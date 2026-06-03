@@ -1,0 +1,36 @@
+# ─── Secrets ───────────────────────────────────────────────
+.env
+.env.*
+*.env
+supabase/.env
+
+# ─── OS files ──────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ─── Editor / IDE ──────────────────────────────────────────
+.vscode/
+.idea/
+*.sublime-workspace
+*.suo
+*.swp
+*~
+
+# ─── Node (if ever added) ──────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# ─── Build output (if ever added) ─────────────────────────
+dist/
+build/
+
+# ─── Logs ──────────────────────────────────────────────────
+*.log
+logs/
+
+# ─── Temporary files ───────────────────────────────────────
+*.tmp
+*.bak
+*.orig
