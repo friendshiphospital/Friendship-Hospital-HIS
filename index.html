@@ -422,6 +422,13 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);font
       <div style="display:flex;align-items:center;gap:10px">
         <span class="pg-title" id="pg-title">Dashboard</span>
       </div>
+      <!-- Global search — lives in the persistent topbar shell (outside the
+           per-page .page divs), so it stays available on every page rather
+           than being wired into goPage() per page like everything else. -->
+      <div id="gs-wrap" style="position:relative;flex:1;max-width:360px">
+        <div class="srch" style="width:100%"><span>🔍</span><input id="gs-input" placeholder="Search patients, lab no, invoice no…" oninput="globalSearch(this.value)" onkeydown="if(event.key==='Escape')closeGlobalSearch()"></div>
+        <div id="gs-results" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1.5px solid var(--teal);border-radius:8px;margin-top:4px;max-height:340px;overflow-y:auto;z-index:300;box-shadow:0 10px 28px rgba(0,0,0,.18)"></div>
+      </div>
       <div style="display:flex;align-items:center;gap:8px">
         <span style="font-size:.72rem;color:var(--slate)" id="topbar-date"></span>
         <button class="btn btn-s btn-sm" onclick="goPage('register')">+ Register Patient</button>
@@ -7750,6 +7757,78 @@ function openPatientHistoryTimeline(patientId){
     .then(({data})=>{ if(data) selectPthPatient(data); })
     .catch(e=>toast(e.message,'err'));
 }
+
+// ── GLOBAL SEARCH ─────────────────────────────────────
+// Lives in the persistent topbar (see markup), so it's reachable from every
+// page. Searches patients (name/MRN/visit_no/phone — lab orders are just
+// patients.lab_no, so the same query covers "search by Lab No." too, per
+// how lab data is actually modelled in this schema) and invoices (by
+// invoice_no), reusing openPatientHistoryTimeline() and editInvoice()
+// rather than building separate per-record detail views.
+let _gsDebounce=null;
+async function globalSearch(q){
+  const box=document.getElementById('gs-results');
+  if(!box) return;
+  clearTimeout(_gsDebounce);
+  if(!sb||!q||q.trim().length<2){ box.style.display='none'; return; }
+  const term=q.trim();
+  _gsDebounce=setTimeout(async ()=>{
+    try{
+      const [ptRes,invRes]=await Promise.all([
+        sb.from('patients').select('id,name,first_name,last_name,mrn,visit_no,lab_no,phone,age,age_unit,sex')
+          .or('name.ilike.%'+term+'%,mrn.ilike.%'+term+'%,visit_no.ilike.%'+term+'%,phone.ilike.%'+term+'%,lab_no.ilike.%'+term+'%')
+          .limit(6),
+        sb.from('invoices').select('id,invoice_no,patient_name,net_amount,total_amount,currency,payment_status')
+          .ilike('invoice_no','%'+term+'%').limit(4)
+      ]);
+      const pts=ptRes.data||[], invs=invRes.data||[];
+      if(!pts.length && !invs.length){
+        box.innerHTML='<div style="padding:10px 12px;font-size:.78rem;color:var(--slate)">No matches for "'+term+'"</div>';
+        box.style.display='block'; return;
+      }
+      let html='';
+      if(pts.length){
+        html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:var(--slate);background:var(--bg)">Patients</div>';
+        html+=pts.map(p=>{
+          const labHit=p.lab_no && p.lab_no.toLowerCase().includes(term.toLowerCase());
+          return '<div onclick="jumpToPatient(\''+p.id+'\')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'">'+
+            '<div style="font-weight:700;font-size:.82rem">'+(p.name||fullName(p))+(labHit?' <span style="font-weight:400;font-size:.68rem;color:var(--teal)">· Lab '+p.lab_no+'</span>':'')+'</div>'+
+            '<div style="font-size:.7rem;color:var(--slate)">'+(p.mrn||'—')+' · '+(p.visit_no||p.lab_no||'—')+' · '+(p.phone||'—')+'</div></div>';
+        }).join('');
+      }
+      if(invs.length){
+        html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:var(--slate);background:var(--bg)">Invoices</div>';
+        html+=invs.map(i=>'<div onclick="jumpToInvoice(\''+i.id+'\')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'">'+
+          '<div style="font-weight:700;font-size:.82rem">'+(i.invoice_no||'—')+'</div>'+
+          '<div style="font-size:.7rem;color:var(--slate)">'+(i.patient_name||'—')+' · '+((i.net_amount??i.total_amount??0).toFixed(2))+' '+(i.currency||CFG.currency)+' · '+(i.payment_status||'')+'</div></div>').join('');
+      }
+      box.innerHTML=html; box.style.display='block';
+    }catch(e){ box.style.display='none'; }
+  }, 220);
+}
+function closeGlobalSearch(){
+  const box=document.getElementById('gs-results'); if(box) box.style.display='none';
+}
+function jumpToPatient(id){
+  closeGlobalSearch();
+  const input=document.getElementById('gs-input'); if(input) input.value='';
+  openPatientHistoryTimeline(id);
+}
+function jumpToInvoice(id){
+  closeGlobalSearch();
+  const input=document.getElementById('gs-input'); if(input) input.value='';
+  goPage('billing');
+  // goPage's billing init (loadBilling/buildBillLineItems) fires
+  // async/fire-and-forget — give it a moment to settle before editInvoice()
+  // populates the same form, matching the setTimeout pattern goPage()
+  // itself already uses for other pages' post-navigation init work.
+  setTimeout(()=>editInvoice(id), 250);
+}
+document.addEventListener('click', (e)=>{
+  const wrap=document.getElementById('gs-wrap'), box=document.getElementById('gs-results');
+  if(box && box.style.display!=='none' && wrap && !wrap.contains(e.target)) box.style.display='none';
+});
+
 async function selectExistingFilePatient(mrn){
   if(!sb||!mrn) return;
   try{
