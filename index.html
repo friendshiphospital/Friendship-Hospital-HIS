@@ -3629,9 +3629,19 @@ html[dir="rtl"] body{direction:rtl;}
       <div class="card"><div class="card-hd"><span class="card-title">📋 Event Detail</span></div><div id="pth-detail" style="padding:16px;min-height:200px"><div class="empty-state"><div class="empty-icon">👆</div><div class="empty-title">Click an event to view details</div></div></div></div>
       <div class="card" id="pth-trends-card" style="display:none">
         <div class="card-hd"><span class="card-title">📈 Result Trends</span>
-          <select class="fc" id="pth-trend-analyte" onchange="renderPthTrend()" style="width:160px;padding:5px 9px;font-size:.78rem">
-            <option value="hgb">Haemoglobin</option><option value="wbc">WBC</option><option value="plt">Platelets</option>
-            <option value="creat">Creatinine</option><option value="fbs">Fasting Glucose</option><option value="alt">ALT</option>
+          <select class="fc" id="pth-trend-analyte" onchange="renderPthTrend()" style="width:170px;padding:5px 9px;font-size:.78rem">
+            <optgroup label="Haematology">
+              <option value="hgb">Haemoglobin</option><option value="wbc">WBC</option><option value="plt">Platelets</option>
+            </optgroup>
+            <optgroup label="Renal Function">
+              <option value="creat">Creatinine</option><option value="urea">Urea</option>
+            </optgroup>
+            <optgroup label="Glucose">
+              <option value="fbs">Fasting Glucose</option>
+            </optgroup>
+            <optgroup label="Liver Enzymes">
+              <option value="alt">ALT</option><option value="ast">AST</option><option value="alp">ALP</option><option value="ggt">GGT</option>
+            </optgroup>
           </select>
         </div>
         <div class="card-body"><canvas id="pth-trend-canvas" height="140" style="width:100%"></canvas><div id="pth-trend-stats" style="margin-top:8px;font-size:.75rem;color:var(--slate)"></div></div>
@@ -5276,7 +5286,16 @@ let _docPt = null, _billPt = null, _scPt = null, _radPt = null, _rptPt = null;
 let _currentAdmId = null, _currentInvId = null;
 let _wlDateMode = 'week', _admFilter = 'Active', _billFilter = 'all', _otRoomFilter = 'all';
 let _painScore = null, _allAdmissions = [], _allBillInvoices = [], _allPrices = [];
-let _pthPt = null, _pthFilter = 'all', _pthAllEvents = [], _pthHemHistory = [];
+let _pthPt = null, _pthFilter = 'all', _pthAllEvents = [], _pthHemHistory = [], _pthChemHistory = [];
+// Maps each trend-chart analyte to which per-department history array it
+// lives in and a human label — renderPthTrend() reads this instead of
+// assuming everything comes from Haematology.
+const PTH_TREND_ANALYTES = {
+  hgb:{source:'hem',label:'Haemoglobin'}, wbc:{source:'hem',label:'WBC'}, plt:{source:'hem',label:'Platelets'},
+  creat:{source:'chem',label:'Creatinine'}, urea:{source:'chem',label:'Urea'},
+  fbs:{source:'chem',label:'Fasting Glucose'},
+  alt:{source:'chem',label:'ALT'}, ast:{source:'chem',label:'AST'}, alp:{source:'chem',label:'ALP'}, ggt:{source:'chem',label:'GGT'},
+};
 let _fcPt = null;
 
 const CFG = {
@@ -7605,17 +7624,19 @@ async function loadPthTimeline() {
     const to=document.getElementById('pth-to')?.value||today();
     const ptId=_pthPt.id;
     const resultTableNames=Object.keys(PTH_RESULT_TABLES);
-    const [labPt,adms,crits,rads,invs,hemHist,consults,...resultRows]=await Promise.all([
+    const [labPt,adms,crits,rads,invs,hemHist,chemHist,consults,...resultRows]=await Promise.all([
       sb.from('patients').select('id,created_at,tests_requested,priority,diagnosis').eq('id',ptId).single(),
       sb.from('admissions').select('*').eq('patient_id',ptId).order('admission_date',{ascending:false}),
       sb.from('critical_values').select('*').eq('patient_id',ptId).order('notified_at',{ascending:false}),
       sb.from('radiology_requests').select('*').eq('patient_id',ptId).order('created_at',{ascending:false}),
       sb.from('invoices').select('*').eq('patient_id',ptId).order('created_at',{ascending:false}),
       sb.from('results_hematology').select('hgb,wbc,plt,analysis_date,is_verified').eq('patient_id',ptId).order('analysis_date'),
+      sb.from('results_chemistry').select('creat,urea,fbs,alt,ast,alp,ggt,analysis_date,is_verified').eq('patient_id',ptId).order('analysis_date'),
       sb.from('doctor_consultations').select('*').eq('patient_id',ptId).order('consultation_date',{ascending:false}),
       ...resultTableNames.map(t=>sb.from(t).select('*').eq('patient_id',ptId)),
     ]);
     _pthHemHistory=hemHist.data||[];
+    _pthChemHistory=chemHist.data||[];
     const events=[];
     const pt=labPt.data;
     if(pt) events.push({t:new Date(pt.created_at),type:'lab',icon:'📋',title:'Patient Registered',detail:'Tests: '+((pt.tests_requested||[]).join(', ')||'—'),color:'var(--teal)',data:pt});
@@ -7632,7 +7653,7 @@ async function loadPthTimeline() {
     _pthAllEvents=events;
     setText('pths-visits',1); setText('pths-admissions',(adms.data||[]).length); setText('pths-criticals',(crits.data||[]).length); setText('pths-radiology',(rads.data||[]).length); setText('pths-invoices',(invs.data||[]).length);
     renderPthTimeline();
-    if(_pthHemHistory.length){ document.getElementById('pth-trends-card').style.display=''; renderPthTrend(); }
+    if(_pthHemHistory.length||_pthChemHistory.length){ document.getElementById('pth-trends-card').style.display=''; renderPthTrend(); }
   } catch(e){ console.error(e); }
 }
 function setPthFilter(f,btn) {
@@ -7655,16 +7676,22 @@ function showPthDetail(idx) {
   el.innerHTML=html;
 }
 function renderPthTrend() {
-  const canvas=document.getElementById('pth-trend-canvas'); if(!canvas||!_pthHemHistory.length) return;
+  const canvas=document.getElementById('pth-trend-canvas'); if(!canvas) return;
   const analyte=document.getElementById('pth-trend-analyte')?.value||'hgb';
-  const data=_pthHemHistory.filter(r=>r[analyte]!=null).map(r=>({date:r.analysis_date,val:r[analyte]}));
-  if(!data.length){ const s=document.getElementById('pth-trend-stats'); if(s) s.textContent='No data for this analyte'; return; }
+  // Same chart-drawing code as before (Phase 5 just widened where the data
+  // comes from) — hgb/wbc/plt read from _pthHemHistory as always, the newly
+  // added renal/glucose/liver-enzyme analytes read from _pthChemHistory.
+  const meta=PTH_TREND_ANALYTES[analyte]||{source:'hem',label:analyte.toUpperCase()};
+  const history=meta.source==='chem' ? _pthChemHistory : _pthHemHistory;
+  if(!history.length) return;
+  const data=history.filter(r=>r[analyte]!=null).map(r=>({date:r.analysis_date,val:r[analyte]}));
+  if(!data.length){ const s=document.getElementById('pth-trend-stats'); if(s) s.textContent='No data for this analyte'; const ctx=canvas.getContext('2d'); ctx.clearRect(0,0,canvas.width,canvas.height); return; }
   const ctx=canvas.getContext('2d'); const W=canvas.offsetWidth||700; canvas.width=W; canvas.height=160; ctx.clearRect(0,0,W,160);
   const vals=data.map(d=>d.val); const minV=Math.min(...vals)*0.9; const maxV=Math.max(...vals)*1.1;
   const pad=40; const toX=(_,i)=>pad+i/(data.length-1||1)*(W-2*pad); const toY=v=>pad+(1-(v-minV)/(maxV-minV||1))*(130-2*pad);
   ctx.beginPath(); ctx.strokeStyle='#0b7a75'; ctx.lineWidth=2.5; data.forEach((d,i)=>{ i===0?ctx.moveTo(toX(null,i),toY(d.val)):ctx.lineTo(toX(null,i),toY(d.val)); }); ctx.stroke();
   data.forEach((d,i)=>{ const x=toX(null,i), y=toY(d.val); ctx.beginPath(); ctx.arc(x,y,4,0,Math.PI*2); ctx.fillStyle='#0b7a75'; ctx.fill(); if(i===0||i===data.length-1||i%Math.max(1,Math.floor(data.length/5))===0){ ctx.fillStyle='#64748b'; ctx.font='8px sans-serif'; ctx.fillText((d.date||'').slice(5),x-14,155); ctx.fillStyle='#0e1928'; ctx.font='bold 9px sans-serif'; ctx.fillText(String(d.val),x-8,y-8); } });
-  ctx.save(); ctx.translate(12,80); ctx.rotate(-Math.PI/2); ctx.font='8px sans-serif'; ctx.fillStyle='#64748b'; ctx.fillText(analyte.toUpperCase(),0,0); ctx.restore();
+  ctx.save(); ctx.translate(12,80); ctx.rotate(-Math.PI/2); ctx.font='8px sans-serif'; ctx.fillStyle='#64748b'; ctx.fillText(meta.label,0,0); ctx.restore();
   const avg=(vals.reduce((s,v)=>s+v,0)/vals.length).toFixed(1); const minVal=Math.min(...vals); const maxVal=Math.max(...vals);
   const stats=document.getElementById('pth-trend-stats'); if(stats) stats.textContent='n='+data.length+' | Min: '+minVal+' | Max: '+maxVal+' | Mean: '+avg;
 }
