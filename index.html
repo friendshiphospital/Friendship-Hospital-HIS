@@ -91,6 +91,16 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);font
 /* MAIN */
 #main{margin-left:var(--sw);flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden;}
 .topbar{height:var(--hh);flex-shrink:0;background:var(--card);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 22px;gap:10px;z-index:200;}
+/* Basic RTL support (Phase 4) — flips the two structural elements every
+   page shares (sidebar position, main content offset) and sets a sane
+   default text direction. This is NOT a full RTL pass: the rest of the
+   app's layout (hundreds of inline flex rows, margin-left/padding-left
+   values, icon-before-text orderings) is hardcoded for LTR throughout and
+   is not addressed here — see the comment above the I18N object in the
+   script block for what a complete pass would require. */
+html[dir="rtl"] #sidebar{left:auto;right:0;}
+html[dir="rtl"] #main{margin-left:0;margin-right:var(--sw);}
+html[dir="rtl"] body{direction:rtl;}
 .content{flex:1;overflow-y:scroll;padding:20px 22px;min-height:0;}
 .pg-title{font-family:'DM Serif Display',serif;font-size:1.05rem;color:var(--ink);}
 /* BUTTONS */
@@ -311,6 +321,10 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);font
 <!-- AUTH SCREEN -->
 <div id="auth-screen">
   <div class="auth-card">
+    <div style="display:flex;justify-content:flex-end;gap:6px;margin-bottom:6px">
+      <button onclick="setLanguage('en')" id="lang-btn-en-auth" style="background:#eef2f7;border:1px solid #dde5ee;color:#334155;border-radius:6px;padding:4px 10px;font-size:.72rem;cursor:pointer;font-weight:700">EN</button>
+      <button onclick="setLanguage('ar')" id="lang-btn-ar-auth" style="background:#eef2f7;border:1px solid #dde5ee;color:#334155;border-radius:6px;padding:4px 10px;font-size:.72rem;cursor:pointer;font-weight:700">AR</button>
+    </div>
     <div class="auth-logo">
       <div style="font-size:2.6rem">🏥</div>
       <h1>Friendship Hospital</h1>
@@ -319,9 +333,9 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);font
     </div>
     <div class="auth-conn"><div class="auth-dot" id="auth-dot"></div><span id="auth-conn-text">Checking connection…</span></div>
     <form id="auth-form" autocomplete="on" onsubmit="event.preventDefault();doLogin();">
-      <div class="auth-field"><label>Email</label><input type="email" id="auth-email" name="username" placeholder="your@email.com" autocomplete="username"></div>
-      <div class="auth-field"><label>Password</label><input type="password" id="auth-pass" name="password" placeholder="••••••••" autocomplete="current-password"></div>
-      <button type="submit" class="auth-submit" id="auth-btn">Sign In</button>
+      <div class="auth-field"><label data-i18n="login_email">Email</label><input type="email" id="auth-email" name="username" placeholder="your@email.com" autocomplete="username"></div>
+      <div class="auth-field"><label data-i18n="login_password">Password</label><input type="password" id="auth-pass" name="password" placeholder="••••••••" autocomplete="current-password"></div>
+      <button type="submit" class="auth-submit" id="auth-btn" data-i18n="login_signin">Sign In</button>
     </form>
     <div class="auth-msg" id="auth-msg"></div>
     <div class="auth-cfg-row" onclick="toggleCfg()">⚙️ Supabase Configuration <span id="cfg-arrow">▸</span></div>
@@ -348,69 +362,73 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);font
       <span class="dot"></span> <span id="conn-text">Online</span>
     </div>
     <div class="sb-group">
-      <div class="sb-lbl">Overview</div>
-      <div class="sb-item" data-p="dashboard" onclick="goPage('dashboard')"><span class="ic">📊</span>Dashboard</div>
+      <div class="sb-lbl" data-i18n="navgrp_overview">Overview</div>
+      <div class="sb-item" data-p="dashboard" onclick="goPage('dashboard')"><span class="ic">📊</span><span data-i18n="nav_dashboard">Dashboard</span></div>
     </div>
     <div class="sb-group">
-      <div class="sb-lbl">🏥 Reception</div>
-      <div class="sb-item" data-p="register" onclick="goPage('register')"><span class="ic">📋</span>Register Patient</div>
-      <div class="sb-item" data-p="appointments" onclick="goPage('appointments')"><span class="ic">📅</span>Appointments</div>
-      <div class="sb-item" data-p="billing" onclick="goPage('billing')"><span class="ic">💰</span>Billing</div>
-      <div class="sb-item" data-p="print-reports-hub" onclick="goPage('print-reports-hub')"><span class="ic">🖨</span>Print Reports</div>
+      <div class="sb-lbl" data-i18n="navgrp_reception">🏥 Reception</div>
+      <div class="sb-item" data-p="register" onclick="goPage('register')"><span class="ic">📋</span><span data-i18n="nav_register">Register Patient</span></div>
+      <div class="sb-item" data-p="appointments" onclick="goPage('appointments')"><span class="ic">📅</span><span data-i18n="nav_appointments">Appointments</span></div>
+      <div class="sb-item" data-p="billing" onclick="goPage('billing')"><span class="ic">💰</span><span data-i18n="nav_billing">Billing</span></div>
+      <div class="sb-item" data-p="print-reports-hub" onclick="goPage('print-reports-hub')"><span class="ic">🖨</span><span data-i18n="nav_print_reports_hub">Print Reports</span></div>
     </div>
     <div class="sb-group">
-      <div class="sb-lbl">🏥 Hospital</div>
-      <div class="sb-item" data-p="admission" onclick="goPage('admission')"><span class="ic">🛏</span>Admissions</div>
-      <div class="sb-item" data-p="theatre" onclick="goPage('theatre')"><span class="ic">🔪</span>Theatre / OT</div>
-      <div class="sb-item" data-p="consultation" onclick="goPage('consultation')"><span class="ic">📋</span>Doctor Orders</div>
-      <div class="sb-item" data-p="nursing" onclick="goPage('nursing')"><span class="ic">💉</span>Nursing &amp; Vitals</div>
-      <div class="sb-item" data-p="fluid-chart" onclick="goPage('fluid-chart')"><span class="ic">💧</span>Fluid Balance</div>
-      <div class="sb-item" data-p="infection" onclick="goPage('infection')"><span class="ic">🦠</span>Infection Flags</div>
-      <div class="sb-item" data-p="handover" onclick="goPage('handover')"><span class="ic">📋</span>Handover Notes</div>
+      <div class="sb-lbl" data-i18n="navgrp_hospital">🏥 Hospital</div>
+      <div class="sb-item" data-p="admission" onclick="goPage('admission')"><span class="ic">🛏</span><span data-i18n="nav_admission">Admissions</span></div>
+      <div class="sb-item" data-p="theatre" onclick="goPage('theatre')"><span class="ic">🔪</span><span data-i18n="nav_theatre">Theatre / OT</span></div>
+      <div class="sb-item" data-p="consultation" onclick="goPage('consultation')"><span class="ic">📋</span><span data-i18n="nav_consultation">Doctor Orders</span></div>
+      <div class="sb-item" data-p="nursing" onclick="goPage('nursing')"><span class="ic">💉</span><span data-i18n="nav_nursing">Nursing &amp; Vitals</span></div>
+      <div class="sb-item" data-p="fluid-chart" onclick="goPage('fluid-chart')"><span class="ic">💧</span><span data-i18n="nav_fluid_chart">Fluid Balance</span></div>
+      <div class="sb-item" data-p="infection" onclick="goPage('infection')"><span class="ic">🦠</span><span data-i18n="nav_infection">Infection Flags</span></div>
+      <div class="sb-item" data-p="handover" onclick="goPage('handover')"><span class="ic">📋</span><span data-i18n="nav_handover">Handover Notes</span></div>
     </div>
     <div class="sb-group">
-      <div class="sb-lbl">🔬 Laboratory</div>
-      <div class="sb-item" data-p="worklist" onclick="goPage('worklist')"><span class="ic">📋</span>Worklist</div>
-      <div class="sb-item" data-p="samples" onclick="goPage('samples')"><span class="ic">🩸</span>Sample Collection</div>
-      <div class="sb-item" data-p="set-printer" onclick="goPage('set-printer')"><span class="ic">🖨</span>Set Printer</div>
-      <div class="sb-item" data-p="hem-entry" onclick="goPage('hem-entry')"><span class="ic">🩸</span>Haematology Entry</div>
-      <div class="sb-item" data-p="chem-entry" onclick="goPage('chem-entry')"><span class="ic">⚗️</span>Chemistry Entry</div>
-      <div class="sb-item" data-p="sero-entry" onclick="goPage('sero-entry')"><span class="ic">💉</span>Serology Entry</div>
-      <div class="sb-item" data-p="immuno-entry" onclick="goPage('immuno-entry')"><span class="ic">🧪</span>Immunology Entry</div>
-      <div class="sb-item" data-p="micro-entry" onclick="goPage('micro-entry')"><span class="ic">🦠</span>Microbiology Entry</div>
-      <div class="sb-item" data-p="pcr-entry" onclick="goPage('pcr-entry')"><span class="ic">🧬</span>PCR / Molecular</div>
-      <div class="sb-item" data-p="histo-entry" onclick="goPage('histo-entry')"><span class="ic">🔬</span>Histopathology</div>
-      <div class="sb-item" data-p="cyto-entry" onclick="goPage('cyto-entry')"><span class="ic">🧫</span>Cytology</div>
-      <div class="sb-item" data-p="allresults" onclick="goPage('allresults')"><span class="ic">📂</span>All Results</div>
-      <div class="sb-item" data-p="criticals" onclick="goPage('criticals')"><span class="ic">🚨</span>Critical Values<span class="sb-badge" id="crit-badge" style="display:none">0</span></div>
-      <div class="sb-item" data-p="reports" onclick="goPage('reports')"><span class="ic">🖨</span>Print Reports</div>
+      <div class="sb-lbl" data-i18n="navgrp_lab">🔬 Laboratory</div>
+      <div class="sb-item" data-p="worklist" onclick="goPage('worklist')"><span class="ic">📋</span><span data-i18n="nav_worklist">Worklist</span></div>
+      <div class="sb-item" data-p="samples" onclick="goPage('samples')"><span class="ic">🩸</span><span data-i18n="nav_samples">Sample Collection</span></div>
+      <div class="sb-item" data-p="set-printer" onclick="goPage('set-printer')"><span class="ic">🖨</span><span data-i18n="nav_set_printer">Set Printer</span></div>
+      <div class="sb-item" data-p="hem-entry" onclick="goPage('hem-entry')"><span class="ic">🩸</span><span data-i18n="nav_hem_entry">Haematology Entry</span></div>
+      <div class="sb-item" data-p="chem-entry" onclick="goPage('chem-entry')"><span class="ic">⚗️</span><span data-i18n="nav_chem_entry">Chemistry Entry</span></div>
+      <div class="sb-item" data-p="sero-entry" onclick="goPage('sero-entry')"><span class="ic">💉</span><span data-i18n="nav_sero_entry">Serology Entry</span></div>
+      <div class="sb-item" data-p="immuno-entry" onclick="goPage('immuno-entry')"><span class="ic">🧪</span><span data-i18n="nav_immuno_entry">Immunology Entry</span></div>
+      <div class="sb-item" data-p="micro-entry" onclick="goPage('micro-entry')"><span class="ic">🦠</span><span data-i18n="nav_micro_entry">Microbiology Entry</span></div>
+      <div class="sb-item" data-p="pcr-entry" onclick="goPage('pcr-entry')"><span class="ic">🧬</span><span data-i18n="nav_pcr_entry">PCR / Molecular</span></div>
+      <div class="sb-item" data-p="histo-entry" onclick="goPage('histo-entry')"><span class="ic">🔬</span><span data-i18n="nav_histo_entry">Histopathology</span></div>
+      <div class="sb-item" data-p="cyto-entry" onclick="goPage('cyto-entry')"><span class="ic">🧫</span><span data-i18n="nav_cyto_entry">Cytology</span></div>
+      <div class="sb-item" data-p="allresults" onclick="goPage('allresults')"><span class="ic">📂</span><span data-i18n="nav_allresults">All Results</span></div>
+      <div class="sb-item" data-p="criticals" onclick="goPage('criticals')"><span class="ic">🚨</span><span data-i18n="nav_criticals">Critical Values</span><span class="sb-badge" id="crit-badge" style="display:none">0</span></div>
+      <div class="sb-item" data-p="reports" onclick="goPage('reports')"><span class="ic">🖨</span><span data-i18n="nav_reports">Print Reports</span></div>
     </div>
     <div class="sb-group">
-      <div class="sb-lbl">💰 Billing</div>
-      <div class="sb-item" data-p="billing" onclick="goPage('billing')"><span class="ic">💰</span>Billing &amp; Invoices</div>
-      <div class="sb-item" data-p="prices" onclick="goPage('prices')"><span class="ic">💲</span>Price List</div>
+      <div class="sb-lbl" data-i18n="navgrp_billing">💰 Billing</div>
+      <div class="sb-item" data-p="billing" onclick="goPage('billing')"><span class="ic">💰</span><span data-i18n="nav_billing_full">Billing &amp; Invoices</span></div>
+      <div class="sb-item" data-p="prices" onclick="goPage('prices')"><span class="ic">💲</span><span data-i18n="nav_prices">Price List</span></div>
     </div>
     <div class="sb-group">
-      <div class="sb-lbl">📊 Analytics</div>
-      <div class="sb-item" data-p="pt-history" onclick="goPage('pt-history')"><span class="ic">🕐</span>Patient Timeline</div>
-      <div class="sb-item" data-p="labhistory" onclick="goPage('labhistory')"><span class="ic">📈</span>Lab History</div>
-      <div class="sb-item" data-p="tat" onclick="goPage('tat')"><span class="ic">⏱️</span>TAT Tracker</div>
-      <div class="sb-item" data-p="inventory" onclick="goPage('inventory')"><span class="ic">📦</span>Inventory</div>
-      <div class="sb-item" data-p="qc" onclick="goPage('qc')"><span class="ic">🔬</span>QC Module</div>
+      <div class="sb-lbl" data-i18n="navgrp_analytics">📊 Analytics</div>
+      <div class="sb-item" data-p="pt-history" onclick="goPage('pt-history')"><span class="ic">🕐</span><span data-i18n="nav_pt_history">Patient Timeline</span></div>
+      <div class="sb-item" data-p="labhistory" onclick="goPage('labhistory')"><span class="ic">📈</span><span data-i18n="nav_labhistory">Lab History</span></div>
+      <div class="sb-item" data-p="tat" onclick="goPage('tat')"><span class="ic">⏱️</span><span data-i18n="nav_tat">TAT Tracker</span></div>
+      <div class="sb-item" data-p="inventory" onclick="goPage('inventory')"><span class="ic">📦</span><span data-i18n="nav_inventory">Inventory</span></div>
+      <div class="sb-item" data-p="qc" onclick="goPage('qc')"><span class="ic">🔬</span><span data-i18n="nav_qc">QC Module</span></div>
     </div>
     <div class="sb-group">
-      <div class="sb-lbl">⚙️ Administration</div>
-      <div class="sb-item" data-p="statistics" onclick="goPage('statistics')"><span class="ic">📊</span>Statistics</div>
-      <div class="sb-item" data-p="staff" onclick="goPage('staff')"><span class="ic">👥</span>Staff</div>
-      <div class="sb-item" data-p="doctors" onclick="goPage('doctors')"><span class="ic">🩺</span>Doctors</div>
-      <div class="sb-item" data-p="radiology" onclick="goPage('radiology')"><span class="ic">🩻</span>Radiology</div>
-      <div class="sb-item" data-p="analyzer" onclick="goPage('analyzer')"><span class="ic">🔌</span>Analyzer Interface</div>
-      <div class="sb-item" data-p="delivery" onclick="goPage('delivery')"><span class="ic">📲</span>Result Delivery</div>
-      <div class="sb-item" data-p="settings" onclick="goPage('settings')"><span class="ic">⚙️</span>Settings</div>
+      <div class="sb-lbl" data-i18n="navgrp_admin">⚙️ Administration</div>
+      <div class="sb-item" data-p="statistics" onclick="goPage('statistics')"><span class="ic">📊</span><span data-i18n="nav_statistics">Statistics</span></div>
+      <div class="sb-item" data-p="staff" onclick="goPage('staff')"><span class="ic">👥</span><span data-i18n="nav_staff">Staff</span></div>
+      <div class="sb-item" data-p="doctors" onclick="goPage('doctors')"><span class="ic">🩺</span><span data-i18n="nav_doctors">Doctors</span></div>
+      <div class="sb-item" data-p="radiology" onclick="goPage('radiology')"><span class="ic">🩻</span><span data-i18n="nav_radiology">Radiology</span></div>
+      <div class="sb-item" data-p="analyzer" onclick="goPage('analyzer')"><span class="ic">🔌</span><span data-i18n="nav_analyzer">Analyzer Interface</span></div>
+      <div class="sb-item" data-p="delivery" onclick="goPage('delivery')"><span class="ic">📲</span><span data-i18n="nav_delivery">Result Delivery</span></div>
+      <div class="sb-item" data-p="settings" onclick="goPage('settings')"><span class="ic">⚙️</span><span data-i18n="nav_settings">Settings</span></div>
     </div>
     <div class="sb-foot">
       <div>Friendship Hospital · Al Damazin</div>
       <div>Blue Nile State, Sudan</div>
+      <div style="display:flex;gap:6px;margin-top:8px">
+        <button onclick="setLanguage('en')" id="lang-btn-en" style="flex:1;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.18);color:#fff;border-radius:6px;padding:6px;font-size:.72rem;cursor:pointer;font-family:'DM Sans',sans-serif;font-weight:700">EN</button>
+        <button onclick="setLanguage('ar')" id="lang-btn-ar" style="flex:1;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.7);border-radius:6px;padding:6px;font-size:.72rem;cursor:pointer;font-family:'DM Sans',sans-serif;font-weight:700">AR</button>
+      </div>
       <button onclick="doLogout()" style="margin-top:8px;width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.55);border-radius:6px;padding:6px;font-size:.73rem;cursor:pointer;font-family:'DM Sans',sans-serif;">⏻ Sign Out</button>
     </div>
   </nav>
@@ -5303,6 +5321,139 @@ const PAGE_TITLES = {
   delivery:'Result Delivery',settings:'Settings',
 };
 
+// ── LANGUAGE (Phase 4) ─────────────────────────────────
+// Scope, deliberately: navigation labels (sidebar) + page titles are fully
+// translated — that's every key below prefixed nav_/navgrp_/page_. A small,
+// representative set of form labels (the login screen) is translated too,
+// to prove the data-i18n mechanism end-to-end. Full form-label coverage
+// across all ~35 pages is NOT done here — this app has hundreds of
+// <label> elements with no existing i18n framework, and translating every
+// one of them (accurately, in clinical Arabic) is a much larger effort
+// than this pass. Flagging that explicitly rather than claiming full
+// coverage: if that's wanted, it's worth splitting into its own pass,
+// page by page.
+//
+// RTL: dir="rtl"/lang="ar" switching is real and the sidebar/topbar flip
+// sides (see the html[dir="rtl"] rules in <style>), but this is a BASIC
+// pass, not an exhaustive one — this codebase uses hardcoded
+// margin-left/flex-direction/text-align throughout its inline styles and
+// <style> block (not logical properties), so most individual page layouts
+// will still read left-to-right even with dir="rtl" set. A full RTL pass
+// means reviewing every page's layout individually; also worth splitting
+// out rather than assuming it's covered by this.
+let currentLang = localStorage.getItem('lang')||'en';
+// Both languages are explicit dictionaries (not "Arabic + stash the English
+// DOM text at runtime") — a runtime-stash approach breaks the moment a
+// user's saved preference is already 'ar' on page load, since the English
+// original would never get captured before being overwritten. Keeping
+// English as real data avoids that entirely.
+const I18N = {
+  en: {
+    navgrp_overview:'Overview', navgrp_reception:'🏥 Reception', navgrp_hospital:'🏥 Hospital',
+    navgrp_lab:'🔬 Laboratory', navgrp_billing:'💰 Billing', navgrp_analytics:'📊 Analytics', navgrp_admin:'⚙️ Administration',
+
+    nav_dashboard:'Dashboard', nav_register:'Register Patient', nav_appointments:'Appointments',
+    nav_billing:'Billing', nav_print_reports_hub:'Print Reports',
+    nav_admission:'Admissions', nav_theatre:'Theatre / OT', nav_consultation:'Doctor Orders',
+    nav_nursing:'Nursing & Vitals', nav_fluid_chart:'Fluid Balance', nav_infection:'Infection Flags',
+    nav_handover:'Handover Notes',
+    nav_worklist:'Worklist', nav_samples:'Sample Collection', nav_set_printer:'Set Printer',
+    nav_hem_entry:'Haematology Entry', nav_chem_entry:'Chemistry Entry', nav_sero_entry:'Serology Entry',
+    nav_immuno_entry:'Immunology Entry', nav_micro_entry:'Microbiology Entry', nav_pcr_entry:'PCR / Molecular',
+    nav_histo_entry:'Histopathology', nav_cyto_entry:'Cytology', nav_allresults:'All Results',
+    nav_criticals:'Critical Values', nav_reports:'Print Reports',
+    nav_billing_full:'Billing & Invoices', nav_prices:'Price List',
+    nav_pt_history:'Patient Timeline', nav_labhistory:'Lab History', nav_tat:'TAT Tracker',
+    nav_inventory:'Inventory', nav_qc:'QC Module',
+    nav_statistics:'Statistics', nav_staff:'Staff', nav_doctors:'Doctors', nav_radiology:'Radiology',
+    nav_analyzer:'Analyzer Interface', nav_delivery:'Result Delivery', nav_settings:'Settings',
+
+    page_dashboard:'Dashboard', page_admission:'Admissions', page_theatre:'Theatre / OT',
+    page_consultation:'Doctor Orders & Consultation', page_nursing:'Nursing & Vital Signs',
+    'page_fluid-chart':'Fluid Balance Chart', page_appointments:'Appointments',
+    page_register:'Register Patient', page_worklist:'Lab Worklist', page_samples:'Sample Collection',
+    'page_set-printer':'Set Printer — Barcode Label Setup', 'page_print-reports-hub':'Print Reports',
+    'page_rad-print':'Print Radiology Report',
+    'page_hem-entry':'Haematology Result Entry', 'page_chem-entry':'Chemistry Result Entry',
+    'page_sero-entry':'Serology Result Entry', 'page_immuno-entry':'Immunology Result Entry',
+    'page_micro-entry':'Microbiology Result Entry', 'page_unified-entry':'Enter Results',
+    page_allresults:'All Results', page_criticals:'Critical Values', page_reports:'Print Reports',
+    page_billing:'Billing & Invoices', page_prices:'Price List',
+    'page_pt-history':'Patient History Timeline', page_labhistory:'Lab History',
+    page_tat:'TAT Tracker', page_inventory:'Inventory', page_qc:'QC Module',
+    page_staff:'Staff Management', page_doctors:'Doctors', page_radiology:'Radiology',
+    page_delivery:'Result Delivery', page_settings:'Settings',
+
+    login_email:'Email', login_password:'Password', login_signin:'Sign In',
+  },
+  ar: {
+    navgrp_overview:'نظرة عامة', navgrp_reception:'🏥 الاستقبال', navgrp_hospital:'🏥 المستشفى',
+    navgrp_lab:'🔬 المختبر', navgrp_billing:'💰 الفواتير', navgrp_analytics:'📊 التحليلات', navgrp_admin:'⚙️ الإدارة',
+
+    nav_dashboard:'لوحة التحكم', nav_register:'تسجيل مريض', nav_appointments:'المواعيد',
+    nav_billing:'الفواتير', nav_print_reports_hub:'طباعة التقارير',
+    nav_admission:'القبول', nav_theatre:'غرفة العمليات', nav_consultation:'أوامر الطبيب',
+    nav_nursing:'التمريض والعلامات الحيوية', nav_fluid_chart:'توازن السوائل', nav_infection:'علامات العدوى',
+    nav_handover:'ملاحظات التسليم',
+    nav_worklist:'قائمة العمل', nav_samples:'جمع العينات', nav_set_printer:'إعداد الطابعة',
+    nav_hem_entry:'إدخال أمراض الدم', nav_chem_entry:'إدخال الكيمياء', nav_sero_entry:'إدخال الأمصال',
+    nav_immuno_entry:'إدخال المناعة', nav_micro_entry:'إدخال الأحياء الدقيقة', nav_pcr_entry:'PCR / الجزيئي',
+    nav_histo_entry:'علم الأنسجة المرضي', nav_cyto_entry:'علم الخلايا', nav_allresults:'جميع النتائج',
+    nav_criticals:'القيم الحرجة', nav_reports:'طباعة التقارير',
+    nav_billing_full:'الفواتير والحسابات', nav_prices:'قائمة الأسعار',
+    nav_pt_history:'الجدول الزمني للمريض', nav_labhistory:'سجل المختبر', nav_tat:'متتبع وقت الإنجاز',
+    nav_inventory:'المخزون', nav_qc:'وحدة ضبط الجودة',
+    nav_statistics:'الإحصائيات', nav_staff:'الموظفون', nav_doctors:'الأطباء', nav_radiology:'الأشعة',
+    nav_analyzer:'واجهة المحلل', nav_delivery:'تسليم النتائج', nav_settings:'الإعدادات',
+
+    page_dashboard:'لوحة التحكم', page_admission:'القبول', page_theatre:'غرفة العمليات',
+    page_consultation:'أوامر واستشارة الطبيب', page_nursing:'التمريض والعلامات الحيوية',
+    'page_fluid-chart':'مخطط توازن السوائل', page_appointments:'المواعيد',
+    page_register:'تسجيل مريض', page_worklist:'قائمة عمل المختبر', page_samples:'جمع العينات',
+    'page_set-printer':'إعداد الطابعة — ملصقات الباركود', 'page_print-reports-hub':'طباعة التقارير',
+    'page_rad-print':'طباعة تقرير الأشعة',
+    'page_hem-entry':'إدخال نتائج أمراض الدم', 'page_chem-entry':'إدخال نتائج الكيمياء',
+    'page_sero-entry':'إدخال نتائج الأمصال', 'page_immuno-entry':'إدخال نتائج المناعة',
+    'page_micro-entry':'إدخال نتائج الأحياء الدقيقة', 'page_unified-entry':'إدخال النتائج',
+    page_allresults:'جميع النتائج', page_criticals:'القيم الحرجة', page_reports:'طباعة التقارير',
+    page_billing:'الفواتير والحسابات', page_prices:'قائمة الأسعار',
+    'page_pt-history':'الجدول الزمني لتاريخ المريض', page_labhistory:'سجل المختبر',
+    page_tat:'متتبع وقت الإنجاز', page_inventory:'المخزون', page_qc:'وحدة ضبط الجودة',
+    page_staff:'إدارة الموظفين', page_doctors:'الأطباء', page_radiology:'الأشعة',
+    page_delivery:'تسليم النتائج', page_settings:'الإعدادات',
+
+    login_email:'البريد الإلكتروني', login_password:'كلمة المرور', login_signin:'تسجيل الدخول',
+  }
+};
+function t(key){
+  const dict=I18N[currentLang]||I18N.en;
+  return dict[key] ?? I18N.en[key] ?? null;
+}
+function applyTranslations(){
+  document.querySelectorAll('[data-i18n]').forEach(el=>{
+    const val=t(el.getAttribute('data-i18n'));
+    if(val!=null) el.textContent=val;
+  });
+  const ti=document.getElementById('pg-title');
+  if(ti){ const p=document.querySelector('.sb-item.active')?.dataset?.p; if(p) ti.textContent = t('page_'+p) || PAGE_TITLES[p] || p; }
+}
+function setLanguage(lang){
+  currentLang = (lang==='ar') ? 'ar' : 'en';
+  localStorage.setItem('lang', currentLang);
+  document.documentElement.lang = currentLang;
+  document.documentElement.dir = currentLang==='ar' ? 'rtl' : 'ltr';
+  ['','-auth'].forEach(suf=>{
+    const enBtn=document.getElementById('lang-btn-en'+suf), arBtn=document.getElementById('lang-btn-ar'+suf);
+    if(enBtn) enBtn.style.opacity = currentLang==='en' ? '1' : '.55';
+    if(arBtn) arBtn.style.opacity = currentLang==='ar' ? '1' : '.55';
+  });
+  applyTranslations();
+}
+// Apply whatever language was last saved as soon as the DOM exists (this
+// script runs after the body markup, so the auth screen + sidebar are
+// already present) — covers the pre-login screen too, not just post-login.
+setLanguage(currentLang);
+
 const CRIT_RANGES = {
   hgb:{lo:7.0,hi:20.0,unit:'g/dL',section:'Haematology'},
   plt:{lo:50,hi:1000,unit:'×10³/µL',section:'Haematology'},
@@ -5525,7 +5676,7 @@ function goPage(p) {
     if(wEl) wEl.value=s.width; if(hEl) hEl.value=s.height; if(bEl) bEl.value=s.barcodeType; if(pEl) pEl.value=s.printerName;
     renderLabelPreview();
   },50); }
-  const ti=document.getElementById('pg-title'); if(ti) ti.textContent=PAGE_TITLES[p]||p;
+  const ti=document.getElementById('pg-title'); if(ti) ti.textContent=t('page_'+p)||PAGE_TITLES[p]||p;
   const run = fn => { try{ const r=fn(); if(r&&r.catch) r.catch(e=>console.warn(e)); }catch(e){console.warn(e);} };
   const td=new Date().toISOString().slice(0,10), td16=new Date().toISOString().slice(0,16);
   if(p==='dashboard') run(loadDashboard);
