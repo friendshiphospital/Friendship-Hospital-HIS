@@ -2333,6 +2333,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);font
     <select class="fc" id="wl-priority-filter" onchange="loadWorklist()" style="padding:5px 9px;font-size:.78rem;width:110px">
       <option value="">All Priority</option>
       <option value="STAT">STAT ⚡</option>
+      <option value="Critical">Critical 🚨</option>
       <option value="Urgent">Urgent</option>
       <option value="Routine">Routine</option>
     </select>
@@ -6950,7 +6951,7 @@ async function loadWorklist() {
       const meta=DEPT_META[deptKeyMap[dept]];
       filtered=filtered.filter(p=>{ const t=(p.tests_requested||[]).join(' ').toLowerCase(); return (meta?meta.keywords:[]).some(k=>t.includes(k)); });
     }
-    const statOrder={STAT:0,Urgent:1,Routine:2};
+    const statOrder={STAT:0,Critical:0,Urgent:1,Routine:2};
     filtered.sort((a,b)=>(statOrder[a.priority]??3)-(statOrder[b.priority]??3));
     const hasStat=filtered.some(p=>p.priority==='STAT');
     const hasUnpaid=filtered.some(p=>p.payment_status==='unpaid'||p.payment_status==='insurance_pending');
@@ -6967,7 +6968,7 @@ async function loadWorklist() {
       filtered.map(p=>{
         const unpaid=p.payment_status==='unpaid'||p.payment_status==='insurance_pending';
         const stt=sampleMap[p.id]||'Pending';
-        const pbg=p.priority==='STAT'?'style="background:#fff1f2"':p.priority==='Urgent'?'style="background:#fffbeb"':'';
+        const pbg=(p.priority==='STAT'||p.priority==='Critical')?'style="background:#fff1f2"':p.priority==='Urgent'?'style="background:#fffbeb"':'';
         return '<tr class="'+(unpaid?'pay-unpaid':'')+'" '+pbg+'>'+
           '<td style="font-family:DM Mono,monospace;font-size:.7rem;font-weight:700;color:var(--teal)">'+(p.lab_no||'—')+'</td>'+
           '<td style="font-size:.72rem">'+(p.mrn||'—')+'</td>'+
