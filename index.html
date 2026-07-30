@@ -5743,7 +5743,7 @@ function openPrintWin(html, title='Print') {
 async function checkCriticals() {
   if(!sb) return;
   try {
-    const {count}=await sb.from('critical_values').select('id',{count:'exact'}).eq('acknowledged',false);
+    const {count}=await sb.from('critical_values').select('id',{count:'exact'}).eq('is_acknowledged',false);
     const badge=document.getElementById('crit-badge'), banner=document.getElementById('crit-banner');
     if(badge){ badge.style.display=count>0?'flex':'none'; badge.textContent=count||0; }
     if(banner){ banner.classList.toggle('has-crits',count>0); }
@@ -5761,7 +5761,7 @@ async function loadDashboard() {
       sb.from('admissions').select('id,ward,status',{count:'exact'}).eq('status','Active'),
       sb.from('results_hematology').select('id',{count:'exact'}).eq('is_verified',true).gte('created_at',td+'T00:00:00'),
       sb.from('results_chemistry').select('id',{count:'exact'}).eq('is_verified',true).gte('created_at',td+'T00:00:00'),
-      sb.from('critical_values').select('id',{count:'exact'}).eq('acknowledged',false),
+      sb.from('critical_values').select('id',{count:'exact'}).eq('is_acknowledged',false),
       sb.from('beds').select('status'),
       sb.from('admissions').select('id',{count:'exact'}).eq('status','Discharged').gte('discharge_date',td+'T00:00:00'),
     ]);
@@ -7260,7 +7260,7 @@ async function loadPthTimeline() {
     const pt=labPt.data;
     if(pt) events.push({t:new Date(pt.created_at),type:'lab',icon:'📋',title:'Patient Registered',detail:'Tests: '+((pt.tests_requested||[]).join(', ')||'—'),color:'var(--teal)',data:pt});
     (adms.data||[]).forEach(a=>events.push({t:new Date(a.admission_date),type:'admission',icon:'🛏',title:'Admitted — '+(a.ward||''),detail:(a.primary_diagnosis||'—')+' | Dr. '+(a.admitting_doctor||'—')+' | '+a.status,color:'var(--blue)',data:a}));
-    (crits.data||[]).forEach(c=>events.push({t:new Date(c.notified_at),type:'lab',icon:'🚨',title:'Critical: '+c.test_name,detail:'Value: '+c.result_value+' | '+(c.acknowledged?'Acknowledged':'⚠️ Unacknowledged'),color:'var(--red)',data:c}));
+    (crits.data||[]).forEach(c=>events.push({t:new Date(c.notified_at),type:'lab',icon:'🚨',title:'Critical: '+c.test_name,detail:'Value: '+c.result_value+' | '+(c.is_acknowledged?'Acknowledged':'⚠️ Unacknowledged'),color:'var(--red)',data:c}));
     (rads.data||[]).forEach(r=>events.push({t:new Date(r.created_at),type:'radiology',icon:'🩻',title:r.imaging_type||'Radiology',detail:(r.urgency||'')+' | '+(r.status||'Requested'),color:'var(--sero)',data:r}));
     (invs.data||[]).forEach(i=>events.push({t:new Date(i.created_at),type:'billing',icon:'💰',title:'Invoice '+(i.invoice_no||''),detail:((i.net_amount||0).toFixed(2))+' '+(i.currency||CFG.currency)+' | '+i.payment_status,color:'var(--amber)',data:i}));
     (consults.data||[]).forEach(c=>events.push({t:new Date(c.consultation_date||c.created_at),type:'consultation',icon:'🩺',title:'Doctor Visit'+(c.visit_type?' — '+c.visit_type:''),detail:(c.primary_diagnosis?'Dx: '+c.primary_diagnosis+' — ':'')+(c.chief_complaint||'—')+(c.consulting_doctor?' | Dr. '+c.consulting_doctor:''),color:'#7c3aed',data:c}));
