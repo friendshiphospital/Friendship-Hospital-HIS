@@ -6007,14 +6007,18 @@ async function checkCriticals() {
 }
 
 // ── NOTIFICATION BELL ─────────────────────────────────
-// Surfaces three things, each reusing tracking that already exists rather
+// Surfaces four things, each reusing tracking that already exists rather
 // than duplicating state: unacknowledged critical_values (is_acknowledged
 // — the same flag checkCriticals() above uses), invoices stuck
-// unpaid/insurance_pending past CFG.unpaidAlertHours, and patients routed
-// to Admission (visit_destination) with no matching admissions row yet,
-// past CFG.admissionAlertHours. Both thresholds are configurable from
-// Settings rather than hardcoded.
-let _notifState={crits:[],unpaid:[],pendingAdm:[]};
+// unpaid/insurance_pending past CFG.unpaidAlertHours, patients routed to
+// Admission (visit_destination) with no matching admissions row yet, past
+// CFG.admissionAlertHours, and reagent_inventory items at or below their
+// existing min_level (Phase 6 — min_level was already the per-item reorder
+// threshold field the Inventory page uses for its own low-stock row
+// highlighting; no new column was needed, just surfacing it here too
+// instead of it only being visible to someone already on that page).
+// Both time thresholds are configurable from Settings rather than hardcoded.
+let _notifState={crits:[],unpaid:[],pendingAdm:[],lowStock:[]};
 async function refreshNotifications(){
   if(!sb) return;
   try{
@@ -6022,10 +6026,11 @@ async function refreshNotifications(){
     const unpaidCutoff=new Date(now-CFG.unpaidAlertHours*3600000).toISOString();
     const admCutoff=new Date(now-CFG.admissionAlertHours*3600000).toISOString();
 
-    const [critRes,invRes,admCandRes]=await Promise.all([
+    const [critRes,invRes,admCandRes,invItemsRes]=await Promise.all([
       sb.from('critical_values').select('id,patient_id,parameter,value,department,created_at,patients(name,mrn)').eq('is_acknowledged',false).order('created_at',{ascending:false}).limit(20),
       sb.from('invoices').select('id,invoice_no,patient_name,net_amount,total_amount,currency,payment_status,created_at').in('payment_status',['unpaid','insurance_pending']).lte('created_at',unpaidCutoff).order('created_at',{ascending:true}).limit(20),
-      sb.from('patients').select('id,name,first_name,last_name,mrn,visit_destination,created_at').ilike('visit_destination','%admission%').lte('created_at',admCutoff).order('created_at',{ascending:true}).limit(40)
+      sb.from('patients').select('id,name,first_name,last_name,mrn,visit_destination,created_at').ilike('visit_destination','%admission%').lte('created_at',admCutoff).order('created_at',{ascending:true}).limit(40),
+      sb.from('reagent_inventory').select('id,item_name,current_stock,min_level,unit').eq('is_active',true)
     ]);
 
     const crits=critRes.data||[], unpaid=invRes.data||[], admCandidates=admCandRes.data||[];
@@ -6040,8 +6045,13 @@ async function refreshNotifications(){
       pendingAdm=admCandidates.filter(p=>!admittedIds.has(p.id));
     }
 
-    _notifState={crits,unpaid,pendingAdm};
-    const total=crits.length+unpaid.length+pendingAdm.length;
+    // current_stock <= min_level, same comparison the Inventory page's own
+    // row-highlighting already uses — done client-side since PostgREST
+    // can't compare one column against another in a .lte() filter.
+    const lowStock=(invItemsRes.data||[]).filter(it=>(it.current_stock||0)<=(it.min_level||0));
+
+    _notifState={crits,unpaid,pendingAdm,lowStock};
+    const total=crits.length+unpaid.length+pendingAdm.length+lowStock.length;
     const countEl=document.getElementById('notif-bell-count');
     if(countEl){ countEl.style.display=total>0?'block':'none'; countEl.textContent=total>99?'99+':total; }
     renderNotifList();
@@ -6049,8 +6059,8 @@ async function refreshNotifications(){
 }
 function renderNotifList(){
   const list=document.getElementById('notif-list'); if(!list) return;
-  const {crits,unpaid,pendingAdm}=_notifState;
-  if(!crits.length && !unpaid.length && !pendingAdm.length){
+  const {crits,unpaid,pendingAdm,lowStock}=_notifState;
+  if(!crits.length && !unpaid.length && !pendingAdm.length && !lowStock.length){
     list.innerHTML='<div style="padding:16px;text-align:center;color:var(--slate);font-size:.78rem">✅ Nothing needs attention</div>';
     return;
   }
@@ -6075,6 +6085,12 @@ function renderNotifList(){
     html+=pendingAdm.map(p=>'<div onclick="notifJumpToAdmission(\''+p.id+'\')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'">'+
       '<div style="font-weight:700;font-size:.8rem">'+(p.name||fullName(p))+' <span style="font-weight:400;color:var(--slate);font-size:.68rem">'+(p.mrn||'')+'</span></div>'+
       '<div style="font-size:.72rem;color:#1d4ed8">Routed to Admission · waiting since '+fmtDT(p.created_at)+'</div></div>').join('');
+  }
+  if(lowStock.length){
+    html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;color:#6d28d9;background:#f5f3ff">📦 Low Stock ('+lowStock.length+')</div>';
+    html+=lowStock.map(it=>'<div onclick="notifJumpToInventory()" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'">'+
+      '<div style="font-weight:700;font-size:.8rem">'+(it.item_name||'—')+'</div>'+
+      '<div style="font-size:.72rem;color:#6d28d9">'+(it.current_stock??0)+' '+(it.unit||'')+' left · reorder threshold '+(it.min_level??0)+'</div></div>').join('');
   }
   list.innerHTML=html;
 }
@@ -6103,6 +6119,10 @@ async function notifJumpToAdmission(patientId){
     const {data:p}=await sb.from('patients').select('*').eq('id',patientId).single();
     if(p) setTimeout(()=>selectAdmPatient(p), 200);
   }catch(e){}
+}
+function notifJumpToInventory(){
+  closeNotifPanel();
+  goPage('inventory');
 }
 document.addEventListener('click', (e)=>{
   const wrap=document.getElementById('notif-bell-wrap'), panel=document.getElementById('notif-panel');
