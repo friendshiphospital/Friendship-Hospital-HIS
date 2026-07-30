@@ -7,6 +7,7 @@
 <title>Friendship Hospital HIS — v2.7</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=DM+Mono:wght@400;500;700&display=swap');
 :root{
@@ -294,6 +295,19 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);font
   </div>
 </div>
 <div id="toast-wrap"></div>
+<!-- Shared camera barcode scanner modal — used by Sample Collection and
+     Sample Receiving. One instance/modal reused for both flows rather than
+     duplicating the html5-qrcode wiring per page. -->
+<div id="scan-modal" style="display:none;position:fixed;inset:0;background:rgba(14,25,40,.75);z-index:9999;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:12px;padding:16px;width:min(94vw,420px);box-shadow:0 20px 60px rgba(0,0,0,.35)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <strong id="scan-modal-title" style="font-size:.9rem">📷 Scan Barcode</strong>
+      <button class="btn btn-s btn-xs" onclick="closeBarcodeScanner()">✕</button>
+    </div>
+    <div id="scan-reader" style="width:100%;border-radius:8px;overflow:hidden"></div>
+    <div id="scan-status" style="font-size:.76rem;color:var(--slate);margin-top:8px;text-align:center">Point the camera at the barcode…</div>
+  </div>
+</div>
 <!-- AUTH SCREEN -->
 <div id="auth-screen">
   <div class="auth-card">
@@ -2337,6 +2351,18 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);font
       <option value="Urgent">Urgent</option>
       <option value="Routine">Routine</option>
     </select>
+    <select class="fc" id="wl-source-filter" onchange="loadWorklist()" style="padding:5px 9px;font-size:.78rem;width:140px">
+      <option value="">All Sources</option>
+      <option value="ICU">ICU</option>
+      <option value="Phlebotomy">Phlebotomy</option>
+      <option value="Theatre/OT">Theatre / OT</option>
+      <option value="Room 1">Room 1</option>
+      <option value="Room 2">Room 2</option>
+      <option value="Room 3">Room 3</option>
+      <option value="Room 4">Room 4</option>
+      <option value="Other Departments">Other Departments</option>
+    </select>
+    <button class="btn btn-s btn-sm" id="wl-source-sort-btn" onclick="toggleWlSourceSort()" title="Sort by sample source">⇅ Source</button>
     <div class="srch" style="flex:1;min-width:160px"><span>🔍</span><input id="wl-search" placeholder="Name, MRN, lab no…" oninput="filterWorklist(this.value)"></div>
     <button class="btn btn-s btn-sm" onclick="loadWorklist()">↻</button>
     <button class="btn btn-s btn-sm" onclick="printWorklist()">🖨</button>
@@ -2403,8 +2429,27 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);font
           <!-- Patient search -->
           <div class="fg">
             <label class="fl">Search Patient</label>
-            <div class="srch"><span>🔍</span><input id="sc-search" placeholder="Name, MRN, lab no…" oninput="searchSamplePatient(this.value)"></div>
+            <div style="display:flex;gap:6px">
+              <div class="srch" style="flex:1"><span>🔍</span><input id="sc-search" placeholder="Name, MRN, lab no…" oninput="searchSamplePatient(this.value)"></div>
+              <button class="btn btn-s btn-sm" type="button" onclick="scanForCollection()">📷 Scan</button>
+            </div>
             <div id="sc-results" style="display:none;border:1.5px solid var(--teal);border-radius:7px;background:#fff;max-height:160px;overflow-y:auto;margin-top:4px;z-index:50;position:relative"></div>
+          </div>
+          <div class="fg"><label class="fl">Sample Source *</label>
+            <select class="fc" id="sc-source" onchange="toggleSourceOther('sc-source','sc-source-other-wrap')">
+              <option value="">Select source…</option>
+              <option value="ICU">ICU</option>
+              <option value="Phlebotomy">Phlebotomy</option>
+              <option value="Theatre/OT">Theatre / OT</option>
+              <option value="Room 1">Room 1</option>
+              <option value="Room 2">Room 2</option>
+              <option value="Room 3">Room 3</option>
+              <option value="Room 4">Room 4</option>
+              <option value="Other Departments">Other Departments</option>
+            </select>
+          </div>
+          <div class="fg" id="sc-source-other-wrap" style="display:none"><label class="fl">Specify Department</label>
+            <input class="fc" id="sc-source-other" placeholder="Department name">
           </div>
           <div id="sc-pt-banner" style="display:none;background:var(--teal-lt);border:1.5px solid var(--teal2);border-radius:9px;padding:10px 14px;margin-bottom:4px">
             <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
@@ -2595,7 +2640,10 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);font
         <div class="card-body">
           <div class="fg">
             <label class="fl">Scan or Search Sample</label>
-            <div class="srch"><span>🔍</span><input id="sc-recv-search" placeholder="Lab No, MRN, patient name…" oninput="searchReceivePatient(this.value)"></div>
+            <div style="display:flex;gap:6px">
+              <div class="srch" style="flex:1"><span>🔍</span><input id="sc-recv-search" placeholder="Lab No, MRN, patient name…" oninput="searchReceivePatient(this.value)"></div>
+              <button class="btn btn-s btn-sm" type="button" onclick="scanForReceiving()">📷 Scan</button>
+            </div>
             <div id="sc-recv-results" style="display:none;border:1.5px solid var(--teal);border-radius:7px;background:#fff;max-height:160px;overflow-y:auto;margin-top:4px;z-index:50;position:relative"></div>
           </div>
           <input type="hidden" id="sc-recv-pt-id">
@@ -6930,6 +6978,7 @@ async function loadWorklist() {
     const mode=window._wlMode||'today';
     const dept=document.getElementById('wl-dept')?.value||'';
     const prio=document.getElementById('wl-priority-filter')?.value||'';
+    const srcFilter=document.getElementById('wl-source-filter')?.value||'';
     let q=sb.from('patients').select('id,name,first_name,last_name,mrn,lab_no,age,age_unit,sex,priority,diagnosis,doctor,ward,tests_requested,payment_status,visit_destination,created_at').order('created_at',{ascending:false}).limit(200);
     if(mode==='today'){ const s=new Date(); s.setHours(0,0,0,0); q=q.gte('created_at',s.toISOString()); }
     else if(mode==='week'){ const s=new Date(); s.setDate(s.getDate()-7); q=q.gte('created_at',s.toISOString()); }
@@ -6938,36 +6987,50 @@ async function loadWorklist() {
     const {data:pts}=await q;
     if(!pts?.length){ body.innerHTML='<div class="empty-state"><div class="empty-icon">🔬</div><div class="empty-title">No patients found</div></div>'; updateWlStats([]); return; }
     const ids=pts.map(p=>p.id);
-    const {data:samples}=await sb.from('sample_records').select('patient_id,status').in('patient_id',ids);
-    const sampleMap={}; (samples||[]).forEach(s=>sampleMap[s.patient_id]=s.status);
+    const {data:samples}=await sb.from('sample_records').select('patient_id,status,sample_source').in('patient_id',ids);
+    // Keyed by patient_id -> {status, source} rather than a bare status string,
+    // so the worklist can filter/sort/display sample_source alongside status.
+    const sampleMap={}; (samples||[]).forEach(s=>sampleMap[s.patient_id]={status:s.status, source:s.sample_source||''});
     updateWlStats(pts,sampleMap);
     // A sample must be physically Received (or further along) in the lab
     // before it's workable — patients whose sample is still Pending collection
     // or Collected-but-not-yet-received don't belong in the worklist at all.
     const RECEIVABLE_STATUSES = ['Received','Processing','Completed'];
-    let filtered = pts.filter(p => RECEIVABLE_STATUSES.includes(sampleMap[p.id]));
+    let filtered = pts.filter(p => RECEIVABLE_STATUSES.includes(sampleMap[p.id]?.status));
     if(dept) {
       const deptKeyMap={haematology:'hem',chemistry:'chem',serology:'sero',immunology:'immuno',microbiology:'micro',pcr:'pcr',histopathology:'histo',cytology:'cyto'};
       const meta=DEPT_META[deptKeyMap[dept]];
       filtered=filtered.filter(p=>{ const t=(p.tests_requested||[]).join(' ').toLowerCase(); return (meta?meta.keywords:[]).some(k=>t.includes(k)); });
     }
-    const statOrder={STAT:0,Critical:0,Urgent:1,Routine:2};
-    filtered.sort((a,b)=>(statOrder[a.priority]??3)-(statOrder[b.priority]??3));
+    if(srcFilter) filtered=filtered.filter(p=>(sampleMap[p.id]?.source||'')===srcFilter);
+    const sourceSort=window._wlSourceSort||null;
+    if(sourceSort){
+      filtered.sort((a,b)=>{
+        const sa=(sampleMap[a.id]?.source||'').toLowerCase(), sb3=(sampleMap[b.id]?.source||'').toLowerCase();
+        return sourceSort==='asc' ? sa.localeCompare(sb3) : sb3.localeCompare(sa);
+      });
+    } else {
+      const statOrder={STAT:0,Critical:0,Urgent:1,Routine:2};
+      filtered.sort((a,b)=>(statOrder[a.priority]??3)-(statOrder[b.priority]??3));
+    }
+    const sortBtn=document.getElementById('wl-source-sort-btn');
+    if(sortBtn) sortBtn.classList.toggle('btn-p', !!sourceSort);
     const hasStat=filtered.some(p=>p.priority==='STAT');
     const hasUnpaid=filtered.some(p=>p.payment_status==='unpaid'||p.payment_status==='insurance_pending');
     const sb2=document.getElementById('wl-stat-banner'); if(sb2) sb2.style.display=hasStat?'flex':'none';
     const ub=document.getElementById('wl-unpaid-banner'); if(ub) ub.style.display=hasUnpaid?'block':'none';
     if(!filtered.length){
-      const unreceivedCount = pts.filter(p=>sampleMap[p.id]==='Pending'||sampleMap[p.id]==='Collected').length;
+      const unreceivedCount = pts.filter(p=>sampleMap[p.id]?.status==='Pending'||sampleMap[p.id]?.status==='Collected').length;
       body.innerHTML = unreceivedCount
         ? '<div class="empty-state"><div class="empty-icon">📥</div><div class="empty-title">'+unreceivedCount+' sample(s) awaiting receipt</div><div style="font-size:.8rem;color:var(--slate);margin-top:4px">Samples must be received in the lab (Sample Collection → Receive in Lab) before they appear here.</div></div>'
         : '<div class="empty-state">No results for selected filters</div>';
       return;
     }
-    body.innerHTML='<div style="overflow-x:auto"><table class="tbl" id="wl-table"><thead><tr><th>Lab No</th><th>MRN</th><th>Name</th><th>Age/Sex</th><th>Tests</th><th>Doctor</th><th>Priority</th><th>Payment</th><th>Sample</th><th>Date</th><th>Actions</th></tr></thead><tbody>'+
+    body.innerHTML='<div style="overflow-x:auto"><table class="tbl" id="wl-table"><thead><tr><th>Lab No</th><th>MRN</th><th>Name</th><th>Age/Sex</th><th>Tests</th><th>Doctor</th><th>Priority</th><th>Payment</th><th>Sample</th><th>Source</th><th>Date</th><th>Actions</th></tr></thead><tbody>'+
       filtered.map(p=>{
         const unpaid=p.payment_status==='unpaid'||p.payment_status==='insurance_pending';
-        const stt=sampleMap[p.id]||'Pending';
+        const stt=sampleMap[p.id]?.status||'Pending';
+        const src=sampleMap[p.id]?.source||'';
         const pbg=(p.priority==='STAT'||p.priority==='Critical')?'style="background:#fff1f2"':p.priority==='Urgent'?'style="background:#fffbeb"':'';
         return '<tr class="'+(unpaid?'pay-unpaid':'')+'" '+pbg+'>'+
           '<td style="font-family:DM Mono,monospace;font-size:.7rem;font-weight:700;color:var(--teal)">'+(p.lab_no||'—')+'</td>'+
@@ -6982,6 +7045,7 @@ async function loadWorklist() {
           '<td>'+(p.priority==='STAT'?'<span class="bdg" style="background:#fef2f2;color:#b91c1c;border:1.5px solid #fca5a5">\u26a1 STAT</span>':statusBadge(p.priority))+'</td>'+
           '<td>'+paymentTag(p.payment_status)+'</td>'+
           '<td>'+statusBadge(stt)+'</td>'+
+          '<td style="font-size:.72rem">'+(src||'—')+'</td>'+
           '<td style="font-size:.7rem;color:var(--slate)">'+fmtDT(p.created_at)+'</td>'+
           '<td><div class="acts">'+
             (unpaid?'<button class="btn btn-s btn-xs" style="opacity:.5;cursor:not-allowed" title="Payment required">\ud83d\udd12 Blocked</button>':
@@ -6991,14 +7055,18 @@ async function loadWorklist() {
       }).join('')+'</tbody></table></div>';
   } catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red)">'+e.message+'</div>'; }
 }
+function toggleWlSourceSort(){
+  window._wlSourceSort = window._wlSourceSort==='asc' ? 'desc' : window._wlSourceSort==='desc' ? null : 'asc';
+  loadWorklist();
+}
 function updateWlStats(pts,sampleMap) {
   const sm=sampleMap||{};
   const se=id=>{ const el=document.getElementById(id); if(el) el.textContent=0; };
   document.getElementById('wl-cnt-total').textContent=pts.length;
-  document.getElementById('wl-cnt-pending').textContent=pts.filter(p=>!sm[p.id]||sm[p.id]==='Pending').length;
-  const ce=document.getElementById('wl-cnt-collected'); if(ce) ce.textContent=pts.filter(p=>sm[p.id]==='Collected').length;
-  const pe=document.getElementById('wl-cnt-processing'); if(pe) pe.textContent=pts.filter(p=>sm[p.id]==='Processing').length;
-  document.getElementById('wl-cnt-done').textContent=pts.filter(p=>sm[p.id]==='Completed').length;
+  document.getElementById('wl-cnt-pending').textContent=pts.filter(p=>!sm[p.id]||sm[p.id].status==='Pending').length;
+  const ce=document.getElementById('wl-cnt-collected'); if(ce) ce.textContent=pts.filter(p=>sm[p.id]?.status==='Collected').length;
+  const pe=document.getElementById('wl-cnt-processing'); if(pe) pe.textContent=pts.filter(p=>sm[p.id]?.status==='Processing').length;
+  document.getElementById('wl-cnt-done').textContent=pts.filter(p=>sm[p.id]?.status==='Completed').length;
   document.getElementById('wl-cnt-crit').textContent=pts.filter(p=>p.priority==='STAT'||p.priority==='Critical').length;
 }
 function setWlMode(mode,btn) {
@@ -7017,7 +7085,7 @@ function printWorklist() {
   const html=printHeader('Laboratory Worklist')+
     '<div style="font-size:8pt;color:#64748b;margin-bottom:10px">Generated: '+new Date().toLocaleString()+'</div>'+
     '<table style="width:100%;border-collapse:collapse"><thead><tr style="background:#1e3a5a;color:#fff">'+
-    '<th style="padding:5px 8px;font-size:8.5pt;text-align:left">Lab No</th><th style="padding:5px 8px;text-align:left">Patient</th><th style="padding:5px 8px;text-align:left">Age/Sex</th><th style="padding:5px 8px;text-align:left">Tests</th><th style="padding:5px 8px;text-align:left">Priority</th><th style="padding:5px 8px;text-align:left">Sample</th><th style="padding:5px 8px;text-align:left">Time</th></tr></thead><tbody>'+
+    '<th style="padding:5px 8px;font-size:8.5pt;text-align:left">Lab No</th><th style="padding:5px 8px;text-align:left">Patient</th><th style="padding:5px 8px;text-align:left">Age/Sex</th><th style="padding:5px 8px;text-align:left">Tests</th><th style="padding:5px 8px;text-align:left">Priority</th><th style="padding:5px 8px;text-align:left">Sample</th><th style="padding:5px 8px;text-align:left">Source</th><th style="padding:5px 8px;text-align:left">Time</th></tr></thead><tbody>'+
     [...rows].filter(r=>r.style.display!=='none').map((r,i)=>{
       const c=r.querySelectorAll('td');
       return '<tr style="background:'+(i%2?'#f8fafd':'#fff')+';border-bottom:1px solid #e2e8f0">'+
@@ -7027,7 +7095,8 @@ function printWorklist() {
         '<td style="padding:4px 8px;font-size:8pt">'+(c[4]?.textContent||'')+'</td>'+
         '<td style="padding:4px 8px;font-size:8.5pt">'+(c[6]?.textContent||'')+'</td>'+
         '<td style="padding:4px 8px;font-size:8.5pt">'+(c[8]?.textContent||'')+'</td>'+
-        '<td style="padding:4px 8px;font-size:8pt">'+(c[9]?.textContent||'')+'</td></tr>';
+        '<td style="padding:4px 8px;font-size:8pt">'+(c[9]?.textContent||'')+'</td>'+
+        '<td style="padding:4px 8px;font-size:8pt">'+(c[10]?.textContent||'')+'</td></tr>';
     }).join('')+'</tbody></table>'+
     '<div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:20px;text-align:center">'+
     '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">Lab Supervisor</div>'+
@@ -7371,9 +7440,79 @@ function switchMicroTab(tab,btn) {
 // what's actually happened (Pending at creation already exists; this adds
 // the rest of the chain), the same way for every department rather than
 // each save/release function tracking it separately.
-async function updateSampleStatus(patientId, status){
+async function updateSampleStatus(patientId, status, extra={}){
   if(!sb||!patientId) return;
-  try{ await sb.from('sample_records').update({status}).eq('patient_id',patientId); }catch(e){ /* best-effort — a missing sample_records row shouldn't block the actual save/release */ }
+  try{ await sb.from('sample_records').update({status, ...extra}).eq('patient_id',patientId); }catch(e){ /* best-effort — a missing sample_records row shouldn't block the actual save/release */ }
+}
+
+// ── BARCODE SCANNING (camera, via html5-qrcode) ──────────────────────
+// Printed sample/patient labels encode lab_no (or mrn as fallback) as the
+// barcode value — see openSampleLabelWindow's barcodeValue — with multi-tube
+// labels suffixed "-1"/"-2"/etc. This resolves a scanned code back to the
+// patient row it was printed for, stripping that tube suffix if present.
+async function resolvePatientByBarcode(code){
+  if(!sb||!code) return null;
+  const clean=String(code).trim().replace(/-\d+$/,'');
+  if(!clean) return null;
+  try{
+    const {data}=await sb.from('patients').select('id,name,first_name,last_name,mrn,lab_no,age,age_unit,sex,tests_requested,payment_status').or('lab_no.eq.'+clean+',mrn.eq.'+clean).order('created_at',{ascending:false}).limit(1);
+    return data && data.length ? data[0] : null;
+  }catch(e){ return null; }
+}
+
+let _scanInstance=null, _scanOnResult=null;
+// Shared modal + Html5Qrcode instance reused by every scan entry point
+// (scanForCollection, scanForReceiving) rather than each page wiring its
+// own camera session.
+function openBarcodeScanner(onResult, opts={}){
+  if(typeof Html5Qrcode==='undefined'){ toast('Barcode scanner library failed to load — check your connection and use search instead','err'); return; }
+  _scanOnResult=onResult;
+  const modal=document.getElementById('scan-modal'); if(!modal) return;
+  const title=document.getElementById('scan-modal-title'); if(title) title.textContent=opts.title||'📷 Scan Barcode';
+  const status=document.getElementById('scan-status'); if(status) status.textContent='Point the camera at the barcode…';
+  modal.style.display='flex';
+  try{
+    _scanInstance=new Html5Qrcode('scan-reader',{formatsToSupport:[Html5QrcodeSupportedFormats.CODE_128,Html5QrcodeSupportedFormats.CODE_39,Html5QrcodeSupportedFormats.EAN_13],verbose:false});
+    _scanInstance.start(
+      {facingMode:'environment'},
+      {fps:10,qrbox:{width:260,height:120}},
+      (decodedText)=>{ _handleScanSuccess(decodedText); },
+      ()=>{ /* per-frame "nothing decoded yet" callback — fires constantly while aiming, not an error */ }
+    ).catch(e=>{ const st=document.getElementById('scan-status'); if(st) st.textContent='⚠️ Camera unavailable: '+(e.message||e)+' — use search instead.'; });
+  }catch(e){ const st=document.getElementById('scan-status'); if(st) st.textContent='⚠️ Could not start scanner: '+(e.message||e); }
+}
+async function _handleScanSuccess(decodedText){
+  const cb=_scanOnResult;
+  await closeBarcodeScanner();
+  if(cb) cb(decodedText);
+}
+async function closeBarcodeScanner(){
+  const modal=document.getElementById('scan-modal'); if(modal) modal.style.display='none';
+  if(_scanInstance){
+    try{ await _scanInstance.stop(); _scanInstance.clear(); }catch(e){}
+    _scanInstance=null;
+  }
+}
+function scanForCollection(){
+  openBarcodeScanner(async (code)=>{
+    const p=await resolvePatientByBarcode(code);
+    if(!p){ toast('No patient found for scanned code: '+code,'err'); return; }
+    await selectScPt(p.id);
+    const srcEl=document.getElementById('sc-source');
+    if(srcEl){ srcEl.focus(); srcEl.style.outline='2px solid var(--teal)'; setTimeout(()=>{ srcEl.style.outline=''; },2000); }
+    toast('✅ Patient loaded from scan — confirm sample source','ok');
+  }, {title:'📷 Scan Patient Barcode'});
+}
+function scanForReceiving(){
+  openBarcodeScanner(async (code)=>{
+    const p=await resolvePatientByBarcode(code);
+    if(!p){ toast('No patient found for scanned code: '+code,'err'); return; }
+    if(!sb){ toast('Not connected','err'); return; }
+    const {data:rec}=await sb.from('sample_records').select('status').eq('patient_id',p.id).maybeSingle();
+    if(!rec||rec.status!=='Collected'){ toast('This sample is not awaiting receipt (status: '+(rec?.status||'no record')+')','err'); return; }
+    await selectReceivePt(p.id);
+    await markSampleReceived();
+  }, {title:'📷 Scan Sample Barcode'});
 }
 async function releaseResults(dept) {
   const meta = DEPT_META[dept], map = DEPT_LOAD_MAP[dept];
@@ -11100,6 +11239,9 @@ async function selectScPt(ptId){
 }
 async function markSampleCollected(){
   if(!sb||!_scPt){toast('Select a patient','err');return;}
+  const srcVal=document.getElementById('sc-source')?.value||'';
+  if(!srcVal){toast('Sample source is required','err');document.getElementById('sc-source')?.focus();return;}
+  if(srcVal==='Other Departments' && !document.getElementById('sc-source-other')?.value?.trim()){toast('Please specify the department','err');document.getElementById('sc-source-other')?.focus();return;}
   if(!isPaymentCleared(_scPt)){checkPaymentGate(_scPt,'Sample Collection',()=>_doMarkSampleCollected());return;}
   _doMarkSampleCollected();
 }
@@ -11107,13 +11249,15 @@ async function _doMarkSampleCollected(){
   if(!_scPt)return;
   if(!sb && navigator.onLine){toast('Not connected','err');return;}
   const g=id=>document.getElementById(id)?.value||'';
+  const sampleSource = g('sc-source')==='Other Departments' ? g('sc-source-other') : g('sc-source');
   try{
     const result = await dbWrite('sample_records','upsert',{
       patient_id:_scPt.id,status:'Collected',specimen_type:g('sc-specimen'),
       collection_site:g('sc-site'),needle_gauge:g('sc-gauge'),
       attempts:parseInt(g('sc-attempts'))||1,condition:g('sc-condition'),
       collected_by:g('sc-collector')||currentProfile?.full_name,
-      collected_at:new Date().toISOString(),notes:g('sc-notes')
+      collected_at:new Date().toISOString(),notes:g('sc-notes'),
+      sample_source:sampleSource
     },{onConflict:'patient_id'});
     toast(result.queued ? '📥 Offline — sample logged on this device, will sync later' : '✅ Sample collected', result.queued?'warn':'ok');
     if(!result.queued) {
@@ -11138,9 +11282,16 @@ async function _doMarkSampleCollected(){
       }
       _scPt = null;
       const banner=document.getElementById('sc-pt-banner'); if(banner) banner.style.display='none';
+      const srcEl=document.getElementById('sc-source'); if(srcEl) srcEl.value='';
+      const srcOtherEl=document.getElementById('sc-source-other'); if(srcOtherEl) srcOtherEl.value='';
+      toggleSourceOther('sc-source','sc-source-other-wrap');
       loadSampleQueue();
     }
   }catch(e){toast(e.message,'err');}
+}
+function toggleSourceOther(selectId, wrapId){
+  const sel=document.getElementById(selectId), wrap=document.getElementById(wrapId);
+  if(sel && wrap) wrap.style.display = sel.value==='Other Departments' ? '' : 'none';
 }
 async function searchUnreceivePatient(q){
   const box=document.getElementById('sc-unrecv-results');
@@ -11202,7 +11353,7 @@ async function markSampleReceived(){
   if(!id){toast('Search a sample first','err');return;}
   const g=x=>document.getElementById(x)?.value||'';
   try{
-    await sb.from('sample_records').update({status:'Received',received_by:g('sc-recv-by')||currentProfile?.full_name,received_at:new Date().toISOString()}).eq('patient_id',id);
+    await updateSampleStatus(id,'Received',{received_by:g('sc-recv-by')||currentProfile?.full_name,received_at:new Date().toISOString()});
     toast('✅ Sample received','ok');
     document.getElementById('sc-recv-pt-id').value='';
     document.getElementById('sc-recv-banner').style.display='none';
