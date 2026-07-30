@@ -1729,11 +1729,13 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);font
 
 <div class="page" id="page-billing">
   <!-- Stats bar -->
-  <div class="stat-grid" style="grid-template-columns:repeat(5,1fr);margin-bottom:12px">
+  <div class="stat-grid" style="grid-template-columns:repeat(7,1fr);margin-bottom:12px">
     <div class="stat-box" style="--ac:#3b82f6"><div class="stat-n" id="bill-stat-total">—</div><div class="stat-l">Total Invoices</div></div>
     <div class="stat-box" style="--ac:#ef4444"><div class="stat-n" id="bill-stat-unpaid">—</div><div class="stat-l">Unpaid</div></div>
     <div class="stat-box" style="--ac:#f59e0b"><div class="stat-n" id="bill-stat-partial">—</div><div class="stat-l">Partial</div></div>
     <div class="stat-box" style="--ac:#22c55e"><div class="stat-n" id="bill-stat-paid">—</div><div class="stat-l">Paid</div></div>
+    <div class="stat-box" style="--ac:#0ea5e9"><div class="stat-n" id="bill-stat-insurance">—</div><div class="stat-l">Insurance Pending</div></div>
+    <div class="stat-box" style="--ac:#8b5cf6"><div class="stat-n" id="bill-stat-waived">—</div><div class="stat-l">Waived</div></div>
     <div class="stat-box" style="--ac:#0b7a75"><div class="stat-n" id="bill-stat-revenue">—</div><div class="stat-l">Revenue (SDG)</div></div>
   </div>
 
@@ -2331,6 +2333,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);font
     <select class="fc" id="wl-priority-filter" onchange="loadWorklist()" style="padding:5px 9px;font-size:.78rem;width:110px">
       <option value="">All Priority</option>
       <option value="STAT">STAT ⚡</option>
+      <option value="Critical">Critical 🚨</option>
       <option value="Urgent">Urgent</option>
       <option value="Routine">Routine</option>
     </select>
@@ -5743,7 +5746,7 @@ function openPrintWin(html, title='Print') {
 async function checkCriticals() {
   if(!sb) return;
   try {
-    const {count}=await sb.from('critical_values').select('id',{count:'exact'}).eq('acknowledged',false);
+    const {count}=await sb.from('critical_values').select('id',{count:'exact'}).eq('is_acknowledged',false);
     const badge=document.getElementById('crit-badge'), banner=document.getElementById('crit-banner');
     if(badge){ badge.style.display=count>0?'flex':'none'; badge.textContent=count||0; }
     if(banner){ banner.classList.toggle('has-crits',count>0); }
@@ -5761,7 +5764,7 @@ async function loadDashboard() {
       sb.from('admissions').select('id,ward,status',{count:'exact'}).eq('status','Active'),
       sb.from('results_hematology').select('id',{count:'exact'}).eq('is_verified',true).gte('created_at',td+'T00:00:00'),
       sb.from('results_chemistry').select('id',{count:'exact'}).eq('is_verified',true).gte('created_at',td+'T00:00:00'),
-      sb.from('critical_values').select('id',{count:'exact'}).eq('acknowledged',false),
+      sb.from('critical_values').select('id',{count:'exact'}).eq('is_acknowledged',false),
       sb.from('beds').select('status'),
       sb.from('admissions').select('id',{count:'exact'}).eq('status','Discharged').gte('discharge_date',td+'T00:00:00'),
     ]);
@@ -6542,7 +6545,7 @@ async function loadActiveOrders() {
   const el=document.getElementById('active-orders-list');
   if(!el||!_docPt?.id||!sb) return;
   try {
-    const {data}=await sb.from('doctor_orders').select('*').eq('patient_id',_docPt.id).not('status','in','("Done","Cancelled")').order('ordered_at',{ascending:false}).limit(20);
+    const {data}=await sb.from('doctor_orders').select('*').eq('patient_id',_docPt.id).neq('status','Cancelled').order('ordered_at',{ascending:false}).limit(20);
     if(!data?.length){el.innerHTML='<div style="font-size:.78rem;color:var(--slate);padding:8px 0">No active orders</div>';return;}
     const tc={Lab:'#dbeafe',Radiology:'#ede9fe',Nursing:'#dcfce7',Diet:'#fef9c3',Physio:'#fce7f3',Other:'#f3f4f6'};
     el.innerHTML=data.map(o=>'<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)">'+
@@ -6739,7 +6742,7 @@ async function loadAppointments() {
     const fd=document.getElementById('appt-filter-date')?.value||today();
     const [{data:todayA},{data:allA}]=await Promise.all([sb.from('appointments').select('*').eq('appointment_date',today()).order('appointment_time'),sb.from('appointments').select('*').eq('appointment_date',fd).order('appointment_time')]);
     const rr=a=>'<tr><td>'+( a.appointment_time||'—')+'</td><td>'+(a.patient_name||'—')+'</td><td>'+statusBadge(a.appt_type)+'</td><td>'+(a.doctor||'—')+'</td><td>'+statusBadge(a.status)+'</td><td><div class="acts"><button class="btn btn-s btn-xs" onclick="updateApptStatus(\''+a.id+'\',\'Arrived\')">✅</button><button class="btn btn-r btn-xs" onclick="updateApptStatus(\''+a.id+'\',\'Cancelled\')">✕</button></div></td></tr>';
-    const waiting=(todayA||[]).filter(a=>a.status!=='Cancelled'&&a.status!=='Done');
+    const waiting=(todayA||[]).filter(a=>a.status!=='Cancelled');
     waitBody.innerHTML=waiting.length?'<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Time</th><th>Patient</th><th>Type</th><th>Doctor</th><th>Status</th><th></th></tr></thead><tbody>'+waiting.map(rr).join('')+'</tbody></table></div>':'<div class="empty-state"><div class="empty-icon">🚶</div><div class="empty-title">No patients waiting today</div></div>';
     listBody.innerHTML=allA?.length?'<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Time</th><th>Patient</th><th>Type</th><th>Doctor</th><th>Status</th><th></th></tr></thead><tbody>'+allA.map(rr).join('')+'</tbody></table></div>':'<div class="empty-state"><div class="empty-icon">📅</div><div class="empty-title">No appointments on this date</div></div>';
   } catch(e){ waitBody.innerHTML='<div style="padding:10px;color:var(--red);font-size:.78rem">'+e.message+'</div>'; }
@@ -6941,14 +6944,14 @@ async function loadWorklist() {
     // A sample must be physically Received (or further along) in the lab
     // before it's workable — patients whose sample is still Pending collection
     // or Collected-but-not-yet-received don't belong in the worklist at all.
-    const RECEIVABLE_STATUSES = ['Received','Processing','Complete'];
+    const RECEIVABLE_STATUSES = ['Received','Processing','Completed'];
     let filtered = pts.filter(p => RECEIVABLE_STATUSES.includes(sampleMap[p.id]));
     if(dept) {
       const deptKeyMap={haematology:'hem',chemistry:'chem',serology:'sero',immunology:'immuno',microbiology:'micro',pcr:'pcr',histopathology:'histo',cytology:'cyto'};
       const meta=DEPT_META[deptKeyMap[dept]];
       filtered=filtered.filter(p=>{ const t=(p.tests_requested||[]).join(' ').toLowerCase(); return (meta?meta.keywords:[]).some(k=>t.includes(k)); });
     }
-    const statOrder={STAT:0,Urgent:1,Routine:2};
+    const statOrder={STAT:0,Critical:0,Urgent:1,Routine:2};
     filtered.sort((a,b)=>(statOrder[a.priority]??3)-(statOrder[b.priority]??3));
     const hasStat=filtered.some(p=>p.priority==='STAT');
     const hasUnpaid=filtered.some(p=>p.payment_status==='unpaid'||p.payment_status==='insurance_pending');
@@ -6965,7 +6968,7 @@ async function loadWorklist() {
       filtered.map(p=>{
         const unpaid=p.payment_status==='unpaid'||p.payment_status==='insurance_pending';
         const stt=sampleMap[p.id]||'Pending';
-        const pbg=p.priority==='STAT'?'style="background:#fff1f2"':p.priority==='Urgent'?'style="background:#fffbeb"':'';
+        const pbg=(p.priority==='STAT'||p.priority==='Critical')?'style="background:#fff1f2"':p.priority==='Urgent'?'style="background:#fffbeb"':'';
         return '<tr class="'+(unpaid?'pay-unpaid':'')+'" '+pbg+'>'+
           '<td style="font-family:DM Mono,monospace;font-size:.7rem;font-weight:700;color:var(--teal)">'+(p.lab_no||'—')+'</td>'+
           '<td style="font-size:.72rem">'+(p.mrn||'—')+'</td>'+
@@ -6995,7 +6998,7 @@ function updateWlStats(pts,sampleMap) {
   document.getElementById('wl-cnt-pending').textContent=pts.filter(p=>!sm[p.id]||sm[p.id]==='Pending').length;
   const ce=document.getElementById('wl-cnt-collected'); if(ce) ce.textContent=pts.filter(p=>sm[p.id]==='Collected').length;
   const pe=document.getElementById('wl-cnt-processing'); if(pe) pe.textContent=pts.filter(p=>sm[p.id]==='Processing').length;
-  document.getElementById('wl-cnt-done').textContent=pts.filter(p=>sm[p.id]==='Complete').length;
+  document.getElementById('wl-cnt-done').textContent=pts.filter(p=>sm[p.id]==='Completed').length;
   document.getElementById('wl-cnt-crit').textContent=pts.filter(p=>p.priority==='STAT'||p.priority==='Critical').length;
 }
 function setWlMode(mode,btn) {
@@ -7260,7 +7263,7 @@ async function loadPthTimeline() {
     const pt=labPt.data;
     if(pt) events.push({t:new Date(pt.created_at),type:'lab',icon:'📋',title:'Patient Registered',detail:'Tests: '+((pt.tests_requested||[]).join(', ')||'—'),color:'var(--teal)',data:pt});
     (adms.data||[]).forEach(a=>events.push({t:new Date(a.admission_date),type:'admission',icon:'🛏',title:'Admitted — '+(a.ward||''),detail:(a.primary_diagnosis||'—')+' | Dr. '+(a.admitting_doctor||'—')+' | '+a.status,color:'var(--blue)',data:a}));
-    (crits.data||[]).forEach(c=>events.push({t:new Date(c.notified_at),type:'lab',icon:'🚨',title:'Critical: '+c.test_name,detail:'Value: '+c.result_value+' | '+(c.acknowledged?'Acknowledged':'⚠️ Unacknowledged'),color:'var(--red)',data:c}));
+    (crits.data||[]).forEach(c=>events.push({t:new Date(c.notified_at),type:'lab',icon:'🚨',title:'Critical: '+c.test_name,detail:'Value: '+c.result_value+' | '+(c.is_acknowledged?'Acknowledged':'⚠️ Unacknowledged'),color:'var(--red)',data:c}));
     (rads.data||[]).forEach(r=>events.push({t:new Date(r.created_at),type:'radiology',icon:'🩻',title:r.imaging_type||'Radiology',detail:(r.urgency||'')+' | '+(r.status||'Requested'),color:'var(--sero)',data:r}));
     (invs.data||[]).forEach(i=>events.push({t:new Date(i.created_at),type:'billing',icon:'💰',title:'Invoice '+(i.invoice_no||''),detail:((i.net_amount||0).toFixed(2))+' '+(i.currency||CFG.currency)+' | '+i.payment_status,color:'var(--amber)',data:i}));
     (consults.data||[]).forEach(c=>events.push({t:new Date(c.consultation_date||c.created_at),type:'consultation',icon:'🩺',title:'Doctor Visit'+(c.visit_type?' — '+c.visit_type:''),detail:(c.primary_diagnosis?'Dx: '+c.primary_diagnosis+' — ':'')+(c.chief_complaint||'—')+(c.consulting_doctor?' | Dr. '+c.consulting_doctor:''),color:'#7c3aed',data:c}));
@@ -9438,12 +9441,16 @@ function updateBillStats(invoices) {
   const unpaid = invoices.filter(i=>i.payment_status==='unpaid').length;
   const partial = invoices.filter(i=>i.payment_status==='partial').length;
   const paid = invoices.filter(i=>i.payment_status==='paid').length;
+  const insurance = invoices.filter(i=>i.payment_status==='insurance_pending').length;
+  const waived = invoices.filter(i=>i.payment_status==='waived').length;
   const revenue = invoices.filter(i=>i.payment_status==='paid').reduce((s,i)=>s+(i.net_amount||i.total_amount||0),0);
   const se = (id,v) => { const el=document.getElementById(id); if(el) el.textContent=v; };
   se('bill-stat-total', total);
   se('bill-stat-unpaid', unpaid);
   se('bill-stat-partial', partial);
   se('bill-stat-paid', paid);
+  se('bill-stat-insurance', insurance);
+  se('bill-stat-waived', waived);
   se('bill-stat-revenue', revenue.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0}));
 }
 
