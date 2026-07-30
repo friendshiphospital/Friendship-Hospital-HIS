@@ -6941,7 +6941,7 @@ async function loadWorklist() {
     // A sample must be physically Received (or further along) in the lab
     // before it's workable — patients whose sample is still Pending collection
     // or Collected-but-not-yet-received don't belong in the worklist at all.
-    const RECEIVABLE_STATUSES = ['Received','Processing','Complete'];
+    const RECEIVABLE_STATUSES = ['Received','Processing','Completed'];
     let filtered = pts.filter(p => RECEIVABLE_STATUSES.includes(sampleMap[p.id]));
     if(dept) {
       const deptKeyMap={haematology:'hem',chemistry:'chem',serology:'sero',immunology:'immuno',microbiology:'micro',pcr:'pcr',histopathology:'histo',cytology:'cyto'};
@@ -6995,7 +6995,7 @@ function updateWlStats(pts,sampleMap) {
   document.getElementById('wl-cnt-pending').textContent=pts.filter(p=>!sm[p.id]||sm[p.id]==='Pending').length;
   const ce=document.getElementById('wl-cnt-collected'); if(ce) ce.textContent=pts.filter(p=>sm[p.id]==='Collected').length;
   const pe=document.getElementById('wl-cnt-processing'); if(pe) pe.textContent=pts.filter(p=>sm[p.id]==='Processing').length;
-  document.getElementById('wl-cnt-done').textContent=pts.filter(p=>sm[p.id]==='Complete').length;
+  document.getElementById('wl-cnt-done').textContent=pts.filter(p=>sm[p.id]==='Completed').length;
   document.getElementById('wl-cnt-crit').textContent=pts.filter(p=>p.priority==='STAT'||p.priority==='Critical').length;
 }
 function setWlMode(mode,btn) {
