@@ -6544,7 +6544,7 @@ async function loadActiveOrders() {
   const el=document.getElementById('active-orders-list');
   if(!el||!_docPt?.id||!sb) return;
   try {
-    const {data}=await sb.from('doctor_orders').select('*').eq('patient_id',_docPt.id).not('status','in','("Done","Cancelled")').order('ordered_at',{ascending:false}).limit(20);
+    const {data}=await sb.from('doctor_orders').select('*').eq('patient_id',_docPt.id).neq('status','Cancelled').order('ordered_at',{ascending:false}).limit(20);
     if(!data?.length){el.innerHTML='<div style="font-size:.78rem;color:var(--slate);padding:8px 0">No active orders</div>';return;}
     const tc={Lab:'#dbeafe',Radiology:'#ede9fe',Nursing:'#dcfce7',Diet:'#fef9c3',Physio:'#fce7f3',Other:'#f3f4f6'};
     el.innerHTML=data.map(o=>'<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)">'+
