@@ -1729,11 +1729,13 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);font
 
 <div class="page" id="page-billing">
   <!-- Stats bar -->
-  <div class="stat-grid" style="grid-template-columns:repeat(5,1fr);margin-bottom:12px">
+  <div class="stat-grid" style="grid-template-columns:repeat(7,1fr);margin-bottom:12px">
     <div class="stat-box" style="--ac:#3b82f6"><div class="stat-n" id="bill-stat-total">—</div><div class="stat-l">Total Invoices</div></div>
     <div class="stat-box" style="--ac:#ef4444"><div class="stat-n" id="bill-stat-unpaid">—</div><div class="stat-l">Unpaid</div></div>
     <div class="stat-box" style="--ac:#f59e0b"><div class="stat-n" id="bill-stat-partial">—</div><div class="stat-l">Partial</div></div>
     <div class="stat-box" style="--ac:#22c55e"><div class="stat-n" id="bill-stat-paid">—</div><div class="stat-l">Paid</div></div>
+    <div class="stat-box" style="--ac:#0ea5e9"><div class="stat-n" id="bill-stat-insurance">—</div><div class="stat-l">Insurance Pending</div></div>
+    <div class="stat-box" style="--ac:#8b5cf6"><div class="stat-n" id="bill-stat-waived">—</div><div class="stat-l">Waived</div></div>
     <div class="stat-box" style="--ac:#0b7a75"><div class="stat-n" id="bill-stat-revenue">—</div><div class="stat-l">Revenue (SDG)</div></div>
   </div>
 
@@ -9438,12 +9440,16 @@ function updateBillStats(invoices) {
   const unpaid = invoices.filter(i=>i.payment_status==='unpaid').length;
   const partial = invoices.filter(i=>i.payment_status==='partial').length;
   const paid = invoices.filter(i=>i.payment_status==='paid').length;
+  const insurance = invoices.filter(i=>i.payment_status==='insurance_pending').length;
+  const waived = invoices.filter(i=>i.payment_status==='waived').length;
   const revenue = invoices.filter(i=>i.payment_status==='paid').reduce((s,i)=>s+(i.net_amount||i.total_amount||0),0);
   const se = (id,v) => { const el=document.getElementById(id); if(el) el.textContent=v; };
   se('bill-stat-total', total);
   se('bill-stat-unpaid', unpaid);
   se('bill-stat-partial', partial);
   se('bill-stat-paid', paid);
+  se('bill-stat-insurance', insurance);
+  se('bill-stat-waived', waived);
   se('bill-stat-revenue', revenue.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0}));
 }
 
