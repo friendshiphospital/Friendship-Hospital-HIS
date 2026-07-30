@@ -430,6 +430,18 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);font
         <div id="gs-results" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1.5px solid var(--teal);border-radius:8px;margin-top:4px;max-height:340px;overflow-y:auto;z-index:300;box-shadow:0 10px 28px rgba(0,0,0,.18)"></div>
       </div>
       <div style="display:flex;align-items:center;gap:8px">
+        <div id="notif-bell-wrap" style="position:relative">
+          <button class="btn btn-s btn-sm" onclick="toggleNotifPanel()" title="Notifications" style="position:relative">
+            🔔<span id="notif-bell-count" style="display:none;position:absolute;top:-6px;right:-6px;background:#ef4444;color:#fff;border-radius:10px;font-size:.62rem;font-weight:700;padding:1px 5px;min-width:16px;text-align:center;line-height:1.4">0</span>
+          </button>
+          <div id="notif-panel" style="display:none;position:absolute;top:100%;right:0;margin-top:6px;width:340px;max-height:420px;overflow-y:auto;background:#fff;border:1.5px solid var(--teal);border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,.2);z-index:300">
+            <div style="padding:10px 12px;border-bottom:1px solid var(--border);font-weight:700;font-size:.82rem;display:flex;justify-content:space-between;align-items:center">
+              <span>🔔 Notifications</span>
+              <button class="btn btn-s btn-xs" onclick="refreshNotifications()">↻</button>
+            </div>
+            <div id="notif-list" style="padding:6px 0"></div>
+          </div>
+        </div>
         <span style="font-size:.72rem;color:var(--slate)" id="topbar-date"></span>
         <button class="btn btn-s btn-sm" onclick="goPage('register')">+ Register Patient</button>
       </div>
@@ -3525,6 +3537,11 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);font
         <select class="fc" id="cfg-currency"><option value="SDG">SDG — Sudanese Pound</option><option value="USD">USD — US Dollar</option><option value="SAR">SAR — Saudi Riyal</option><option value="OMR">OMR — Omani Rial</option></select></div>
       <div class="fg"><label class="fl">Lab Number Prefix</label><input class="fc" id="cfg-lab-prefix" value="FH" maxlength="6"></div>
       <div class="fg"><label class="fl">Report Footer Text</label><textarea class="fc" id="cfg-footer" rows="2">Results are valid for 24 hours. For queries contact the laboratory.</textarea></div>
+      <div class="g2">
+        <div class="fg"><label class="fl">Unpaid Invoice Alert (hours)</label><input class="fc" type="number" min="1" id="cfg-unpaid-alert-hours" placeholder="72"></div>
+        <div class="fg"><label class="fl">Pending Admission Alert (hours)</label><input class="fc" type="number" min="1" id="cfg-admission-alert-hours" placeholder="4"></div>
+      </div>
+      <div style="font-size:.7rem;color:var(--slate);margin:-6px 0 10px">How long an invoice stays unpaid, or a patient routed to Admission stays un-admitted, before the notification bell flags it.</div>
       <button class="btn btn-p" onclick="saveSettings()" style="width:100%;justify-content:center">💾 Save Settings</button>
       <div id="cfg-status" style="margin-top:7px;font-size:.78rem;color:var(--green)"></div>
     </div></div>
@@ -5252,6 +5269,10 @@ const CFG = {
   get currency(){ return localStorage.getItem('cfg_currency')||'SDG'; },
   get prefix(){ return localStorage.getItem('cfg_lab_prefix')||'FH'; },
   get footer(){ return localStorage.getItem('cfg_footer')||'Results are valid for 24 hours.'; },
+  // Notification thresholds (Phase 3) — configurable rather than hardcoded,
+  // so a site can tune what counts as "overdue" without editing code.
+  get unpaidAlertHours(){ return parseFloat(localStorage.getItem('cfg_unpaid_alert_hours'))||72; },
+  get admissionAlertHours(){ return parseFloat(localStorage.getItem('cfg_admission_alert_hours'))||4; },
 };
 
 const ROLE_PAGES = {
@@ -5453,6 +5474,7 @@ function showApp() {
   filterSidebar(); loadSettings(); goPage('dashboard');
   updateTopbarDate(); setInterval(updateTopbarDate,60000);
   checkCriticals(); setInterval(checkCriticals,120000);
+  refreshNotifications(); setInterval(refreshNotifications,120000);
 }
 function filterSidebar() {
   const role=currentProfile?.role||'admin';
@@ -5555,6 +5577,8 @@ function loadSettings() {
   const g=(id,key)=>{ const el=document.getElementById(id); if(el){ const v=localStorage.getItem(key); if(v) el.value=v; } };
   g('cfg-hosp-name','cfg_hosp_name'); g('cfg-addr1','cfg_addr1'); g('cfg-phone','cfg_phone');
   g('cfg-email','cfg_email'); g('cfg-currency','cfg_currency'); g('cfg-lab-prefix','cfg_lab_prefix'); g('cfg-footer','cfg_footer');
+  const uah=document.getElementById('cfg-unpaid-alert-hours'); if(uah) uah.value=CFG.unpaidAlertHours;
+  const aah=document.getElementById('cfg-admission-alert-hours'); if(aah) aah.value=CFG.admissionAlertHours;
   const cu=document.getElementById('cfg-sb-url'); if(cu) cu.value=localStorage.getItem('sb_url')||'';
   const ck=document.getElementById('cfg-sb-key'); if(ck) ck.value=localStorage.getItem('sb_key')||'';
   loadBedConfig();
@@ -5603,8 +5627,11 @@ function saveSettings() {
   localStorage.setItem('cfg_phone',g('cfg-phone')); localStorage.setItem('cfg_email',g('cfg-email'));
   localStorage.setItem('cfg_currency',g('cfg-currency')); localStorage.setItem('cfg_lab_prefix',g('cfg-lab-prefix'));
   localStorage.setItem('cfg_footer',g('cfg-footer'));
+  const uah=parseFloat(g('cfg-unpaid-alert-hours')); localStorage.setItem('cfg_unpaid_alert_hours', (isNaN(uah)||uah<=0)?72:uah);
+  const aah=parseFloat(g('cfg-admission-alert-hours')); localStorage.setItem('cfg_admission_alert_hours', (isNaN(aah)||aah<=0)?4:aah);
   const st=document.getElementById('cfg-status'); if(st){ st.textContent='✅ Settings saved'; setTimeout(()=>st.textContent='',3000); }
   toast('Settings saved','ok');
+  refreshNotifications();
 }
 function saveSbCfg() {
   const url=document.getElementById('cfg-sb-url')?.value?.trim(), key=document.getElementById('cfg-sb-key')?.value?.trim();
@@ -5808,6 +5835,109 @@ async function checkCriticals() {
     if(count>0){ const t=document.getElementById('crit-banner-text'); if(t) t.textContent=count+' unacknowledged critical value'+(count!==1?'s':''); }
   } catch(e){}
 }
+
+// ── NOTIFICATION BELL ─────────────────────────────────
+// Surfaces three things, each reusing tracking that already exists rather
+// than duplicating state: unacknowledged critical_values (is_acknowledged
+// — the same flag checkCriticals() above uses), invoices stuck
+// unpaid/insurance_pending past CFG.unpaidAlertHours, and patients routed
+// to Admission (visit_destination) with no matching admissions row yet,
+// past CFG.admissionAlertHours. Both thresholds are configurable from
+// Settings rather than hardcoded.
+let _notifState={crits:[],unpaid:[],pendingAdm:[]};
+async function refreshNotifications(){
+  if(!sb) return;
+  try{
+    const now=Date.now();
+    const unpaidCutoff=new Date(now-CFG.unpaidAlertHours*3600000).toISOString();
+    const admCutoff=new Date(now-CFG.admissionAlertHours*3600000).toISOString();
+
+    const [critRes,invRes,admCandRes]=await Promise.all([
+      sb.from('critical_values').select('id,patient_id,parameter,value,department,created_at,patients(name,mrn)').eq('is_acknowledged',false).order('created_at',{ascending:false}).limit(20),
+      sb.from('invoices').select('id,invoice_no,patient_name,net_amount,total_amount,currency,payment_status,created_at').in('payment_status',['unpaid','insurance_pending']).lte('created_at',unpaidCutoff).order('created_at',{ascending:true}).limit(20),
+      sb.from('patients').select('id,name,first_name,last_name,mrn,visit_destination,created_at').ilike('visit_destination','%admission%').lte('created_at',admCutoff).order('created_at',{ascending:true}).limit(40)
+    ]);
+
+    const crits=critRes.data||[], unpaid=invRes.data||[], admCandidates=admCandRes.data||[];
+
+    // "Pending admission" = routed to Admission at registration but never
+    // actually admitted — exclude anyone who already has an admissions row.
+    let pendingAdm=[];
+    if(admCandidates.length){
+      const ids=admCandidates.map(p=>p.id);
+      const {data:existing}=await sb.from('admissions').select('patient_id').in('patient_id',ids);
+      const admittedIds=new Set((existing||[]).map(a=>a.patient_id));
+      pendingAdm=admCandidates.filter(p=>!admittedIds.has(p.id));
+    }
+
+    _notifState={crits,unpaid,pendingAdm};
+    const total=crits.length+unpaid.length+pendingAdm.length;
+    const countEl=document.getElementById('notif-bell-count');
+    if(countEl){ countEl.style.display=total>0?'block':'none'; countEl.textContent=total>99?'99+':total; }
+    renderNotifList();
+  }catch(e){ /* best-effort — a failed notification refresh shouldn't interrupt anything else */ }
+}
+function renderNotifList(){
+  const list=document.getElementById('notif-list'); if(!list) return;
+  const {crits,unpaid,pendingAdm}=_notifState;
+  if(!crits.length && !unpaid.length && !pendingAdm.length){
+    list.innerHTML='<div style="padding:16px;text-align:center;color:var(--slate);font-size:.78rem">✅ Nothing needs attention</div>';
+    return;
+  }
+  let html='';
+  if(crits.length){
+    html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;color:#b91c1c;background:#fff1f2">🚨 Unacknowledged Criticals ('+crits.length+')</div>';
+    html+=crits.map(c=>{
+      const pt=c.patients||{};
+      return '<div onclick="notifJumpToCritical()" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'">'+
+        '<div style="font-weight:700;font-size:.8rem">'+(pt.name||'—')+' <span style="font-weight:400;color:var(--slate);font-size:.68rem">'+(pt.mrn||'')+'</span></div>'+
+        '<div style="font-size:.72rem;color:#b91c1c">'+(c.parameter||'')+' = '+(c.value||'')+' · '+fmtDT(c.created_at)+'</div></div>';
+    }).join('');
+  }
+  if(unpaid.length){
+    html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;color:#92400e;background:#fffbeb">💰 Unpaid Invoices ('+unpaid.length+')</div>';
+    html+=unpaid.map(i=>'<div onclick="notifJumpToInvoice(\''+i.id+'\')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'">'+
+      '<div style="font-weight:700;font-size:.8rem">'+(i.invoice_no||'—')+' <span style="font-weight:400;color:var(--slate);font-size:.68rem">'+(i.patient_name||'')+'</span></div>'+
+      '<div style="font-size:.72rem;color:#92400e">'+((i.net_amount??i.total_amount??0).toFixed(2))+' '+(i.currency||CFG.currency)+' · overdue since '+fmtDT(i.created_at)+'</div></div>').join('');
+  }
+  if(pendingAdm.length){
+    html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;color:#1d4ed8;background:#eff6ff">🛏 Pending Admissions ('+pendingAdm.length+')</div>';
+    html+=pendingAdm.map(p=>'<div onclick="notifJumpToAdmission(\''+p.id+'\')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'">'+
+      '<div style="font-weight:700;font-size:.8rem">'+(p.name||fullName(p))+' <span style="font-weight:400;color:var(--slate);font-size:.68rem">'+(p.mrn||'')+'</span></div>'+
+      '<div style="font-size:.72rem;color:#1d4ed8">Routed to Admission · waiting since '+fmtDT(p.created_at)+'</div></div>').join('');
+  }
+  list.innerHTML=html;
+}
+function toggleNotifPanel(){
+  const panel=document.getElementById('notif-panel'); if(!panel) return;
+  const opening = panel.style.display==='none' || !panel.style.display;
+  panel.style.display = opening ? 'block' : 'none';
+  if(opening) refreshNotifications();
+}
+function closeNotifPanel(){
+  const panel=document.getElementById('notif-panel'); if(panel) panel.style.display='none';
+}
+function notifJumpToCritical(){
+  closeNotifPanel();
+  goPage('criticals');
+}
+function notifJumpToInvoice(id){
+  closeNotifPanel();
+  jumpToInvoice(id);
+}
+async function notifJumpToAdmission(patientId){
+  closeNotifPanel();
+  goPage('admission');
+  if(!sb||!patientId) return;
+  try{
+    const {data:p}=await sb.from('patients').select('*').eq('id',patientId).single();
+    if(p) setTimeout(()=>selectAdmPatient(p), 200);
+  }catch(e){}
+}
+document.addEventListener('click', (e)=>{
+  const wrap=document.getElementById('notif-bell-wrap'), panel=document.getElementById('notif-panel');
+  if(panel && panel.style.display!=='none' && wrap && !wrap.contains(e.target)) panel.style.display='none';
+});
 
 // ── DASHBOARD ─────────────────────────────────────────
 async function loadDashboard() {
