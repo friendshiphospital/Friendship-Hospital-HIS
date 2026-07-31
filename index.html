@@ -3235,11 +3235,19 @@ html[dir="rtl"] body{direction:rtl;}
           <div class="fg"><label class="fl">Qualifications</label>
             <input class="fc" id="stf-qualifications" placeholder="e.g. BSc MLT, ASCP, ISO">
           </div>
-          <div style="background:#fffbeb;border:1.5px solid #fde68a;border-radius:8px;padding:10px 12px;font-size:.75rem;color:#92400e;margin-bottom:10px;line-height:1.6">
-            ⚠️ <strong>Login Access:</strong> To give system access, invite the user via <strong>Supabase → Authentication → Users → Invite</strong>, then link their UUID below. The role set here controls what pages they can see.
+          <div id="stf-new-account-fields">
+            <div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:8px;padding:10px 12px;font-size:.75rem;color:#166534;margin-bottom:10px;line-height:1.6">
+              ✅ <strong>Login Access:</strong> creating a staff member here creates their sign-in account and links it in one step — there's no separate "invite in Supabase, then paste a UUID" process anymore. Requires the <code>create-staff-account</code> Edge Function to be deployed.
+            </div>
+            <div class="fg"><label class="fl">Login Email *</label>
+              <input class="fc" id="stf-login-email" type="email" placeholder="For signing in — can differ from the contact email above">
+            </div>
+            <div class="fg"><label class="fl">Temporary Password *</label>
+              <input class="fc" id="stf-password" type="password" placeholder="At least 8 characters" minlength="8">
+            </div>
           </div>
-          <div class="fg"><label class="fl">Supabase User ID (UUID)</label>
-            <input class="fc" id="stf-user-id" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" style="font-family:DM Mono,monospace;font-size:.72rem">
+          <div id="stf-edit-account-note" style="display:none;background:#f8fafd;border:1.5px solid var(--border);border-radius:8px;padding:10px 12px;font-size:.75rem;color:var(--slate);margin-bottom:10px;line-height:1.6">
+            ℹ️ Login credentials aren't changed here. This updates the staff record's details and role only.
           </div>
           <div style="display:flex;gap:8px;margin-top:4px">
             <button class="btn btn-p" onclick="saveStaff()" style="flex:2;justify-content:center">💾 Save Staff</button>
@@ -11121,25 +11129,49 @@ function filterStaff(q) {
   });
 }
 
+// Editing an existing staff row never touches auth \u2014 only saveStaff()'s
+// "new staff" branch (below) creates a login, via the create-staff-account
+// Edge Function, since that's the only place a service_role-only operation
+// (creating an auth user with a set password) can happen. See Step 3 of
+// the staff-account security fix: this replaces the old two-step "invite
+// in the Supabase dashboard, then paste the UUID here" flow, which is how
+// staff rows with no (or a mismatched) user_id happened in the first
+// place.
 async function saveStaff() {
   if(!sb){toast('Not connected','err');return;}
   const g=id=>document.getElementById(id)?.value||'';
   if(!g('stf-name')){toast('Full name required','err');return;}
   const editId=g('stf-edit-id');
-  const payload={full_name:g('stf-name'),role:g('stf-role'),department:g('stf-dept'),phone:g('stf-phone'),email:g('stf-email'),status:g('stf-status'),hire_date:g('stf-hire-date')||null,qualifications:g('stf-qualifications'),national_id:g('stf-national-id')};
-  if(g('stf-user-id')) payload.user_id=g('stf-user-id');
-  try {
-    if(editId){
+  if(editId){
+    const payload={full_name:g('stf-name'),role:g('stf-role'),department:g('stf-dept'),phone:g('stf-phone'),email:g('stf-email'),status:g('stf-status'),hire_date:g('stf-hire-date')||null,qualifications:g('stf-qualifications'),national_id:g('stf-national-id')};
+    try {
       await sb.from('staff').update(payload).eq('id',editId);
       toast('\u2705 Staff updated','ok');
-    } else {
-      await sb.from('staff').insert(payload);
-      toast('\u2705 Staff saved','ok');
-    }
+      clearStaffForm(); loadStaff();
+      document.querySelectorAll('#staff-tabs .tab')[0]?.click();
+    } catch(e){ toast(e.message,'err'); }
+    return;
+  }
+  const loginEmail=g('stf-login-email'), password=g('stf-password');
+  if(!loginEmail){ toast('Login email is required','err'); return; }
+  if(!password||password.length<8){ toast('Password must be at least 8 characters','err'); return; }
+  const btn=document.querySelector('#stf-tab-add .btn-p'); if(btn){ btn.disabled=true; btn.textContent='Creating\u2026'; }
+  try {
+    const {data,error}=await sb.functions.invoke('create-staff-account',{body:{
+      full_name:g('stf-name'), email:loginEmail, password, role:g('stf-role'),
+      department:g('stf-dept')||null, phone:g('stf-phone')||null,
+      national_id:g('stf-national-id')||null, hire_date:g('stf-hire-date')||null,
+      qualifications:g('stf-qualifications')||null,
+    }});
+    if(error || data?.error) throw new Error(data?.error || error.message || 'Failed to create staff account');
+    toast('\u2705 Staff account created \u2014 they can sign in immediately','ok');
     clearStaffForm(); loadStaff();
-    // Switch to list tab
     document.querySelectorAll('#staff-tabs .tab')[0]?.click();
-  } catch(e){toast(e.message,'err');}
+  } catch(e){
+    toast(e.message,'err');
+  } finally {
+    if(btn){ btn.disabled=false; btn.innerHTML='\ud83d\udcbe Save Staff'; }
+  }
 }
 
 async function editStaff(id) {
@@ -11157,8 +11189,9 @@ async function editStaff(id) {
     document.getElementById('stf-hire-date').value=s.hire_date||'';
     document.getElementById('stf-qualifications').value=s.qualifications||'';
     document.getElementById('stf-national-id').value=s.national_id||'';
-    document.getElementById('stf-user-id').value=s.user_id||'';
     document.getElementById('stf-form-title').textContent='\u270f\ufe0f Edit Staff Member';
+    const newFields=document.getElementById('stf-new-account-fields'); if(newFields) newFields.style.display='none';
+    const editNote=document.getElementById('stf-edit-account-note'); if(editNote) editNote.style.display='';
     document.querySelectorAll('#staff-tabs .tab')[1]?.click();
   } catch(e){toast(e.message,'err');}
 }
@@ -11172,8 +11205,10 @@ async function deleteStaff(id) {
 }
 
 function clearStaffForm() {
-  ['stf-edit-id','stf-name','stf-phone','stf-email','stf-national-id','stf-hire-date','stf-qualifications','stf-user-id'].forEach(id=>{const el=document.getElementById(id);if(el) el.value='';});
+  ['stf-edit-id','stf-name','stf-phone','stf-email','stf-national-id','stf-hire-date','stf-qualifications','stf-login-email','stf-password'].forEach(id=>{const el=document.getElementById(id);if(el) el.value='';});
   document.getElementById('stf-form-title').textContent='\u2795 Add Staff Member';
+  const newFields=document.getElementById('stf-new-account-fields'); if(newFields) newFields.style.display='';
+  const editNote=document.getElementById('stf-edit-account-note'); if(editNote) editNote.style.display='none';
 }
 
 function renderPermissionsMatrix() {
