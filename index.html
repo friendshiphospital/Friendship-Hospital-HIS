@@ -35,6 +35,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);font
 .pay-tag-ins   { background:#dbeafe; color:#1d4ed8; padding:2px 8px; border-radius:20px; font-size:.68rem; font-weight:700; }
 .pay-tag-paid  { background:#dcfce7; color:#166534; padding:2px 8px; border-radius:20px; font-size:.68rem; font-weight:700; }
 .pay-tag-partial { background:#fef3c7; color:#b45309; padding:2px 8px; border-radius:20px; font-size:.68rem; font-weight:700; }
+.pay-tag-refunded { background:#f3e8ff; color:#6b21a8; padding:2px 8px; border-radius:20px; font-size:.68rem; font-weight:700; }
+.pay-tag-void { background:#e2e8f0; color:#475569; padding:2px 8px; border-radius:20px; font-size:.68rem; font-weight:700; text-decoration:line-through; }
 .dest-card.selected { border-color:var(--teal)!important; background:var(--teal-lt); }
 .dest-card:hover    { border-color:var(--teal2)!important; background:#f8fffe; }
 .reg-blocked-banner { background:#fef9c3; border:2px solid #eab308; border-radius:10px; padding:12px 16px; display:flex; align-items:center; gap:12px; font-size:.82rem; margin-bottom:10px; }
@@ -2129,6 +2131,32 @@ html[dir="rtl"] body{direction:rtl;}
       <div id="wal-txns"><div class="spin-center"><div class="spinner"></div>Loading…</div></div>
     </div>
     <div class="mo-ft"><button class="btn btn-s" onclick="closeOv('wallet-ov')">Close</button></div>
+  </div>
+</div>
+
+<!-- Refund -->
+<div class="ov" id="refund-ov">
+  <div class="mo mo-sm">
+    <div class="mo-hd"><h3>↩ Issue Refund</h3><button class="mo-x" onclick="closeOv('refund-ov')">✕</button></div>
+    <div class="mo-b">
+      <div class="override-warn">⚠️ Refunds require admin/manager authorization and are permanently recorded in the billing audit trail.</div>
+      <input type="hidden" id="rfd-inv-id">
+      <div class="fg"><label class="fl">Invoice</label><input class="fc" id="rfd-inv-label" readonly style="background:var(--bg)"></div>
+      <div class="g2">
+        <div class="fg"><label class="fl">Refund Amount (SDG) *</label><input class="fc" type="number" id="rfd-amount" min="0.01" step="0.01"></div>
+        <div class="fg"><label class="fl">Refund Method</label>
+          <select class="fc" id="rfd-method">
+            <option value="cash">💵 Cash</option><option value="card">💳 Card</option><option value="insurance">🏥 Insurance</option>
+            <option value="wallet">👛 Patient Wallet</option><option value="online">🌐 Online</option><option value="mobile_money">📱 Mobile Money</option><option value="bank_transfer">🏦 Bank Transfer</option>
+          </select>
+        </div>
+      </div>
+      <div class="fg"><label class="fl">Reason</label><input class="fc" id="rfd-reason" placeholder="Reason for refund…"></div>
+    </div>
+    <div class="mo-ft">
+      <button class="btn btn-s" onclick="closeOv('refund-ov')">Cancel</button>
+      <button class="btn btn-r" onclick="submitRefundAmount()">↩ Continue to Authorization</button>
+    </div>
   </div>
 </div>
 
@@ -8766,7 +8794,8 @@ function regShowSuccess(pt, mrn, labNo, testCount, payStatus, destinations, tota
     unpaid:'<span class="pay-tag-unpaid">⚠️ UNPAID</span>',
     partial:'<span class="pay-tag-partial">🔶 PARTIAL</span>',
     insurance_pending:'<span class="pay-tag-ins">🔵 INSURANCE PENDING</span>',
-    waived:'<span class="pay-tag-paid">🟢 WAIVED</span>'
+    waived:'<span class="pay-tag-paid">🟢 WAIVED</span>',
+    refunded:'<span class="pay-tag-refunded">↩ REFUNDED</span>'
   }[payStatus] || '<span class="pay-tag-unpaid">UNPAID</span>';
 
   const destActionMap = {
@@ -8853,7 +8882,8 @@ function paymentTag(status) {
     unpaid:'<span class="pay-tag-unpaid">⚠️ Unpaid</span>',
     partial:'<span class="pay-tag-partial">🔶 Partial</span>',
     insurance_pending:'<span class="pay-tag-ins">🔵 Insurance</span>',
-    waived:'<span class="pay-tag-paid">🟢 Waived</span>'
+    waived:'<span class="pay-tag-paid">🟢 Waived</span>',
+    refunded:'<span class="pay-tag-refunded">↩ Refunded</span>'
   };
   return map[status] || '<span class="pay-tag-unpaid">⚠️ Unpaid</span>';
 }
@@ -10366,7 +10396,7 @@ async function loadBilling() {
   const dateVal = document.getElementById('bill-list-date')?.value;
   try {
     let q = sb.from('invoices')
-      .select('id,invoice_no,patient_name,lab_no,invoice_type,total_amount,net_amount,discount_amount,payment_status,payment_method,insurance_company,created_at,line_items,currency')
+      .select('id,invoice_no,patient_name,lab_no,invoice_type,total_amount,net_amount,discount_amount,payment_status,payment_method,insurance_company,created_at,line_items,currency,patient_id,shift_id,queue_token,voided,reprint_count')
       .order('created_at',{ascending:false}).limit(100);
     if(filter && filter!=='all') q = q.eq('payment_status',filter);
     if(dateVal) q = q.gte('created_at',dateVal+'T00:00:00').lte('created_at',dateVal+'T23:59:59');
@@ -10407,18 +10437,20 @@ function renderBillTable(invoices) {
     invoices.map(i=>{
       const unpaid=i.payment_status==='unpaid'||i.payment_status==='insurance_pending';
       return '<tr class="'+(unpaid?'pay-unpaid':'')+'" id="inv-row-'+i.id+'">'+
-        '<td style="font-family:DM Mono,monospace;font-size:.7rem;font-weight:700;color:var(--teal)">'+(i.invoice_no||'—')+'</td>'+
+        '<td style="font-family:DM Mono,monospace;font-size:.7rem;font-weight:700;color:var(--teal)">'+(i.invoice_no||'—')+(i.queue_token?'<div style="font-size:.62rem;color:var(--slate);font-weight:500">Token '+i.queue_token+'</div>':'')+'</td>'+
         '<td style="font-weight:600;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(i.patient_name||'—')+'</td>'+
         '<td><span class="bdg bdg-sl" style="font-size:.65rem">'+(i.invoice_type||'—')+'</span></td>'+
         '<td style="font-weight:700;color:var(--teal);white-space:nowrap">'+((i.net_amount||i.total_amount||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}))+' '+(i.currency||'SDG')+'</td>'+
-        '<td>'+paymentTag(i.payment_status)+'</td>'+
+        '<td>'+(i.voided?'<span class="pay-tag-void">VOID</span>':paymentTag(i.payment_status))+'</td>'+
         '<td style="font-size:.72rem">'+(i.payment_method||'—')+'</td>'+
         '<td style="font-size:.72rem;color:var(--slate)">'+fmtDate(i.created_at)+'</td>'+
         '<td><div class="acts">'+
           '<button class="btn btn-s btn-xs" onclick="openBillDetail(\''+i.id+'\')">👁</button>'+
-          '<button class="btn btn-s btn-xs" onclick="printInvoice(\''+i.id+'\')">🖨</button>'+
-          (i.payment_status!=='paid'?'<button class="btn btn-p btn-xs" onclick="markPaid(\''+i.id+'\')">✅</button>':'')+(i.insurance_company?'<button class="btn btn-s btn-xs" onclick="generateInsuranceClaim(\''+i.id+'\')">🏥</button>':'')+
+          '<button class="btn btn-s btn-xs" onclick="printInvoice(\''+i.id+'\')" title="'+(i.reprint_count?'Reprint (already printed '+i.reprint_count+'x)':'Print')+'">🖨</button>'+
+          (!i.voided?((i.payment_status!=='paid'?'<button class="btn btn-p btn-xs" onclick="markPaid(\''+i.id+'\')">✅</button>':'')+(i.insurance_company?'<button class="btn btn-s btn-xs" onclick="generateInsuranceClaim(\''+i.id+'\')">🏥</button>':'')+
           '<button class="btn btn-s btn-xs" onclick="editInvoice(\''+i.id+'\')">✏️</button>'+
+          (i.payment_status==='paid'||i.payment_status==='partial'?'<button class="btn btn-s btn-xs" onclick="openRefundModal(\''+i.id+'\')" title="Refund">↩</button>':'')+
+          '<button class="btn btn-r btn-xs" onclick="voidInvoice(\''+i.id+'\')" title="Void — requires admin authorization">🛡 Void</button>'):'')+
         '</div></td></tr>';
     }).join('')+'</tbody></table></div>';
 }
@@ -11073,6 +11105,72 @@ function clearBillForm() {
   const splitRows=document.getElementById('bill-split-rows'); if(splitRows) splitRows.innerHTML='';
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+// ANTI-FRAUD: Void / Refund — both gated behind requireOverride() so a
+// real admin re-auth (not a static PIN) is on record in billing_audit_logs
+// for every void and every refund, no exceptions.
+// ═══════════════════════════════════════════════════════════════════════
+async function voidInvoice(id){
+  if(!sb||!id) return;
+  const {data:inv} = await sb.from('invoices').select('*').eq('id',id).single();
+  if(!inv){ toast('Invoice not found','err'); return; }
+  if(inv.voided){ toast('Invoice already voided','warn'); return; }
+  requireOverride('Voiding invoice '+(inv.invoice_no||id)+' ('+((inv.net_amount||inv.total_amount||0).toFixed(2))+' SDG) requires admin/manager authorization.', async(admin)=>{
+    try {
+      await sb.from('invoices').update({voided:true, voided_reason:'Voided by admin authorization', voided_at:new Date().toISOString()}).eq('id',id);
+      await dbWrite('billing_audit_logs','insert',{
+        event_type:'void_invoice', invoice_id:id, shift_id:inv.shift_id||_activeShift?.id||null,
+        amount:inv.net_amount||inv.total_amount, reason:'Invoice void',
+        authorized_by:admin.id, authorized_by_name:admin.full_name,
+        performed_by:currentProfile?.id, performed_by_name:currentProfile?.full_name
+      });
+      toast('🛡 Invoice voided','ok');
+      loadBilling();
+    } catch(e){ toast(e.message,'err'); }
+  });
+}
+function openRefundModal(id){
+  const inv = (_allBillInvoices||[]).find(i=>i.id===id);
+  if(!inv){ toast('Invoice not found','err'); return; }
+  document.getElementById('rfd-inv-id').value = id;
+  document.getElementById('rfd-inv-label').value = (inv.invoice_no||id)+' — '+(inv.patient_name||'');
+  document.getElementById('rfd-amount').value = (inv.net_amount||inv.total_amount||0).toFixed(2);
+  document.getElementById('rfd-amount').max = (inv.net_amount||inv.total_amount||0);
+  document.getElementById('rfd-reason').value = '';
+  openOv('refund-ov');
+}
+function submitRefundAmount(){
+  const id = document.getElementById('rfd-inv-id')?.value;
+  const amt = parseFloat(document.getElementById('rfd-amount')?.value);
+  const method = document.getElementById('rfd-method')?.value||'cash';
+  const reason = document.getElementById('rfd-reason')?.value||'Refund';
+  if(!id){ toast('No invoice selected','err'); return; }
+  if(!amt||amt<=0){ toast('Enter a valid refund amount','err'); return; }
+  closeOv('refund-ov');
+  requireOverride('Refunding '+amt.toFixed(2)+' SDG via '+method+' requires admin/manager authorization.', async(admin)=>{
+    try {
+      const {data:inv} = await sb.from('invoices').select('*').eq('id',id).single();
+      await dbWrite('billing_audit_logs','insert',{
+        event_type:'refund', invoice_id:id, shift_id:inv?.shift_id||_activeShift?.id||null, amount:amt, reason,
+        authorized_by:admin.id, authorized_by_name:admin.full_name,
+        performed_by:currentProfile?.id, performed_by_name:currentProfile?.full_name,
+        details:{method}
+      });
+      if(method==='wallet' && inv?.patient_id) {
+        try {
+          await sb.rpc('apply_wallet_transaction',{
+            p_patient_id:inv.patient_id, p_type:'refund', p_amount:amt,
+            p_reference_invoice_id:id, p_shift_id:inv.shift_id||_activeShift?.id||null, p_notes:reason
+          });
+        } catch(e){ toast('⚠️ Wallet refund credit failed: '+e.message,'err'); }
+      }
+      await sb.from('invoices').update({payment_status:'refunded'}).eq('id',id);
+      toast('🛡 Refund recorded','ok');
+      loadBilling();
+    } catch(e){ toast(e.message,'err'); }
+  });
+}
+
 async function openBillDetail(id) {
   if(!sb||!id) return;
   _currentInvId = id;
@@ -11144,6 +11242,20 @@ async function printInvoice(id) {
   try {
     const {data:inv} = await sb.from('invoices').select('*').eq('id',id).single();
     if(!inv){toast('Invoice not found','err');return;}
+    // Reprint tracking (anti-fraud) — the FIRST print of an invoice is the
+    // original (count becomes 1, no badge); every print after that is a
+    // tracked, badged duplicate. Counted server-side on the invoice row
+    // itself so it survives across devices/sessions, not just this tab.
+    const newCount = (inv.reprint_count||0) + 1;
+    try { await sb.from('invoices').update({reprint_count:newCount}).eq('id',id); } catch(e){}
+    if(newCount > 1) {
+      try {
+        await dbWrite('billing_audit_logs','insert',{
+          event_type:'reprint', invoice_id:id, shift_id:inv.shift_id||_activeShift?.id||null,
+          reason:'Reprint #'+newCount, performed_by:currentProfile?.id, performed_by_name:currentProfile?.full_name
+        });
+      } catch(e){}
+    }
     const items = inv.line_items||[];
     const itemRows = items.map((item,n)=>
       '<tr style="border-bottom:1px solid #f1f5fb;background:'+(n%2?'#f8fafd':'#fff')+'">'+
@@ -11153,12 +11265,17 @@ async function printInvoice(id) {
       '<td style="padding:5px 8px;font-size:9pt;text-align:right;font-weight:600">'+((item.total_price||0).toLocaleString('en-US',{minimumFractionDigits:2}))+'</td></tr>'
     ).join('');
     const html=printHeader('Receipt / Invoice')+
+      (newCount>1?'<div style="text-align:center"><span class="reprint-badge">⚠ DUPLICATE REPRINT — COPY #'+newCount+'</span></div>':'')+
+      (inv.voided?'<div style="text-align:center"><span class="reprint-badge" style="background:#64748b">VOIDED INVOICE</span></div>':'')+
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">'+
       '<div><div style="font-size:8pt;color:#64748b">Invoice No</div><div style="font-weight:800;font-size:11pt;color:#0b7a75;font-family:DM Mono,monospace">'+(inv.invoice_no||'—')+'</div>'+
-      '<div style="font-size:8pt;color:#64748b;margin-top:6px">Date</div><div style="font-size:9pt">'+fmtDate(inv.invoice_date||inv.created_at)+'</div></div>'+
+      '<div style="font-size:8pt;color:#64748b;margin-top:6px">Date</div><div style="font-size:9pt">'+fmtDate(inv.invoice_date||inv.created_at)+'</div>'+
+      (inv.queue_token?'<div style="font-size:8pt;color:#64748b;margin-top:6px">Queue Token</div><div style="font-size:13pt;font-weight:900;color:#1e3a5a;font-family:DM Mono,monospace">'+inv.queue_token+'</div>':'')+
+      '</div>'+
       '<div><div style="font-size:8pt;color:#64748b">Patient</div><div style="font-weight:700;font-size:10pt">'+(inv.patient_name||'—')+'</div>'+
       '<div style="font-size:8pt;color:#64748b;margin-top:6px">Lab No / MRN</div><div style="font-size:9pt;font-family:DM Mono,monospace">'+(inv.lab_no||'—')+'</div>'+
-      (inv.insurance_company?'<div style="font-size:8pt;color:#64748b;margin-top:6px">Insurance</div><div style="font-size:9pt">'+inv.insurance_company+' / '+(inv.insurance_no||'—')+'</div>':'')+
+      '<div style="font-size:8pt;color:#64748b;margin-top:6px">Cashier / Shift</div><div style="font-size:9pt">'+(currentProfile?.full_name||'—')+(_activeShift?' · '+_activeShift.shift_no:'')+'</div>'+
+      (inv.insurance_company?'<div style="font-size:8pt;color:#64748b;margin-top:6px">Insurance</div><div style="font-size:9pt">'+inv.insurance_company+' / '+(inv.insurance_no||'—')+(inv.pre_auth_no?' · Pre-auth '+inv.pre_auth_no:'')+'</div>':'')+
       '</div></div>'+
       '<table style="width:100%;border-collapse:collapse;margin-bottom:12px"><thead><tr style="background:#1e3a5a;color:#fff">'+
       '<th style="padding:6px 8px;font-size:8.5pt;text-align:left">Description</th>'+
@@ -11168,11 +11285,12 @@ async function printInvoice(id) {
       '<tbody>'+itemRows+'</tbody>'+
       '<tfoot>'+
       (inv.discount_amount?'<tr style="background:#f8fafd"><td colspan="3" style="padding:5px 8px;text-align:right;font-size:9pt">Discount</td><td style="padding:5px 8px;text-align:right;font-size:9pt;color:var(--green)">-'+((inv.discount_amount||0).toLocaleString('en-US',{minimumFractionDigits:2}))+'</td></tr>':'')+
-      '<tr style="background:#d4f1ef"><td colspan="3" style="padding:7px 8px;text-align:right;font-weight:800;font-size:10.5pt">NET TOTAL</td>'+
-      '<td style="padding:7px 8px;text-align:right;font-weight:900;font-size:10.5pt;color:#0b7a75">'+((inv.net_amount||inv.total_amount||0).toLocaleString('en-US',{minimumFractionDigits:2}))+' SDG</td></tr>'+
+      (inv.insurance_company?'<tr style="background:#f8fafd"><td colspan="3" style="padding:5px 8px;text-align:right;font-size:9pt">Insurance Covered Share</td><td style="padding:5px 8px;text-align:right;font-size:9pt;color:#1d4ed8">-'+((inv.insurance_covered||0).toLocaleString('en-US',{minimumFractionDigits:2}))+'</td></tr>':'')+
+      '<tr style="background:#d4f1ef"><td colspan="3" style="padding:7px 8px;text-align:right;font-weight:800;font-size:10.5pt">'+(inv.insurance_company?'PATIENT PAYABLE':'NET TOTAL')+'</td>'+
+      '<td style="padding:7px 8px;text-align:right;font-weight:900;font-size:10.5pt;color:#0b7a75">'+((inv.insurance_company?(inv.patient_payable||inv.net_amount):(inv.net_amount||inv.total_amount))||0).toLocaleString('en-US',{minimumFractionDigits:2})+' SDG</td></tr>'+
       '</tfoot></table>'+
       '<div style="display:flex;justify-content:space-between;align-items:center;background:#f1f5f9;padding:10px 14px;border-radius:8px;margin-bottom:16px">'+
-      '<div><span style="font-size:9pt;color:#64748b">Payment Status: </span>'+paymentTag(inv.payment_status)+'</div>'+
+      '<div><span style="font-size:9pt;color:#64748b">Payment Status: </span>'+(inv.voided?'<span class="pay-tag-void">VOID</span>':paymentTag(inv.payment_status))+'</div>'+
       '<div style="font-size:9pt;color:#64748b">Method: <strong>'+(inv.payment_method||'—')+'</strong></div></div>'+
       '<div style="margin-top:30px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;text-align:center">'+
       '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">Cashier / Receptionist</div>'+
