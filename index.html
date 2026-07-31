@@ -2132,9 +2132,20 @@ html[dir="rtl"] body{direction:rtl;}
     <div class="mo-hd"><h3>🛡 Manager Authorization Required</h3><button class="mo-x" onclick="closeOv('override-ov')">✕</button></div>
     <div class="mo-b">
       <div class="override-warn">⚠️ <span id="override-reason-text">This action requires admin/manager authorization.</span></div>
-      <div class="fg"><label class="fl">Admin / Manager Email</label><input class="fc" id="ovr-email" placeholder="admin@hospital.com"></div>
-      <div class="fg"><label class="fl">Admin / Manager Password *</label><input class="fc" type="password" id="ovr-pass" placeholder="Re-authenticate to authorize"></div>
-      <div style="font-size:.71rem;color:var(--slate)">Authorization is verified against a real admin login (Supabase Auth) — not a static PIN — and is logged to the billing audit trail with the authorizing admin's identity.</div>
+      <div class="tabs" style="margin-bottom:10px">
+        <button class="tab active" id="ovr-tab-pin" onclick="setOverrideMode('pin')">🔑 Quick PIN</button>
+        <button class="tab" id="ovr-tab-pass" onclick="setOverrideMode('password')">✉ Email + Password</button>
+      </div>
+      <div id="ovr-pin-panel">
+        <div class="fg"><label class="fl">Admin Quick PIN *</label><input class="fc" type="password" inputmode="numeric" maxlength="12" id="ovr-pin" placeholder="6+ digit PIN"></div>
+        <div style="font-size:.71rem;color:var(--slate)">Faster for counter use. Only works for an admin who has set a PIN in Settings — verified server-side, the PIN itself is never stored or transmitted in plain text.</div>
+      </div>
+      <div id="ovr-pass-panel" style="display:none">
+        <div class="fg"><label class="fl">Admin / Manager Email</label><input class="fc" id="ovr-email" placeholder="admin@hospital.com"></div>
+        <div class="fg"><label class="fl">Admin / Manager Password *</label><input class="fc" type="password" id="ovr-pass" placeholder="Re-authenticate to authorize"></div>
+        <div style="font-size:.71rem;color:var(--slate)">The stronger option — verified against a real admin login (Supabase Auth), not a shared secret.</div>
+      </div>
+      <div style="font-size:.71rem;color:var(--slate);margin-top:8px">Either way, this is logged to the billing audit trail with the authorizing admin's identity.</div>
     </div>
     <div class="mo-ft">
       <button class="btn btn-s" onclick="closeOv('override-ov')">Cancel</button>
@@ -3835,6 +3846,12 @@ html[dir="rtl"] body{direction:rtl;}
         <div class="fg"><label class="fl">SMS API URL</label><input class="fc" id="cfg-sms-api-url" placeholder="https://api.yourprovider.com/sms/send"></div>
         <div class="fg"><label class="fl">API Key / Bearer Token</label><input class="fc" id="cfg-sms-api-key"></div>
         <div class="fg"><label class="fl">Sender ID</label><input class="fc" id="cfg-sms-sender-id" placeholder="FriendshipHosp"></div>
+      </div></div>
+      <div class="card" id="cfg-override-pin-card" style="display:none"><div class="card-hd"><span class="card-title">🔑 My Anti-Fraud Override PIN</span></div><div class="card-body">
+        <div style="font-size:.72rem;color:var(--slate);margin-bottom:8px">Lets you approve a void/refund/discount-override at the counter with a PIN instead of your full password. Stored as a bcrypt hash — never in plain text, never readable by anyone else, admin or otherwise. Requires migration_v2.12_override_pin.sql to be applied.</div>
+        <div class="fg"><label class="fl">New PIN (6+ digits, numeric)</label><input class="fc" type="password" inputmode="numeric" maxlength="12" id="cfg-override-pin" placeholder="e.g. 482913"></div>
+        <button class="btn btn-p btn-sm" onclick="saveOverridePin()">💾 Set / Change My PIN</button>
+        <div id="cfg-override-pin-status" style="margin-top:7px;font-size:.78rem"></div>
       </div></div>
       <div class="card"><div class="card-hd"><span class="card-title">🛏 Bed Configuration</span></div><div class="card-body">
         <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
@@ -6109,6 +6126,7 @@ function loadSettings() {
   const ss=document.getElementById('cfg-sms-sender-id'); if(ss) ss.value=CFG.smsSenderId;
   const ane=document.getElementById('cfg-admin-notify-email'); if(ane) ane.value=CFG.adminNotifyEmail;
   const dot=document.getElementById('cfg-discount-override-pct'); if(dot) dot.value=CFG.discountOverrideThreshold;
+  const pinCard=document.getElementById('cfg-override-pin-card'); if(pinCard) pinCard.style.display = currentProfile?.role==='admin' ? '' : 'none';
   const cu=document.getElementById('cfg-sb-url'); if(cu) cu.value=localStorage.getItem('sb_url')||'';
   const ck=document.getElementById('cfg-sb-key'); if(ck) ck.value=localStorage.getItem('sb_key')||'';
   loadBedConfig();
@@ -6166,6 +6184,27 @@ function saveSettings() {
   const st=document.getElementById('cfg-status'); if(st){ st.textContent='✅ Settings saved'; setTimeout(()=>st.textContent='',3000); }
   toast('Settings saved','ok');
   refreshNotifications();
+}
+// Sets/changes the CURRENT admin's own Quick-PIN via the set_override_pin()
+// RPC (migration_v2.12) — the plain PIN is sent once over the (HTTPS)
+// connection to be hashed server-side and is never stored client-side or
+// logged anywhere.
+async function saveOverridePin(){
+  if(!sb){ toast('Not connected','err'); return; }
+  const pin=document.getElementById('cfg-override-pin')?.value.trim();
+  const statusEl=document.getElementById('cfg-override-pin-status');
+  if(!pin){ toast('Enter a PIN','err'); return; }
+  if(pin.length<6 || !/^[0-9]+$/.test(pin)){ toast('PIN must be at least 6 numeric digits','err'); return; }
+  try {
+    const {error} = await sb.rpc('set_override_pin', {p_pin: pin});
+    if(error) throw error;
+    document.getElementById('cfg-override-pin').value='';
+    if(statusEl){ statusEl.style.color='var(--green)'; statusEl.textContent='✅ PIN updated'; setTimeout(()=>statusEl.textContent='',3000); }
+    toast('🔑 Override PIN updated','ok');
+  } catch(e){
+    if(statusEl){ statusEl.style.color='var(--red)'; statusEl.textContent=e.message; }
+    toast(e.message,'err');
+  }
 }
 function saveSbCfg() {
   const url=document.getElementById('cfg-sb-url')?.value?.trim(), key=document.getElementById('cfg-sb-key')?.value?.trim();
@@ -10889,18 +10928,54 @@ async function dispatchShiftEmail(kind, shiftRow){
 // ═══════════════════════════════════════════════════════════════════════
 // ANTI-FRAUD: Admin/Manager authorization override
 // ═══════════════════════════════════════════════════════════════════════
-// Re-authenticates against a throwaway, isolated Supabase client (never
-// the global `sb`/currentUser session) so a cashier can prove an admin
-// approved an action without logging the cashier out and back in.
+// Two ways to authorize, both ending in the same callback:
+//  - Quick PIN: verified server-side via the verify_override_pin() RPC
+//    (migration_v2.12) — the PIN never gets compared client-side and the
+//    stored hash never leaves the database.
+//  - Email + Password: re-authenticates against a throwaway, isolated
+//    Supabase client (never the global `sb`/currentUser session) so a
+//    cashier can prove an admin approved an action without logging the
+//    cashier out and back in. Stronger of the two — still available for
+//    anyone who'd rather not rely on a shared PIN.
 let _pendingOverrideAction = null;
+let _overrideMode = 'pin';
+function setOverrideMode(mode){
+  _overrideMode = mode;
+  const pinTab=document.getElementById('ovr-tab-pin'), passTab=document.getElementById('ovr-tab-pass');
+  const pinPanel=document.getElementById('ovr-pin-panel'), passPanel=document.getElementById('ovr-pass-panel');
+  if(pinTab) pinTab.classList.toggle('active', mode==='pin');
+  if(passTab) passTab.classList.toggle('active', mode==='password');
+  if(pinPanel) pinPanel.style.display = mode==='pin' ? '' : 'none';
+  if(passPanel) passPanel.style.display = mode==='password' ? '' : 'none';
+}
 function requireOverride(reasonText, onAuthorized){
   _pendingOverrideAction = onAuthorized;
   const t=document.getElementById('override-reason-text'); if(t) t.textContent=reasonText;
   const e=document.getElementById('ovr-email'); if(e) e.value='';
   const p=document.getElementById('ovr-pass'); if(p) p.value='';
+  const pin=document.getElementById('ovr-pin'); if(pin) pin.value='';
+  setOverrideMode('pin');
   openOv('override-ov');
 }
 async function submitOverride(){
+  if(!sb){ toast('Not connected','err'); return; }
+  if(_overrideMode==='pin') return submitOverridePin();
+  return submitOverridePassword();
+}
+async function submitOverridePin(){
+  const pin=document.getElementById('ovr-pin')?.value.trim();
+  if(!pin){ toast('Enter the admin PIN','err'); return; }
+  try {
+    const {data, error} = await sb.rpc('verify_override_pin', {p_pin: pin});
+    if(error) throw error;
+    const match = Array.isArray(data) ? data[0] : data;
+    if(!match || !match.admin_id){ toast('❌ Invalid PIN','err'); return; }
+    closeOv('override-ov');
+    const action=_pendingOverrideAction; _pendingOverrideAction=null;
+    if(action) await action({id:match.admin_id, full_name:match.admin_name});
+  } catch(e){ toast(e.message,'err'); }
+}
+async function submitOverridePassword(){
   const email=document.getElementById('ovr-email')?.value.trim();
   const pass=document.getElementById('ovr-pass')?.value;
   if(!email||!pass){ toast('Enter the admin email and password','err'); return; }
