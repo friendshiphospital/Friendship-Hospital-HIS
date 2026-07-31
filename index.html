@@ -171,6 +171,44 @@ html[dir="rtl"] body{direction:rtl;}
 .mo-x:hover{background:var(--bg);}
 .mo-b{padding:19px;}
 .mo-ft{padding:12px 19px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;}
+/* SHIFT MANAGEMENT (Reception) — glassmorphism status bar + KPI/variance widgets */
+#shift-bar{display:none;align-items:center;gap:16px;flex-wrap:wrap;margin:0 22px 12px;padding:11px 18px;border-radius:12px;
+  background:linear-gradient(120deg,rgba(11,122,117,.92),rgba(30,58,90,.92));backdrop-filter:blur(8px);color:#fff;
+  box-shadow:0 8px 26px rgba(11,122,117,.22);}
+#shift-bar.show{display:flex;}
+#shift-bar.closed-state{background:linear-gradient(120deg,rgba(148,30,30,.88),rgba(30,41,59,.9));}
+.sft-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 11px;border-radius:20px;font-size:.7rem;font-weight:800;letter-spacing:.4px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28);}
+.sft-dot{width:8px;height:8px;border-radius:50%;background:#4ade80;box-shadow:0 0 0 0 rgba(74,222,128,.6);animation:sftpulse 1.8s infinite;}
+#shift-bar.closed-state .sft-dot{background:#f87171;animation:none;}
+@keyframes sftpulse{0%{box-shadow:0 0 0 0 rgba(74,222,128,.55)}70%{box-shadow:0 0 0 7px rgba(74,222,128,0)}100%{box-shadow:0 0 0 0 rgba(74,222,128,0)}}
+.sft-meta{display:flex;gap:18px;flex-wrap:wrap;flex:1}
+.sft-i .sft-l{font-size:.6rem;text-transform:uppercase;letter-spacing:.4px;color:rgba(255,255,255,.6)}
+.sft-i .sft-v{font-size:.82rem;font-weight:700;margin-top:1px}
+.sft-actions{display:flex;gap:7px;flex-wrap:wrap}
+.sft-actions .btn{background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.3);color:#fff}
+.sft-actions .btn:hover{background:rgba(255,255,255,.24)}
+.sft-actions .btn.btn-r{background:#ef4444;border-color:#ef4444}
+/* Warning banner shown in place of a reception page when no shift is active */
+.shift-required-banner{background:#fef3c7;border:1.5px solid #f59e0b;border-radius:10px;padding:22px;text-align:center;margin:20px}
+.shift-required-banner .srb-icon{font-size:2rem;margin-bottom:8px}
+.shift-required-banner h3{font-family:'DM Serif Display',serif;color:#92400e;margin-bottom:6px}
+.shift-required-banner p{color:#78350f;font-size:.84rem;margin-bottom:12px}
+/* KPI grid reused by Close-Shift / X-Report modals */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:14px}
+.kpi-box{background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:10px 12px;text-align:center}
+.kpi-box .kpi-n{font-family:'DM Serif Display',serif;font-size:1.25rem;color:var(--teal)}
+.kpi-box .kpi-l{font-size:.63rem;text-transform:uppercase;letter-spacing:.3px;color:var(--slate);margin-top:2px}
+.recon-row{display:flex;justify-content:space-between;font-size:.82rem;padding:6px 0;border-bottom:1px solid var(--border)}
+.recon-row:last-child{border-bottom:none}
+.recon-row .rr-v{font-weight:700}
+.variance-pos{color:var(--green)}.variance-neg{color:var(--red)}
+/* Anti-fraud PIN override modal */
+.override-warn{background:#fee2e2;border:1.5px solid #ef4444;border-radius:9px;padding:10px 13px;font-size:.79rem;color:#991b1b;margin-bottom:12px;display:flex;gap:8px;align-items:flex-start}
+/* Patient wallet card */
+.wallet-card{background:linear-gradient(100deg,#0b7a75,#0e5a56);border-radius:10px;padding:12px 15px;color:#fff;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:10px}
+.wallet-card .wc-bal{font-family:'DM Serif Display',serif;font-size:1.3rem}
+.wallet-card .wc-l{font-size:.63rem;text-transform:uppercase;letter-spacing:.4px;color:rgba(255,255,255,.7)}
+.reprint-badge{display:inline-block;background:#ef4444;color:#fff;font-weight:800;padding:3px 10px;border-radius:5px;font-size:.72rem;letter-spacing:.4px;margin-bottom:8px}
 /* PATIENT BANNER */
 .pt-banner{background:linear-gradient(100deg,var(--ink2),var(--ink3));border-radius:10px;padding:11px 16px;margin-bottom:14px;display:flex;flex-wrap:wrap;gap:14px;align-items:center;}
 .pb-i .pb-l{color:rgba(255,255,255,.45);font-size:.61rem;text-transform:uppercase;letter-spacing:.3px;}
@@ -464,6 +502,28 @@ html[dir="rtl"] body{direction:rtl;}
         <button class="btn btn-s btn-sm" onclick="goPage('register')">+ Register Patient</button>
       </div>
     </div>
+
+    <!-- ── SHIFT STATUS BAR (Reception) ──────────────────────────────────
+         Persistent, like the topbar — shown only for billing-capable roles
+         (receptionist/cashier/admin) via toggleShiftBarVisibility(), which
+         goPage() calls on every navigation. Reflects whichever shift
+         checkActiveShift() last found (or null). -->
+    <div id="shift-bar">
+      <span class="sft-badge" id="sft-status-badge"><span class="sft-dot"></span> <span id="sft-status-text">NO ACTIVE SHIFT</span></span>
+      <div class="sft-meta" id="sft-meta" style="display:none">
+        <div class="sft-i"><div class="sft-l">Shift ID</div><div class="sft-v" id="sft-id">—</div></div>
+        <div class="sft-i"><div class="sft-l">Staff</div><div class="sft-v" id="sft-staff">—</div></div>
+        <div class="sft-i"><div class="sft-l">Station</div><div class="sft-v" id="sft-station">—</div></div>
+        <div class="sft-i"><div class="sft-l">Opened</div><div class="sft-v" id="sft-opened">—</div></div>
+        <div class="sft-i"><div class="sft-l">Opening Float</div><div class="sft-v" id="sft-float">—</div></div>
+      </div>
+      <div class="sft-actions" id="sft-actions">
+        <button class="btn btn-sm" onclick="openShiftModal()" id="sft-btn-open">🟢 Open Shift</button>
+        <button class="btn btn-sm" onclick="openXReportModal()" id="sft-btn-xreport" style="display:none">📊 X-Report</button>
+        <button class="btn btn-sm btn-r" onclick="openCloseShiftModal()" id="sft-btn-close" style="display:none">🔒 Close Shift &amp; Generate Report</button>
+      </div>
+    </div>
+
     <div class="content">
 
 <div class="page active" id="page-dashboard">
@@ -1808,6 +1868,10 @@ html[dir="rtl"] body{direction:rtl;}
             <div style="font-weight:700;font-size:.84rem" id="bill-pt-name-disp">—</div>
             <div style="font-size:.7rem;color:var(--slate);margin-top:1px" id="bill-pt-meta-disp">—</div>
             <div id="bill-pt-pay-tag" style="margin-top:4px"></div>
+            <div style="margin-top:6px;display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,.55);border-radius:6px;padding:5px 9px">
+              <span style="font-size:.71rem;color:var(--ink2)">👛 Wallet: <b id="bill-pt-wallet-bal">—</b></span>
+              <button class="btn btn-s btn-xs" onclick="openWalletModal()">Manage</button>
+            </div>
           </div>
           <input type="hidden" id="bill-pt-id">
           <input type="hidden" id="bill-edit-id">
@@ -1884,10 +1948,35 @@ html[dir="rtl"] body{direction:rtl;}
             </div>
           </div>
           <div class="g3">
-            <div class="fg"><label class="fl">Insurance Co.</label><input class="fc" id="bill-ins-co" placeholder="Company name"></div>
+            <div class="fg"><label class="fl">Insurance Co.</label><input class="fc" id="bill-ins-co" placeholder="Company name" oninput="recalcInsurance()"></div>
             <div class="fg"><label class="fl">Policy No.</label><input class="fc" id="bill-ins-no"></div>
-            <div class="fg"><label class="fl">Pre-auth No.</label><input class="fc" id="bill-preauth"></div>
+            <div class="fg"><label class="fl">Pre-auth No. <span id="bill-preauth-req" style="color:var(--red);display:none">*</span></label><input class="fc" id="bill-preauth"></div>
           </div>
+          <div id="bill-copay-wrap" style="display:none">
+            <div class="g2">
+              <div class="fg"><label class="fl">Co-pay %</label><input class="fc" type="number" id="bill-copay-pct" min="0" max="100" step="0.1" oninput="recalcInsurance()"></div>
+              <div class="fg"><label class="fl">Co-pay Fixed Fee (SDG)</label><input class="fc" type="number" id="bill-copay-fixed" min="0" step="0.01" oninput="recalcInsurance()"></div>
+            </div>
+            <div style="background:#eff6ff;border-radius:8px;padding:8px 11px;margin-bottom:8px;font-size:.78rem">
+              <div style="display:flex;justify-content:space-between"><span>Insurance Covered Share</span><b id="bill-ins-covered">0.00 SDG</b></div>
+              <div style="display:flex;justify-content:space-between"><span>Patient Payable</span><b id="bill-pt-payable">0.00 SDG</b></div>
+            </div>
+          </div>
+
+          <!-- Split payment -->
+          <div class="fg" style="display:flex;align-items:center;gap:7px;margin-bottom:4px">
+            <input type="checkbox" id="bill-split-toggle" onchange="toggleSplitPayment()" style="width:15px;height:15px">
+            <label class="fl" style="margin:0;cursor:pointer" for="bill-split-toggle">💳 Split across multiple payment methods</label>
+          </div>
+          <div id="bill-split-wrap" style="display:none;margin-bottom:8px">
+            <div id="bill-split-rows"></div>
+            <button class="btn btn-s btn-xs" onclick="addSplitRow()">+ Add Payment Line</button>
+            <div style="display:flex;justify-content:space-between;font-size:.78rem;margin-top:6px;padding:6px 9px;background:var(--bg);border-radius:6px">
+              <span>Allocated</span><b id="bill-split-allocated">0.00 SDG</b>
+              <span>Remaining</span><b id="bill-split-remaining">0.00 SDG</b>
+            </div>
+          </div>
+
           <div class="fg"><label class="fl">Notes</label>
             <input class="fc" id="bill-notes" placeholder="Receipt no., remarks…">
           </div>
@@ -1945,6 +2034,101 @@ html[dir="rtl"] body{direction:rtl;}
     <div class="mo-ft">
       <button class="btn btn-s" onclick="closeOv('price-picker-ov')">Done</button>
     </div>
+  </div>
+</div>
+
+<!-- ═══════════ SHIFT MANAGEMENT MODALS ═══════════ -->
+
+<!-- Open Shift -->
+<div class="ov" id="shift-open-ov">
+  <div class="mo mo-sm">
+    <div class="mo-hd"><h3>🟢 Open Reception Shift</h3><button class="mo-x" onclick="closeOv('shift-open-ov')">✕</button></div>
+    <div class="mo-b">
+      <div class="fg"><label class="fl">Staff</label><input class="fc" id="sfo-staff" readonly style="background:var(--bg)"></div>
+      <div class="g2">
+        <div class="fg"><label class="fl">Station / Counter ID *</label><input class="fc" id="sfo-station" value="Reception-1"></div>
+        <div class="fg"><label class="fl">Shift Type *</label>
+          <select class="fc" id="sfo-type">
+            <option value="morning">🌅 Morning</option>
+            <option value="evening">🌇 Evening</option>
+            <option value="night">🌙 Night</option>
+          </select>
+        </div>
+      </div>
+      <div class="g2">
+        <div class="fg"><label class="fl">Opening Cash Float *</label><input class="fc" type="number" id="sfo-float" value="0" min="0" step="0.01"></div>
+        <div class="fg"><label class="fl">Currency</label>
+          <select class="fc" id="sfo-currency"><option value="SDG">SDG</option><option value="USD">USD</option></select>
+        </div>
+      </div>
+      <div style="font-size:.72rem;color:var(--slate);margin-top:2px">Opening this shift emails an admin notification and tags every invoice/payment you take to this shift ID until it's closed.</div>
+    </div>
+    <div class="mo-ft">
+      <button class="btn btn-s" onclick="closeOv('shift-open-ov')">Cancel</button>
+      <button class="btn btn-p" onclick="submitOpenShift()">🟢 Open Shift</button>
+    </div>
+  </div>
+</div>
+
+<!-- Close Shift / Z-Report -->
+<div class="ov" id="shift-close-ov">
+  <div class="mo mo-lg">
+    <div class="mo-hd"><h3>🔒 Close Shift — End-of-Day Reconciliation</h3><button class="mo-x" onclick="closeOv('shift-close-ov')">✕</button></div>
+    <div class="mo-b" id="shift-close-body">
+      <div class="spin-center"><div class="spinner"></div>Loading shift totals…</div>
+    </div>
+    <div class="mo-ft">
+      <button class="btn btn-s" onclick="closeOv('shift-close-ov')">Cancel</button>
+      <button class="btn btn-r" onclick="submitCloseShift()">🔒 Confirm Close &amp; Send Report</button>
+    </div>
+  </div>
+</div>
+
+<!-- X-Report (mid-shift snapshot, read-only) -->
+<div class="ov" id="xreport-ov">
+  <div class="mo mo-lg">
+    <div class="mo-hd"><h3>📊 X-Report — Mid-Shift Snapshot</h3><button class="mo-x" onclick="closeOv('xreport-ov')">✕</button></div>
+    <div class="mo-b" id="xreport-body"><div class="spin-center"><div class="spinner"></div>Loading…</div></div>
+    <div class="mo-ft">
+      <button class="btn btn-s" onclick="window.print()">🖨 Print</button>
+      <button class="btn btn-p" onclick="closeOv('xreport-ov')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Anti-fraud: Admin/Manager authorization override -->
+<div class="ov" id="override-ov">
+  <div class="mo mo-sm">
+    <div class="mo-hd"><h3>🛡 Manager Authorization Required</h3><button class="mo-x" onclick="closeOv('override-ov')">✕</button></div>
+    <div class="mo-b">
+      <div class="override-warn">⚠️ <span id="override-reason-text">This action requires admin/manager authorization.</span></div>
+      <div class="fg"><label class="fl">Admin / Manager Email</label><input class="fc" id="ovr-email" placeholder="admin@hospital.com"></div>
+      <div class="fg"><label class="fl">Admin / Manager Password *</label><input class="fc" type="password" id="ovr-pass" placeholder="Re-authenticate to authorize"></div>
+      <div style="font-size:.71rem;color:var(--slate)">Authorization is verified against a real admin login (Supabase Auth) — not a static PIN — and is logged to the billing audit trail with the authorizing admin's identity.</div>
+    </div>
+    <div class="mo-ft">
+      <button class="btn btn-s" onclick="closeOv('override-ov')">Cancel</button>
+      <button class="btn btn-r" onclick="submitOverride()">🛡 Authorize</button>
+    </div>
+  </div>
+</div>
+
+<!-- Patient wallet -->
+<div class="ov" id="wallet-ov">
+  <div class="mo mo-lg">
+    <div class="mo-hd"><h3>👛 Patient Wallet</h3><button class="mo-x" onclick="closeOv('wallet-ov')">✕</button></div>
+    <div class="mo-b">
+      <div class="wallet-card">
+        <div><div class="wc-l">Balance — <span id="wal-pt-name">—</span></div><div class="wc-bal" id="wal-balance">0.00 SDG</div></div>
+        <div style="display:flex;gap:6px">
+          <input class="fc" type="number" id="wal-credit-amt" placeholder="Amount" min="0.01" step="0.01" style="width:110px">
+          <button class="btn btn-p btn-sm" onclick="submitWalletCredit()">+ Credit</button>
+        </div>
+      </div>
+      <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:var(--slate);margin-bottom:6px">Transaction History</div>
+      <div id="wal-txns"><div class="spin-center"><div class="spinner"></div>Loading…</div></div>
+    </div>
+    <div class="mo-ft"><button class="btn btn-s" onclick="closeOv('wallet-ov')">Close</button></div>
   </div>
 </div>
 
@@ -3572,6 +3756,11 @@ html[dir="rtl"] body{direction:rtl;}
         <div class="fg"><label class="fl">Pending Admission Alert (hours)</label><input class="fc" type="number" min="1" id="cfg-admission-alert-hours" placeholder="4"></div>
       </div>
       <div style="font-size:.7rem;color:var(--slate);margin:-6px 0 10px">How long an invoice stays unpaid, or a patient routed to Admission stays un-admitted, before the notification bell flags it.</div>
+      <div class="g2">
+        <div class="fg"><label class="fl">Admin Notify Email (Shift Reports)</label><input class="fc" type="email" id="cfg-admin-notify-email" placeholder="admin@hospital.com"></div>
+        <div class="fg"><label class="fl">Discount Override Threshold (%)</label><input class="fc" type="number" min="0" max="100" step="1" id="cfg-discount-override-pct" placeholder="15"></div>
+      </div>
+      <div style="font-size:.7rem;color:var(--slate);margin:-6px 0 10px">Open/Close Shift emails are sent to this address. Invoice discounts above this percentage require manager (admin) authorization before they can be saved.</div>
       <button class="btn btn-p" onclick="saveSettings()" style="width:100%;justify-content:center">💾 Save Settings</button>
       <div id="cfg-status" style="margin-top:7px;font-size:.78rem;color:var(--green)"></div>
     </div></div>
@@ -5336,6 +5525,10 @@ const CFG = {
   get smsApiUrl(){ return localStorage.getItem('cfg_sms_api_url')||''; },
   get smsApiKey(){ return localStorage.getItem('cfg_sms_api_key')||''; },
   get smsSenderId(){ return localStorage.getItem('cfg_sms_sender_id')||''; },
+  // Shift Management / Anti-fraud (RCM engine) — same localStorage-only,
+  // per-deployment config pattern as everything else in CFG.
+  get adminNotifyEmail(){ return localStorage.getItem('cfg_admin_notify_email')||'admin@hospital.com'; },
+  get discountOverrideThreshold(){ return parseFloat(localStorage.getItem('cfg_discount_override_pct'))||15; },
 };
 
 const ROLE_PAGES = {
@@ -5749,6 +5942,7 @@ function showApp() {
   updateTopbarDate(); setInterval(updateTopbarDate,60000);
   checkCriticals(); setInterval(checkCriticals,120000);
   refreshNotifications(); setInterval(refreshNotifications,120000);
+  initShiftBar();
 }
 function filterSidebar() {
   const role=currentProfile?.role||'admin';
@@ -5857,6 +6051,8 @@ function loadSettings() {
   const su=document.getElementById('cfg-sms-api-url'); if(su) su.value=CFG.smsApiUrl;
   const sk=document.getElementById('cfg-sms-api-key'); if(sk) sk.value=CFG.smsApiKey;
   const ss=document.getElementById('cfg-sms-sender-id'); if(ss) ss.value=CFG.smsSenderId;
+  const ane=document.getElementById('cfg-admin-notify-email'); if(ane) ane.value=CFG.adminNotifyEmail;
+  const dot=document.getElementById('cfg-discount-override-pct'); if(dot) dot.value=CFG.discountOverrideThreshold;
   const cu=document.getElementById('cfg-sb-url'); if(cu) cu.value=localStorage.getItem('sb_url')||'';
   const ck=document.getElementById('cfg-sb-key'); if(ck) ck.value=localStorage.getItem('sb_key')||'';
   loadBedConfig();
@@ -5909,6 +6105,8 @@ function saveSettings() {
   const aah=parseFloat(g('cfg-admission-alert-hours')); localStorage.setItem('cfg_admission_alert_hours', (isNaN(aah)||aah<=0)?4:aah);
   localStorage.setItem('cfg_sms_api_url',g('cfg-sms-api-url')); localStorage.setItem('cfg_sms_api_key',g('cfg-sms-api-key'));
   localStorage.setItem('cfg_sms_sender_id',g('cfg-sms-sender-id'));
+  localStorage.setItem('cfg_admin_notify_email', g('cfg-admin-notify-email')||'admin@hospital.com');
+  const dot=parseFloat(g('cfg-discount-override-pct')); localStorage.setItem('cfg_discount_override_pct', (isNaN(dot)||dot<0)?15:dot);
   const st=document.getElementById('cfg-status'); if(st){ st.textContent='✅ Settings saved'; setTimeout(()=>st.textContent='',3000); }
   toast('Settings saved','ok');
   refreshNotifications();
@@ -7323,6 +7521,7 @@ async function loadApptDoctors() {
 }
 async function saveAppointment() {
   if(!sb){ toast('Not connected','err'); return; }
+  if(!requireActiveShift()) return;
   const g=id=>document.getElementById(id)?.value||'';
   if(!g('appt-name')||!g('appt-date')){ toast('Name and date required','err'); return; }
   try {
@@ -7348,6 +7547,7 @@ function updateTestSummary() {
   if(checked.length){ s.style.display='block'; l.textContent=checked.join(', '); } else s.style.display='none';
 }
 async function submitRegistration() {
+  if(!requireActiveShift()) return;
   const g=id=>document.getElementById(id)?.value||'';
   if(!g('r-fname')){ toast('First name required','err'); return; }
   if(!g('r-sex')){ toast('Please select sex','err'); return; }
@@ -10269,6 +10469,7 @@ function selectBillPatient(p) {
   document.getElementById('bill-search-results').style.display='none';
   // Auto-load existing invoice items for this patient
   autoFillFromPatient(p.id);
+  loadWalletBalance(p.id);
 }
 
 async function autoFillFromPatient(ptId) {
@@ -10363,6 +10564,8 @@ function recalcBill() {
   const statusEl = document.getElementById('bill-status');
   if(statusEl && paid>0 && paid>=total) statusEl.value='paid';
   else if(statusEl && paid>0 && paid<total) statusEl.value='partial';
+  recalcInsurance();
+  recalcSplitPayment();
 }
 
 function getBillLineItems() {
@@ -10377,44 +10580,481 @@ function getBillLineItems() {
   return items;
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+// SHIFT MANAGEMENT MODULE (Open/Close Shift, X-Report)
+// ═══════════════════════════════════════════════════════════════════════
+// Every reception/billing/registration action that must be tagged to a
+// live cash-drawer session goes through requireActiveShift() first. The
+// active shift itself is looked up per-staff (one active shift per staff
+// member — enforced DB-side too, see migration_v2.11's unique index), so
+// two cashiers on two counters each see and use only their own shift.
+let _activeShift = null;
+const SHIFT_ROLES = ['receptionist','cashier','admin'];
+
+function initShiftBar(){
+  if(!SHIFT_ROLES.includes(currentProfile?.role)) return;
+  document.getElementById('shift-bar')?.classList.add('show');
+  refreshActiveShift();
+  setInterval(refreshActiveShift, 60000);
+}
+async function refreshActiveShift(){
+  if(!sb || !currentProfile?.id) return;
+  try {
+    const {data} = await sb.from('reception_shifts').select('*')
+      .eq('staff_id', currentProfile.id).eq('status','active').maybeSingle();
+    _activeShift = data||null;
+  } catch(e) { /* keep last known state on a transient read failure */ }
+  renderShiftBar();
+}
+function renderShiftBar(){
+  const bar = document.getElementById('shift-bar');
+  if(!bar) return;
+  const txt=document.getElementById('sft-status-text'), meta=document.getElementById('sft-meta');
+  const btnOpen=document.getElementById('sft-btn-open'), btnClose=document.getElementById('sft-btn-close'), btnX=document.getElementById('sft-btn-xreport');
+  if(_activeShift) {
+    bar.classList.remove('closed-state');
+    txt.textContent='ACTIVE';
+    meta.style.display='flex';
+    document.getElementById('sft-id').textContent = _activeShift.shift_no;
+    document.getElementById('sft-staff').textContent = _activeShift.staff_name;
+    document.getElementById('sft-station').textContent = _activeShift.station_id;
+    document.getElementById('sft-opened').textContent = fmtDT(_activeShift.opened_at);
+    document.getElementById('sft-float').textContent = (_activeShift.opening_float||0).toLocaleString('en-US',{minimumFractionDigits:2})+' '+_activeShift.currency;
+    if(btnOpen) btnOpen.style.display='none';
+    if(btnClose) btnClose.style.display='';
+    if(btnX) btnX.style.display='';
+  } else {
+    bar.classList.add('closed-state');
+    txt.textContent='NO ACTIVE SHIFT';
+    meta.style.display='none';
+    if(btnOpen) btnOpen.style.display='';
+    if(btnClose) btnClose.style.display='none';
+    if(btnX) btnX.style.display='none';
+  }
+}
+// Guard called at the top of every billing/registration/appointment save —
+// blocks the action and prompts Open Shift instead of silently letting an
+// invoice/patient/appointment through with no shift_id attached.
+function requireActiveShift(){
+  if(!SHIFT_ROLES.includes(currentProfile?.role)) return true; // guard only applies to billing-capable roles
+  if(_activeShift && _activeShift.status==='active') return true;
+  toast('⚠️ Open a reception shift before continuing','warn');
+  openShiftModal();
+  return false;
+}
+function openShiftModal(){
+  if(_activeShift){ toast('A shift is already active','warn'); return; }
+  const s=document.getElementById('sfo-staff'); if(s) s.value = currentProfile?.full_name||'—';
+  const f=document.getElementById('sfo-float'); if(f) f.value='0';
+  openOv('shift-open-ov');
+}
+async function submitOpenShift(){
+  if(!sb){ toast('Not connected','err'); return; }
+  if(_activeShift){ toast('A shift is already active','err'); closeOv('shift-open-ov'); return; }
+  const g=id=>document.getElementById(id)?.value||'';
+  const station=g('sfo-station').trim();
+  if(!station){ toast('Station/Counter ID required','err'); return; }
+  const payload = {
+    shift_no: genOfflineId('SFT'),
+    staff_id: currentProfile?.id, staff_name: currentProfile?.full_name||'',
+    station_id: station, shift_type: g('sfo-type')||'morning', status:'active',
+    currency: g('sfo-currency')||'SDG', opening_float: parseFloat(g('sfo-float'))||0,
+    opened_by: currentProfile?.id
+  };
+  try {
+    const {data,error} = await sb.from('reception_shifts').insert(payload).select().single();
+    if(error) throw error;
+    _activeShift = data;
+    renderShiftBar();
+    closeOv('shift-open-ov');
+    toast('🟢 Shift opened: '+data.shift_no,'ok');
+    dispatchShiftEmail('open', data);
+  } catch(e){ toast(e.message,'err'); }
+}
+// Shared by the Close-Shift reconciliation view and the X-Report snapshot —
+// both need the same live totals, the only difference is whether the
+// result locks the shift. Reads `payments` (split-payment ledger) rather
+// than invoices.payment_method, since one invoice can carry several
+// payment methods.
+async function computeShiftTotals(shiftId){
+  const [{data:invoices},{data:payments},{data:refunds}] = await Promise.all([
+    sb.from('invoices').select('id,net_amount,total_amount,patient_id').eq('shift_id',shiftId),
+    sb.from('payments').select('method,amount,voided').eq('shift_id',shiftId),
+    sb.from('billing_audit_logs').select('amount,details').eq('shift_id',shiftId).eq('event_type','refund')
+  ]);
+  const totalPatients = new Set((invoices||[]).map(i=>i.patient_id)).size;
+  const byMethod = {cash:0,card:0,insurance:0,wallet:0,online:0,bank_transfer:0,mobile_money:0};
+  (payments||[]).filter(p=>!p.voided).forEach(p=>{ byMethod[p.method]=(byMethod[p.method]||0)+parseFloat(p.amount||0); });
+  const grossRevenue = (invoices||[]).reduce((s,i)=>s+(i.net_amount||i.total_amount||0),0);
+  const totalRefunds = (refunds||[]).reduce((s,r)=>s+parseFloat(r.amount||0),0);
+  const cashRefunds = (refunds||[]).filter(r=>(r.details&&r.details.method)==='cash').reduce((s,r)=>s+parseFloat(r.amount||0),0);
+  return {totalPatients, byMethod, grossRevenue, totalRefunds, cashRefunds, invoiceCount:(invoices||[]).length};
+}
+function paymentBreakdownTableHtml(t){
+  return '<table class="tbl" style="margin-bottom:12px"><thead><tr><th>Method</th><th style="text-align:right">Amount (SDG)</th></tr></thead><tbody>'+
+    '<tr><td>💵 Cash</td><td style="text-align:right">'+(t.byMethod.cash||0).toFixed(2)+'</td></tr>'+
+    '<tr><td>💳 Card</td><td style="text-align:right">'+(t.byMethod.card||0).toFixed(2)+'</td></tr>'+
+    '<tr><td>🏥 Insurance</td><td style="text-align:right">'+(t.byMethod.insurance||0).toFixed(2)+'</td></tr>'+
+    '<tr><td>👛 Wallet</td><td style="text-align:right">'+(t.byMethod.wallet||0).toFixed(2)+'</td></tr>'+
+    '<tr><td>🌐 Online / Mobile / Bank</td><td style="text-align:right">'+((t.byMethod.online||0)+(t.byMethod.mobile_money||0)+(t.byMethod.bank_transfer||0)).toFixed(2)+'</td></tr>'+
+    '<tr><td style="color:var(--red)">↩ Discounts / Refunds</td><td style="text-align:right;color:var(--red)">-'+(t.totalRefunds||0).toFixed(2)+'</td></tr>'+
+    '</tbody></table>';
+}
+async function openCloseShiftModal(){
+  if(!_activeShift){ toast('No active shift','err'); return; }
+  openOv('shift-close-ov');
+  const body=document.getElementById('shift-close-body');
+  body.innerHTML='<div class="spin-center"><div class="spinner"></div>Loading shift totals…</div>';
+  const t = await computeShiftTotals(_activeShift.id);
+  window._shiftCloseTotals = t;
+  const expectedCash = (_activeShift.opening_float||0) + (t.byMethod.cash||0) - (t.cashRefunds||0);
+  window._shiftExpectedCash = expectedCash;
+  body.innerHTML =
+    '<div class="kpi-grid">'+
+      '<div class="kpi-box"><div class="kpi-n">'+t.totalPatients+'</div><div class="kpi-l">Patients Processed</div></div>'+
+      '<div class="kpi-box"><div class="kpi-n">'+t.grossRevenue.toLocaleString('en-US',{minimumFractionDigits:0})+'</div><div class="kpi-l">Gross Revenue (SDG)</div></div>'+
+      '<div class="kpi-box"><div class="kpi-n">'+(t.byMethod.cash||0).toLocaleString('en-US',{minimumFractionDigits:0})+'</div><div class="kpi-l">Net Cash Collected</div></div>'+
+    '</div>'+
+    paymentBreakdownTableHtml(t)+
+    '<div style="background:var(--bg);border-radius:9px;padding:10px 13px;margin-bottom:12px">'+
+      '<div class="recon-row"><span>Opening Float</span><span class="rr-v">'+(_activeShift.opening_float||0).toFixed(2)+'</span></div>'+
+      '<div class="recon-row"><span>+ Cash Collected</span><span class="rr-v">'+(t.byMethod.cash||0).toFixed(2)+'</span></div>'+
+      '<div class="recon-row"><span>− Cash Refunds</span><span class="rr-v">'+(t.cashRefunds||0).toFixed(2)+'</span></div>'+
+      '<div class="recon-row"><span><b>Expected Cash Balance</b></span><span class="rr-v"><b>'+expectedCash.toFixed(2)+'</b></span></div>'+
+    '</div>'+
+    '<div class="g2">'+
+      '<div class="fg"><label class="fl">Actual Cash Count *</label><input class="fc" type="number" id="sfc-actual" step="0.01" oninput="recalcCloseVariance()"></div>'+
+      '<div class="fg"><label class="fl">Variance</label><input class="fc" id="sfc-variance" readonly style="background:var(--bg);font-weight:700"></div>'+
+    '</div>'+
+    '<div class="fg" id="sfc-reason-wrap" style="display:none">'+
+      '<label class="fl">Variance / Discrepancy Reason *</label>'+
+      '<select class="fc" id="sfc-reason">'+
+        '<option value="">— Select reason —</option>'+
+        '<option value="counter_change_shortage">Counter Change Shortage</option>'+
+        '<option value="unprocessed_refund">Unprocessed Refund</option>'+
+        '<option value="bank_deposit_variance">Bank Deposit Variance</option>'+
+        '<option value="counterfeit_note">Counterfeit Note</option>'+
+        '<option value="miscount">Miscount</option>'+
+        '<option value="other">Other</option>'+
+      '</select>'+
+    '</div>'+
+    '<div class="fg"><label class="fl">Shift Handover / Closure Notes</label><textarea class="fc" id="sfc-notes" rows="2" placeholder="Any remarks for the next shift or admin…"></textarea></div>';
+}
+function recalcCloseVariance(){
+  const actualEl=document.getElementById('sfc-actual'), varEl=document.getElementById('sfc-variance'), reasonWrap=document.getElementById('sfc-reason-wrap');
+  if(!actualEl||!varEl||!reasonWrap) return;
+  const actual=parseFloat(actualEl.value);
+  const expected=window._shiftExpectedCash||0;
+  if(isNaN(actual)){ varEl.value=''; reasonWrap.style.display='none'; return; }
+  const variance=actual-expected;
+  varEl.value=(variance>=0?'+':'')+variance.toFixed(2)+' SDG';
+  varEl.className='fc '+(Math.abs(variance)<0.01?'':(variance>0?'variance-pos':'variance-neg'));
+  reasonWrap.style.display = Math.abs(variance)>=0.01 ? '' : 'none';
+}
+async function submitCloseShift(){
+  if(!sb||!_activeShift){ toast('No active shift','err'); return; }
+  const actual=parseFloat(document.getElementById('sfc-actual')?.value);
+  if(isNaN(actual)){ toast('Enter the actual cash count','err'); return; }
+  const expected=window._shiftExpectedCash||0;
+  const variance=actual-expected;
+  const reason=document.getElementById('sfc-reason')?.value||'';
+  if(Math.abs(variance)>=0.01 && !reason){ toast('Select a variance/discrepancy reason','err'); return; }
+  const notes=document.getElementById('sfc-notes')?.value||'';
+  const t=window._shiftCloseTotals||{byMethod:{}};
+  const payload = {
+    status:'closed', closed_at:new Date().toISOString(), closed_by:currentProfile?.id,
+    total_patients:t.totalPatients||0, gross_revenue:t.grossRevenue||0,
+    total_cash:t.byMethod.cash||0, total_card:t.byMethod.card||0, total_insurance:t.byMethod.insurance||0,
+    total_wallet:t.byMethod.wallet||0,
+    total_online:(t.byMethod.online||0)+(t.byMethod.mobile_money||0)+(t.byMethod.bank_transfer||0),
+    total_refunds:t.totalRefunds||0, cash_expected:expected, cash_actual:actual, cash_variance:variance,
+    variance_reason:reason||null, closing_notes:notes
+  };
+  try {
+    const {data,error} = await sb.from('reception_shifts').update(payload).eq('id',_activeShift.id).select().single();
+    if(error) throw error;
+    try {
+      await dbWrite('billing_audit_logs','insert',{
+        event_type:'shift_close', shift_id:_activeShift.id, amount:variance, reason:reason||null,
+        performed_by:currentProfile?.id, performed_by_name:currentProfile?.full_name, details:payload
+      });
+    } catch(e){ /* audit log failure shouldn't block the close itself */ }
+    toast('🔒 Shift closed: '+data.shift_no,'ok');
+    dispatchShiftEmail('close', data);
+    _activeShift = null;
+    renderShiftBar();
+    closeOv('shift-close-ov');
+  } catch(e){ toast(e.message,'err'); }
+}
+async function openXReportModal(){
+  if(!_activeShift){ toast('No active shift','err'); return; }
+  openOv('xreport-ov');
+  const body=document.getElementById('xreport-body');
+  body.innerHTML='<div class="spin-center"><div class="spinner"></div>Loading…</div>';
+  const t = await computeShiftTotals(_activeShift.id);
+  const expectedCash = (_activeShift.opening_float||0) + (t.byMethod.cash||0) - (t.cashRefunds||0);
+  body.innerHTML =
+    '<div style="font-size:.76rem;color:var(--slate);margin-bottom:10px">Shift '+_activeShift.shift_no+' · '+_activeShift.staff_name+' · opened '+fmtDT(_activeShift.opened_at)+' — snapshot only, the shift stays open.</div>'+
+    '<div class="kpi-grid">'+
+      '<div class="kpi-box"><div class="kpi-n">'+t.totalPatients+'</div><div class="kpi-l">Patients So Far</div></div>'+
+      '<div class="kpi-box"><div class="kpi-n">'+t.grossRevenue.toLocaleString('en-US',{minimumFractionDigits:0})+'</div><div class="kpi-l">Gross Revenue (SDG)</div></div>'+
+      '<div class="kpi-box"><div class="kpi-n">'+expectedCash.toLocaleString('en-US',{minimumFractionDigits:0})+'</div><div class="kpi-l">Expected Cash (SDG)</div></div>'+
+    '</div>'+
+    paymentBreakdownTableHtml(t);
+}
+// Non-blocking by design (never awaited at the call site) — a slow or
+// unreachable email endpoint must never hold up shift open/close for the
+// person standing at the counter. See supabase/functions/reception-shift-notify.
+async function dispatchShiftEmail(kind, shiftRow){
+  if(!sb) return;
+  try {
+    const {error} = await sb.functions.invoke('reception-shift-notify', {
+      body: { kind, shift: shiftRow, admin_email: CFG.adminNotifyEmail }
+    });
+    if(error) throw error;
+  } catch(e) { toast('⚠️ Shift email notification failed to send: '+(e.message||'unknown error'),'warn'); }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// ANTI-FRAUD: Admin/Manager authorization override
+// ═══════════════════════════════════════════════════════════════════════
+// Re-authenticates against a throwaway, isolated Supabase client (never
+// the global `sb`/currentUser session) so a cashier can prove an admin
+// approved an action without logging the cashier out and back in.
+let _pendingOverrideAction = null;
+function requireOverride(reasonText, onAuthorized){
+  _pendingOverrideAction = onAuthorized;
+  const t=document.getElementById('override-reason-text'); if(t) t.textContent=reasonText;
+  const e=document.getElementById('ovr-email'); if(e) e.value='';
+  const p=document.getElementById('ovr-pass'); if(p) p.value='';
+  openOv('override-ov');
+}
+async function submitOverride(){
+  const email=document.getElementById('ovr-email')?.value.trim();
+  const pass=document.getElementById('ovr-pass')?.value;
+  if(!email||!pass){ toast('Enter the admin email and password','err'); return; }
+  const url=localStorage.getItem('sb_url'), key=localStorage.getItem('sb_key');
+  if(!window.supabase||!url||!key){ toast('Not connected','err'); return; }
+  try {
+    const verifyClient = window.supabase.createClient(url, key);
+    const {data:authData, error:authErr} = await verifyClient.auth.signInWithPassword({email, password:pass});
+    if(authErr || !authData?.user){ toast('❌ Invalid admin credentials','err'); return; }
+    const {data:staffRow} = await verifyClient.from('staff').select('id,role,full_name').eq('user_id',authData.user.id).maybeSingle();
+    await verifyClient.auth.signOut().catch(()=>{});
+    if(!staffRow || staffRow.role!=='admin'){ toast('❌ That account is not an admin','err'); return; }
+    closeOv('override-ov');
+    const action=_pendingOverrideAction; _pendingOverrideAction=null;
+    if(action) await action({id:staffRow.id, full_name:staffRow.full_name, email});
+  } catch(e){ toast(e.message,'err'); }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// PATIENT WALLET (pre-paid deposit / advance balance)
+// ═══════════════════════════════════════════════════════════════════════
+let _currentWalletId = null;
+async function openWalletModal(){
+  if(!_billPt?.id){ toast('Select a patient first','err'); return; }
+  openOv('wallet-ov');
+  const nm=document.getElementById('wal-pt-name'); if(nm) nm.textContent=_billPt.name||fullName(_billPt);
+  const amt=document.getElementById('wal-credit-amt'); if(amt) amt.value='';
+  await loadWalletBalance(_billPt.id);
+}
+async function loadWalletBalance(ptId){
+  if(!sb||!ptId) return;
+  try {
+    const {data:wallet} = await sb.from('patient_wallets').select('*').eq('patient_id',ptId).maybeSingle();
+    const bal = wallet?.balance||0;
+    _currentWalletId = wallet?.id||null;
+    const balEl=document.getElementById('wal-balance'); if(balEl) balEl.textContent=bal.toLocaleString('en-US',{minimumFractionDigits:2})+' SDG';
+    const bannerEl=document.getElementById('bill-pt-wallet-bal'); if(bannerEl) bannerEl.textContent=bal.toLocaleString('en-US',{minimumFractionDigits:2})+' SDG';
+    const txnsEl=document.getElementById('wal-txns');
+    if(!txnsEl) return;
+    if(!wallet){ txnsEl.innerHTML='<div style="font-size:.76rem;color:var(--slate);text-align:center;padding:10px">No wallet activity yet</div>'; return; }
+    const {data:txns} = await sb.from('wallet_transactions').select('*').eq('wallet_id',wallet.id).order('created_at',{ascending:false}).limit(30);
+    txnsEl.innerHTML = !txns?.length ? '<div style="font-size:.76rem;color:var(--slate);text-align:center;padding:10px">No wallet activity yet</div>' :
+      '<div style="overflow-x:auto"><table class="tbl" style="font-size:.76rem"><thead><tr><th>Date</th><th>Type</th><th style="text-align:right">Amount</th><th style="text-align:right">Balance After</th><th>By</th></tr></thead><tbody>'+
+      txns.map(t=>'<tr><td>'+fmtDT(t.created_at)+'</td><td>'+(t.type==='credit'?'⬆ Credit':(t.type==='debit'?'⬇ Debit':'↩ Refund'))+'</td>'+
+        '<td style="text-align:right">'+(t.amount||0).toFixed(2)+'</td><td style="text-align:right">'+(t.balance_after||0).toFixed(2)+'</td><td>'+(t.performed_by_name||'—')+'</td></tr>').join('')+
+      '</tbody></table></div>';
+  } catch(e){ toast(e.message,'err'); }
+}
+async function submitWalletCredit(){
+  if(!_billPt?.id){ toast('Select a patient first','err'); return; }
+  const amt=parseFloat(document.getElementById('wal-credit-amt')?.value);
+  if(!amt||amt<=0){ toast('Enter a valid credit amount','err'); return; }
+  if(!requireActiveShift()) return;
+  try {
+    const {error} = await sb.rpc('apply_wallet_transaction',{
+      p_patient_id:_billPt.id, p_type:'credit', p_amount:amt,
+      p_reference_invoice_id:null, p_shift_id:_activeShift?.id||null, p_notes:'Reception deposit'
+    });
+    if(error) throw error;
+    toast('👛 Wallet credited '+amt.toFixed(2)+' SDG','ok');
+    document.getElementById('wal-credit-amt').value='';
+    await loadWalletBalance(_billPt.id);
+  } catch(e){ toast(e.message,'err'); }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// SPLIT PAYMENTS + INSURANCE CO-PAY (Billing form extensions)
+// ═══════════════════════════════════════════════════════════════════════
+function recalcInsurance(){
+  const insCo=document.getElementById('bill-ins-co')?.value.trim();
+  const wrap=document.getElementById('bill-copay-wrap'), req=document.getElementById('bill-preauth-req');
+  if(wrap) wrap.style.display = insCo ? '' : 'none';
+  if(req) req.style.display = insCo ? '' : 'none';
+  if(!insCo) return;
+  const totalText=document.getElementById('bill-total')?.textContent||'0';
+  const total=parseFloat(totalText.replace(/[^0-9.]/g,''))||0;
+  const pct=parseFloat(document.getElementById('bill-copay-pct')?.value)||0;
+  const fixed=parseFloat(document.getElementById('bill-copay-fixed')?.value)||0;
+  const patientPayable=Math.min(total, fixed + total*(pct/100));
+  const covered=Math.max(0, total-patientPayable);
+  const ce=document.getElementById('bill-ins-covered'); if(ce) ce.textContent=covered.toFixed(2)+' SDG';
+  const pe=document.getElementById('bill-pt-payable'); if(pe) pe.textContent=patientPayable.toFixed(2)+' SDG';
+}
+let _splitRowIdx = 0;
+function toggleSplitPayment(){
+  const on=document.getElementById('bill-split-toggle')?.checked;
+  const wrap=document.getElementById('bill-split-wrap');
+  if(wrap) wrap.style.display = on?'':'none';
+  if(on && !document.querySelectorAll('.split-pay-row').length) addSplitRow();
+}
+function addSplitRow(){
+  const rows=document.getElementById('bill-split-rows'); if(!rows) return;
+  const i=_splitRowIdx++;
+  rows.insertAdjacentHTML('beforeend',
+    '<div class="split-pay-row" id="split-row-'+i+'" style="display:grid;grid-template-columns:1fr 90px 28px;gap:5px;margin-bottom:4px">'+
+    '<select class="fc" id="split-method-'+i+'" onchange="recalcSplitPayment()" style="padding:4px 7px;font-size:.76rem">'+
+      '<option value="cash">💵 Cash</option><option value="card">💳 Card</option><option value="insurance">🏥 Insurance</option>'+
+      '<option value="wallet">👛 Wallet</option><option value="online">🌐 Online</option><option value="mobile_money">📱 Mobile Money</option><option value="bank_transfer">🏦 Bank Transfer</option>'+
+    '</select>'+
+    '<input class="fc" type="number" id="split-amt-'+i+'" min="0" step="0.01" placeholder="0.00" oninput="recalcSplitPayment()" style="padding:4px 7px;font-size:.76rem;text-align:right">'+
+    '<button class="btn btn-r btn-xs" onclick="document.getElementById(\x27split-row-'+i+'\x27).remove();recalcSplitPayment()">✕</button>'+
+    '</div>');
+  recalcSplitPayment();
+}
+function getSplitRows(){
+  return [...document.querySelectorAll('.split-pay-row')].map(row=>{
+    const i=row.id.replace('split-row-','');
+    return { method:document.getElementById('split-method-'+i)?.value, amount:parseFloat(document.getElementById('split-amt-'+i)?.value)||0 };
+  }).filter(r=>r.amount>0);
+}
+function recalcSplitPayment(){
+  const rows=getSplitRows();
+  const allocated=rows.reduce((s,r)=>s+r.amount,0);
+  const totalText=document.getElementById('bill-total')?.textContent||'0';
+  const total=parseFloat(totalText.replace(/[^0-9.]/g,''))||0;
+  const remaining=total-allocated;
+  const ae=document.getElementById('bill-split-allocated'); if(ae) ae.textContent=allocated.toFixed(2)+' SDG';
+  const re=document.getElementById('bill-split-remaining');
+  if(re){ re.textContent=remaining.toFixed(2)+' SDG'; re.style.color = Math.abs(remaining)<0.01?'var(--green)':(remaining<0?'var(--red)':'var(--slate)'); }
+}
+
 async function saveInvoice() {
   if(!sb){toast('Not connected','err');return;}
+  if(!requireActiveShift()) return;
   const ptId = document.getElementById('bill-pt-id')?.value;
   if(!ptId){toast('Select a patient first','err');return;}
   const g = id=>document.getElementById(id)?.value||'';
   const items = getBillLineItems();
   if(!items.length){toast('Add at least one line item','err');return;}
+  const insCo = g('bill-ins-co');
+  if(insCo && !g('bill-preauth')){ toast('Pre-authorization code is required for insurance billing','err'); return; }
   const subtotal = items.reduce((s,i)=>s+i.total_price,0);
   const discount = parseFloat(g('bill-discount'))||0;
   const net = Math.max(0,subtotal-discount);
   const editId = g('bill-edit-id');
+  const copayPct=parseFloat(g('bill-copay-pct'))||0, copayFixed=parseFloat(g('bill-copay-fixed'))||0;
+  const patientPayable = insCo ? Math.min(net, copayFixed + net*(copayPct/100)) : net;
+  const insuranceCovered = insCo ? Math.max(0, net-patientPayable) : 0;
+  const splitOn = document.getElementById('bill-split-toggle')?.checked;
+  if(splitOn) {
+    const rows=getSplitRows();
+    if(!rows.length){ toast('Add at least one split payment line, or turn split payment off','err'); return; }
+  }
   const payload = {
     patient_id:ptId, patient_name:_billPt?.name||fullName(_billPt)||'',
     lab_no:_billPt?.lab_no||_billPt?.mrn||'',
     invoice_type:g('bill-type'), invoice_date:g('bill-date')||today(),
     line_items:items, total_amount:subtotal, discount_amount:discount, net_amount:net,
-    currency:'SDG', payment_status:g('bill-status'), payment_method:g('bill-method'),
-    insurance_company:g('bill-ins-co'), insurance_no:g('bill-ins-no'),
-    pre_auth_no:g('bill-preauth'), notes:g('bill-notes'), created_by:currentProfile?.id
+    currency:'SDG', payment_status:g('bill-status'), payment_method:splitOn?'Split':g('bill-method'),
+    insurance_company:insCo, insurance_no:g('bill-ins-no'),
+    pre_auth_no:g('bill-preauth'), notes:g('bill-notes'), created_by:currentProfile?.id,
+    shift_id:_activeShift?.id||null, insurance_covered:insuranceCovered, patient_payable:patientPayable,
+    copay_percent:insCo?copayPct:null, copay_fixed:insCo?copayFixed:null
   };
+  const discountPct = subtotal>0 ? (discount/subtotal*100) : 0;
+  const threshold = CFG.discountOverrideThreshold;
+  if(!editId && discountPct > threshold) {
+    requireOverride('Discount of '+discountPct.toFixed(1)+'% exceeds the '+threshold+'% authorization threshold for this invoice.', async(admin)=>{
+      await finalizeSaveInvoice(payload, editId, admin);
+    });
+    return;
+  }
+  await finalizeSaveInvoice(payload, editId, null);
+}
+
+// Split out from saveInvoice() so the discount-override flow can resume
+// here after admin authorization, without duplicating the save logic.
+async function finalizeSaveInvoice(payload, editId, overrideAdmin) {
   try {
+    let invId = editId;
     if(editId) {
       await sb.from('invoices').update(payload).eq('id',editId);
       toast('✅ Invoice updated','ok');
     } else {
       const invNo = genOfflineId('INV');
-      await sb.from('invoices').insert({...payload, invoice_no:invNo});
-      toast('✅ Invoice saved: '+invNo,'ok');
+      const prefixMap = {lab:'LAB',consultation:'CON',radiology:'RAD',admission:'ADM',theatre:'OT',pharmacy:'PHM',combined:'GEN'};
+      let queueToken = null;
+      try { const {data:tok} = await sb.rpc('generate_queue_token',{p_prefix:prefixMap[payload.invoice_type]||'GEN'}); queueToken = tok; }
+      catch(e) { /* queue token is a display convenience, never blocks invoice save */ }
+      const {data:inv, error} = await sb.from('invoices').insert({...payload, invoice_no:invNo, queue_token:queueToken}).select().single();
+      if(error) throw error;
+      invId = inv.id;
+      toast('✅ Invoice saved: '+invNo+(queueToken?' · Token '+queueToken:''),'ok');
     }
-    // Update patient payment_status
-    try{ await sb.from('patients').update({payment_status:g('bill-status')}).eq('id',ptId); }catch(e){}
+    // Write payment ledger lines — either the split-payment rows, or (in
+    // the simple/default flow) one line derived from Payment Method so
+    // `payments` stays the single source of truth invoices were tagged
+    // with, even when the split UI was never opened.
+    const splitOn = document.getElementById('bill-split-toggle')?.checked;
+    const rows = splitOn ? getSplitRows() : [];
+    const paidAmt = parseFloat(document.getElementById('bill-paid-amount')?.value)||0;
+    const methodMap = {Cash:'cash','Mobile Money':'mobile_money','Bank Transfer':'bank_transfer',Insurance:'insurance',Waiver:'cash'};
+    const linesToWrite = rows.length ? rows : (paidAmt>0 ? [{method:methodMap[document.getElementById('bill-method')?.value]||'cash', amount:paidAmt}] : []);
+    for(const line of linesToWrite) {
+      await dbWrite('payments','insert',{
+        invoice_id:invId, method:line.method, amount:line.amount, currency:'SDG',
+        shift_id:_activeShift?.id||null, received_by:currentProfile?.id, received_by_name:currentProfile?.full_name
+      });
+      if(line.method==='wallet' && _billPt?.id) {
+        try {
+          await sb.rpc('apply_wallet_transaction',{
+            p_patient_id:_billPt.id, p_type:'debit', p_amount:line.amount,
+            p_reference_invoice_id:invId, p_shift_id:_activeShift?.id||null, p_notes:'Invoice payment'
+          });
+        } catch(e){ toast('⚠️ Wallet debit failed: '+e.message,'err'); }
+      }
+    }
+    if(overrideAdmin) {
+      try {
+        await dbWrite('billing_audit_logs','insert',{
+          event_type:'discount_override', invoice_id:invId, shift_id:_activeShift?.id||null,
+          amount:payload.discount_amount, reason:'Discount above '+CFG.discountOverrideThreshold+'% threshold',
+          authorized_by:overrideAdmin.id, authorized_by_name:overrideAdmin.full_name,
+          performed_by:currentProfile?.id, performed_by_name:currentProfile?.full_name
+        });
+      } catch(e){ /* audit log failure shouldn't undo an already-saved invoice */ }
+    }
+    try{ await sb.from('patients').update({payment_status:payload.payment_status}).eq('id',payload.patient_id); }catch(e){}
     clearBillForm(); loadBilling();
   } catch(e){toast(e.message,'err');}
 }
 
 function clearBillForm() {
-  _billPt = null;
-  ['bill-pt-id','bill-edit-id','bill-search','bill-ins-co','bill-ins-no','bill-preauth','bill-notes'].forEach(id=>{
+  _billPt = null; _currentWalletId = null;
+  ['bill-pt-id','bill-edit-id','bill-search','bill-ins-co','bill-ins-no','bill-preauth','bill-notes','bill-copay-pct','bill-copay-fixed'].forEach(id=>{
     const el=document.getElementById(id); if(el) el.value='';
   });
   document.getElementById('bill-pt-banner').style.display='none';
@@ -10426,6 +11066,11 @@ function clearBillForm() {
     const el=document.getElementById(id); if(el) el.textContent='0.00 SDG';
   });
   const d=document.getElementById('bill-date'); if(d) d.value=today();
+  const copayWrap=document.getElementById('bill-copay-wrap'); if(copayWrap) copayWrap.style.display='none';
+  const preauthReq=document.getElementById('bill-preauth-req'); if(preauthReq) preauthReq.style.display='none';
+  const splitToggle=document.getElementById('bill-split-toggle'); if(splitToggle) splitToggle.checked=false;
+  const splitWrap=document.getElementById('bill-split-wrap'); if(splitWrap) splitWrap.style.display='none';
+  const splitRows=document.getElementById('bill-split-rows'); if(splitRows) splitRows.innerHTML='';
 }
 
 async function openBillDetail(id) {
