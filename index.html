@@ -5671,7 +5671,8 @@ async function doLogin() {
     const {data,error} = await sb.auth.signInWithPassword({email,password:pass});
     if(error) throw error;
     currentUser = data.user;
-    await loadProfile();
+    const linked = await loadProfile();
+    if(!linked) { await denyUnlinkedAccount(); throw new Error(STAFF_NOT_LINKED_MSG); }
     showApp();
   } catch(e) {
     showAuthMsg(e.message||'Login failed','err');
@@ -5682,12 +5683,52 @@ function showAuthMsg(msg,type) {
   const el=document.getElementById('auth-msg'); if(!el) return;
   el.textContent=msg; el.className='auth-msg '+type; el.style.display='block';
 }
+// Security fix: a missing/errored staff lookup used to silently grant
+// role:'admin' (see git history) — filterSidebar()/goPage() both treat
+// role==='admin' as "skip every restriction", so any account whose staff
+// row was missing, mislinked (wrong user_id), or blocked by RLS ended up
+// with unrestricted access instead of no access. Fails closed now: no
+// linked staff row means denied, full stop, never a permissive default.
+// Returns true if currentProfile was populated from a real staff row,
+// false if the caller should deny access.
+const STAFF_NOT_LINKED_MSG = "Your account isn't set up correctly — no staff record is linked to this login. Contact an administrator.";
 async function loadProfile() {
-  if(!currentUser) return;
+  if(!currentUser) return false;
   try {
     const {data} = await sb.from('staff').select('*').eq('user_id',currentUser.id).maybeSingle();
-    currentProfile = data || {full_name:currentUser.email?.split('@')[0]||'User',role:'admin'};
-  } catch(e) { currentProfile = {full_name:currentUser.email?.split('@')[0]||'User',role:'admin'}; }
+    if(!data) { currentProfile = null; return false; }
+    currentProfile = data;
+    return true;
+  } catch(e) { currentProfile = null; return false; }
+}
+// Shared cleanup for "authenticated with Supabase, but not a valid staff
+// account" — signs out so no authenticated session is left sitting around
+// for someone the app is refusing to let in, and clears local state so
+// nothing downstream can accidentally read a half-set profile.
+async function denyUnlinkedAccount() {
+  try { await sb.auth.signOut(); } catch(e) {}
+  currentUser = null; currentProfile = null;
+}
+// Page-load session restore (an existing Supabase Auth session token found
+// in localStorage) — the other path into the app besides doLogin(), and
+// the same admin-fallback bug applied here too: the original code called
+// showApp() from BOTH the success and the .catch() branch of the profile
+// load, so even a failed lookup still let the session in. Same fail-closed
+// behavior as doLogin() now: no linked staff row means back to the login
+// screen with an explanation, never a silent admin session.
+async function restoreSession() {
+  try {
+    const {data:{session}} = await sb.auth.getSession();
+    if(!session?.user) return;
+    currentUser = session.user;
+    const linked = await loadProfile();
+    if(linked) { showApp(); return; }
+    await denyUnlinkedAccount();
+    showAuthMsg(STAFF_NOT_LINKED_MSG,'err');
+  } catch(e) {
+    await denyUnlinkedAccount();
+    showAuthMsg(STAFF_NOT_LINKED_MSG,'err');
+  }
 }
 function showApp() {
   document.getElementById('auth-screen').style.display='none';
@@ -11563,7 +11604,7 @@ window.addEventListener('DOMContentLoaded',()=>{
   const cu=document.getElementById('cfg-url'); if(cu&&su) cu.value=su;
   const ck=document.getElementById('cfg-key'); if(ck&&sk) ck.value=sk;
   if(initSupabase()){
-    sb.auth.getSession().then(({data:{session}})=>{ if(session?.user){ currentUser=session.user; loadProfile().then(()=>showApp()).catch(()=>showApp()); } }).catch(()=>{});
+    restoreSession();
   }
   updateTopbarDate();
   updateConnBadge();
