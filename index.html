@@ -6300,24 +6300,46 @@ function selectAdmPatient(p) {
   const banner=document.getElementById('adm-pt-banner');
   if(banner){ banner.style.display='block'; document.getElementById('adm-pt-name-disp').textContent=p.name||fullName(p); document.getElementById('adm-pt-meta-disp').textContent=(p.mrn||'')+' · '+(p.age||'?')+(p.age_unit||'y')+' / '+(p.sex||''); }
 }
+// Same offline read-through pattern as populateDoctorDropdown()/
+// ensurePriceList() (try the live query, cache a successful result, fall
+// back to the last cached copy when offline or the query fails) — ward/room
+// availability is exactly the kind of "blocks admitting a patient if it's
+// unavailable" reference lookup that pattern exists for. Cached
+// availability can go stale (e.g. someone else takes the last bed while
+// you're offline) — that's an accepted tradeoff this app already makes
+// everywhere for offline writes (dbWrite queues optimistically); showing a
+// stale-but-usable room list beats blocking admission entirely.
 async function loadBedsForWard() {
-  const ward=document.getElementById('adm-ward')?.value; if(!ward||!sb) return;
-  try {
-    const {data}=await sb.from('beds').select('room').eq('ward',ward).eq('status','Available').order('room');
-    const rooms=[...new Set((data||[]).map(b=>b.room))];
-    const rs=document.getElementById('adm-room'); if(!rs) return;
-    rs.innerHTML=rooms.map(r=>'<option>'+r+'</option>').join('')||'<option>—</option>';
-    loadBedsForRoom();
-  } catch(e){}
+  const ward=document.getElementById('adm-ward')?.value; if(!ward) return;
+  const cacheKey='beds_rooms_'+ward;
+  let rooms=null;
+  if(sb && navigator.onLine){
+    try{
+      const {data}=await sb.from('beds').select('room').eq('ward',ward).eq('status','Available').order('room');
+      rooms=[...new Set((data||[]).map(b=>b.room))];
+      await cacheSet(cacheKey, rooms);
+    }catch(e){}
+  }
+  if(rooms==null) rooms=(await cacheGet(cacheKey))||[];
+  const rs=document.getElementById('adm-room'); if(!rs) return;
+  rs.innerHTML=rooms.map(r=>'<option>'+r+'</option>').join('')||'<option>—</option>';
+  loadBedsForRoom();
 }
 async function loadBedsForRoom() {
   const ward=document.getElementById('adm-ward')?.value, room=document.getElementById('adm-room')?.value;
-  if(!ward||!room||!sb) return;
-  try {
-    const {data}=await sb.from('beds').select('bed_number').eq('ward',ward).eq('room',room).eq('status','Available').order('bed_number');
-    const bs=document.getElementById('adm-bed'); if(!bs) return;
-    bs.innerHTML=(data||[]).map(b=>'<option>'+b.bed_number+'</option>').join('')||'<option>—</option>';
-  } catch(e){}
+  if(!ward||!room) return;
+  const cacheKey='beds_nums_'+ward+'_'+room;
+  let beds=null;
+  if(sb && navigator.onLine){
+    try{
+      const {data}=await sb.from('beds').select('bed_number').eq('ward',ward).eq('room',room).eq('status','Available').order('bed_number');
+      beds=(data||[]).map(b=>b.bed_number);
+      await cacheSet(cacheKey, beds);
+    }catch(e){}
+  }
+  if(beds==null) beds=(await cacheGet(cacheKey))||[];
+  const bs=document.getElementById('adm-bed'); if(!bs) return;
+  bs.innerHTML=beds.map(b=>'<option>'+b+'</option>').join('')||'<option>—</option>';
 }
 async function submitAdmission() {
   if(!sb){ toast('Not connected','err'); return; }
