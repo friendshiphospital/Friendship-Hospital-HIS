@@ -7,6 +7,7 @@
 <title>Friendship Hospital HIS — v2.7</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=DM+Mono:wght@400;500;700&display=swap');
 :root{
@@ -90,6 +91,16 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);font
 /* MAIN */
 #main{margin-left:var(--sw);flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden;}
 .topbar{height:var(--hh);flex-shrink:0;background:var(--card);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 22px;gap:10px;z-index:200;}
+/* Basic RTL support (Phase 4) — flips the two structural elements every
+   page shares (sidebar position, main content offset) and sets a sane
+   default text direction. This is NOT a full RTL pass: the rest of the
+   app's layout (hundreds of inline flex rows, margin-left/padding-left
+   values, icon-before-text orderings) is hardcoded for LTR throughout and
+   is not addressed here — see the comment above the I18N object in the
+   script block for what a complete pass would require. */
+html[dir="rtl"] #sidebar{left:auto;right:0;}
+html[dir="rtl"] #main{margin-left:0;margin-right:var(--sw);}
+html[dir="rtl"] body{direction:rtl;}
 .content{flex:1;overflow-y:scroll;padding:20px 22px;min-height:0;}
 .pg-title{font-family:'DM Serif Display',serif;font-size:1.05rem;color:var(--ink);}
 /* BUTTONS */
@@ -294,9 +305,26 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);font
   </div>
 </div>
 <div id="toast-wrap"></div>
+<!-- Shared camera barcode scanner modal — used by Sample Collection and
+     Sample Receiving. One instance/modal reused for both flows rather than
+     duplicating the html5-qrcode wiring per page. -->
+<div id="scan-modal" style="display:none;position:fixed;inset:0;background:rgba(14,25,40,.75);z-index:9999;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:12px;padding:16px;width:min(94vw,420px);box-shadow:0 20px 60px rgba(0,0,0,.35)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <strong id="scan-modal-title" style="font-size:.9rem">📷 Scan Barcode</strong>
+      <button class="btn btn-s btn-xs" onclick="closeBarcodeScanner()">✕</button>
+    </div>
+    <div id="scan-reader" style="width:100%;border-radius:8px;overflow:hidden"></div>
+    <div id="scan-status" style="font-size:.76rem;color:var(--slate);margin-top:8px;text-align:center">Point the camera at the barcode…</div>
+  </div>
+</div>
 <!-- AUTH SCREEN -->
 <div id="auth-screen">
   <div class="auth-card">
+    <div style="display:flex;justify-content:flex-end;gap:6px;margin-bottom:6px">
+      <button onclick="setLanguage('en')" id="lang-btn-en-auth" style="background:#eef2f7;border:1px solid #dde5ee;color:#334155;border-radius:6px;padding:4px 10px;font-size:.72rem;cursor:pointer;font-weight:700">EN</button>
+      <button onclick="setLanguage('ar')" id="lang-btn-ar-auth" style="background:#eef2f7;border:1px solid #dde5ee;color:#334155;border-radius:6px;padding:4px 10px;font-size:.72rem;cursor:pointer;font-weight:700">AR</button>
+    </div>
     <div class="auth-logo">
       <div style="font-size:2.6rem">🏥</div>
       <h1>Friendship Hospital</h1>
@@ -305,9 +333,9 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);font
     </div>
     <div class="auth-conn"><div class="auth-dot" id="auth-dot"></div><span id="auth-conn-text">Checking connection…</span></div>
     <form id="auth-form" autocomplete="on" onsubmit="event.preventDefault();doLogin();">
-      <div class="auth-field"><label>Email</label><input type="email" id="auth-email" name="username" placeholder="your@email.com" autocomplete="username"></div>
-      <div class="auth-field"><label>Password</label><input type="password" id="auth-pass" name="password" placeholder="••••••••" autocomplete="current-password"></div>
-      <button type="submit" class="auth-submit" id="auth-btn">Sign In</button>
+      <div class="auth-field"><label data-i18n="login_email">Email</label><input type="email" id="auth-email" name="username" placeholder="your@email.com" autocomplete="username"></div>
+      <div class="auth-field"><label data-i18n="login_password">Password</label><input type="password" id="auth-pass" name="password" placeholder="••••••••" autocomplete="current-password"></div>
+      <button type="submit" class="auth-submit" id="auth-btn" data-i18n="login_signin">Sign In</button>
     </form>
     <div class="auth-msg" id="auth-msg"></div>
     <div class="auth-cfg-row" onclick="toggleCfg()">⚙️ Supabase Configuration <span id="cfg-arrow">▸</span></div>
@@ -334,69 +362,73 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);font
       <span class="dot"></span> <span id="conn-text">Online</span>
     </div>
     <div class="sb-group">
-      <div class="sb-lbl">Overview</div>
-      <div class="sb-item" data-p="dashboard" onclick="goPage('dashboard')"><span class="ic">📊</span>Dashboard</div>
+      <div class="sb-lbl" data-i18n="navgrp_overview">Overview</div>
+      <div class="sb-item" data-p="dashboard" onclick="goPage('dashboard')"><span class="ic">📊</span><span data-i18n="nav_dashboard">Dashboard</span></div>
     </div>
     <div class="sb-group">
-      <div class="sb-lbl">🏥 Reception</div>
-      <div class="sb-item" data-p="register" onclick="goPage('register')"><span class="ic">📋</span>Register Patient</div>
-      <div class="sb-item" data-p="appointments" onclick="goPage('appointments')"><span class="ic">📅</span>Appointments</div>
-      <div class="sb-item" data-p="billing" onclick="goPage('billing')"><span class="ic">💰</span>Billing</div>
-      <div class="sb-item" data-p="print-reports-hub" onclick="goPage('print-reports-hub')"><span class="ic">🖨</span>Print Reports</div>
+      <div class="sb-lbl" data-i18n="navgrp_reception">🏥 Reception</div>
+      <div class="sb-item" data-p="register" onclick="goPage('register')"><span class="ic">📋</span><span data-i18n="nav_register">Register Patient</span></div>
+      <div class="sb-item" data-p="appointments" onclick="goPage('appointments')"><span class="ic">📅</span><span data-i18n="nav_appointments">Appointments</span></div>
+      <div class="sb-item" data-p="billing" onclick="goPage('billing')"><span class="ic">💰</span><span data-i18n="nav_billing">Billing</span></div>
+      <div class="sb-item" data-p="print-reports-hub" onclick="goPage('print-reports-hub')"><span class="ic">🖨</span><span data-i18n="nav_print_reports_hub">Print Reports</span></div>
     </div>
     <div class="sb-group">
-      <div class="sb-lbl">🏥 Hospital</div>
-      <div class="sb-item" data-p="admission" onclick="goPage('admission')"><span class="ic">🛏</span>Admissions</div>
-      <div class="sb-item" data-p="theatre" onclick="goPage('theatre')"><span class="ic">🔪</span>Theatre / OT</div>
-      <div class="sb-item" data-p="consultation" onclick="goPage('consultation')"><span class="ic">📋</span>Doctor Orders</div>
-      <div class="sb-item" data-p="nursing" onclick="goPage('nursing')"><span class="ic">💉</span>Nursing &amp; Vitals</div>
-      <div class="sb-item" data-p="fluid-chart" onclick="goPage('fluid-chart')"><span class="ic">💧</span>Fluid Balance</div>
-      <div class="sb-item" data-p="infection" onclick="goPage('infection')"><span class="ic">🦠</span>Infection Flags</div>
-      <div class="sb-item" data-p="handover" onclick="goPage('handover')"><span class="ic">📋</span>Handover Notes</div>
+      <div class="sb-lbl" data-i18n="navgrp_hospital">🏥 Hospital</div>
+      <div class="sb-item" data-p="admission" onclick="goPage('admission')"><span class="ic">🛏</span><span data-i18n="nav_admission">Admissions</span></div>
+      <div class="sb-item" data-p="theatre" onclick="goPage('theatre')"><span class="ic">🔪</span><span data-i18n="nav_theatre">Theatre / OT</span></div>
+      <div class="sb-item" data-p="consultation" onclick="goPage('consultation')"><span class="ic">📋</span><span data-i18n="nav_consultation">Doctor Orders</span></div>
+      <div class="sb-item" data-p="nursing" onclick="goPage('nursing')"><span class="ic">💉</span><span data-i18n="nav_nursing">Nursing &amp; Vitals</span></div>
+      <div class="sb-item" data-p="fluid-chart" onclick="goPage('fluid-chart')"><span class="ic">💧</span><span data-i18n="nav_fluid_chart">Fluid Balance</span></div>
+      <div class="sb-item" data-p="infection" onclick="goPage('infection')"><span class="ic">🦠</span><span data-i18n="nav_infection">Infection Flags</span></div>
+      <div class="sb-item" data-p="handover" onclick="goPage('handover')"><span class="ic">📋</span><span data-i18n="nav_handover">Handover Notes</span></div>
     </div>
     <div class="sb-group">
-      <div class="sb-lbl">🔬 Laboratory</div>
-      <div class="sb-item" data-p="worklist" onclick="goPage('worklist')"><span class="ic">📋</span>Worklist</div>
-      <div class="sb-item" data-p="samples" onclick="goPage('samples')"><span class="ic">🩸</span>Sample Collection</div>
-      <div class="sb-item" data-p="set-printer" onclick="goPage('set-printer')"><span class="ic">🖨</span>Set Printer</div>
-      <div class="sb-item" data-p="hem-entry" onclick="goPage('hem-entry')"><span class="ic">🩸</span>Haematology Entry</div>
-      <div class="sb-item" data-p="chem-entry" onclick="goPage('chem-entry')"><span class="ic">⚗️</span>Chemistry Entry</div>
-      <div class="sb-item" data-p="sero-entry" onclick="goPage('sero-entry')"><span class="ic">💉</span>Serology Entry</div>
-      <div class="sb-item" data-p="immuno-entry" onclick="goPage('immuno-entry')"><span class="ic">🧪</span>Immunology Entry</div>
-      <div class="sb-item" data-p="micro-entry" onclick="goPage('micro-entry')"><span class="ic">🦠</span>Microbiology Entry</div>
-      <div class="sb-item" data-p="pcr-entry" onclick="goPage('pcr-entry')"><span class="ic">🧬</span>PCR / Molecular</div>
-      <div class="sb-item" data-p="histo-entry" onclick="goPage('histo-entry')"><span class="ic">🔬</span>Histopathology</div>
-      <div class="sb-item" data-p="cyto-entry" onclick="goPage('cyto-entry')"><span class="ic">🧫</span>Cytology</div>
-      <div class="sb-item" data-p="allresults" onclick="goPage('allresults')"><span class="ic">📂</span>All Results</div>
-      <div class="sb-item" data-p="criticals" onclick="goPage('criticals')"><span class="ic">🚨</span>Critical Values<span class="sb-badge" id="crit-badge" style="display:none">0</span></div>
-      <div class="sb-item" data-p="reports" onclick="goPage('reports')"><span class="ic">🖨</span>Print Reports</div>
+      <div class="sb-lbl" data-i18n="navgrp_lab">🔬 Laboratory</div>
+      <div class="sb-item" data-p="worklist" onclick="goPage('worklist')"><span class="ic">📋</span><span data-i18n="nav_worklist">Worklist</span></div>
+      <div class="sb-item" data-p="samples" onclick="goPage('samples')"><span class="ic">🩸</span><span data-i18n="nav_samples">Sample Collection</span></div>
+      <div class="sb-item" data-p="set-printer" onclick="goPage('set-printer')"><span class="ic">🖨</span><span data-i18n="nav_set_printer">Set Printer</span></div>
+      <div class="sb-item" data-p="hem-entry" onclick="goPage('hem-entry')"><span class="ic">🩸</span><span data-i18n="nav_hem_entry">Haematology Entry</span></div>
+      <div class="sb-item" data-p="chem-entry" onclick="goPage('chem-entry')"><span class="ic">⚗️</span><span data-i18n="nav_chem_entry">Chemistry Entry</span></div>
+      <div class="sb-item" data-p="sero-entry" onclick="goPage('sero-entry')"><span class="ic">💉</span><span data-i18n="nav_sero_entry">Serology Entry</span></div>
+      <div class="sb-item" data-p="immuno-entry" onclick="goPage('immuno-entry')"><span class="ic">🧪</span><span data-i18n="nav_immuno_entry">Immunology Entry</span></div>
+      <div class="sb-item" data-p="micro-entry" onclick="goPage('micro-entry')"><span class="ic">🦠</span><span data-i18n="nav_micro_entry">Microbiology Entry</span></div>
+      <div class="sb-item" data-p="pcr-entry" onclick="goPage('pcr-entry')"><span class="ic">🧬</span><span data-i18n="nav_pcr_entry">PCR / Molecular</span></div>
+      <div class="sb-item" data-p="histo-entry" onclick="goPage('histo-entry')"><span class="ic">🔬</span><span data-i18n="nav_histo_entry">Histopathology</span></div>
+      <div class="sb-item" data-p="cyto-entry" onclick="goPage('cyto-entry')"><span class="ic">🧫</span><span data-i18n="nav_cyto_entry">Cytology</span></div>
+      <div class="sb-item" data-p="allresults" onclick="goPage('allresults')"><span class="ic">📂</span><span data-i18n="nav_allresults">All Results</span></div>
+      <div class="sb-item" data-p="criticals" onclick="goPage('criticals')"><span class="ic">🚨</span><span data-i18n="nav_criticals">Critical Values</span><span class="sb-badge" id="crit-badge" style="display:none">0</span></div>
+      <div class="sb-item" data-p="reports" onclick="goPage('reports')"><span class="ic">🖨</span><span data-i18n="nav_reports">Print Reports</span></div>
     </div>
     <div class="sb-group">
-      <div class="sb-lbl">💰 Billing</div>
-      <div class="sb-item" data-p="billing" onclick="goPage('billing')"><span class="ic">💰</span>Billing &amp; Invoices</div>
-      <div class="sb-item" data-p="prices" onclick="goPage('prices')"><span class="ic">💲</span>Price List</div>
+      <div class="sb-lbl" data-i18n="navgrp_billing">💰 Billing</div>
+      <div class="sb-item" data-p="billing" onclick="goPage('billing')"><span class="ic">💰</span><span data-i18n="nav_billing_full">Billing &amp; Invoices</span></div>
+      <div class="sb-item" data-p="prices" onclick="goPage('prices')"><span class="ic">💲</span><span data-i18n="nav_prices">Price List</span></div>
     </div>
     <div class="sb-group">
-      <div class="sb-lbl">📊 Analytics</div>
-      <div class="sb-item" data-p="pt-history" onclick="goPage('pt-history')"><span class="ic">🕐</span>Patient Timeline</div>
-      <div class="sb-item" data-p="labhistory" onclick="goPage('labhistory')"><span class="ic">📈</span>Lab History</div>
-      <div class="sb-item" data-p="tat" onclick="goPage('tat')"><span class="ic">⏱️</span>TAT Tracker</div>
-      <div class="sb-item" data-p="inventory" onclick="goPage('inventory')"><span class="ic">📦</span>Inventory</div>
-      <div class="sb-item" data-p="qc" onclick="goPage('qc')"><span class="ic">🔬</span>QC Module</div>
+      <div class="sb-lbl" data-i18n="navgrp_analytics">📊 Analytics</div>
+      <div class="sb-item" data-p="pt-history" onclick="goPage('pt-history')"><span class="ic">🕐</span><span data-i18n="nav_pt_history">Patient Timeline</span></div>
+      <div class="sb-item" data-p="labhistory" onclick="goPage('labhistory')"><span class="ic">📈</span><span data-i18n="nav_labhistory">Lab History</span></div>
+      <div class="sb-item" data-p="tat" onclick="goPage('tat')"><span class="ic">⏱️</span><span data-i18n="nav_tat">TAT Tracker</span></div>
+      <div class="sb-item" data-p="inventory" onclick="goPage('inventory')"><span class="ic">📦</span><span data-i18n="nav_inventory">Inventory</span></div>
+      <div class="sb-item" data-p="qc" onclick="goPage('qc')"><span class="ic">🔬</span><span data-i18n="nav_qc">QC Module</span></div>
     </div>
     <div class="sb-group">
-      <div class="sb-lbl">⚙️ Administration</div>
-      <div class="sb-item" data-p="statistics" onclick="goPage('statistics')"><span class="ic">📊</span>Statistics</div>
-      <div class="sb-item" data-p="staff" onclick="goPage('staff')"><span class="ic">👥</span>Staff</div>
-      <div class="sb-item" data-p="doctors" onclick="goPage('doctors')"><span class="ic">🩺</span>Doctors</div>
-      <div class="sb-item" data-p="radiology" onclick="goPage('radiology')"><span class="ic">🩻</span>Radiology</div>
-      <div class="sb-item" data-p="analyzer" onclick="goPage('analyzer')"><span class="ic">🔌</span>Analyzer Interface</div>
-      <div class="sb-item" data-p="delivery" onclick="goPage('delivery')"><span class="ic">📲</span>Result Delivery</div>
-      <div class="sb-item" data-p="settings" onclick="goPage('settings')"><span class="ic">⚙️</span>Settings</div>
+      <div class="sb-lbl" data-i18n="navgrp_admin">⚙️ Administration</div>
+      <div class="sb-item" data-p="statistics" onclick="goPage('statistics')"><span class="ic">📊</span><span data-i18n="nav_statistics">Statistics</span></div>
+      <div class="sb-item" data-p="staff" onclick="goPage('staff')"><span class="ic">👥</span><span data-i18n="nav_staff">Staff</span></div>
+      <div class="sb-item" data-p="doctors" onclick="goPage('doctors')"><span class="ic">🩺</span><span data-i18n="nav_doctors">Doctors</span></div>
+      <div class="sb-item" data-p="radiology" onclick="goPage('radiology')"><span class="ic">🩻</span><span data-i18n="nav_radiology">Radiology</span></div>
+      <div class="sb-item" data-p="analyzer" onclick="goPage('analyzer')"><span class="ic">🔌</span><span data-i18n="nav_analyzer">Analyzer Interface</span></div>
+      <div class="sb-item" data-p="delivery" onclick="goPage('delivery')"><span class="ic">📲</span><span data-i18n="nav_delivery">Result Delivery</span></div>
+      <div class="sb-item" data-p="settings" onclick="goPage('settings')"><span class="ic">⚙️</span><span data-i18n="nav_settings">Settings</span></div>
     </div>
     <div class="sb-foot">
       <div>Friendship Hospital · Al Damazin</div>
       <div>Blue Nile State, Sudan</div>
+      <div style="display:flex;gap:6px;margin-top:8px">
+        <button onclick="setLanguage('en')" id="lang-btn-en" style="flex:1;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.18);color:#fff;border-radius:6px;padding:6px;font-size:.72rem;cursor:pointer;font-family:'DM Sans',sans-serif;font-weight:700">EN</button>
+        <button onclick="setLanguage('ar')" id="lang-btn-ar" style="flex:1;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.7);border-radius:6px;padding:6px;font-size:.72rem;cursor:pointer;font-family:'DM Sans',sans-serif;font-weight:700">AR</button>
+      </div>
       <button onclick="doLogout()" style="margin-top:8px;width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.55);border-radius:6px;padding:6px;font-size:.73rem;cursor:pointer;font-family:'DM Sans',sans-serif;">⏻ Sign Out</button>
     </div>
   </nav>
@@ -408,7 +440,26 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);font
       <div style="display:flex;align-items:center;gap:10px">
         <span class="pg-title" id="pg-title">Dashboard</span>
       </div>
+      <!-- Global search — lives in the persistent topbar shell (outside the
+           per-page .page divs), so it stays available on every page rather
+           than being wired into goPage() per page like everything else. -->
+      <div id="gs-wrap" style="position:relative;flex:1;max-width:360px">
+        <div class="srch" style="width:100%"><span>🔍</span><input id="gs-input" placeholder="Search patients, lab no, invoice no…" oninput="globalSearch(this.value)" onkeydown="if(event.key==='Escape')closeGlobalSearch()"></div>
+        <div id="gs-results" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1.5px solid var(--teal);border-radius:8px;margin-top:4px;max-height:340px;overflow-y:auto;z-index:300;box-shadow:0 10px 28px rgba(0,0,0,.18)"></div>
+      </div>
       <div style="display:flex;align-items:center;gap:8px">
+        <div id="notif-bell-wrap" style="position:relative">
+          <button class="btn btn-s btn-sm" onclick="toggleNotifPanel()" title="Notifications" style="position:relative">
+            🔔<span id="notif-bell-count" style="display:none;position:absolute;top:-6px;right:-6px;background:#ef4444;color:#fff;border-radius:10px;font-size:.62rem;font-weight:700;padding:1px 5px;min-width:16px;text-align:center;line-height:1.4">0</span>
+          </button>
+          <div id="notif-panel" style="display:none;position:absolute;top:100%;right:0;margin-top:6px;width:340px;max-height:420px;overflow-y:auto;background:#fff;border:1.5px solid var(--teal);border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,.2);z-index:300">
+            <div style="padding:10px 12px;border-bottom:1px solid var(--border);font-weight:700;font-size:.82rem;display:flex;justify-content:space-between;align-items:center">
+              <span>🔔 Notifications</span>
+              <button class="btn btn-s btn-xs" onclick="refreshNotifications()">↻</button>
+            </div>
+            <div id="notif-list" style="padding:6px 0"></div>
+          </div>
+        </div>
         <span style="font-size:.72rem;color:var(--slate)" id="topbar-date"></span>
         <button class="btn btn-s btn-sm" onclick="goPage('register')">+ Register Patient</button>
       </div>
@@ -2012,24 +2063,24 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);font
           </div>
           <input type="hidden" id="r-existing-mrn">
           <div class="g3">
-            <div class="fg"><label class="fl">First Name *</label><input class="fc" id="r-fname" placeholder="First name" oninput="regValidate()"></div>
-            <div class="fg"><label class="fl">Middle Name</label><input class="fc" id="r-mname"></div>
-            <div class="fg"><label class="fl">Last Name</label><input class="fc" id="r-lname" oninput="regValidate()"></div>
+            <div class="fg"><label class="fl" data-i18n="reg_fname">First Name *</label><input class="fc" id="r-fname" placeholder="First name" oninput="regValidate()"></div>
+            <div class="fg"><label class="fl" data-i18n="reg_mname">Middle Name</label><input class="fc" id="r-mname"></div>
+            <div class="fg"><label class="fl" data-i18n="reg_lname">Last Name</label><input class="fc" id="r-lname" oninput="regValidate()"></div>
           </div>
           <div class="g4">
-            <div class="fg"><label class="fl">Age *</label><input class="fc" type="number" id="r-age" min="0" oninput="regValidate()"></div>
-            <div class="fg"><label class="fl">Unit</label><select class="fc" id="r-age-unit"><option>Years</option><option>Months</option><option>Days</option></select></div>
-            <div class="fg"><label class="fl">Sex *</label><select class="fc" id="r-sex" onchange="regValidate()"><option value="">—</option><option>Male</option><option>Female</option></select></div>
-            <div class="fg"><label class="fl">D.O.B</label><input class="fc" type="date" id="r-dob" onchange="calcAgeFromDob()"></div>
+            <div class="fg"><label class="fl" data-i18n="reg_age">Age *</label><input class="fc" type="number" id="r-age" min="0" oninput="regValidate()"></div>
+            <div class="fg"><label class="fl" data-i18n="reg_unit">Unit</label><select class="fc" id="r-age-unit"><option>Years</option><option>Months</option><option>Days</option></select></div>
+            <div class="fg"><label class="fl" data-i18n="reg_sex">Sex *</label><select class="fc" id="r-sex" onchange="regValidate()"><option value="">—</option><option>Male</option><option>Female</option></select></div>
+            <div class="fg"><label class="fl" data-i18n="reg_dob">D.O.B</label><input class="fc" type="date" id="r-dob" onchange="calcAgeFromDob()"></div>
           </div>
           <div class="g2">
-            <div class="fg"><label class="fl">Mobile Number *</label><input class="fc" id="r-phone" type="tel" placeholder="09XXXXXXXX" required oninput="regValidate();onPhoneNumberInput(this.value)">
+            <div class="fg"><label class="fl" data-i18n="reg_phone">Mobile Number *</label><input class="fc" id="r-phone" type="tel" placeholder="09XXXXXXXX" required oninput="regValidate();onPhoneNumberInput(this.value)">
               <div id="r-phone-check-hint" style="font-size:.68rem;color:var(--teal);margin-top:2px"></div></div>
-            <div class="fg"><label class="fl">National ID</label><input class="fc" id="r-national-id"></div>
+            <div class="fg"><label class="fl" data-i18n="reg_national_id">National ID</label><input class="fc" id="r-national-id"></div>
           </div>
           <div class="g2">
-            <div class="fg"><label class="fl">Next of Kin Name</label><input class="fc" id="r-kin-name"></div>
-            <div class="fg"><label class="fl">Kin Phone</label><input class="fc" id="r-kin-phone" type="tel"></div>
+            <div class="fg"><label class="fl" data-i18n="reg_kin_name">Next of Kin Name</label><input class="fc" id="r-kin-name"></div>
+            <div class="fg"><label class="fl" data-i18n="reg_kin_phone">Kin Phone</label><input class="fc" id="r-kin-phone" type="tel"></div>
           </div>
           <button class="btn btn-p" onclick="regGoStep(2)" style="width:100%;margin-top:10px;justify-content:center" id="reg-step1-next" disabled>Next: Visit Details →</button>
         </div>
@@ -2042,13 +2093,13 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);font
         </div>
         <div class="card-body">
           <div class="g2">
-            <div class="fg"><label class="fl">Patient Type</label>
+            <div class="fg"><label class="fl" data-i18n="reg_patient_type">Patient Type</label>
               <select class="fc" id="r-patient-type">
                 <option>Outpatient</option><option>Inpatient</option>
                 <option>Emergency</option><option>External Referral</option>
               </select>
             </div>
-            <div class="fg"><label class="fl">Priority</label>
+            <div class="fg"><label class="fl" data-i18n="reg_priority">Priority</label>
               <select class="fc" id="r-priority">
                 <option>Routine</option><option>Urgent</option>
                 <option>STAT</option><option>Critical</option>
@@ -2080,7 +2131,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);font
           </div>
           <input type="hidden" id="r-destination" value="">
 
-          <div class="fg" style="margin-top:8px"><label class="fl">Referring Doctor</label>
+          <div class="fg" style="margin-top:8px"><label class="fl" data-i18n="reg_ref_doctor">Referring Doctor</label>
             <select class="fc" id="r-doc" onchange="onDoctorSelect(this.value)">
               <option value="">Select…</option>
               <optgroup label="Clinic Doctors" id="r-doc-clinic-group"></optgroup>
@@ -2088,14 +2139,14 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);font
             </select>
             <input class="fc" id="r-doc-ext" placeholder="External doctor name" style="display:none;margin-top:5px">
           </div>
-          <div class="fg"><label class="fl">Ward / Source</label>
+          <div class="fg"><label class="fl" data-i18n="reg_ward_source">Ward / Source</label>
             <select class="fc" id="r-ward">
               <option>OPD</option><option>Emergency</option><option>ICU</option>
               <option>Surgical Ward</option><option>Medical Ward</option>
               <option>Antenatal</option><option>External</option>
             </select>
           </div>
-          <div class="fg"><label class="fl">Diagnosis / Complaint</label>
+          <div class="fg"><label class="fl" data-i18n="reg_diagnosis">Diagnosis / Complaint</label>
             <input class="fc" id="r-diagnosis" placeholder="Chief complaint or preliminary diagnosis">
           </div>
 
@@ -2103,13 +2154,13 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);font
           <div id="reg-doctor-section" style="display:none;margin-top:10px;padding:10px 12px;background:var(--bg);border:1.5px solid var(--border);border-radius:9px">
             <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:var(--slate);margin-bottom:8px">🩺 Consultation Details</div>
             <div class="g2">
-              <div class="fg"><label class="fl">Visit Type</label>
+              <div class="fg"><label class="fl" data-i18n="reg_visit_type">Visit Type</label>
                 <select class="fc" id="r-doc-visit-type">
                   <option>New Consultation</option><option>Follow-up</option>
                   <option>Review</option><option>Second Opinion</option>
                 </select>
               </div>
-              <div class="fg"><label class="fl">Clinic / Department</label>
+              <div class="fg"><label class="fl" data-i18n="reg_clinic_dept">Clinic / Department</label>
                 <select class="fc" id="r-doc-dept">
                   <option>General OPD</option><option>Paediatrics</option>
                   <option>Obstetrics & Gynaecology</option><option>Surgery</option>
@@ -2123,7 +2174,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);font
           <!-- Radiology panel — shown only when dest = radiology -->
           <div id="reg-radiology-section" style="display:none;margin-top:10px;padding:10px 12px;background:var(--bg);border:1.5px solid var(--border);border-radius:9px">
             <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:var(--slate);margin-bottom:8px">🩻 Imaging Request</div>
-            <div class="fg"><label class="fl">Imaging Type</label>
+            <div class="fg"><label class="fl" data-i18n="reg_imaging_type">Imaging Type</label>
               <select class="fc" id="r-rad-type" onchange="onRegRadTypeChange()">
                 <option value="">Select imaging study…</option>
                 <option>X-Ray — Chest PA</option>
@@ -2159,16 +2210,16 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);font
               </select>
             </div>
             <div class="g2">
-              <div class="fg"><label class="fl">Urgency</label>
+              <div class="fg"><label class="fl" data-i18n="reg_urgency">Urgency</label>
                 <select class="fc" id="r-rad-urgency">
                   <option>Routine</option><option>Urgent</option><option>STAT</option>
                 </select>
               </div>
-              <div class="fg"><label class="fl">Relevant History</label>
+              <div class="fg"><label class="fl" data-i18n="reg_relevant_history">Relevant History</label>
                 <input class="fc" id="r-rad-history" placeholder="Pregnancy, allergy, pacemaker…">
               </div>
             </div>
-            <div class="fg"><label class="fl">Clinical Indication</label>
+            <div class="fg"><label class="fl" data-i18n="reg_clinical_indication">Clinical Indication</label>
               <textarea class="fc" id="r-rad-indication" rows="2" placeholder="Reason for study, specific question to be answered…"></textarea>
             </div>
           </div>
@@ -2177,13 +2228,13 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);font
           <div id="reg-admission-section" style="display:none;margin-top:10px;padding:10px 12px;background:var(--bg);border:1.5px solid var(--border);border-radius:9px">
             <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:var(--slate);margin-bottom:8px">🛏 Admission Details</div>
             <div class="g2">
-              <div class="fg"><label class="fl">Admission Type</label>
+              <div class="fg"><label class="fl" data-i18n="reg_admission_type">Admission Type</label>
                 <select class="fc" id="r-adm-type">
                   <option>Elective</option><option>Emergency</option>
                   <option>Planned Surgery</option><option>Maternity</option>
                 </select>
               </div>
-              <div class="fg"><label class="fl">Preferred Ward</label>
+              <div class="fg"><label class="fl" data-i18n="reg_preferred_ward">Preferred Ward</label>
                 <select class="fc" id="r-adm-ward">
                   <option>Medical Ward</option><option>Surgical Ward</option>
                   <option>ICU</option><option>Antenatal</option>
@@ -2192,14 +2243,14 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);font
               </div>
             </div>
             <div class="g2">
-              <div class="fg"><label class="fl">Est. Length of Stay (days)</label>
+              <div class="fg"><label class="fl" data-i18n="reg_los">Est. Length of Stay (days)</label>
                 <input class="fc" type="number" min="0" id="r-adm-los" placeholder="e.g. 3">
               </div>
-              <div class="fg"><label class="fl">Attending Consultant</label>
+              <div class="fg"><label class="fl" data-i18n="reg_consultant">Attending Consultant</label>
                 <input class="fc" id="r-adm-consultant" placeholder="Consultant name">
               </div>
             </div>
-            <div class="fg"><label class="fl">Reason for Admission</label>
+            <div class="fg"><label class="fl" data-i18n="reg_adm_reason">Reason for Admission</label>
               <textarea class="fc" id="r-adm-reason" rows="2" placeholder="Presenting complaint requiring admission…"></textarea>
             </div>
             <div style="font-size:.72rem;color:var(--slate);margin-top:4px">ℹ️ Bed allocation is finalised on the Admission page once the patient arrives on the ward.</div>
@@ -2231,8 +2282,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);font
           </div>
 
           <div class="g2" style="margin-top:10px">
-            <div class="fg"><label class="fl">Insurance Co.</label><input class="fc" id="r-ins-co"></div>
-            <div class="fg"><label class="fl">Insurance No.</label><input class="fc" id="r-ins-no"></div>
+            <div class="fg"><label class="fl" data-i18n="reg_ins_co">Insurance Co.</label><input class="fc" id="r-ins-co"></div>
+            <div class="fg"><label class="fl" data-i18n="reg_ins_no">Insurance No.</label><input class="fc" id="r-ins-no"></div>
           </div>
           <label class="chk-item" style="margin-top:10px"><input type="checkbox" id="r-consent"> Patient / guardian consent obtained</label>
           <button class="btn btn-p" onclick="regGoStep(3)" style="width:100%;margin-top:12px;justify-content:center" id="reg-step2-next">Next: Payment →</button>
@@ -2254,7 +2305,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);font
           </div>
 
           <div class="g2">
-            <div class="fg"><label class="fl">Payment Method</label>
+            <div class="fg"><label class="fl" data-i18n="reg_pay_method">Payment Method</label>
               <select class="fc" id="r-pay-method" onchange="onPayMethodChange()">
                 <option value="cash">Cash</option>
                 <option value="insurance">Insurance</option>
@@ -2263,7 +2314,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);font
                 <option value="waiver">Waiver</option>
               </select>
             </div>
-            <div class="fg"><label class="fl">Payment Status</label>
+            <div class="fg"><label class="fl" data-i18n="reg_pay_status">Payment Status</label>
               <select class="fc" id="r-pay-status">
                 <option value="paid">Paid ✅</option>
                 <option value="unpaid">Unpaid ⚠️</option>
@@ -2275,12 +2326,12 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);font
           </div>
           <div id="reg-ins-fields" style="display:none">
             <div class="g3">
-              <div class="fg"><label class="fl">Insurance Co.</label><input class="fc" id="r-pay-ins-co"></div>
-              <div class="fg"><label class="fl">Policy No.</label><input class="fc" id="r-pay-ins-no"></div>
-              <div class="fg"><label class="fl">Pre-auth No.</label><input class="fc" id="r-pay-preauth"></div>
+              <div class="fg"><label class="fl" data-i18n="reg_ins_co">Insurance Co.</label><input class="fc" id="r-pay-ins-co"></div>
+              <div class="fg"><label class="fl" data-i18n="reg_policy_no">Policy No.</label><input class="fc" id="r-pay-ins-no"></div>
+              <div class="fg"><label class="fl" data-i18n="reg_preauth_no">Pre-auth No.</label><input class="fc" id="r-pay-preauth"></div>
             </div>
           </div>
-          <div class="fg"><label class="fl">Amount Paid (SDG)</label>
+          <div class="fg"><label class="fl" data-i18n="reg_amount_paid">Amount Paid (SDG)</label>
             <input class="fc" type="number" id="r-pay-amount" min="0" step="0.01" placeholder="0.00">
           </div>
           <div class="fg"><label class="fl">Notes</label>
@@ -2337,6 +2388,18 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);font
       <option value="Urgent">Urgent</option>
       <option value="Routine">Routine</option>
     </select>
+    <select class="fc" id="wl-source-filter" onchange="loadWorklist()" style="padding:5px 9px;font-size:.78rem;width:140px">
+      <option value="">All Sources</option>
+      <option value="ICU">ICU</option>
+      <option value="Phlebotomy">Phlebotomy</option>
+      <option value="Theatre/OT">Theatre / OT</option>
+      <option value="Room 1">Room 1</option>
+      <option value="Room 2">Room 2</option>
+      <option value="Room 3">Room 3</option>
+      <option value="Room 4">Room 4</option>
+      <option value="Other Departments">Other Departments</option>
+    </select>
+    <button class="btn btn-s btn-sm" id="wl-source-sort-btn" onclick="toggleWlSourceSort()" title="Sort by sample source">⇅ Source</button>
     <div class="srch" style="flex:1;min-width:160px"><span>🔍</span><input id="wl-search" placeholder="Name, MRN, lab no…" oninput="filterWorklist(this.value)"></div>
     <button class="btn btn-s btn-sm" onclick="loadWorklist()">↻</button>
     <button class="btn btn-s btn-sm" onclick="printWorklist()">🖨</button>
@@ -2403,8 +2466,27 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);font
           <!-- Patient search -->
           <div class="fg">
             <label class="fl">Search Patient</label>
-            <div class="srch"><span>🔍</span><input id="sc-search" placeholder="Name, MRN, lab no…" oninput="searchSamplePatient(this.value)"></div>
+            <div style="display:flex;gap:6px">
+              <div class="srch" style="flex:1"><span>🔍</span><input id="sc-search" placeholder="Name, MRN, lab no…" oninput="searchSamplePatient(this.value)"></div>
+              <button class="btn btn-s btn-sm" type="button" onclick="scanForCollection()">📷 Scan</button>
+            </div>
             <div id="sc-results" style="display:none;border:1.5px solid var(--teal);border-radius:7px;background:#fff;max-height:160px;overflow-y:auto;margin-top:4px;z-index:50;position:relative"></div>
+          </div>
+          <div class="fg"><label class="fl">Sample Source *</label>
+            <select class="fc" id="sc-source" onchange="toggleSourceOther('sc-source','sc-source-other-wrap')">
+              <option value="">Select source…</option>
+              <option value="ICU">ICU</option>
+              <option value="Phlebotomy">Phlebotomy</option>
+              <option value="Theatre/OT">Theatre / OT</option>
+              <option value="Room 1">Room 1</option>
+              <option value="Room 2">Room 2</option>
+              <option value="Room 3">Room 3</option>
+              <option value="Room 4">Room 4</option>
+              <option value="Other Departments">Other Departments</option>
+            </select>
+          </div>
+          <div class="fg" id="sc-source-other-wrap" style="display:none"><label class="fl">Specify Department</label>
+            <input class="fc" id="sc-source-other" placeholder="Department name">
           </div>
           <div id="sc-pt-banner" style="display:none;background:var(--teal-lt);border:1.5px solid var(--teal2);border-radius:9px;padding:10px 14px;margin-bottom:4px">
             <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
@@ -2595,7 +2677,10 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);font
         <div class="card-body">
           <div class="fg">
             <label class="fl">Scan or Search Sample</label>
-            <div class="srch"><span>🔍</span><input id="sc-recv-search" placeholder="Lab No, MRN, patient name…" oninput="searchReceivePatient(this.value)"></div>
+            <div style="display:flex;gap:6px">
+              <div class="srch" style="flex:1"><span>🔍</span><input id="sc-recv-search" placeholder="Lab No, MRN, patient name…" oninput="searchReceivePatient(this.value)"></div>
+              <button class="btn btn-s btn-sm" type="button" onclick="scanForReceiving()">📷 Scan</button>
+            </div>
             <div id="sc-recv-results" style="display:none;border:1.5px solid var(--teal);border-radius:7px;background:#fff;max-height:160px;overflow-y:auto;margin-top:4px;z-index:50;position:relative"></div>
           </div>
           <input type="hidden" id="sc-recv-pt-id">
@@ -3454,8 +3539,12 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);font
 </div>
 
 <div class="page" id="page-delivery">
-  <div class="card"><div class="card-hd"><span class="card-title">📲 Result Delivery Log</span></div>
-    <div class="card-body"><p style="font-size:.82rem;color:var(--slate)">Track SMS / WhatsApp / email result deliveries. Feature available for configuration with your SMS/messaging provider.</p></div>
+  <div class="card"><div class="card-hd"><span class="card-title">📲 Result / Reminder Delivery Log</span>
+    <button class="btn btn-s btn-sm" onclick="loadDeliveryLog()">↻</button></div>
+    <div class="card-body">
+      <div style="font-size:.75rem;color:var(--slate);margin-bottom:10px">SMS sent from the app (result-ready notices on All Results, appointment reminders on Appointments) — configure a provider under Settings → SMS / Messaging Provider first. WhatsApp/email delivery are not implemented.</div>
+      <div id="delivery-log-body"><div class="spin-center"><div class="spinner"></div>Loading…</div></div>
+    </div>
   </div>
 </div>
 
@@ -3470,6 +3559,11 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);font
         <select class="fc" id="cfg-currency"><option value="SDG">SDG — Sudanese Pound</option><option value="USD">USD — US Dollar</option><option value="SAR">SAR — Saudi Riyal</option><option value="OMR">OMR — Omani Rial</option></select></div>
       <div class="fg"><label class="fl">Lab Number Prefix</label><input class="fc" id="cfg-lab-prefix" value="FH" maxlength="6"></div>
       <div class="fg"><label class="fl">Report Footer Text</label><textarea class="fc" id="cfg-footer" rows="2">Results are valid for 24 hours. For queries contact the laboratory.</textarea></div>
+      <div class="g2">
+        <div class="fg"><label class="fl">Unpaid Invoice Alert (hours)</label><input class="fc" type="number" min="1" id="cfg-unpaid-alert-hours" placeholder="72"></div>
+        <div class="fg"><label class="fl">Pending Admission Alert (hours)</label><input class="fc" type="number" min="1" id="cfg-admission-alert-hours" placeholder="4"></div>
+      </div>
+      <div style="font-size:.7rem;color:var(--slate);margin:-6px 0 10px">How long an invoice stays unpaid, or a patient routed to Admission stays un-admitted, before the notification bell flags it.</div>
       <button class="btn btn-p" onclick="saveSettings()" style="width:100%;justify-content:center">💾 Save Settings</button>
       <div id="cfg-status" style="margin-top:7px;font-size:.78rem;color:var(--green)"></div>
     </div></div>
@@ -3482,6 +3576,12 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);font
           <button class="btn btn-s" onclick="testConnection()">🔌 Test</button>
         </div>
         <div id="cfg-conn-status" style="margin-top:8px;font-size:.78rem"></div>
+      </div></div>
+      <div class="card"><div class="card-hd"><span class="card-title">📲 SMS / Messaging Provider</span></div><div class="card-body">
+        <div style="font-size:.72rem;color:var(--slate);margin-bottom:8px">Generic REST config — sendSms() POSTs {to, message, sender} as JSON with this URL and a Bearer token. Matches most SMS gateway APIs directly; some providers need a different request shape (form-encoded, a different field naming) and would need sendSms() adjusted to match once a specific provider is chosen.</div>
+        <div class="fg"><label class="fl">SMS API URL</label><input class="fc" id="cfg-sms-api-url" placeholder="https://api.yourprovider.com/sms/send"></div>
+        <div class="fg"><label class="fl">API Key / Bearer Token</label><input class="fc" id="cfg-sms-api-key"></div>
+        <div class="fg"><label class="fl">Sender ID</label><input class="fc" id="cfg-sms-sender-id" placeholder="FriendshipHosp"></div>
       </div></div>
       <div class="card"><div class="card-hd"><span class="card-title">🛏 Bed Configuration</span></div><div class="card-body">
         <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
@@ -3539,9 +3639,19 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);font
       <div class="card"><div class="card-hd"><span class="card-title">📋 Event Detail</span></div><div id="pth-detail" style="padding:16px;min-height:200px"><div class="empty-state"><div class="empty-icon">👆</div><div class="empty-title">Click an event to view details</div></div></div></div>
       <div class="card" id="pth-trends-card" style="display:none">
         <div class="card-hd"><span class="card-title">📈 Result Trends</span>
-          <select class="fc" id="pth-trend-analyte" onchange="renderPthTrend()" style="width:160px;padding:5px 9px;font-size:.78rem">
-            <option value="hgb">Haemoglobin</option><option value="wbc">WBC</option><option value="plt">Platelets</option>
-            <option value="creat">Creatinine</option><option value="fbs">Fasting Glucose</option><option value="alt">ALT</option>
+          <select class="fc" id="pth-trend-analyte" onchange="renderPthTrend()" style="width:170px;padding:5px 9px;font-size:.78rem">
+            <optgroup label="Haematology">
+              <option value="hgb">Haemoglobin</option><option value="wbc">WBC</option><option value="plt">Platelets</option>
+            </optgroup>
+            <optgroup label="Renal Function">
+              <option value="creat">Creatinine</option><option value="urea">Urea</option>
+            </optgroup>
+            <optgroup label="Glucose">
+              <option value="fbs">Fasting Glucose</option>
+            </optgroup>
+            <optgroup label="Liver Enzymes">
+              <option value="alt">ALT</option><option value="ast">AST</option><option value="alp">ALP</option><option value="ggt">GGT</option>
+            </optgroup>
           </select>
         </div>
         <div class="card-body"><canvas id="pth-trend-canvas" height="140" style="width:100%"></canvas><div id="pth-trend-stats" style="margin-top:8px;font-size:.75rem;color:var(--slate)"></div></div>
@@ -5186,7 +5296,16 @@ let _docPt = null, _billPt = null, _scPt = null, _radPt = null, _rptPt = null;
 let _currentAdmId = null, _currentInvId = null;
 let _wlDateMode = 'week', _admFilter = 'Active', _billFilter = 'all', _otRoomFilter = 'all';
 let _painScore = null, _allAdmissions = [], _allBillInvoices = [], _allPrices = [];
-let _pthPt = null, _pthFilter = 'all', _pthAllEvents = [], _pthHemHistory = [];
+let _pthPt = null, _pthFilter = 'all', _pthAllEvents = [], _pthHemHistory = [], _pthChemHistory = [];
+// Maps each trend-chart analyte to which per-department history array it
+// lives in and a human label — renderPthTrend() reads this instead of
+// assuming everything comes from Haematology.
+const PTH_TREND_ANALYTES = {
+  hgb:{source:'hem',label:'Haemoglobin'}, wbc:{source:'hem',label:'WBC'}, plt:{source:'hem',label:'Platelets'},
+  creat:{source:'chem',label:'Creatinine'}, urea:{source:'chem',label:'Urea'},
+  fbs:{source:'chem',label:'Fasting Glucose'},
+  alt:{source:'chem',label:'ALT'}, ast:{source:'chem',label:'AST'}, alp:{source:'chem',label:'ALP'}, ggt:{source:'chem',label:'GGT'},
+};
 let _fcPt = null;
 
 const CFG = {
@@ -5197,6 +5316,18 @@ const CFG = {
   get currency(){ return localStorage.getItem('cfg_currency')||'SDG'; },
   get prefix(){ return localStorage.getItem('cfg_lab_prefix')||'FH'; },
   get footer(){ return localStorage.getItem('cfg_footer')||'Results are valid for 24 hours.'; },
+  // Notification thresholds (Phase 3) — configurable rather than hardcoded,
+  // so a site can tune what counts as "overdue" without editing code.
+  get unpaidAlertHours(){ return parseFloat(localStorage.getItem('cfg_unpaid_alert_hours'))||72; },
+  get admissionAlertHours(){ return parseFloat(localStorage.getItem('cfg_admission_alert_hours'))||4; },
+  // SMS provider (Phase 8) — same localStorage-only pattern as the Supabase
+  // URL/key: entered at runtime per deployment, never committed. Generic
+  // "POST {to, message, ...} with a Bearer token" shape, since no specific
+  // provider is wired in — see sendSms()'s comment for what adapting this
+  // to a real provider's exact request format would involve.
+  get smsApiUrl(){ return localStorage.getItem('cfg_sms_api_url')||''; },
+  get smsApiKey(){ return localStorage.getItem('cfg_sms_api_key')||''; },
+  get smsSenderId(){ return localStorage.getItem('cfg_sms_sender_id')||''; },
 };
 
 const ROLE_PAGES = {
@@ -5226,6 +5357,176 @@ const PAGE_TITLES = {
   staff:'Staff Management',doctors:'Doctors',radiology:'Radiology',
   delivery:'Result Delivery',settings:'Settings',
 };
+
+// ── LANGUAGE (Phase 4) ─────────────────────────────────
+// Scope, deliberately: navigation labels (sidebar) + page titles are fully
+// translated — that's every key below prefixed nav_/navgrp_/page_. A small,
+// representative set of form labels (the login screen) is translated too,
+// to prove the data-i18n mechanism end-to-end. Full form-label coverage
+// across all ~35 pages is NOT done here — this app has hundreds of
+// <label> elements with no existing i18n framework, and translating every
+// one of them (accurately, in clinical Arabic) is a much larger effort
+// than this pass. Flagging that explicitly rather than claiming full
+// coverage: if that's wanted, it's worth splitting into its own pass,
+// page by page.
+//
+// RTL: dir="rtl"/lang="ar" switching is real and the sidebar/topbar flip
+// sides (see the html[dir="rtl"] rules in <style>), but this is a BASIC
+// pass, not an exhaustive one — this codebase uses hardcoded
+// margin-left/flex-direction/text-align throughout its inline styles and
+// <style> block (not logical properties), so most individual page layouts
+// will still read left-to-right even with dir="rtl" set. A full RTL pass
+// means reviewing every page's layout individually; also worth splitting
+// out rather than assuming it's covered by this.
+let currentLang = localStorage.getItem('lang')||'en';
+// Both languages are explicit dictionaries (not "Arabic + stash the English
+// DOM text at runtime") — a runtime-stash approach breaks the moment a
+// user's saved preference is already 'ar' on page load, since the English
+// original would never get captured before being overwritten. Keeping
+// English as real data avoids that entirely.
+const I18N = {
+  en: {
+    navgrp_overview:'Overview', navgrp_reception:'🏥 Reception', navgrp_hospital:'🏥 Hospital',
+    navgrp_lab:'🔬 Laboratory', navgrp_billing:'💰 Billing', navgrp_analytics:'📊 Analytics', navgrp_admin:'⚙️ Administration',
+
+    nav_dashboard:'Dashboard', nav_register:'Register Patient', nav_appointments:'Appointments',
+    nav_billing:'Billing', nav_print_reports_hub:'Print Reports',
+    nav_admission:'Admissions', nav_theatre:'Theatre / OT', nav_consultation:'Doctor Orders',
+    nav_nursing:'Nursing & Vitals', nav_fluid_chart:'Fluid Balance', nav_infection:'Infection Flags',
+    nav_handover:'Handover Notes',
+    nav_worklist:'Worklist', nav_samples:'Sample Collection', nav_set_printer:'Set Printer',
+    nav_hem_entry:'Haematology Entry', nav_chem_entry:'Chemistry Entry', nav_sero_entry:'Serology Entry',
+    nav_immuno_entry:'Immunology Entry', nav_micro_entry:'Microbiology Entry', nav_pcr_entry:'PCR / Molecular',
+    nav_histo_entry:'Histopathology', nav_cyto_entry:'Cytology', nav_allresults:'All Results',
+    nav_criticals:'Critical Values', nav_reports:'Print Reports',
+    nav_billing_full:'Billing & Invoices', nav_prices:'Price List',
+    nav_pt_history:'Patient Timeline', nav_labhistory:'Lab History', nav_tat:'TAT Tracker',
+    nav_inventory:'Inventory', nav_qc:'QC Module',
+    nav_statistics:'Statistics', nav_staff:'Staff', nav_doctors:'Doctors', nav_radiology:'Radiology',
+    nav_analyzer:'Analyzer Interface', nav_delivery:'Result Delivery', nav_settings:'Settings',
+
+    page_dashboard:'Dashboard', page_admission:'Admissions', page_theatre:'Theatre / OT',
+    page_consultation:'Doctor Orders & Consultation', page_nursing:'Nursing & Vital Signs',
+    'page_fluid-chart':'Fluid Balance Chart', page_appointments:'Appointments',
+    page_register:'Register Patient', page_worklist:'Lab Worklist', page_samples:'Sample Collection',
+    'page_set-printer':'Set Printer — Barcode Label Setup', 'page_print-reports-hub':'Print Reports',
+    'page_rad-print':'Print Radiology Report',
+    'page_hem-entry':'Haematology Result Entry', 'page_chem-entry':'Chemistry Result Entry',
+    'page_sero-entry':'Serology Result Entry', 'page_immuno-entry':'Immunology Result Entry',
+    'page_micro-entry':'Microbiology Result Entry', 'page_unified-entry':'Enter Results',
+    page_allresults:'All Results', page_criticals:'Critical Values', page_reports:'Print Reports',
+    page_billing:'Billing & Invoices', page_prices:'Price List',
+    'page_pt-history':'Patient History Timeline', page_labhistory:'Lab History',
+    page_tat:'TAT Tracker', page_inventory:'Inventory', page_qc:'QC Module',
+    page_staff:'Staff Management', page_doctors:'Doctors', page_radiology:'Radiology',
+    page_delivery:'Result Delivery', page_settings:'Settings',
+
+    login_email:'Email', login_password:'Password', login_signin:'Sign In',
+
+    // Register Patient form labels (Phase 4 follow-up) — the highest-traffic
+    // page in the app, translated first among the "much larger scope" form
+    // labels flagged as deferred when Phase 4 shipped.
+    reg_fname:'First Name *', reg_mname:'Middle Name', reg_lname:'Last Name',
+    reg_age:'Age *', reg_unit:'Unit', reg_sex:'Sex *', reg_dob:'D.O.B',
+    reg_phone:'Mobile Number *', reg_national_id:'National ID',
+    reg_kin_name:'Next of Kin Name', reg_kin_phone:'Kin Phone',
+    reg_patient_type:'Patient Type', reg_priority:'Priority',
+    reg_ref_doctor:'Referring Doctor', reg_ward_source:'Ward / Source',
+    reg_diagnosis:'Diagnosis / Complaint', reg_visit_type:'Visit Type',
+    reg_clinic_dept:'Clinic / Department', reg_imaging_type:'Imaging Type',
+    reg_urgency:'Urgency', reg_relevant_history:'Relevant History',
+    reg_clinical_indication:'Clinical Indication', reg_admission_type:'Admission Type',
+    reg_preferred_ward:'Preferred Ward', reg_los:'Est. Length of Stay (days)',
+    reg_consultant:'Attending Consultant', reg_adm_reason:'Reason for Admission',
+    reg_ins_co:'Insurance Co.', reg_ins_no:'Insurance No.',
+    reg_pay_method:'Payment Method', reg_pay_status:'Payment Status',
+    reg_policy_no:'Policy No.', reg_preauth_no:'Pre-auth No.',
+    reg_amount_paid:'Amount Paid (SDG)',
+  },
+  ar: {
+    navgrp_overview:'نظرة عامة', navgrp_reception:'🏥 الاستقبال', navgrp_hospital:'🏥 المستشفى',
+    navgrp_lab:'🔬 المختبر', navgrp_billing:'💰 الفواتير', navgrp_analytics:'📊 التحليلات', navgrp_admin:'⚙️ الإدارة',
+
+    nav_dashboard:'لوحة التحكم', nav_register:'تسجيل مريض', nav_appointments:'المواعيد',
+    nav_billing:'الفواتير', nav_print_reports_hub:'طباعة التقارير',
+    nav_admission:'القبول', nav_theatre:'غرفة العمليات', nav_consultation:'أوامر الطبيب',
+    nav_nursing:'التمريض والعلامات الحيوية', nav_fluid_chart:'توازن السوائل', nav_infection:'علامات العدوى',
+    nav_handover:'ملاحظات التسليم',
+    nav_worklist:'قائمة العمل', nav_samples:'جمع العينات', nav_set_printer:'إعداد الطابعة',
+    nav_hem_entry:'إدخال أمراض الدم', nav_chem_entry:'إدخال الكيمياء', nav_sero_entry:'إدخال الأمصال',
+    nav_immuno_entry:'إدخال المناعة', nav_micro_entry:'إدخال الأحياء الدقيقة', nav_pcr_entry:'PCR / الجزيئي',
+    nav_histo_entry:'علم الأنسجة المرضي', nav_cyto_entry:'علم الخلايا', nav_allresults:'جميع النتائج',
+    nav_criticals:'القيم الحرجة', nav_reports:'طباعة التقارير',
+    nav_billing_full:'الفواتير والحسابات', nav_prices:'قائمة الأسعار',
+    nav_pt_history:'الجدول الزمني للمريض', nav_labhistory:'سجل المختبر', nav_tat:'متتبع وقت الإنجاز',
+    nav_inventory:'المخزون', nav_qc:'وحدة ضبط الجودة',
+    nav_statistics:'الإحصائيات', nav_staff:'الموظفون', nav_doctors:'الأطباء', nav_radiology:'الأشعة',
+    nav_analyzer:'واجهة المحلل', nav_delivery:'تسليم النتائج', nav_settings:'الإعدادات',
+
+    page_dashboard:'لوحة التحكم', page_admission:'القبول', page_theatre:'غرفة العمليات',
+    page_consultation:'أوامر واستشارة الطبيب', page_nursing:'التمريض والعلامات الحيوية',
+    'page_fluid-chart':'مخطط توازن السوائل', page_appointments:'المواعيد',
+    page_register:'تسجيل مريض', page_worklist:'قائمة عمل المختبر', page_samples:'جمع العينات',
+    'page_set-printer':'إعداد الطابعة — ملصقات الباركود', 'page_print-reports-hub':'طباعة التقارير',
+    'page_rad-print':'طباعة تقرير الأشعة',
+    'page_hem-entry':'إدخال نتائج أمراض الدم', 'page_chem-entry':'إدخال نتائج الكيمياء',
+    'page_sero-entry':'إدخال نتائج الأمصال', 'page_immuno-entry':'إدخال نتائج المناعة',
+    'page_micro-entry':'إدخال نتائج الأحياء الدقيقة', 'page_unified-entry':'إدخال النتائج',
+    page_allresults:'جميع النتائج', page_criticals:'القيم الحرجة', page_reports:'طباعة التقارير',
+    page_billing:'الفواتير والحسابات', page_prices:'قائمة الأسعار',
+    'page_pt-history':'الجدول الزمني لتاريخ المريض', page_labhistory:'سجل المختبر',
+    page_tat:'متتبع وقت الإنجاز', page_inventory:'المخزون', page_qc:'وحدة ضبط الجودة',
+    page_staff:'إدارة الموظفين', page_doctors:'الأطباء', page_radiology:'الأشعة',
+    page_delivery:'تسليم النتائج', page_settings:'الإعدادات',
+
+    login_email:'البريد الإلكتروني', login_password:'كلمة المرور', login_signin:'تسجيل الدخول',
+
+    reg_fname:'الاسم الأول *', reg_mname:'الاسم الأوسط', reg_lname:'اسم العائلة',
+    reg_age:'العمر *', reg_unit:'الوحدة', reg_sex:'الجنس *', reg_dob:'تاريخ الميلاد',
+    reg_phone:'رقم الهاتف المحمول *', reg_national_id:'الرقم الوطني',
+    reg_kin_name:'اسم أقرب الأقارب', reg_kin_phone:'هاتف القريب',
+    reg_patient_type:'نوع المريض', reg_priority:'الأولوية',
+    reg_ref_doctor:'الطبيب المحوّل', reg_ward_source:'الجناح / المصدر',
+    reg_diagnosis:'التشخيص / الشكوى', reg_visit_type:'نوع الزيارة',
+    reg_clinic_dept:'العيادة / القسم', reg_imaging_type:'نوع التصوير',
+    reg_urgency:'درجة الاستعجال', reg_relevant_history:'التاريخ المرضي ذو الصلة',
+    reg_clinical_indication:'الإشارة السريرية', reg_admission_type:'نوع القبول',
+    reg_preferred_ward:'الجناح المفضل', reg_los:'مدة الإقامة المتوقعة (أيام)',
+    reg_consultant:'الاستشاري المعالج', reg_adm_reason:'سبب القبول',
+    reg_ins_co:'شركة التأمين', reg_ins_no:'رقم التأمين',
+    reg_pay_method:'طريقة الدفع', reg_pay_status:'حالة الدفع',
+    reg_policy_no:'رقم البوليصة', reg_preauth_no:'رقم الموافقة المسبقة',
+    reg_amount_paid:'المبلغ المدفوع (جنيه سوداني)',
+  }
+};
+function t(key){
+  const dict=I18N[currentLang]||I18N.en;
+  return dict[key] ?? I18N.en[key] ?? null;
+}
+function applyTranslations(){
+  document.querySelectorAll('[data-i18n]').forEach(el=>{
+    const val=t(el.getAttribute('data-i18n'));
+    if(val!=null) el.textContent=val;
+  });
+  const ti=document.getElementById('pg-title');
+  if(ti){ const p=document.querySelector('.sb-item.active')?.dataset?.p; if(p) ti.textContent = t('page_'+p) || PAGE_TITLES[p] || p; }
+}
+function setLanguage(lang){
+  currentLang = (lang==='ar') ? 'ar' : 'en';
+  localStorage.setItem('lang', currentLang);
+  document.documentElement.lang = currentLang;
+  document.documentElement.dir = currentLang==='ar' ? 'rtl' : 'ltr';
+  ['','-auth'].forEach(suf=>{
+    const enBtn=document.getElementById('lang-btn-en'+suf), arBtn=document.getElementById('lang-btn-ar'+suf);
+    if(enBtn) enBtn.style.opacity = currentLang==='en' ? '1' : '.55';
+    if(arBtn) arBtn.style.opacity = currentLang==='ar' ? '1' : '.55';
+  });
+  applyTranslations();
+}
+// Apply whatever language was last saved as soon as the DOM exists (this
+// script runs after the body markup, so the auth screen + sidebar are
+// already present) — covers the pre-login screen too, not just post-login.
+setLanguage(currentLang);
 
 const CRIT_RANGES = {
   hgb:{lo:7.0,hi:20.0,unit:'g/dL',section:'Haematology'},
@@ -5398,6 +5699,7 @@ function showApp() {
   filterSidebar(); loadSettings(); goPage('dashboard');
   updateTopbarDate(); setInterval(updateTopbarDate,60000);
   checkCriticals(); setInterval(checkCriticals,120000);
+  refreshNotifications(); setInterval(refreshNotifications,120000);
 }
 function filterSidebar() {
   const role=currentProfile?.role||'admin';
@@ -5448,7 +5750,7 @@ function goPage(p) {
     if(wEl) wEl.value=s.width; if(hEl) hEl.value=s.height; if(bEl) bEl.value=s.barcodeType; if(pEl) pEl.value=s.printerName;
     renderLabelPreview();
   },50); }
-  const ti=document.getElementById('pg-title'); if(ti) ti.textContent=PAGE_TITLES[p]||p;
+  const ti=document.getElementById('pg-title'); if(ti) ti.textContent=t('page_'+p)||PAGE_TITLES[p]||p;
   const run = fn => { try{ const r=fn(); if(r&&r.catch) r.catch(e=>console.warn(e)); }catch(e){console.warn(e);} };
   const td=new Date().toISOString().slice(0,10), td16=new Date().toISOString().slice(0,16);
   if(p==='dashboard') run(loadDashboard);
@@ -5470,6 +5772,7 @@ function goPage(p) {
   else if(p==='labhistory'){ setD('lh-from',new Date(Date.now()-7*864e5).toISOString().slice(0,10)); setD('lh-to',td); }
   else if(p==='tat'){ setD('tat-filter-date',td); run(loadTat); }
   else if(p==='inventory') run(loadInventory);
+  else if(p==='delivery') run(loadDeliveryLog);
   else if(p==='staff') run(loadStaff);
   else if(p==='doctors') run(loadDoctors);
   else if(p==='radiology') run(loadRadRequests);
@@ -5500,6 +5803,11 @@ function loadSettings() {
   const g=(id,key)=>{ const el=document.getElementById(id); if(el){ const v=localStorage.getItem(key); if(v) el.value=v; } };
   g('cfg-hosp-name','cfg_hosp_name'); g('cfg-addr1','cfg_addr1'); g('cfg-phone','cfg_phone');
   g('cfg-email','cfg_email'); g('cfg-currency','cfg_currency'); g('cfg-lab-prefix','cfg_lab_prefix'); g('cfg-footer','cfg_footer');
+  const uah=document.getElementById('cfg-unpaid-alert-hours'); if(uah) uah.value=CFG.unpaidAlertHours;
+  const aah=document.getElementById('cfg-admission-alert-hours'); if(aah) aah.value=CFG.admissionAlertHours;
+  const su=document.getElementById('cfg-sms-api-url'); if(su) su.value=CFG.smsApiUrl;
+  const sk=document.getElementById('cfg-sms-api-key'); if(sk) sk.value=CFG.smsApiKey;
+  const ss=document.getElementById('cfg-sms-sender-id'); if(ss) ss.value=CFG.smsSenderId;
   const cu=document.getElementById('cfg-sb-url'); if(cu) cu.value=localStorage.getItem('sb_url')||'';
   const ck=document.getElementById('cfg-sb-key'); if(ck) ck.value=localStorage.getItem('sb_key')||'';
   loadBedConfig();
@@ -5548,8 +5856,13 @@ function saveSettings() {
   localStorage.setItem('cfg_phone',g('cfg-phone')); localStorage.setItem('cfg_email',g('cfg-email'));
   localStorage.setItem('cfg_currency',g('cfg-currency')); localStorage.setItem('cfg_lab_prefix',g('cfg-lab-prefix'));
   localStorage.setItem('cfg_footer',g('cfg-footer'));
+  const uah=parseFloat(g('cfg-unpaid-alert-hours')); localStorage.setItem('cfg_unpaid_alert_hours', (isNaN(uah)||uah<=0)?72:uah);
+  const aah=parseFloat(g('cfg-admission-alert-hours')); localStorage.setItem('cfg_admission_alert_hours', (isNaN(aah)||aah<=0)?4:aah);
+  localStorage.setItem('cfg_sms_api_url',g('cfg-sms-api-url')); localStorage.setItem('cfg_sms_api_key',g('cfg-sms-api-key'));
+  localStorage.setItem('cfg_sms_sender_id',g('cfg-sms-sender-id'));
   const st=document.getElementById('cfg-status'); if(st){ st.textContent='✅ Settings saved'; setTimeout(()=>st.textContent='',3000); }
   toast('Settings saved','ok');
+  refreshNotifications();
 }
 function saveSbCfg() {
   const url=document.getElementById('cfg-sb-url')?.value?.trim(), key=document.getElementById('cfg-sb-key')?.value?.trim();
@@ -5754,6 +6067,189 @@ async function checkCriticals() {
   } catch(e){}
 }
 
+// ── NOTIFICATION BELL ─────────────────────────────────
+// Surfaces four things, each reusing tracking that already exists rather
+// than duplicating state: unacknowledged critical_values (is_acknowledged
+// — the same flag checkCriticals() above uses), invoices stuck
+// unpaid/insurance_pending past CFG.unpaidAlertHours, patients routed to
+// Admission (visit_destination) with no matching admissions row yet, past
+// CFG.admissionAlertHours, and reagent_inventory items at or below their
+// existing min_level (Phase 6 — min_level was already the per-item reorder
+// threshold field the Inventory page uses for its own low-stock row
+// highlighting; no new column was needed, just surfacing it here too
+// instead of it only being visible to someone already on that page).
+// Both time thresholds are configurable from Settings rather than hardcoded.
+let _notifState={crits:[],unpaid:[],pendingAdm:[],lowStock:[]};
+async function refreshNotifications(){
+  if(!sb) return;
+  try{
+    const now=Date.now();
+    const unpaidCutoff=new Date(now-CFG.unpaidAlertHours*3600000).toISOString();
+    const admCutoff=new Date(now-CFG.admissionAlertHours*3600000).toISOString();
+
+    const [critRes,invRes,admCandRes,invItemsRes]=await Promise.all([
+      sb.from('critical_values').select('id,patient_id,parameter,value,department,created_at,patients(name,mrn)').eq('is_acknowledged',false).order('created_at',{ascending:false}).limit(20),
+      sb.from('invoices').select('id,invoice_no,patient_name,net_amount,total_amount,currency,payment_status,created_at').in('payment_status',['unpaid','insurance_pending']).lte('created_at',unpaidCutoff).order('created_at',{ascending:true}).limit(20),
+      sb.from('patients').select('id,name,first_name,last_name,mrn,visit_destination,created_at').ilike('visit_destination','%admission%').lte('created_at',admCutoff).order('created_at',{ascending:true}).limit(40),
+      sb.from('reagent_inventory').select('id,item_name,current_stock,min_level,unit').eq('is_active',true)
+    ]);
+
+    const crits=critRes.data||[], unpaid=invRes.data||[], admCandidates=admCandRes.data||[];
+
+    // "Pending admission" = routed to Admission at registration but never
+    // actually admitted — exclude anyone who already has an admissions row.
+    let pendingAdm=[];
+    if(admCandidates.length){
+      const ids=admCandidates.map(p=>p.id);
+      const {data:existing}=await sb.from('admissions').select('patient_id').in('patient_id',ids);
+      const admittedIds=new Set((existing||[]).map(a=>a.patient_id));
+      pendingAdm=admCandidates.filter(p=>!admittedIds.has(p.id));
+    }
+
+    // current_stock <= min_level, same comparison the Inventory page's own
+    // row-highlighting already uses — done client-side since PostgREST
+    // can't compare one column against another in a .lte() filter.
+    const lowStock=(invItemsRes.data||[]).filter(it=>(it.current_stock||0)<=(it.min_level||0));
+
+    _notifState={crits,unpaid,pendingAdm,lowStock};
+    const total=crits.length+unpaid.length+pendingAdm.length+lowStock.length;
+    const countEl=document.getElementById('notif-bell-count');
+    if(countEl){ countEl.style.display=total>0?'block':'none'; countEl.textContent=total>99?'99+':total; }
+    renderNotifList();
+  }catch(e){ /* best-effort — a failed notification refresh shouldn't interrupt anything else */ }
+}
+function renderNotifList(){
+  const list=document.getElementById('notif-list'); if(!list) return;
+  const {crits,unpaid,pendingAdm,lowStock}=_notifState;
+  if(!crits.length && !unpaid.length && !pendingAdm.length && !lowStock.length){
+    list.innerHTML='<div style="padding:16px;text-align:center;color:var(--slate);font-size:.78rem">✅ Nothing needs attention</div>';
+    return;
+  }
+  let html='';
+  if(crits.length){
+    html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;color:#b91c1c;background:#fff1f2">🚨 Unacknowledged Criticals ('+crits.length+')</div>';
+    html+=crits.map(c=>{
+      const pt=c.patients||{};
+      return '<div onclick="notifJumpToCritical()" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'">'+
+        '<div style="font-weight:700;font-size:.8rem">'+(pt.name||'—')+' <span style="font-weight:400;color:var(--slate);font-size:.68rem">'+(pt.mrn||'')+'</span></div>'+
+        '<div style="font-size:.72rem;color:#b91c1c">'+(c.parameter||'')+' = '+(c.value||'')+' · '+fmtDT(c.created_at)+'</div></div>';
+    }).join('');
+  }
+  if(unpaid.length){
+    html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;color:#92400e;background:#fffbeb">💰 Unpaid Invoices ('+unpaid.length+')</div>';
+    html+=unpaid.map(i=>'<div onclick="notifJumpToInvoice(\''+i.id+'\')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'">'+
+      '<div style="font-weight:700;font-size:.8rem">'+(i.invoice_no||'—')+' <span style="font-weight:400;color:var(--slate);font-size:.68rem">'+(i.patient_name||'')+'</span></div>'+
+      '<div style="font-size:.72rem;color:#92400e">'+((i.net_amount??i.total_amount??0).toFixed(2))+' '+(i.currency||CFG.currency)+' · overdue since '+fmtDT(i.created_at)+'</div></div>').join('');
+  }
+  if(pendingAdm.length){
+    html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;color:#1d4ed8;background:#eff6ff">🛏 Pending Admissions ('+pendingAdm.length+')</div>';
+    html+=pendingAdm.map(p=>'<div onclick="notifJumpToAdmission(\''+p.id+'\')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'">'+
+      '<div style="font-weight:700;font-size:.8rem">'+(p.name||fullName(p))+' <span style="font-weight:400;color:var(--slate);font-size:.68rem">'+(p.mrn||'')+'</span></div>'+
+      '<div style="font-size:.72rem;color:#1d4ed8">Routed to Admission · waiting since '+fmtDT(p.created_at)+'</div></div>').join('');
+  }
+  if(lowStock.length){
+    html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;color:#6d28d9;background:#f5f3ff">📦 Low Stock ('+lowStock.length+')</div>';
+    html+=lowStock.map(it=>'<div onclick="notifJumpToInventory()" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'">'+
+      '<div style="font-weight:700;font-size:.8rem">'+(it.item_name||'—')+'</div>'+
+      '<div style="font-size:.72rem;color:#6d28d9">'+(it.current_stock??0)+' '+(it.unit||'')+' left · reorder threshold '+(it.min_level??0)+'</div></div>').join('');
+  }
+  list.innerHTML=html;
+}
+function toggleNotifPanel(){
+  const panel=document.getElementById('notif-panel'); if(!panel) return;
+  const opening = panel.style.display==='none' || !panel.style.display;
+  panel.style.display = opening ? 'block' : 'none';
+  if(opening) refreshNotifications();
+}
+function closeNotifPanel(){
+  const panel=document.getElementById('notif-panel'); if(panel) panel.style.display='none';
+}
+function notifJumpToCritical(){
+  closeNotifPanel();
+  goPage('criticals');
+}
+function notifJumpToInvoice(id){
+  closeNotifPanel();
+  jumpToInvoice(id);
+}
+async function notifJumpToAdmission(patientId){
+  closeNotifPanel();
+  goPage('admission');
+  if(!sb||!patientId) return;
+  try{
+    const {data:p}=await sb.from('patients').select('*').eq('id',patientId).single();
+    if(p) setTimeout(()=>selectAdmPatient(p), 200);
+  }catch(e){}
+}
+function notifJumpToInventory(){
+  closeNotifPanel();
+  goPage('inventory');
+}
+
+// ── SMS (Phase 8) ──────────────────────────────────────
+// Generic REST send — cannot be tested against a real gateway in this
+// environment (no provider account/credentials exist here). The request
+// shape ({to, message, sender} as JSON with a Bearer token) matches most
+// SMS gateway APIs directly, but isn't guaranteed to match whichever
+// specific provider ends up configured; adjust the fetch() body/headers
+// below to match that provider's actual API once chosen. Every attempt is
+// logged to sms_log via dbWrite (offline-safe, same as every other write
+// in this app) regardless of whether the send itself succeeds, so there's
+// always a record of what was tried.
+async function sendSms(phone, message, purpose, patientId){
+  if(!phone){ toast('No phone number on file','err'); return {ok:false, error:'no_phone'}; }
+  if(!CFG.smsApiUrl){ toast('SMS provider not configured — see Settings','err'); return {ok:false, error:'not_configured'}; }
+  let ok=false, errorMsg=null;
+  try{
+    const res=await fetch(CFG.smsApiUrl, {
+      method:'POST',
+      headers:{'Content-Type':'application/json', 'Authorization':'Bearer '+CFG.smsApiKey},
+      body:JSON.stringify({to:phone, message, sender:CFG.smsSenderId||undefined})
+    });
+    ok=res.ok;
+    if(!ok) errorMsg='HTTP '+res.status;
+  }catch(e){ errorMsg=e.message||'Network error'; }
+  try{
+    await dbWrite('sms_log','insert',{
+      patient_id:patientId||null, phone, message, purpose:purpose||'other',
+      status:ok?'sent':'failed', error:errorMsg, sent_by:currentProfile?.id,
+      sent_by_name:currentProfile?.full_name||''
+    });
+  }catch(e){ /* logging failure shouldn't mask the send result */ }
+  toast(ok?'📲 SMS sent':'⚠️ SMS failed: '+errorMsg, ok?'ok':'err');
+  return {ok, error:errorMsg};
+}
+async function sendAppointmentReminder(apptId, phone, patientName, apptDate, apptTime){
+  const msg=(CFG.name||'Hospital')+': Reminder — '+patientName+', you have an appointment on '+apptDate+(apptTime?' at '+apptTime:'')+'. Please arrive 15 minutes early.';
+  await sendSms(phone, msg, 'appointment_reminder', null);
+}
+async function sendResultReadySms(patientId, phone, patientName){
+  const msg=(CFG.name||'Hospital')+': '+patientName+', your lab results are ready. Please contact the laboratory or your doctor to collect them.';
+  await sendSms(phone, msg, 'result_ready', patientId);
+}
+async function loadDeliveryLog(){
+  const body=document.getElementById('delivery-log-body'); if(!body||!sb) return;
+  body.innerHTML='<div class="spin-center"><div class="spinner"></div>Loading…</div>';
+  try{
+    const {data}=await sb.from('sms_log').select('*').order('created_at',{ascending:false}).limit(100);
+    if(!data?.length){ body.innerHTML='<div class="empty-state"><div class="empty-icon">📲</div><div class="empty-title">No messages sent yet</div></div>'; return; }
+    const purposeLabels={appointment_reminder:'Appointment Reminder', result_ready:'Result Ready', other:'Other'};
+    body.innerHTML='<div style="overflow-x:auto"><table class="tbl" style="font-size:.78rem"><thead><tr><th>Time</th><th>Phone</th><th>Purpose</th><th>Message</th><th>Status</th><th>Sent By</th></tr></thead><tbody>'+
+      data.map(m=>'<tr>'+
+        '<td style="font-size:.72rem;color:var(--slate)">'+fmtDT(m.created_at)+'</td>'+
+        '<td style="font-family:DM Mono,monospace;font-size:.72rem">'+(m.phone||'—')+'</td>'+
+        '<td>'+(purposeLabels[m.purpose]||m.purpose||'—')+'</td>'+
+        '<td style="max-width:280px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+(m.message||'').replace(/"/g,'&quot;')+'">'+(m.message||'—')+'</td>'+
+        '<td>'+(m.status==='sent'?'<span class="bdg" style="background:#dcfce7;color:#166534">✅ Sent</span>':'<span class="bdg" style="background:#fee2e2;color:#b91c1c" title="'+(m.error||'').replace(/"/g,'&quot;')+'">❌ Failed</span>')+'</td>'+
+        '<td style="font-size:.72rem">'+(m.sent_by_name||'—')+'</td>'+
+      '</tr>').join('')+'</tbody></table></div>';
+  }catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+e.message+'</div>'; }
+}
+document.addEventListener('click', (e)=>{
+  const wrap=document.getElementById('notif-bell-wrap'), panel=document.getElementById('notif-panel');
+  if(panel && panel.style.display!=='none' && wrap && !wrap.contains(e.target)) panel.style.display='none';
+});
+
 // ── DASHBOARD ─────────────────────────────────────────
 async function loadDashboard() {
   if(!sb) return;
@@ -5888,24 +6384,46 @@ function selectAdmPatient(p) {
   const banner=document.getElementById('adm-pt-banner');
   if(banner){ banner.style.display='block'; document.getElementById('adm-pt-name-disp').textContent=p.name||fullName(p); document.getElementById('adm-pt-meta-disp').textContent=(p.mrn||'')+' · '+(p.age||'?')+(p.age_unit||'y')+' / '+(p.sex||''); }
 }
+// Same offline read-through pattern as populateDoctorDropdown()/
+// ensurePriceList() (try the live query, cache a successful result, fall
+// back to the last cached copy when offline or the query fails) — ward/room
+// availability is exactly the kind of "blocks admitting a patient if it's
+// unavailable" reference lookup that pattern exists for. Cached
+// availability can go stale (e.g. someone else takes the last bed while
+// you're offline) — that's an accepted tradeoff this app already makes
+// everywhere for offline writes (dbWrite queues optimistically); showing a
+// stale-but-usable room list beats blocking admission entirely.
 async function loadBedsForWard() {
-  const ward=document.getElementById('adm-ward')?.value; if(!ward||!sb) return;
-  try {
-    const {data}=await sb.from('beds').select('room').eq('ward',ward).eq('status','Available').order('room');
-    const rooms=[...new Set((data||[]).map(b=>b.room))];
-    const rs=document.getElementById('adm-room'); if(!rs) return;
-    rs.innerHTML=rooms.map(r=>'<option>'+r+'</option>').join('')||'<option>—</option>';
-    loadBedsForRoom();
-  } catch(e){}
+  const ward=document.getElementById('adm-ward')?.value; if(!ward) return;
+  const cacheKey='beds_rooms_'+ward;
+  let rooms=null;
+  if(sb && navigator.onLine){
+    try{
+      const {data}=await sb.from('beds').select('room').eq('ward',ward).eq('status','Available').order('room');
+      rooms=[...new Set((data||[]).map(b=>b.room))];
+      await cacheSet(cacheKey, rooms);
+    }catch(e){}
+  }
+  if(rooms==null) rooms=(await cacheGet(cacheKey))||[];
+  const rs=document.getElementById('adm-room'); if(!rs) return;
+  rs.innerHTML=rooms.map(r=>'<option>'+r+'</option>').join('')||'<option>—</option>';
+  loadBedsForRoom();
 }
 async function loadBedsForRoom() {
   const ward=document.getElementById('adm-ward')?.value, room=document.getElementById('adm-room')?.value;
-  if(!ward||!room||!sb) return;
-  try {
-    const {data}=await sb.from('beds').select('bed_number').eq('ward',ward).eq('room',room).eq('status','Available').order('bed_number');
-    const bs=document.getElementById('adm-bed'); if(!bs) return;
-    bs.innerHTML=(data||[]).map(b=>'<option>'+b.bed_number+'</option>').join('')||'<option>—</option>';
-  } catch(e){}
+  if(!ward||!room) return;
+  const cacheKey='beds_nums_'+ward+'_'+room;
+  let beds=null;
+  if(sb && navigator.onLine){
+    try{
+      const {data}=await sb.from('beds').select('bed_number').eq('ward',ward).eq('room',room).eq('status','Available').order('bed_number');
+      beds=(data||[]).map(b=>b.bed_number);
+      await cacheSet(cacheKey, beds);
+    }catch(e){}
+  }
+  if(beds==null) beds=(await cacheGet(cacheKey))||[];
+  const bs=document.getElementById('adm-bed'); if(!bs) return;
+  bs.innerHTML=beds.map(b=>'<option>'+b+'</option>').join('')||'<option>—</option>';
 }
 async function submitAdmission() {
   if(!sb){ toast('Not connected','err'); return; }
@@ -6741,7 +7259,9 @@ async function loadAppointments() {
   try {
     const fd=document.getElementById('appt-filter-date')?.value||today();
     const [{data:todayA},{data:allA}]=await Promise.all([sb.from('appointments').select('*').eq('appointment_date',today()).order('appointment_time'),sb.from('appointments').select('*').eq('appointment_date',fd).order('appointment_time')]);
-    const rr=a=>'<tr><td>'+( a.appointment_time||'—')+'</td><td>'+(a.patient_name||'—')+'</td><td>'+statusBadge(a.appt_type)+'</td><td>'+(a.doctor||'—')+'</td><td>'+statusBadge(a.status)+'</td><td><div class="acts"><button class="btn btn-s btn-xs" onclick="updateApptStatus(\''+a.id+'\',\'Arrived\')">✅</button><button class="btn btn-r btn-xs" onclick="updateApptStatus(\''+a.id+'\',\'Cancelled\')">✕</button></div></td></tr>';
+    const rr=a=>'<tr><td>'+( a.appointment_time||'—')+'</td><td>'+(a.patient_name||'—')+'</td><td>'+statusBadge(a.appt_type)+'</td><td>'+(a.doctor||'—')+'</td><td>'+statusBadge(a.status)+'</td><td><div class="acts">'+
+      (a.phone?'<button class="btn btn-s btn-xs" onclick="sendAppointmentReminder(\''+a.id+'\',\''+a.phone+'\',\''+(a.patient_name||'').replace(/'/g,'')+'\',\''+a.appointment_date+'\',\''+(a.appointment_time||'')+'\')" title="Send SMS reminder">📲</button>':'')+
+      '<button class="btn btn-s btn-xs" onclick="updateApptStatus(\''+a.id+'\',\'Arrived\')">✅</button><button class="btn btn-r btn-xs" onclick="updateApptStatus(\''+a.id+'\',\'Cancelled\')">✕</button></div></td></tr>';
     const waiting=(todayA||[]).filter(a=>a.status!=='Cancelled');
     waitBody.innerHTML=waiting.length?'<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Time</th><th>Patient</th><th>Type</th><th>Doctor</th><th>Status</th><th></th></tr></thead><tbody>'+waiting.map(rr).join('')+'</tbody></table></div>':'<div class="empty-state"><div class="empty-icon">🚶</div><div class="empty-title">No patients waiting today</div></div>';
     listBody.innerHTML=allA?.length?'<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Time</th><th>Patient</th><th>Type</th><th>Doctor</th><th>Status</th><th></th></tr></thead><tbody>'+allA.map(rr).join('')+'</tbody></table></div>':'<div class="empty-state"><div class="empty-icon">📅</div><div class="empty-title">No appointments on this date</div></div>';
@@ -6757,7 +7277,7 @@ async function saveAppointment() {
   const g=id=>document.getElementById(id)?.value||'';
   if(!g('appt-name')||!g('appt-date')){ toast('Name and date required','err'); return; }
   try {
-    await sb.from('appointments').insert({patient_name:g('appt-name'),appointment_date:g('appt-date'),appointment_time:g('appt-time')||null,appt_type:g('appt-type'),doctor:g('appt-doctor'),notes:g('appt-notes'),status:'Booked',created_by:currentProfile?.id});
+    await sb.from('appointments').insert({patient_name:g('appt-name'),phone:g('appt-phone'),appointment_date:g('appt-date'),appointment_time:g('appt-time')||null,appt_type:g('appt-type'),doctor:g('appt-doctor'),notes:g('appt-notes'),status:'Booked',created_by:currentProfile?.id});
     toast('✅ Appointment booked','ok'); ['appt-name','appt-phone','appt-notes'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; }); loadAppointments();
   } catch(e){ toast(e.message,'err'); }
 }
@@ -6930,6 +7450,7 @@ async function loadWorklist() {
     const mode=window._wlMode||'today';
     const dept=document.getElementById('wl-dept')?.value||'';
     const prio=document.getElementById('wl-priority-filter')?.value||'';
+    const srcFilter=document.getElementById('wl-source-filter')?.value||'';
     let q=sb.from('patients').select('id,name,first_name,last_name,mrn,lab_no,age,age_unit,sex,priority,diagnosis,doctor,ward,tests_requested,payment_status,visit_destination,created_at').order('created_at',{ascending:false}).limit(200);
     if(mode==='today'){ const s=new Date(); s.setHours(0,0,0,0); q=q.gte('created_at',s.toISOString()); }
     else if(mode==='week'){ const s=new Date(); s.setDate(s.getDate()-7); q=q.gte('created_at',s.toISOString()); }
@@ -6938,36 +7459,50 @@ async function loadWorklist() {
     const {data:pts}=await q;
     if(!pts?.length){ body.innerHTML='<div class="empty-state"><div class="empty-icon">🔬</div><div class="empty-title">No patients found</div></div>'; updateWlStats([]); return; }
     const ids=pts.map(p=>p.id);
-    const {data:samples}=await sb.from('sample_records').select('patient_id,status').in('patient_id',ids);
-    const sampleMap={}; (samples||[]).forEach(s=>sampleMap[s.patient_id]=s.status);
+    const {data:samples}=await sb.from('sample_records').select('patient_id,status,sample_source').in('patient_id',ids);
+    // Keyed by patient_id -> {status, source} rather than a bare status string,
+    // so the worklist can filter/sort/display sample_source alongside status.
+    const sampleMap={}; (samples||[]).forEach(s=>sampleMap[s.patient_id]={status:s.status, source:s.sample_source||''});
     updateWlStats(pts,sampleMap);
     // A sample must be physically Received (or further along) in the lab
     // before it's workable — patients whose sample is still Pending collection
     // or Collected-but-not-yet-received don't belong in the worklist at all.
     const RECEIVABLE_STATUSES = ['Received','Processing','Completed'];
-    let filtered = pts.filter(p => RECEIVABLE_STATUSES.includes(sampleMap[p.id]));
+    let filtered = pts.filter(p => RECEIVABLE_STATUSES.includes(sampleMap[p.id]?.status));
     if(dept) {
       const deptKeyMap={haematology:'hem',chemistry:'chem',serology:'sero',immunology:'immuno',microbiology:'micro',pcr:'pcr',histopathology:'histo',cytology:'cyto'};
       const meta=DEPT_META[deptKeyMap[dept]];
       filtered=filtered.filter(p=>{ const t=(p.tests_requested||[]).join(' ').toLowerCase(); return (meta?meta.keywords:[]).some(k=>t.includes(k)); });
     }
-    const statOrder={STAT:0,Critical:0,Urgent:1,Routine:2};
-    filtered.sort((a,b)=>(statOrder[a.priority]??3)-(statOrder[b.priority]??3));
+    if(srcFilter) filtered=filtered.filter(p=>(sampleMap[p.id]?.source||'')===srcFilter);
+    const sourceSort=window._wlSourceSort||null;
+    if(sourceSort){
+      filtered.sort((a,b)=>{
+        const sa=(sampleMap[a.id]?.source||'').toLowerCase(), sb3=(sampleMap[b.id]?.source||'').toLowerCase();
+        return sourceSort==='asc' ? sa.localeCompare(sb3) : sb3.localeCompare(sa);
+      });
+    } else {
+      const statOrder={STAT:0,Critical:0,Urgent:1,Routine:2};
+      filtered.sort((a,b)=>(statOrder[a.priority]??3)-(statOrder[b.priority]??3));
+    }
+    const sortBtn=document.getElementById('wl-source-sort-btn');
+    if(sortBtn) sortBtn.classList.toggle('btn-p', !!sourceSort);
     const hasStat=filtered.some(p=>p.priority==='STAT');
     const hasUnpaid=filtered.some(p=>p.payment_status==='unpaid'||p.payment_status==='insurance_pending');
     const sb2=document.getElementById('wl-stat-banner'); if(sb2) sb2.style.display=hasStat?'flex':'none';
     const ub=document.getElementById('wl-unpaid-banner'); if(ub) ub.style.display=hasUnpaid?'block':'none';
     if(!filtered.length){
-      const unreceivedCount = pts.filter(p=>sampleMap[p.id]==='Pending'||sampleMap[p.id]==='Collected').length;
+      const unreceivedCount = pts.filter(p=>sampleMap[p.id]?.status==='Pending'||sampleMap[p.id]?.status==='Collected').length;
       body.innerHTML = unreceivedCount
         ? '<div class="empty-state"><div class="empty-icon">📥</div><div class="empty-title">'+unreceivedCount+' sample(s) awaiting receipt</div><div style="font-size:.8rem;color:var(--slate);margin-top:4px">Samples must be received in the lab (Sample Collection → Receive in Lab) before they appear here.</div></div>'
         : '<div class="empty-state">No results for selected filters</div>';
       return;
     }
-    body.innerHTML='<div style="overflow-x:auto"><table class="tbl" id="wl-table"><thead><tr><th>Lab No</th><th>MRN</th><th>Name</th><th>Age/Sex</th><th>Tests</th><th>Doctor</th><th>Priority</th><th>Payment</th><th>Sample</th><th>Date</th><th>Actions</th></tr></thead><tbody>'+
+    body.innerHTML='<div style="overflow-x:auto"><table class="tbl" id="wl-table"><thead><tr><th>Lab No</th><th>MRN</th><th>Name</th><th>Age/Sex</th><th>Tests</th><th>Doctor</th><th>Priority</th><th>Payment</th><th>Sample</th><th>Source</th><th>Date</th><th>Actions</th></tr></thead><tbody>'+
       filtered.map(p=>{
         const unpaid=p.payment_status==='unpaid'||p.payment_status==='insurance_pending';
-        const stt=sampleMap[p.id]||'Pending';
+        const stt=sampleMap[p.id]?.status||'Pending';
+        const src=sampleMap[p.id]?.source||'';
         const pbg=(p.priority==='STAT'||p.priority==='Critical')?'style="background:#fff1f2"':p.priority==='Urgent'?'style="background:#fffbeb"':'';
         return '<tr class="'+(unpaid?'pay-unpaid':'')+'" '+pbg+'>'+
           '<td style="font-family:DM Mono,monospace;font-size:.7rem;font-weight:700;color:var(--teal)">'+(p.lab_no||'—')+'</td>'+
@@ -6982,6 +7517,7 @@ async function loadWorklist() {
           '<td>'+(p.priority==='STAT'?'<span class="bdg" style="background:#fef2f2;color:#b91c1c;border:1.5px solid #fca5a5">\u26a1 STAT</span>':statusBadge(p.priority))+'</td>'+
           '<td>'+paymentTag(p.payment_status)+'</td>'+
           '<td>'+statusBadge(stt)+'</td>'+
+          '<td style="font-size:.72rem">'+(src||'—')+'</td>'+
           '<td style="font-size:.7rem;color:var(--slate)">'+fmtDT(p.created_at)+'</td>'+
           '<td><div class="acts">'+
             (unpaid?'<button class="btn btn-s btn-xs" style="opacity:.5;cursor:not-allowed" title="Payment required">\ud83d\udd12 Blocked</button>':
@@ -6991,14 +7527,18 @@ async function loadWorklist() {
       }).join('')+'</tbody></table></div>';
   } catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red)">'+e.message+'</div>'; }
 }
+function toggleWlSourceSort(){
+  window._wlSourceSort = window._wlSourceSort==='asc' ? 'desc' : window._wlSourceSort==='desc' ? null : 'asc';
+  loadWorklist();
+}
 function updateWlStats(pts,sampleMap) {
   const sm=sampleMap||{};
   const se=id=>{ const el=document.getElementById(id); if(el) el.textContent=0; };
   document.getElementById('wl-cnt-total').textContent=pts.length;
-  document.getElementById('wl-cnt-pending').textContent=pts.filter(p=>!sm[p.id]||sm[p.id]==='Pending').length;
-  const ce=document.getElementById('wl-cnt-collected'); if(ce) ce.textContent=pts.filter(p=>sm[p.id]==='Collected').length;
-  const pe=document.getElementById('wl-cnt-processing'); if(pe) pe.textContent=pts.filter(p=>sm[p.id]==='Processing').length;
-  document.getElementById('wl-cnt-done').textContent=pts.filter(p=>sm[p.id]==='Completed').length;
+  document.getElementById('wl-cnt-pending').textContent=pts.filter(p=>!sm[p.id]||sm[p.id].status==='Pending').length;
+  const ce=document.getElementById('wl-cnt-collected'); if(ce) ce.textContent=pts.filter(p=>sm[p.id]?.status==='Collected').length;
+  const pe=document.getElementById('wl-cnt-processing'); if(pe) pe.textContent=pts.filter(p=>sm[p.id]?.status==='Processing').length;
+  document.getElementById('wl-cnt-done').textContent=pts.filter(p=>sm[p.id]?.status==='Completed').length;
   document.getElementById('wl-cnt-crit').textContent=pts.filter(p=>p.priority==='STAT'||p.priority==='Critical').length;
 }
 function setWlMode(mode,btn) {
@@ -7017,7 +7557,7 @@ function printWorklist() {
   const html=printHeader('Laboratory Worklist')+
     '<div style="font-size:8pt;color:#64748b;margin-bottom:10px">Generated: '+new Date().toLocaleString()+'</div>'+
     '<table style="width:100%;border-collapse:collapse"><thead><tr style="background:#1e3a5a;color:#fff">'+
-    '<th style="padding:5px 8px;font-size:8.5pt;text-align:left">Lab No</th><th style="padding:5px 8px;text-align:left">Patient</th><th style="padding:5px 8px;text-align:left">Age/Sex</th><th style="padding:5px 8px;text-align:left">Tests</th><th style="padding:5px 8px;text-align:left">Priority</th><th style="padding:5px 8px;text-align:left">Sample</th><th style="padding:5px 8px;text-align:left">Time</th></tr></thead><tbody>'+
+    '<th style="padding:5px 8px;font-size:8.5pt;text-align:left">Lab No</th><th style="padding:5px 8px;text-align:left">Patient</th><th style="padding:5px 8px;text-align:left">Age/Sex</th><th style="padding:5px 8px;text-align:left">Tests</th><th style="padding:5px 8px;text-align:left">Priority</th><th style="padding:5px 8px;text-align:left">Sample</th><th style="padding:5px 8px;text-align:left">Source</th><th style="padding:5px 8px;text-align:left">Time</th></tr></thead><tbody>'+
     [...rows].filter(r=>r.style.display!=='none').map((r,i)=>{
       const c=r.querySelectorAll('td');
       return '<tr style="background:'+(i%2?'#f8fafd':'#fff')+';border-bottom:1px solid #e2e8f0">'+
@@ -7027,7 +7567,8 @@ function printWorklist() {
         '<td style="padding:4px 8px;font-size:8pt">'+(c[4]?.textContent||'')+'</td>'+
         '<td style="padding:4px 8px;font-size:8.5pt">'+(c[6]?.textContent||'')+'</td>'+
         '<td style="padding:4px 8px;font-size:8.5pt">'+(c[8]?.textContent||'')+'</td>'+
-        '<td style="padding:4px 8px;font-size:8pt">'+(c[9]?.textContent||'')+'</td></tr>';
+        '<td style="padding:4px 8px;font-size:8pt">'+(c[9]?.textContent||'')+'</td>'+
+        '<td style="padding:4px 8px;font-size:8pt">'+(c[10]?.textContent||'')+'</td></tr>';
     }).join('')+'</tbody></table>'+
     '<div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:20px;text-align:center">'+
     '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">Lab Supervisor</div>'+
@@ -7055,7 +7596,7 @@ async function loadAllResults() {
     }
     if(!results.length){ body.innerHTML='<div class="empty-state">No results found</div>'; return; }
     const ptIds=[...new Set(results.map(r=>r.patient_id))];
-    const {data:pts}=await sb.from('patients').select('id,name,first_name,last_name,mrn,lab_no,age,sex').in('id',ptIds);
+    const {data:pts}=await sb.from('patients').select('id,name,first_name,last_name,mrn,lab_no,age,sex,phone').in('id',ptIds);
     const ptMap={}; (pts||[]).forEach(p=>ptMap[p.id]=p);
     results.sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
     const deptColors={haematology:'#dbeafe',chemistry:'#dcfce7',serology:'#ede9fe',microbiology:'#fce7f3',pcr:'#fef3c7',histopathology:'#fee2e2',cytology:'#ecfdf5'};
@@ -7072,6 +7613,7 @@ async function loadAllResults() {
           '<td><div class="acts">'+
             '<button class="btn btn-p btn-xs" onclick="openEnterModalDept(\x27'+r.patient_id+'\x27,\x27'+r.dept+'\x27)">\ud83d\udcdd View/Edit</button>'+
             '<button class="btn btn-s btn-xs" onclick="printResultByDept(\x27'+r.patient_id+'\x27,\x27'+r.dept+'\x27)">\ud83d\udda8</button>'+
+            (r.is_verified&&pt.phone?'<button class="btn btn-s btn-xs" onclick="sendResultReadySms(\x27'+r.patient_id+'\x27,\x27'+pt.phone+'\x27,\x27'+((pt.name||fullName(pt)||'').replace(/\x27/g,''))+'\x27)" title="Send SMS: results ready">\ud83d\udcf2</button>':'')+
           '</div></td></tr>';
       }).join('')+'</tbody></table></div>';
   } catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red)">'+e.message+'</div>'; }
@@ -7248,17 +7790,19 @@ async function loadPthTimeline() {
     const to=document.getElementById('pth-to')?.value||today();
     const ptId=_pthPt.id;
     const resultTableNames=Object.keys(PTH_RESULT_TABLES);
-    const [labPt,adms,crits,rads,invs,hemHist,consults,...resultRows]=await Promise.all([
+    const [labPt,adms,crits,rads,invs,hemHist,chemHist,consults,...resultRows]=await Promise.all([
       sb.from('patients').select('id,created_at,tests_requested,priority,diagnosis').eq('id',ptId).single(),
       sb.from('admissions').select('*').eq('patient_id',ptId).order('admission_date',{ascending:false}),
       sb.from('critical_values').select('*').eq('patient_id',ptId).order('notified_at',{ascending:false}),
       sb.from('radiology_requests').select('*').eq('patient_id',ptId).order('created_at',{ascending:false}),
       sb.from('invoices').select('*').eq('patient_id',ptId).order('created_at',{ascending:false}),
       sb.from('results_hematology').select('hgb,wbc,plt,analysis_date,is_verified').eq('patient_id',ptId).order('analysis_date'),
+      sb.from('results_chemistry').select('creat,urea,fbs,alt,ast,alp,ggt,analysis_date,is_verified').eq('patient_id',ptId).order('analysis_date'),
       sb.from('doctor_consultations').select('*').eq('patient_id',ptId).order('consultation_date',{ascending:false}),
       ...resultTableNames.map(t=>sb.from(t).select('*').eq('patient_id',ptId)),
     ]);
     _pthHemHistory=hemHist.data||[];
+    _pthChemHistory=chemHist.data||[];
     const events=[];
     const pt=labPt.data;
     if(pt) events.push({t:new Date(pt.created_at),type:'lab',icon:'📋',title:'Patient Registered',detail:'Tests: '+((pt.tests_requested||[]).join(', ')||'—'),color:'var(--teal)',data:pt});
@@ -7275,7 +7819,7 @@ async function loadPthTimeline() {
     _pthAllEvents=events;
     setText('pths-visits',1); setText('pths-admissions',(adms.data||[]).length); setText('pths-criticals',(crits.data||[]).length); setText('pths-radiology',(rads.data||[]).length); setText('pths-invoices',(invs.data||[]).length);
     renderPthTimeline();
-    if(_pthHemHistory.length){ document.getElementById('pth-trends-card').style.display=''; renderPthTrend(); }
+    if(_pthHemHistory.length||_pthChemHistory.length){ document.getElementById('pth-trends-card').style.display=''; renderPthTrend(); }
   } catch(e){ console.error(e); }
 }
 function setPthFilter(f,btn) {
@@ -7298,16 +7842,22 @@ function showPthDetail(idx) {
   el.innerHTML=html;
 }
 function renderPthTrend() {
-  const canvas=document.getElementById('pth-trend-canvas'); if(!canvas||!_pthHemHistory.length) return;
+  const canvas=document.getElementById('pth-trend-canvas'); if(!canvas) return;
   const analyte=document.getElementById('pth-trend-analyte')?.value||'hgb';
-  const data=_pthHemHistory.filter(r=>r[analyte]!=null).map(r=>({date:r.analysis_date,val:r[analyte]}));
-  if(!data.length){ const s=document.getElementById('pth-trend-stats'); if(s) s.textContent='No data for this analyte'; return; }
+  // Same chart-drawing code as before (Phase 5 just widened where the data
+  // comes from) — hgb/wbc/plt read from _pthHemHistory as always, the newly
+  // added renal/glucose/liver-enzyme analytes read from _pthChemHistory.
+  const meta=PTH_TREND_ANALYTES[analyte]||{source:'hem',label:analyte.toUpperCase()};
+  const history=meta.source==='chem' ? _pthChemHistory : _pthHemHistory;
+  if(!history.length) return;
+  const data=history.filter(r=>r[analyte]!=null).map(r=>({date:r.analysis_date,val:r[analyte]}));
+  if(!data.length){ const s=document.getElementById('pth-trend-stats'); if(s) s.textContent='No data for this analyte'; const ctx=canvas.getContext('2d'); ctx.clearRect(0,0,canvas.width,canvas.height); return; }
   const ctx=canvas.getContext('2d'); const W=canvas.offsetWidth||700; canvas.width=W; canvas.height=160; ctx.clearRect(0,0,W,160);
   const vals=data.map(d=>d.val); const minV=Math.min(...vals)*0.9; const maxV=Math.max(...vals)*1.1;
   const pad=40; const toX=(_,i)=>pad+i/(data.length-1||1)*(W-2*pad); const toY=v=>pad+(1-(v-minV)/(maxV-minV||1))*(130-2*pad);
   ctx.beginPath(); ctx.strokeStyle='#0b7a75'; ctx.lineWidth=2.5; data.forEach((d,i)=>{ i===0?ctx.moveTo(toX(null,i),toY(d.val)):ctx.lineTo(toX(null,i),toY(d.val)); }); ctx.stroke();
   data.forEach((d,i)=>{ const x=toX(null,i), y=toY(d.val); ctx.beginPath(); ctx.arc(x,y,4,0,Math.PI*2); ctx.fillStyle='#0b7a75'; ctx.fill(); if(i===0||i===data.length-1||i%Math.max(1,Math.floor(data.length/5))===0){ ctx.fillStyle='#64748b'; ctx.font='8px sans-serif'; ctx.fillText((d.date||'').slice(5),x-14,155); ctx.fillStyle='#0e1928'; ctx.font='bold 9px sans-serif'; ctx.fillText(String(d.val),x-8,y-8); } });
-  ctx.save(); ctx.translate(12,80); ctx.rotate(-Math.PI/2); ctx.font='8px sans-serif'; ctx.fillStyle='#64748b'; ctx.fillText(analyte.toUpperCase(),0,0); ctx.restore();
+  ctx.save(); ctx.translate(12,80); ctx.rotate(-Math.PI/2); ctx.font='8px sans-serif'; ctx.fillStyle='#64748b'; ctx.fillText(meta.label,0,0); ctx.restore();
   const avg=(vals.reduce((s,v)=>s+v,0)/vals.length).toFixed(1); const minVal=Math.min(...vals); const maxVal=Math.max(...vals);
   const stats=document.getElementById('pth-trend-stats'); if(stats) stats.textContent='n='+data.length+' | Min: '+minVal+' | Max: '+maxVal+' | Mean: '+avg;
 }
@@ -7371,9 +7921,79 @@ function switchMicroTab(tab,btn) {
 // what's actually happened (Pending at creation already exists; this adds
 // the rest of the chain), the same way for every department rather than
 // each save/release function tracking it separately.
-async function updateSampleStatus(patientId, status){
+async function updateSampleStatus(patientId, status, extra={}){
   if(!sb||!patientId) return;
-  try{ await sb.from('sample_records').update({status}).eq('patient_id',patientId); }catch(e){ /* best-effort — a missing sample_records row shouldn't block the actual save/release */ }
+  try{ await sb.from('sample_records').update({status, ...extra}).eq('patient_id',patientId); }catch(e){ /* best-effort — a missing sample_records row shouldn't block the actual save/release */ }
+}
+
+// ── BARCODE SCANNING (camera, via html5-qrcode) ──────────────────────
+// Printed sample/patient labels encode lab_no (or mrn as fallback) as the
+// barcode value — see openSampleLabelWindow's barcodeValue — with multi-tube
+// labels suffixed "-1"/"-2"/etc. This resolves a scanned code back to the
+// patient row it was printed for, stripping that tube suffix if present.
+async function resolvePatientByBarcode(code){
+  if(!sb||!code) return null;
+  const clean=String(code).trim().replace(/-\d+$/,'');
+  if(!clean) return null;
+  try{
+    const {data}=await sb.from('patients').select('id,name,first_name,last_name,mrn,lab_no,age,age_unit,sex,tests_requested,payment_status').or('lab_no.eq.'+clean+',mrn.eq.'+clean).order('created_at',{ascending:false}).limit(1);
+    return data && data.length ? data[0] : null;
+  }catch(e){ return null; }
+}
+
+let _scanInstance=null, _scanOnResult=null;
+// Shared modal + Html5Qrcode instance reused by every scan entry point
+// (scanForCollection, scanForReceiving) rather than each page wiring its
+// own camera session.
+function openBarcodeScanner(onResult, opts={}){
+  if(typeof Html5Qrcode==='undefined'){ toast('Barcode scanner library failed to load — check your connection and use search instead','err'); return; }
+  _scanOnResult=onResult;
+  const modal=document.getElementById('scan-modal'); if(!modal) return;
+  const title=document.getElementById('scan-modal-title'); if(title) title.textContent=opts.title||'📷 Scan Barcode';
+  const status=document.getElementById('scan-status'); if(status) status.textContent='Point the camera at the barcode…';
+  modal.style.display='flex';
+  try{
+    _scanInstance=new Html5Qrcode('scan-reader',{formatsToSupport:[Html5QrcodeSupportedFormats.CODE_128,Html5QrcodeSupportedFormats.CODE_39,Html5QrcodeSupportedFormats.EAN_13],verbose:false});
+    _scanInstance.start(
+      {facingMode:'environment'},
+      {fps:10,qrbox:{width:260,height:120}},
+      (decodedText)=>{ _handleScanSuccess(decodedText); },
+      ()=>{ /* per-frame "nothing decoded yet" callback — fires constantly while aiming, not an error */ }
+    ).catch(e=>{ const st=document.getElementById('scan-status'); if(st) st.textContent='⚠️ Camera unavailable: '+(e.message||e)+' — use search instead.'; });
+  }catch(e){ const st=document.getElementById('scan-status'); if(st) st.textContent='⚠️ Could not start scanner: '+(e.message||e); }
+}
+async function _handleScanSuccess(decodedText){
+  const cb=_scanOnResult;
+  await closeBarcodeScanner();
+  if(cb) cb(decodedText);
+}
+async function closeBarcodeScanner(){
+  const modal=document.getElementById('scan-modal'); if(modal) modal.style.display='none';
+  if(_scanInstance){
+    try{ await _scanInstance.stop(); _scanInstance.clear(); }catch(e){}
+    _scanInstance=null;
+  }
+}
+function scanForCollection(){
+  openBarcodeScanner(async (code)=>{
+    const p=await resolvePatientByBarcode(code);
+    if(!p){ toast('No patient found for scanned code: '+code,'err'); return; }
+    await selectScPt(p.id);
+    const srcEl=document.getElementById('sc-source');
+    if(srcEl){ srcEl.focus(); srcEl.style.outline='2px solid var(--teal)'; setTimeout(()=>{ srcEl.style.outline=''; },2000); }
+    toast('✅ Patient loaded from scan — confirm sample source','ok');
+  }, {title:'📷 Scan Patient Barcode'});
+}
+function scanForReceiving(){
+  openBarcodeScanner(async (code)=>{
+    const p=await resolvePatientByBarcode(code);
+    if(!p){ toast('No patient found for scanned code: '+code,'err'); return; }
+    if(!sb){ toast('Not connected','err'); return; }
+    const {data:rec}=await sb.from('sample_records').select('status').eq('patient_id',p.id).maybeSingle();
+    if(!rec||rec.status!=='Collected'){ toast('This sample is not awaiting receipt (status: '+(rec?.status||'no record')+')','err'); return; }
+    await selectReceivePt(p.id);
+    await markSampleReceived();
+  }, {title:'📷 Scan Sample Barcode'});
 }
 async function releaseResults(dept) {
   const meta = DEPT_META[dept], map = DEPT_LOAD_MAP[dept];
@@ -7611,6 +8231,78 @@ function openPatientHistoryTimeline(patientId){
     .then(({data})=>{ if(data) selectPthPatient(data); })
     .catch(e=>toast(e.message,'err'));
 }
+
+// ── GLOBAL SEARCH ─────────────────────────────────────
+// Lives in the persistent topbar (see markup), so it's reachable from every
+// page. Searches patients (name/MRN/visit_no/phone — lab orders are just
+// patients.lab_no, so the same query covers "search by Lab No." too, per
+// how lab data is actually modelled in this schema) and invoices (by
+// invoice_no), reusing openPatientHistoryTimeline() and editInvoice()
+// rather than building separate per-record detail views.
+let _gsDebounce=null;
+async function globalSearch(q){
+  const box=document.getElementById('gs-results');
+  if(!box) return;
+  clearTimeout(_gsDebounce);
+  if(!sb||!q||q.trim().length<2){ box.style.display='none'; return; }
+  const term=q.trim();
+  _gsDebounce=setTimeout(async ()=>{
+    try{
+      const [ptRes,invRes]=await Promise.all([
+        sb.from('patients').select('id,name,first_name,last_name,mrn,visit_no,lab_no,phone,age,age_unit,sex')
+          .or('name.ilike.%'+term+'%,mrn.ilike.%'+term+'%,visit_no.ilike.%'+term+'%,phone.ilike.%'+term+'%,lab_no.ilike.%'+term+'%')
+          .limit(6),
+        sb.from('invoices').select('id,invoice_no,patient_name,net_amount,total_amount,currency,payment_status')
+          .ilike('invoice_no','%'+term+'%').limit(4)
+      ]);
+      const pts=ptRes.data||[], invs=invRes.data||[];
+      if(!pts.length && !invs.length){
+        box.innerHTML='<div style="padding:10px 12px;font-size:.78rem;color:var(--slate)">No matches for "'+term+'"</div>';
+        box.style.display='block'; return;
+      }
+      let html='';
+      if(pts.length){
+        html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:var(--slate);background:var(--bg)">Patients</div>';
+        html+=pts.map(p=>{
+          const labHit=p.lab_no && p.lab_no.toLowerCase().includes(term.toLowerCase());
+          return '<div onclick="jumpToPatient(\''+p.id+'\')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'">'+
+            '<div style="font-weight:700;font-size:.82rem">'+(p.name||fullName(p))+(labHit?' <span style="font-weight:400;font-size:.68rem;color:var(--teal)">· Lab '+p.lab_no+'</span>':'')+'</div>'+
+            '<div style="font-size:.7rem;color:var(--slate)">'+(p.mrn||'—')+' · '+(p.visit_no||p.lab_no||'—')+' · '+(p.phone||'—')+'</div></div>';
+        }).join('');
+      }
+      if(invs.length){
+        html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:var(--slate);background:var(--bg)">Invoices</div>';
+        html+=invs.map(i=>'<div onclick="jumpToInvoice(\''+i.id+'\')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'">'+
+          '<div style="font-weight:700;font-size:.82rem">'+(i.invoice_no||'—')+'</div>'+
+          '<div style="font-size:.7rem;color:var(--slate)">'+(i.patient_name||'—')+' · '+((i.net_amount??i.total_amount??0).toFixed(2))+' '+(i.currency||CFG.currency)+' · '+(i.payment_status||'')+'</div></div>').join('');
+      }
+      box.innerHTML=html; box.style.display='block';
+    }catch(e){ box.style.display='none'; }
+  }, 220);
+}
+function closeGlobalSearch(){
+  const box=document.getElementById('gs-results'); if(box) box.style.display='none';
+}
+function jumpToPatient(id){
+  closeGlobalSearch();
+  const input=document.getElementById('gs-input'); if(input) input.value='';
+  openPatientHistoryTimeline(id);
+}
+function jumpToInvoice(id){
+  closeGlobalSearch();
+  const input=document.getElementById('gs-input'); if(input) input.value='';
+  goPage('billing');
+  // goPage's billing init (loadBilling/buildBillLineItems) fires
+  // async/fire-and-forget — give it a moment to settle before editInvoice()
+  // populates the same form, matching the setTimeout pattern goPage()
+  // itself already uses for other pages' post-navigation init work.
+  setTimeout(()=>editInvoice(id), 250);
+}
+document.addEventListener('click', (e)=>{
+  const wrap=document.getElementById('gs-wrap'), box=document.getElementById('gs-results');
+  if(box && box.style.display!=='none' && wrap && !wrap.contains(e.target)) box.style.display='none';
+});
+
 async function selectExistingFilePatient(mrn){
   if(!sb||!mrn) return;
   try{
@@ -11100,6 +11792,9 @@ async function selectScPt(ptId){
 }
 async function markSampleCollected(){
   if(!sb||!_scPt){toast('Select a patient','err');return;}
+  const srcVal=document.getElementById('sc-source')?.value||'';
+  if(!srcVal){toast('Sample source is required','err');document.getElementById('sc-source')?.focus();return;}
+  if(srcVal==='Other Departments' && !document.getElementById('sc-source-other')?.value?.trim()){toast('Please specify the department','err');document.getElementById('sc-source-other')?.focus();return;}
   if(!isPaymentCleared(_scPt)){checkPaymentGate(_scPt,'Sample Collection',()=>_doMarkSampleCollected());return;}
   _doMarkSampleCollected();
 }
@@ -11107,13 +11802,15 @@ async function _doMarkSampleCollected(){
   if(!_scPt)return;
   if(!sb && navigator.onLine){toast('Not connected','err');return;}
   const g=id=>document.getElementById(id)?.value||'';
+  const sampleSource = g('sc-source')==='Other Departments' ? g('sc-source-other') : g('sc-source');
   try{
     const result = await dbWrite('sample_records','upsert',{
       patient_id:_scPt.id,status:'Collected',specimen_type:g('sc-specimen'),
       collection_site:g('sc-site'),needle_gauge:g('sc-gauge'),
       attempts:parseInt(g('sc-attempts'))||1,condition:g('sc-condition'),
       collected_by:g('sc-collector')||currentProfile?.full_name,
-      collected_at:new Date().toISOString(),notes:g('sc-notes')
+      collected_at:new Date().toISOString(),notes:g('sc-notes'),
+      sample_source:sampleSource
     },{onConflict:'patient_id'});
     toast(result.queued ? '📥 Offline — sample logged on this device, will sync later' : '✅ Sample collected', result.queued?'warn':'ok');
     if(!result.queued) {
@@ -11138,9 +11835,16 @@ async function _doMarkSampleCollected(){
       }
       _scPt = null;
       const banner=document.getElementById('sc-pt-banner'); if(banner) banner.style.display='none';
+      const srcEl=document.getElementById('sc-source'); if(srcEl) srcEl.value='';
+      const srcOtherEl=document.getElementById('sc-source-other'); if(srcOtherEl) srcOtherEl.value='';
+      toggleSourceOther('sc-source','sc-source-other-wrap');
       loadSampleQueue();
     }
   }catch(e){toast(e.message,'err');}
+}
+function toggleSourceOther(selectId, wrapId){
+  const sel=document.getElementById(selectId), wrap=document.getElementById(wrapId);
+  if(sel && wrap) wrap.style.display = sel.value==='Other Departments' ? '' : 'none';
 }
 async function searchUnreceivePatient(q){
   const box=document.getElementById('sc-unrecv-results');
@@ -11202,7 +11906,7 @@ async function markSampleReceived(){
   if(!id){toast('Search a sample first','err');return;}
   const g=x=>document.getElementById(x)?.value||'';
   try{
-    await sb.from('sample_records').update({status:'Received',received_by:g('sc-recv-by')||currentProfile?.full_name,received_at:new Date().toISOString()}).eq('patient_id',id);
+    await updateSampleStatus(id,'Received',{received_by:g('sc-recv-by')||currentProfile?.full_name,received_at:new Date().toISOString()});
     toast('✅ Sample received','ok');
     document.getElementById('sc-recv-pt-id').value='';
     document.getElementById('sc-recv-banner').style.display='none';
