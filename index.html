@@ -3539,8 +3539,12 @@ html[dir="rtl"] body{direction:rtl;}
 </div>
 
 <div class="page" id="page-delivery">
-  <div class="card"><div class="card-hd"><span class="card-title">📲 Result Delivery Log</span></div>
-    <div class="card-body"><p style="font-size:.82rem;color:var(--slate)">Track SMS / WhatsApp / email result deliveries. Feature available for configuration with your SMS/messaging provider.</p></div>
+  <div class="card"><div class="card-hd"><span class="card-title">📲 Result / Reminder Delivery Log</span>
+    <button class="btn btn-s btn-sm" onclick="loadDeliveryLog()">↻</button></div>
+    <div class="card-body">
+      <div style="font-size:.75rem;color:var(--slate);margin-bottom:10px">SMS sent from the app (result-ready notices on All Results, appointment reminders on Appointments) — configure a provider under Settings → SMS / Messaging Provider first. WhatsApp/email delivery are not implemented.</div>
+      <div id="delivery-log-body"><div class="spin-center"><div class="spinner"></div>Loading…</div></div>
+    </div>
   </div>
 </div>
 
@@ -3572,6 +3576,12 @@ html[dir="rtl"] body{direction:rtl;}
           <button class="btn btn-s" onclick="testConnection()">🔌 Test</button>
         </div>
         <div id="cfg-conn-status" style="margin-top:8px;font-size:.78rem"></div>
+      </div></div>
+      <div class="card"><div class="card-hd"><span class="card-title">📲 SMS / Messaging Provider</span></div><div class="card-body">
+        <div style="font-size:.72rem;color:var(--slate);margin-bottom:8px">Generic REST config — sendSms() POSTs {to, message, sender} as JSON with this URL and a Bearer token. Matches most SMS gateway APIs directly; some providers need a different request shape (form-encoded, a different field naming) and would need sendSms() adjusted to match once a specific provider is chosen.</div>
+        <div class="fg"><label class="fl">SMS API URL</label><input class="fc" id="cfg-sms-api-url" placeholder="https://api.yourprovider.com/sms/send"></div>
+        <div class="fg"><label class="fl">API Key / Bearer Token</label><input class="fc" id="cfg-sms-api-key"></div>
+        <div class="fg"><label class="fl">Sender ID</label><input class="fc" id="cfg-sms-sender-id" placeholder="FriendshipHosp"></div>
       </div></div>
       <div class="card"><div class="card-hd"><span class="card-title">🛏 Bed Configuration</span></div><div class="card-body">
         <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
@@ -5310,6 +5320,14 @@ const CFG = {
   // so a site can tune what counts as "overdue" without editing code.
   get unpaidAlertHours(){ return parseFloat(localStorage.getItem('cfg_unpaid_alert_hours'))||72; },
   get admissionAlertHours(){ return parseFloat(localStorage.getItem('cfg_admission_alert_hours'))||4; },
+  // SMS provider (Phase 8) — same localStorage-only pattern as the Supabase
+  // URL/key: entered at runtime per deployment, never committed. Generic
+  // "POST {to, message, ...} with a Bearer token" shape, since no specific
+  // provider is wired in — see sendSms()'s comment for what adapting this
+  // to a real provider's exact request format would involve.
+  get smsApiUrl(){ return localStorage.getItem('cfg_sms_api_url')||''; },
+  get smsApiKey(){ return localStorage.getItem('cfg_sms_api_key')||''; },
+  get smsSenderId(){ return localStorage.getItem('cfg_sms_sender_id')||''; },
 };
 
 const ROLE_PAGES = {
@@ -5754,6 +5772,7 @@ function goPage(p) {
   else if(p==='labhistory'){ setD('lh-from',new Date(Date.now()-7*864e5).toISOString().slice(0,10)); setD('lh-to',td); }
   else if(p==='tat'){ setD('tat-filter-date',td); run(loadTat); }
   else if(p==='inventory') run(loadInventory);
+  else if(p==='delivery') run(loadDeliveryLog);
   else if(p==='staff') run(loadStaff);
   else if(p==='doctors') run(loadDoctors);
   else if(p==='radiology') run(loadRadRequests);
@@ -5786,6 +5805,9 @@ function loadSettings() {
   g('cfg-email','cfg_email'); g('cfg-currency','cfg_currency'); g('cfg-lab-prefix','cfg_lab_prefix'); g('cfg-footer','cfg_footer');
   const uah=document.getElementById('cfg-unpaid-alert-hours'); if(uah) uah.value=CFG.unpaidAlertHours;
   const aah=document.getElementById('cfg-admission-alert-hours'); if(aah) aah.value=CFG.admissionAlertHours;
+  const su=document.getElementById('cfg-sms-api-url'); if(su) su.value=CFG.smsApiUrl;
+  const sk=document.getElementById('cfg-sms-api-key'); if(sk) sk.value=CFG.smsApiKey;
+  const ss=document.getElementById('cfg-sms-sender-id'); if(ss) ss.value=CFG.smsSenderId;
   const cu=document.getElementById('cfg-sb-url'); if(cu) cu.value=localStorage.getItem('sb_url')||'';
   const ck=document.getElementById('cfg-sb-key'); if(ck) ck.value=localStorage.getItem('sb_key')||'';
   loadBedConfig();
@@ -5836,6 +5858,8 @@ function saveSettings() {
   localStorage.setItem('cfg_footer',g('cfg-footer'));
   const uah=parseFloat(g('cfg-unpaid-alert-hours')); localStorage.setItem('cfg_unpaid_alert_hours', (isNaN(uah)||uah<=0)?72:uah);
   const aah=parseFloat(g('cfg-admission-alert-hours')); localStorage.setItem('cfg_admission_alert_hours', (isNaN(aah)||aah<=0)?4:aah);
+  localStorage.setItem('cfg_sms_api_url',g('cfg-sms-api-url')); localStorage.setItem('cfg_sms_api_key',g('cfg-sms-api-key'));
+  localStorage.setItem('cfg_sms_sender_id',g('cfg-sms-sender-id'));
   const st=document.getElementById('cfg-status'); if(st){ st.textContent='✅ Settings saved'; setTimeout(()=>st.textContent='',3000); }
   toast('Settings saved','ok');
   refreshNotifications();
@@ -6160,6 +6184,66 @@ async function notifJumpToAdmission(patientId){
 function notifJumpToInventory(){
   closeNotifPanel();
   goPage('inventory');
+}
+
+// ── SMS (Phase 8) ──────────────────────────────────────
+// Generic REST send — cannot be tested against a real gateway in this
+// environment (no provider account/credentials exist here). The request
+// shape ({to, message, sender} as JSON with a Bearer token) matches most
+// SMS gateway APIs directly, but isn't guaranteed to match whichever
+// specific provider ends up configured; adjust the fetch() body/headers
+// below to match that provider's actual API once chosen. Every attempt is
+// logged to sms_log via dbWrite (offline-safe, same as every other write
+// in this app) regardless of whether the send itself succeeds, so there's
+// always a record of what was tried.
+async function sendSms(phone, message, purpose, patientId){
+  if(!phone){ toast('No phone number on file','err'); return {ok:false, error:'no_phone'}; }
+  if(!CFG.smsApiUrl){ toast('SMS provider not configured — see Settings','err'); return {ok:false, error:'not_configured'}; }
+  let ok=false, errorMsg=null;
+  try{
+    const res=await fetch(CFG.smsApiUrl, {
+      method:'POST',
+      headers:{'Content-Type':'application/json', 'Authorization':'Bearer '+CFG.smsApiKey},
+      body:JSON.stringify({to:phone, message, sender:CFG.smsSenderId||undefined})
+    });
+    ok=res.ok;
+    if(!ok) errorMsg='HTTP '+res.status;
+  }catch(e){ errorMsg=e.message||'Network error'; }
+  try{
+    await dbWrite('sms_log','insert',{
+      patient_id:patientId||null, phone, message, purpose:purpose||'other',
+      status:ok?'sent':'failed', error:errorMsg, sent_by:currentProfile?.id,
+      sent_by_name:currentProfile?.full_name||''
+    });
+  }catch(e){ /* logging failure shouldn't mask the send result */ }
+  toast(ok?'📲 SMS sent':'⚠️ SMS failed: '+errorMsg, ok?'ok':'err');
+  return {ok, error:errorMsg};
+}
+async function sendAppointmentReminder(apptId, phone, patientName, apptDate, apptTime){
+  const msg=(CFG.name||'Hospital')+': Reminder — '+patientName+', you have an appointment on '+apptDate+(apptTime?' at '+apptTime:'')+'. Please arrive 15 minutes early.';
+  await sendSms(phone, msg, 'appointment_reminder', null);
+}
+async function sendResultReadySms(patientId, phone, patientName){
+  const msg=(CFG.name||'Hospital')+': '+patientName+', your lab results are ready. Please contact the laboratory or your doctor to collect them.';
+  await sendSms(phone, msg, 'result_ready', patientId);
+}
+async function loadDeliveryLog(){
+  const body=document.getElementById('delivery-log-body'); if(!body||!sb) return;
+  body.innerHTML='<div class="spin-center"><div class="spinner"></div>Loading…</div>';
+  try{
+    const {data}=await sb.from('sms_log').select('*').order('created_at',{ascending:false}).limit(100);
+    if(!data?.length){ body.innerHTML='<div class="empty-state"><div class="empty-icon">📲</div><div class="empty-title">No messages sent yet</div></div>'; return; }
+    const purposeLabels={appointment_reminder:'Appointment Reminder', result_ready:'Result Ready', other:'Other'};
+    body.innerHTML='<div style="overflow-x:auto"><table class="tbl" style="font-size:.78rem"><thead><tr><th>Time</th><th>Phone</th><th>Purpose</th><th>Message</th><th>Status</th><th>Sent By</th></tr></thead><tbody>'+
+      data.map(m=>'<tr>'+
+        '<td style="font-size:.72rem;color:var(--slate)">'+fmtDT(m.created_at)+'</td>'+
+        '<td style="font-family:DM Mono,monospace;font-size:.72rem">'+(m.phone||'—')+'</td>'+
+        '<td>'+(purposeLabels[m.purpose]||m.purpose||'—')+'</td>'+
+        '<td style="max-width:280px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+(m.message||'').replace(/"/g,'&quot;')+'">'+(m.message||'—')+'</td>'+
+        '<td>'+(m.status==='sent'?'<span class="bdg" style="background:#dcfce7;color:#166534">✅ Sent</span>':'<span class="bdg" style="background:#fee2e2;color:#b91c1c" title="'+(m.error||'').replace(/"/g,'&quot;')+'">❌ Failed</span>')+'</td>'+
+        '<td style="font-size:.72rem">'+(m.sent_by_name||'—')+'</td>'+
+      '</tr>').join('')+'</tbody></table></div>';
+  }catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+e.message+'</div>'; }
 }
 document.addEventListener('click', (e)=>{
   const wrap=document.getElementById('notif-bell-wrap'), panel=document.getElementById('notif-panel');
@@ -7175,7 +7259,9 @@ async function loadAppointments() {
   try {
     const fd=document.getElementById('appt-filter-date')?.value||today();
     const [{data:todayA},{data:allA}]=await Promise.all([sb.from('appointments').select('*').eq('appointment_date',today()).order('appointment_time'),sb.from('appointments').select('*').eq('appointment_date',fd).order('appointment_time')]);
-    const rr=a=>'<tr><td>'+( a.appointment_time||'—')+'</td><td>'+(a.patient_name||'—')+'</td><td>'+statusBadge(a.appt_type)+'</td><td>'+(a.doctor||'—')+'</td><td>'+statusBadge(a.status)+'</td><td><div class="acts"><button class="btn btn-s btn-xs" onclick="updateApptStatus(\''+a.id+'\',\'Arrived\')">✅</button><button class="btn btn-r btn-xs" onclick="updateApptStatus(\''+a.id+'\',\'Cancelled\')">✕</button></div></td></tr>';
+    const rr=a=>'<tr><td>'+( a.appointment_time||'—')+'</td><td>'+(a.patient_name||'—')+'</td><td>'+statusBadge(a.appt_type)+'</td><td>'+(a.doctor||'—')+'</td><td>'+statusBadge(a.status)+'</td><td><div class="acts">'+
+      (a.phone?'<button class="btn btn-s btn-xs" onclick="sendAppointmentReminder(\''+a.id+'\',\''+a.phone+'\',\''+(a.patient_name||'').replace(/'/g,'')+'\',\''+a.appointment_date+'\',\''+(a.appointment_time||'')+'\')" title="Send SMS reminder">📲</button>':'')+
+      '<button class="btn btn-s btn-xs" onclick="updateApptStatus(\''+a.id+'\',\'Arrived\')">✅</button><button class="btn btn-r btn-xs" onclick="updateApptStatus(\''+a.id+'\',\'Cancelled\')">✕</button></div></td></tr>';
     const waiting=(todayA||[]).filter(a=>a.status!=='Cancelled');
     waitBody.innerHTML=waiting.length?'<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Time</th><th>Patient</th><th>Type</th><th>Doctor</th><th>Status</th><th></th></tr></thead><tbody>'+waiting.map(rr).join('')+'</tbody></table></div>':'<div class="empty-state"><div class="empty-icon">🚶</div><div class="empty-title">No patients waiting today</div></div>';
     listBody.innerHTML=allA?.length?'<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Time</th><th>Patient</th><th>Type</th><th>Doctor</th><th>Status</th><th></th></tr></thead><tbody>'+allA.map(rr).join('')+'</tbody></table></div>':'<div class="empty-state"><div class="empty-icon">📅</div><div class="empty-title">No appointments on this date</div></div>';
@@ -7191,7 +7277,7 @@ async function saveAppointment() {
   const g=id=>document.getElementById(id)?.value||'';
   if(!g('appt-name')||!g('appt-date')){ toast('Name and date required','err'); return; }
   try {
-    await sb.from('appointments').insert({patient_name:g('appt-name'),appointment_date:g('appt-date'),appointment_time:g('appt-time')||null,appt_type:g('appt-type'),doctor:g('appt-doctor'),notes:g('appt-notes'),status:'Booked',created_by:currentProfile?.id});
+    await sb.from('appointments').insert({patient_name:g('appt-name'),phone:g('appt-phone'),appointment_date:g('appt-date'),appointment_time:g('appt-time')||null,appt_type:g('appt-type'),doctor:g('appt-doctor'),notes:g('appt-notes'),status:'Booked',created_by:currentProfile?.id});
     toast('✅ Appointment booked','ok'); ['appt-name','appt-phone','appt-notes'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; }); loadAppointments();
   } catch(e){ toast(e.message,'err'); }
 }
@@ -7510,7 +7596,7 @@ async function loadAllResults() {
     }
     if(!results.length){ body.innerHTML='<div class="empty-state">No results found</div>'; return; }
     const ptIds=[...new Set(results.map(r=>r.patient_id))];
-    const {data:pts}=await sb.from('patients').select('id,name,first_name,last_name,mrn,lab_no,age,sex').in('id',ptIds);
+    const {data:pts}=await sb.from('patients').select('id,name,first_name,last_name,mrn,lab_no,age,sex,phone').in('id',ptIds);
     const ptMap={}; (pts||[]).forEach(p=>ptMap[p.id]=p);
     results.sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
     const deptColors={haematology:'#dbeafe',chemistry:'#dcfce7',serology:'#ede9fe',microbiology:'#fce7f3',pcr:'#fef3c7',histopathology:'#fee2e2',cytology:'#ecfdf5'};
@@ -7527,6 +7613,7 @@ async function loadAllResults() {
           '<td><div class="acts">'+
             '<button class="btn btn-p btn-xs" onclick="openEnterModalDept(\x27'+r.patient_id+'\x27,\x27'+r.dept+'\x27)">\ud83d\udcdd View/Edit</button>'+
             '<button class="btn btn-s btn-xs" onclick="printResultByDept(\x27'+r.patient_id+'\x27,\x27'+r.dept+'\x27)">\ud83d\udda8</button>'+
+            (r.is_verified&&pt.phone?'<button class="btn btn-s btn-xs" onclick="sendResultReadySms(\x27'+r.patient_id+'\x27,\x27'+pt.phone+'\x27,\x27'+((pt.name||fullName(pt)||'').replace(/\x27/g,''))+'\x27)" title="Send SMS: results ready">\ud83d\udcf2</button>':'')+
           '</div></td></tr>';
       }).join('')+'</tbody></table></div>';
   } catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red)">'+e.message+'</div>'; }
