@@ -6031,7 +6031,7 @@ function goPage(p) {
   else if(p==='fluid-chart'){ setD('fc-date',td); run(loadFluidChart); }
   else if(p==='consultation'){ run(loadDoctorQueue); run(buildOrderTestPanel); setD('doc-date',td); }
   else if(p==='appointments'){ run(loadAppointments); run(loadApptDoctors); setD('appt-date',td); setD('appt-filter-date',td); }
-  else if(p==='billing'){ run(loadBilling); run(buildBillLineItems); }
+  else if(p==='billing'){ run(loadBilling); }
   else if(p==='prices') run(loadPriceEditor);
   else if(p==='register'){ initRegForm(); run(loadRecentPatients); run(populateDoctorDropdown); }
   else if(p==='worklist') run(loadWorklist);
@@ -8569,10 +8569,10 @@ function jumpToInvoice(id){
   closeGlobalSearch();
   const input=document.getElementById('gs-input'); if(input) input.value='';
   goPage('billing');
-  // goPage's billing init (loadBilling/buildBillLineItems) fires
-  // async/fire-and-forget — give it a moment to settle before editInvoice()
-  // populates the same form, matching the setTimeout pattern goPage()
-  // itself already uses for other pages' post-navigation init work.
+  // goPage's billing init (loadBilling) fires async/fire-and-forget — give
+  // it a moment to settle before editInvoice() populates the same form,
+  // matching the setTimeout pattern goPage() itself already uses for other
+  // pages' post-navigation init work.
   setTimeout(()=>editInvoice(id), 250);
 }
 document.addEventListener('click', (e)=>{
