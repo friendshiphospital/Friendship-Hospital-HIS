@@ -2063,24 +2063,24 @@ html[dir="rtl"] body{direction:rtl;}
           </div>
           <input type="hidden" id="r-existing-mrn">
           <div class="g3">
-            <div class="fg"><label class="fl">First Name *</label><input class="fc" id="r-fname" placeholder="First name" oninput="regValidate()"></div>
-            <div class="fg"><label class="fl">Middle Name</label><input class="fc" id="r-mname"></div>
-            <div class="fg"><label class="fl">Last Name</label><input class="fc" id="r-lname" oninput="regValidate()"></div>
+            <div class="fg"><label class="fl" data-i18n="reg_fname">First Name *</label><input class="fc" id="r-fname" placeholder="First name" oninput="regValidate()"></div>
+            <div class="fg"><label class="fl" data-i18n="reg_mname">Middle Name</label><input class="fc" id="r-mname"></div>
+            <div class="fg"><label class="fl" data-i18n="reg_lname">Last Name</label><input class="fc" id="r-lname" oninput="regValidate()"></div>
           </div>
           <div class="g4">
-            <div class="fg"><label class="fl">Age *</label><input class="fc" type="number" id="r-age" min="0" oninput="regValidate()"></div>
-            <div class="fg"><label class="fl">Unit</label><select class="fc" id="r-age-unit"><option>Years</option><option>Months</option><option>Days</option></select></div>
-            <div class="fg"><label class="fl">Sex *</label><select class="fc" id="r-sex" onchange="regValidate()"><option value="">—</option><option>Male</option><option>Female</option></select></div>
-            <div class="fg"><label class="fl">D.O.B</label><input class="fc" type="date" id="r-dob" onchange="calcAgeFromDob()"></div>
+            <div class="fg"><label class="fl" data-i18n="reg_age">Age *</label><input class="fc" type="number" id="r-age" min="0" oninput="regValidate()"></div>
+            <div class="fg"><label class="fl" data-i18n="reg_unit">Unit</label><select class="fc" id="r-age-unit"><option>Years</option><option>Months</option><option>Days</option></select></div>
+            <div class="fg"><label class="fl" data-i18n="reg_sex">Sex *</label><select class="fc" id="r-sex" onchange="regValidate()"><option value="">—</option><option>Male</option><option>Female</option></select></div>
+            <div class="fg"><label class="fl" data-i18n="reg_dob">D.O.B</label><input class="fc" type="date" id="r-dob" onchange="calcAgeFromDob()"></div>
           </div>
           <div class="g2">
-            <div class="fg"><label class="fl">Mobile Number *</label><input class="fc" id="r-phone" type="tel" placeholder="09XXXXXXXX" required oninput="regValidate();onPhoneNumberInput(this.value)">
+            <div class="fg"><label class="fl" data-i18n="reg_phone">Mobile Number *</label><input class="fc" id="r-phone" type="tel" placeholder="09XXXXXXXX" required oninput="regValidate();onPhoneNumberInput(this.value)">
               <div id="r-phone-check-hint" style="font-size:.68rem;color:var(--teal);margin-top:2px"></div></div>
-            <div class="fg"><label class="fl">National ID</label><input class="fc" id="r-national-id"></div>
+            <div class="fg"><label class="fl" data-i18n="reg_national_id">National ID</label><input class="fc" id="r-national-id"></div>
           </div>
           <div class="g2">
-            <div class="fg"><label class="fl">Next of Kin Name</label><input class="fc" id="r-kin-name"></div>
-            <div class="fg"><label class="fl">Kin Phone</label><input class="fc" id="r-kin-phone" type="tel"></div>
+            <div class="fg"><label class="fl" data-i18n="reg_kin_name">Next of Kin Name</label><input class="fc" id="r-kin-name"></div>
+            <div class="fg"><label class="fl" data-i18n="reg_kin_phone">Kin Phone</label><input class="fc" id="r-kin-phone" type="tel"></div>
           </div>
           <button class="btn btn-p" onclick="regGoStep(2)" style="width:100%;margin-top:10px;justify-content:center" id="reg-step1-next" disabled>Next: Visit Details →</button>
         </div>
@@ -2093,13 +2093,13 @@ html[dir="rtl"] body{direction:rtl;}
         </div>
         <div class="card-body">
           <div class="g2">
-            <div class="fg"><label class="fl">Patient Type</label>
+            <div class="fg"><label class="fl" data-i18n="reg_patient_type">Patient Type</label>
               <select class="fc" id="r-patient-type">
                 <option>Outpatient</option><option>Inpatient</option>
                 <option>Emergency</option><option>External Referral</option>
               </select>
             </div>
-            <div class="fg"><label class="fl">Priority</label>
+            <div class="fg"><label class="fl" data-i18n="reg_priority">Priority</label>
               <select class="fc" id="r-priority">
                 <option>Routine</option><option>Urgent</option>
                 <option>STAT</option><option>Critical</option>
@@ -2131,7 +2131,7 @@ html[dir="rtl"] body{direction:rtl;}
           </div>
           <input type="hidden" id="r-destination" value="">
 
-          <div class="fg" style="margin-top:8px"><label class="fl">Referring Doctor</label>
+          <div class="fg" style="margin-top:8px"><label class="fl" data-i18n="reg_ref_doctor">Referring Doctor</label>
             <select class="fc" id="r-doc" onchange="onDoctorSelect(this.value)">
               <option value="">Select…</option>
               <optgroup label="Clinic Doctors" id="r-doc-clinic-group"></optgroup>
@@ -2139,14 +2139,14 @@ html[dir="rtl"] body{direction:rtl;}
             </select>
             <input class="fc" id="r-doc-ext" placeholder="External doctor name" style="display:none;margin-top:5px">
           </div>
-          <div class="fg"><label class="fl">Ward / Source</label>
+          <div class="fg"><label class="fl" data-i18n="reg_ward_source">Ward / Source</label>
             <select class="fc" id="r-ward">
               <option>OPD</option><option>Emergency</option><option>ICU</option>
               <option>Surgical Ward</option><option>Medical Ward</option>
               <option>Antenatal</option><option>External</option>
             </select>
           </div>
-          <div class="fg"><label class="fl">Diagnosis / Complaint</label>
+          <div class="fg"><label class="fl" data-i18n="reg_diagnosis">Diagnosis / Complaint</label>
             <input class="fc" id="r-diagnosis" placeholder="Chief complaint or preliminary diagnosis">
           </div>
 
@@ -2154,13 +2154,13 @@ html[dir="rtl"] body{direction:rtl;}
           <div id="reg-doctor-section" style="display:none;margin-top:10px;padding:10px 12px;background:var(--bg);border:1.5px solid var(--border);border-radius:9px">
             <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:var(--slate);margin-bottom:8px">🩺 Consultation Details</div>
             <div class="g2">
-              <div class="fg"><label class="fl">Visit Type</label>
+              <div class="fg"><label class="fl" data-i18n="reg_visit_type">Visit Type</label>
                 <select class="fc" id="r-doc-visit-type">
                   <option>New Consultation</option><option>Follow-up</option>
                   <option>Review</option><option>Second Opinion</option>
                 </select>
               </div>
-              <div class="fg"><label class="fl">Clinic / Department</label>
+              <div class="fg"><label class="fl" data-i18n="reg_clinic_dept">Clinic / Department</label>
                 <select class="fc" id="r-doc-dept">
                   <option>General OPD</option><option>Paediatrics</option>
                   <option>Obstetrics & Gynaecology</option><option>Surgery</option>
@@ -2174,7 +2174,7 @@ html[dir="rtl"] body{direction:rtl;}
           <!-- Radiology panel — shown only when dest = radiology -->
           <div id="reg-radiology-section" style="display:none;margin-top:10px;padding:10px 12px;background:var(--bg);border:1.5px solid var(--border);border-radius:9px">
             <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:var(--slate);margin-bottom:8px">🩻 Imaging Request</div>
-            <div class="fg"><label class="fl">Imaging Type</label>
+            <div class="fg"><label class="fl" data-i18n="reg_imaging_type">Imaging Type</label>
               <select class="fc" id="r-rad-type" onchange="onRegRadTypeChange()">
                 <option value="">Select imaging study…</option>
                 <option>X-Ray — Chest PA</option>
@@ -2210,16 +2210,16 @@ html[dir="rtl"] body{direction:rtl;}
               </select>
             </div>
             <div class="g2">
-              <div class="fg"><label class="fl">Urgency</label>
+              <div class="fg"><label class="fl" data-i18n="reg_urgency">Urgency</label>
                 <select class="fc" id="r-rad-urgency">
                   <option>Routine</option><option>Urgent</option><option>STAT</option>
                 </select>
               </div>
-              <div class="fg"><label class="fl">Relevant History</label>
+              <div class="fg"><label class="fl" data-i18n="reg_relevant_history">Relevant History</label>
                 <input class="fc" id="r-rad-history" placeholder="Pregnancy, allergy, pacemaker…">
               </div>
             </div>
-            <div class="fg"><label class="fl">Clinical Indication</label>
+            <div class="fg"><label class="fl" data-i18n="reg_clinical_indication">Clinical Indication</label>
               <textarea class="fc" id="r-rad-indication" rows="2" placeholder="Reason for study, specific question to be answered…"></textarea>
             </div>
           </div>
@@ -2228,13 +2228,13 @@ html[dir="rtl"] body{direction:rtl;}
           <div id="reg-admission-section" style="display:none;margin-top:10px;padding:10px 12px;background:var(--bg);border:1.5px solid var(--border);border-radius:9px">
             <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:var(--slate);margin-bottom:8px">🛏 Admission Details</div>
             <div class="g2">
-              <div class="fg"><label class="fl">Admission Type</label>
+              <div class="fg"><label class="fl" data-i18n="reg_admission_type">Admission Type</label>
                 <select class="fc" id="r-adm-type">
                   <option>Elective</option><option>Emergency</option>
                   <option>Planned Surgery</option><option>Maternity</option>
                 </select>
               </div>
-              <div class="fg"><label class="fl">Preferred Ward</label>
+              <div class="fg"><label class="fl" data-i18n="reg_preferred_ward">Preferred Ward</label>
                 <select class="fc" id="r-adm-ward">
                   <option>Medical Ward</option><option>Surgical Ward</option>
                   <option>ICU</option><option>Antenatal</option>
@@ -2243,14 +2243,14 @@ html[dir="rtl"] body{direction:rtl;}
               </div>
             </div>
             <div class="g2">
-              <div class="fg"><label class="fl">Est. Length of Stay (days)</label>
+              <div class="fg"><label class="fl" data-i18n="reg_los">Est. Length of Stay (days)</label>
                 <input class="fc" type="number" min="0" id="r-adm-los" placeholder="e.g. 3">
               </div>
-              <div class="fg"><label class="fl">Attending Consultant</label>
+              <div class="fg"><label class="fl" data-i18n="reg_consultant">Attending Consultant</label>
                 <input class="fc" id="r-adm-consultant" placeholder="Consultant name">
               </div>
             </div>
-            <div class="fg"><label class="fl">Reason for Admission</label>
+            <div class="fg"><label class="fl" data-i18n="reg_adm_reason">Reason for Admission</label>
               <textarea class="fc" id="r-adm-reason" rows="2" placeholder="Presenting complaint requiring admission…"></textarea>
             </div>
             <div style="font-size:.72rem;color:var(--slate);margin-top:4px">ℹ️ Bed allocation is finalised on the Admission page once the patient arrives on the ward.</div>
@@ -2282,8 +2282,8 @@ html[dir="rtl"] body{direction:rtl;}
           </div>
 
           <div class="g2" style="margin-top:10px">
-            <div class="fg"><label class="fl">Insurance Co.</label><input class="fc" id="r-ins-co"></div>
-            <div class="fg"><label class="fl">Insurance No.</label><input class="fc" id="r-ins-no"></div>
+            <div class="fg"><label class="fl" data-i18n="reg_ins_co">Insurance Co.</label><input class="fc" id="r-ins-co"></div>
+            <div class="fg"><label class="fl" data-i18n="reg_ins_no">Insurance No.</label><input class="fc" id="r-ins-no"></div>
           </div>
           <label class="chk-item" style="margin-top:10px"><input type="checkbox" id="r-consent"> Patient / guardian consent obtained</label>
           <button class="btn btn-p" onclick="regGoStep(3)" style="width:100%;margin-top:12px;justify-content:center" id="reg-step2-next">Next: Payment →</button>
@@ -2305,7 +2305,7 @@ html[dir="rtl"] body{direction:rtl;}
           </div>
 
           <div class="g2">
-            <div class="fg"><label class="fl">Payment Method</label>
+            <div class="fg"><label class="fl" data-i18n="reg_pay_method">Payment Method</label>
               <select class="fc" id="r-pay-method" onchange="onPayMethodChange()">
                 <option value="cash">Cash</option>
                 <option value="insurance">Insurance</option>
@@ -2314,7 +2314,7 @@ html[dir="rtl"] body{direction:rtl;}
                 <option value="waiver">Waiver</option>
               </select>
             </div>
-            <div class="fg"><label class="fl">Payment Status</label>
+            <div class="fg"><label class="fl" data-i18n="reg_pay_status">Payment Status</label>
               <select class="fc" id="r-pay-status">
                 <option value="paid">Paid ✅</option>
                 <option value="unpaid">Unpaid ⚠️</option>
@@ -2326,12 +2326,12 @@ html[dir="rtl"] body{direction:rtl;}
           </div>
           <div id="reg-ins-fields" style="display:none">
             <div class="g3">
-              <div class="fg"><label class="fl">Insurance Co.</label><input class="fc" id="r-pay-ins-co"></div>
-              <div class="fg"><label class="fl">Policy No.</label><input class="fc" id="r-pay-ins-no"></div>
-              <div class="fg"><label class="fl">Pre-auth No.</label><input class="fc" id="r-pay-preauth"></div>
+              <div class="fg"><label class="fl" data-i18n="reg_ins_co">Insurance Co.</label><input class="fc" id="r-pay-ins-co"></div>
+              <div class="fg"><label class="fl" data-i18n="reg_policy_no">Policy No.</label><input class="fc" id="r-pay-ins-no"></div>
+              <div class="fg"><label class="fl" data-i18n="reg_preauth_no">Pre-auth No.</label><input class="fc" id="r-pay-preauth"></div>
             </div>
           </div>
-          <div class="fg"><label class="fl">Amount Paid (SDG)</label>
+          <div class="fg"><label class="fl" data-i18n="reg_amount_paid">Amount Paid (SDG)</label>
             <input class="fc" type="number" id="r-pay-amount" min="0" step="0.01" placeholder="0.00">
           </div>
           <div class="fg"><label class="fl">Notes</label>
@@ -5404,6 +5404,26 @@ const I18N = {
     page_delivery:'Result Delivery', page_settings:'Settings',
 
     login_email:'Email', login_password:'Password', login_signin:'Sign In',
+
+    // Register Patient form labels (Phase 4 follow-up) — the highest-traffic
+    // page in the app, translated first among the "much larger scope" form
+    // labels flagged as deferred when Phase 4 shipped.
+    reg_fname:'First Name *', reg_mname:'Middle Name', reg_lname:'Last Name',
+    reg_age:'Age *', reg_unit:'Unit', reg_sex:'Sex *', reg_dob:'D.O.B',
+    reg_phone:'Mobile Number *', reg_national_id:'National ID',
+    reg_kin_name:'Next of Kin Name', reg_kin_phone:'Kin Phone',
+    reg_patient_type:'Patient Type', reg_priority:'Priority',
+    reg_ref_doctor:'Referring Doctor', reg_ward_source:'Ward / Source',
+    reg_diagnosis:'Diagnosis / Complaint', reg_visit_type:'Visit Type',
+    reg_clinic_dept:'Clinic / Department', reg_imaging_type:'Imaging Type',
+    reg_urgency:'Urgency', reg_relevant_history:'Relevant History',
+    reg_clinical_indication:'Clinical Indication', reg_admission_type:'Admission Type',
+    reg_preferred_ward:'Preferred Ward', reg_los:'Est. Length of Stay (days)',
+    reg_consultant:'Attending Consultant', reg_adm_reason:'Reason for Admission',
+    reg_ins_co:'Insurance Co.', reg_ins_no:'Insurance No.',
+    reg_pay_method:'Payment Method', reg_pay_status:'Payment Status',
+    reg_policy_no:'Policy No.', reg_preauth_no:'Pre-auth No.',
+    reg_amount_paid:'Amount Paid (SDG)',
   },
   ar: {
     navgrp_overview:'نظرة عامة', navgrp_reception:'🏥 الاستقبال', navgrp_hospital:'🏥 المستشفى',
@@ -5442,6 +5462,23 @@ const I18N = {
     page_delivery:'تسليم النتائج', page_settings:'الإعدادات',
 
     login_email:'البريد الإلكتروني', login_password:'كلمة المرور', login_signin:'تسجيل الدخول',
+
+    reg_fname:'الاسم الأول *', reg_mname:'الاسم الأوسط', reg_lname:'اسم العائلة',
+    reg_age:'العمر *', reg_unit:'الوحدة', reg_sex:'الجنس *', reg_dob:'تاريخ الميلاد',
+    reg_phone:'رقم الهاتف المحمول *', reg_national_id:'الرقم الوطني',
+    reg_kin_name:'اسم أقرب الأقارب', reg_kin_phone:'هاتف القريب',
+    reg_patient_type:'نوع المريض', reg_priority:'الأولوية',
+    reg_ref_doctor:'الطبيب المحوّل', reg_ward_source:'الجناح / المصدر',
+    reg_diagnosis:'التشخيص / الشكوى', reg_visit_type:'نوع الزيارة',
+    reg_clinic_dept:'العيادة / القسم', reg_imaging_type:'نوع التصوير',
+    reg_urgency:'درجة الاستعجال', reg_relevant_history:'التاريخ المرضي ذو الصلة',
+    reg_clinical_indication:'الإشارة السريرية', reg_admission_type:'نوع القبول',
+    reg_preferred_ward:'الجناح المفضل', reg_los:'مدة الإقامة المتوقعة (أيام)',
+    reg_consultant:'الاستشاري المعالج', reg_adm_reason:'سبب القبول',
+    reg_ins_co:'شركة التأمين', reg_ins_no:'رقم التأمين',
+    reg_pay_method:'طريقة الدفع', reg_pay_status:'حالة الدفع',
+    reg_policy_no:'رقم البوليصة', reg_preauth_no:'رقم الموافقة المسبقة',
+    reg_amount_paid:'المبلغ المدفوع (جنيه سوداني)',
   }
 };
 function t(key){
