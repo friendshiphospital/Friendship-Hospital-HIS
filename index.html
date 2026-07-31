@@ -1949,8 +1949,19 @@ html[dir="rtl"] body{direction:rtl;}
               </select>
             </div>
           </div>
+          <div class="fg"><label class="fl">Insurance Provider</label>
+            <select class="fc" id="bill-ins-co-picker" onchange="onInsProviderPick()">
+              <option value="">— Select provider —</option>
+              <option>National Health Insurance Fund (NHIF)</option>
+              <option>Shifa Insurance</option>
+              <option>Blue Nile Cooperative Insurance</option>
+              <option>Sudanese Insurance &amp; Reinsurance Co.</option>
+              <option>UN / NGO Staff Medical Insurance</option>
+              <option value="__other__">Other (type manually)</option>
+            </select>
+          </div>
           <div class="g3">
-            <div class="fg"><label class="fl">Insurance Co.</label><input class="fc" id="bill-ins-co" placeholder="Company name" oninput="recalcInsurance()"></div>
+            <div class="fg" id="bill-ins-co-manual-wrap" style="display:none"><label class="fl">Insurance Company (manual)</label><input class="fc" id="bill-ins-co" placeholder="Company name" oninput="recalcInsurance()"></div>
             <div class="fg"><label class="fl">Policy No.</label><input class="fc" id="bill-ins-no"></div>
             <div class="fg"><label class="fl">Pre-auth No. <span id="bill-preauth-req" style="color:var(--red);display:none">*</span></label><input class="fc" id="bill-preauth"></div>
           </div>
@@ -2040,6 +2051,23 @@ html[dir="rtl"] body{direction:rtl;}
 </div>
 
 <!-- ═══════════ SHIFT MANAGEMENT MODALS ═══════════ -->
+
+<!-- Shift enforcement — shown by requireActiveShift() when a billing/
+     registration/appointment action is attempted with no shift open, in
+     place of jumping straight into the Open Shift form. -->
+<div class="ov" id="shift-required-ov">
+  <div class="mo mo-sm">
+    <div class="shift-required-banner" style="margin:0;border-radius:14px 14px 0 0">
+      <div class="srb-icon">🔒</div>
+      <h3>Reception Shift Required</h3>
+      <p>You must open a reception shift before registering patients, booking appointments, or creating invoices — this keeps every transaction properly tracked and reconciled to a cashier and till.</p>
+    </div>
+    <div class="mo-ft" style="justify-content:center">
+      <button class="btn btn-s" onclick="closeOv('shift-required-ov')">Not Now</button>
+      <button class="btn btn-p" onclick="closeOv('shift-required-ov');openShiftModal()">🟢 Open Shift Now</button>
+    </div>
+  </div>
+</div>
 
 <!-- Open Shift -->
 <div class="ov" id="shift-open-ov">
@@ -6329,6 +6357,16 @@ function openPrintWin(html, title='Print') {
   w.document.write('<!DOCTYPE html><html><head><title>'+title+'</title><link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"><style>@page{size:A4;margin:15mm}*{box-sizing:border-box}body{font-family:DM Sans,sans-serif;font-size:10.5pt;color:#0e1928;background:#fff;padding:5mm}table{width:100%;border-collapse:collapse}th{background:#f8fafd;padding:5px 9px;font-size:9pt;text-align:left;border-bottom:1px solid #e2e8f3}td{padding:5px 9px;font-size:9.5pt;border-bottom:1px solid #f1f5fb}.no-print{display:flex;background:#0e1928;color:#fff;padding:8px 14px;justify-content:space-between;align-items:center;gap:10px}@media print{.no-print{display:none!important}}</style></head><body><div class="no-print"><span style="font-size:.82rem"><strong>🏥 Friendship Hospital — Al Damazin</strong></span><button onclick="window.print()" style="background:#0b7a75;color:#fff;border:none;padding:8px 18px;border-radius:6px;font-size:.82rem;font-weight:700;cursor:pointer">🖨️ Print</button></div><div style="padding:5mm">'+html+'</div></body></html>');
   w.document.close();
 }
+// Dedicated thermal-width print window (80mm roll paper) — separate from
+// openPrintWin() rather than a parameter on it, since every other document
+// in the app (lab reports, discharge summaries, etc.) is legitimately
+// A4-only and shouldn't carry thermal-specific CSS along for the ride.
+// Currently only printInvoiceThermal() uses this.
+function openPrintWinThermal(html, title='Receipt') {
+  const w=window.open('','_blank','width=380,height=650'); if(!w){ toast('Allow popups','warn'); return; }
+  w.document.write('<!DOCTYPE html><html><head><title>'+title+'</title><style>@page{size:80mm auto;margin:3mm}*{box-sizing:border-box}body{font-family:"DM Mono",Consolas,monospace;font-size:8.5pt;color:#000;background:#fff;width:74mm;padding:0}table{width:100%;border-collapse:collapse}td,th{padding:2px 0;font-size:8pt}.no-print{display:flex;background:#0e1928;color:#fff;padding:6px 10px;justify-content:space-between;align-items:center;gap:8px}@media print{.no-print{display:none!important}}</style></head><body><div class="no-print"><span style="font-size:.72rem">🧾 Thermal Receipt</span><button onclick="window.print()" style="background:#0b7a75;color:#fff;border:none;padding:6px 12px;border-radius:5px;font-size:.72rem;font-weight:700;cursor:pointer">🖨️ Print</button></div><div style="padding:2mm">'+html+'</div></body></html>');
+  w.document.close();
+}
 
 // ── CRITICALS CHECK ───────────────────────────────────
 async function checkCriticals() {
@@ -10446,7 +10484,8 @@ function renderBillTable(invoices) {
         '<td style="font-size:.72rem;color:var(--slate)">'+fmtDate(i.created_at)+'</td>'+
         '<td><div class="acts">'+
           '<button class="btn btn-s btn-xs" onclick="openBillDetail(\''+i.id+'\')">👁</button>'+
-          '<button class="btn btn-s btn-xs" onclick="printInvoice(\''+i.id+'\')" title="'+(i.reprint_count?'Reprint (already printed '+i.reprint_count+'x)':'Print')+'">🖨</button>'+
+          '<button class="btn btn-s btn-xs" onclick="printInvoice(\''+i.id+'\')" title="'+(i.reprint_count?'Reprint A4 (already printed '+i.reprint_count+'x)':'Print A4')+'">🖨</button>'+
+          '<button class="btn btn-s btn-xs" onclick="printInvoiceThermal(\''+i.id+'\')" title="Thermal Receipt (80mm)">🧾</button>'+
           (!i.voided?((i.payment_status!=='paid'?'<button class="btn btn-p btn-xs" onclick="markPaid(\''+i.id+'\')">✅</button>':'')+(i.insurance_company?'<button class="btn btn-s btn-xs" onclick="generateInsuranceClaim(\''+i.id+'\')">🏥</button>':'')+
           '<button class="btn btn-s btn-xs" onclick="editInvoice(\''+i.id+'\')">✏️</button>'+
           (i.payment_status==='paid'||i.payment_status==='partial'?'<button class="btn btn-s btn-xs" onclick="openRefundModal(\''+i.id+'\')" title="Refund">↩</button>':'')+
@@ -10513,7 +10552,7 @@ async function autoFillFromPatient(ptId) {
       document.getElementById('bill-edit-id').value = inv.id;
       document.getElementById('bill-type').value = inv.invoice_type||'lab';
       document.getElementById('bill-discount').value = inv.discount_amount||0;
-      document.getElementById('bill-ins-co').value = inv.insurance_company||'';
+      document.getElementById('bill-ins-co').value = inv.insurance_company||''; syncInsProviderPicker();
       document.getElementById('bill-ins-no').value = inv.insurance_no||'';
       document.getElementById('bill-preauth').value = inv.pre_auth_no||'';
       document.getElementById('bill-notes').value = inv.notes||'';
@@ -10671,7 +10710,7 @@ function requireActiveShift(){
   if(!SHIFT_ROLES.includes(currentProfile?.role)) return true; // guard only applies to billing-capable roles
   if(_activeShift && _activeShift.status==='active') return true;
   toast('⚠️ Open a reception shift before continuing','warn');
-  openShiftModal();
+  openOv('shift-required-ov');
   return false;
 }
 function openShiftModal(){
@@ -10945,6 +10984,34 @@ function recalcInsurance(){
   const ce=document.getElementById('bill-ins-covered'); if(ce) ce.textContent=covered.toFixed(2)+' SDG';
   const pe=document.getElementById('bill-pt-payable'); if(pe) pe.textContent=patientPayable.toFixed(2)+' SDG';
 }
+// The visible control is a <select> of common providers; the actual value
+// saved/read everywhere else in the billing form (saveInvoice, editInvoice,
+// autoFillFromPatient, clearBillForm) stays the plain #bill-ins-co text
+// input, now hidden except for "Other" — so nothing downstream had to
+// change to add provider selection on top of free text.
+function onInsProviderPick(){
+  const sel=document.getElementById('bill-ins-co-picker');
+  const wrap=document.getElementById('bill-ins-co-manual-wrap');
+  const hidden=document.getElementById('bill-ins-co');
+  if(!sel||!wrap||!hidden) return;
+  if(sel.value==='__other__'){ wrap.style.display=''; hidden.value=''; hidden.focus(); }
+  else { wrap.style.display='none'; hidden.value=sel.value; }
+  recalcInsurance();
+}
+// Reflects an already-set #bill-ins-co value (loaded via editInvoice() or
+// autoFillFromPatient()) back onto the picker — matches a known provider
+// if possible, otherwise falls back to "Other" with the manual field shown.
+function syncInsProviderPicker(){
+  const hidden=document.getElementById('bill-ins-co');
+  const sel=document.getElementById('bill-ins-co-picker');
+  const wrap=document.getElementById('bill-ins-co-manual-wrap');
+  if(!hidden||!sel||!wrap) return;
+  const v=hidden.value||'';
+  if(!v){ sel.value=''; wrap.style.display='none'; return; }
+  const known=[...sel.options].some(o=>o.value===v);
+  if(known){ sel.value=v; wrap.style.display='none'; }
+  else { sel.value='__other__'; wrap.style.display=''; }
+}
 let _splitRowIdx = 0;
 function toggleSplitPayment(){
   const on=document.getElementById('bill-split-toggle')?.checked;
@@ -11098,6 +11165,8 @@ function clearBillForm() {
     const el=document.getElementById(id); if(el) el.textContent='0.00 SDG';
   });
   const d=document.getElementById('bill-date'); if(d) d.value=today();
+  const insPicker=document.getElementById('bill-ins-co-picker'); if(insPicker) insPicker.value='';
+  const insManualWrap=document.getElementById('bill-ins-co-manual-wrap'); if(insManualWrap) insManualWrap.style.display='none';
   const copayWrap=document.getElementById('bill-copay-wrap'); if(copayWrap) copayWrap.style.display='none';
   const preauthReq=document.getElementById('bill-preauth-req'); if(preauthReq) preauthReq.style.display='none';
   const splitToggle=document.getElementById('bill-split-toggle'); if(splitToggle) splitToggle.checked=false;
@@ -11237,25 +11306,32 @@ async function editInvoice(id) {
   } catch(e){toast(e.message,'err');}
 }
 
+// Shared by both the A4 (printInvoice) and thermal (printInvoiceThermal)
+// receipt paths so a reprint counts as a reprint regardless of which
+// format was used — the FIRST print of an invoice, in either format, is
+// the original (count becomes 1, no badge); every print after that across
+// EITHER format is a tracked, badged duplicate. Counted server-side on the
+// invoice row itself so it survives across devices/sessions, not just
+// this tab.
+async function trackInvoicePrint(inv){
+  const newCount = (inv.reprint_count||0) + 1;
+  try { await sb.from('invoices').update({reprint_count:newCount}).eq('id',inv.id); } catch(e){}
+  if(newCount > 1) {
+    try {
+      await dbWrite('billing_audit_logs','insert',{
+        event_type:'reprint', invoice_id:inv.id, shift_id:inv.shift_id||_activeShift?.id||null,
+        reason:'Reprint #'+newCount, performed_by:currentProfile?.id, performed_by_name:currentProfile?.full_name
+      });
+    } catch(e){}
+  }
+  return newCount;
+}
 async function printInvoice(id) {
   if(!sb||!id) return;
   try {
     const {data:inv} = await sb.from('invoices').select('*').eq('id',id).single();
     if(!inv){toast('Invoice not found','err');return;}
-    // Reprint tracking (anti-fraud) — the FIRST print of an invoice is the
-    // original (count becomes 1, no badge); every print after that is a
-    // tracked, badged duplicate. Counted server-side on the invoice row
-    // itself so it survives across devices/sessions, not just this tab.
-    const newCount = (inv.reprint_count||0) + 1;
-    try { await sb.from('invoices').update({reprint_count:newCount}).eq('id',id); } catch(e){}
-    if(newCount > 1) {
-      try {
-        await dbWrite('billing_audit_logs','insert',{
-          event_type:'reprint', invoice_id:id, shift_id:inv.shift_id||_activeShift?.id||null,
-          reason:'Reprint #'+newCount, performed_by:currentProfile?.id, performed_by_name:currentProfile?.full_name
-        });
-      } catch(e){}
-    }
+    const newCount = await trackInvoicePrint(inv);
     const items = inv.line_items||[];
     const itemRows = items.map((item,n)=>
       '<tr style="border-bottom:1px solid #f1f5fb;background:'+(n%2?'#f8fafd':'#fff')+'">'+
@@ -11298,6 +11374,40 @@ async function printInvoice(id) {
       '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">Date: '+fmtDate(inv.created_at)+'</div></div>'+
       printFooter();
     openPrintWin(html,'Invoice - '+(inv.invoice_no||''));
+  } catch(e){toast(e.message,'err');}
+}
+
+// 80mm thermal-roll receipt — a compact alternative to printInvoice()'s A4
+// layout for counters using a receipt printer. Shares trackInvoicePrint()
+// so a thermal reprint is counted (and badged) exactly like an A4 one.
+async function printInvoiceThermal(id) {
+  if(!sb||!id) return;
+  try {
+    const {data:inv} = await sb.from('invoices').select('*').eq('id',id).single();
+    if(!inv){toast('Invoice not found','err');return;}
+    const newCount = await trackInvoicePrint(inv);
+    const items = inv.line_items||[];
+    const itemLines = items.map(item=>
+      '<tr><td style="font-size:8pt">'+item.name+' x'+(item.qty||1)+'</td>'+
+      '<td style="text-align:right;font-size:8pt">'+((item.total_price||0).toFixed(2))+'</td></tr>'
+    ).join('');
+    const html =
+      '<div style="text-align:center;margin-bottom:6px"><div style="font-weight:800;font-size:10pt">FRIENDSHIP HOSPITAL</div><div style="font-size:7.5pt">Al Damazin, Blue Nile State</div></div>'+
+      (newCount>1?'<div style="text-align:center;font-weight:800;border:1px solid #000;padding:2px;margin-bottom:6px;font-size:8pt">DUPLICATE REPRINT — COPY #'+newCount+'</div>':'')+
+      (inv.voided?'<div style="text-align:center;font-weight:800;border:1px solid #000;padding:2px;margin-bottom:6px;font-size:8pt">VOIDED INVOICE</div>':'')+
+      '<div style="font-size:8pt;border-top:1px dashed #000;border-bottom:1px dashed #000;padding:4px 0;margin-bottom:6px">'+
+      'Invoice: '+(inv.invoice_no||'—')+'<br>'+
+      (inv.queue_token?('Token: <b style="font-size:11pt">'+inv.queue_token+'</b><br>'):'')+
+      'Date: '+fmtDate(inv.invoice_date||inv.created_at)+'<br>'+
+      'Patient: '+(inv.patient_name||'—')+'<br>'+
+      'Cashier: '+(currentProfile?.full_name||'—')+(_activeShift?(' / '+_activeShift.shift_no):'')+
+      '</div>'+
+      '<table>'+itemLines+'</table>'+
+      '<div style="border-top:1px dashed #000;margin-top:4px;padding-top:4px;display:flex;justify-content:space-between;font-weight:800;font-size:9.5pt">'+
+      '<span>TOTAL</span><span>'+((inv.net_amount||inv.total_amount||0).toFixed(2))+' SDG</span></div>'+
+      '<div style="text-align:center;margin-top:6px;font-size:7.5pt">'+(inv.voided?'VOIDED':(inv.payment_status||'').toUpperCase())+'</div>'+
+      '<div style="text-align:center;margin-top:8px;font-size:7pt">Thank you</div>';
+    openPrintWinThermal(html, 'Receipt - '+(inv.invoice_no||''));
   } catch(e){toast(e.message,'err');}
 }
 
