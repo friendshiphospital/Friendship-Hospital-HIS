@@ -1363,6 +1363,24 @@ html[dir="rtl"] body{direction:rtl;}
       </div>
       <input type="hidden" id="doc-pt-id">
 
+      <!-- Sticky Critical Patient Header — pinned above the tabs while the
+           consultation form scrolls, so name/allergies/vitals/chronic
+           conditions stay visible the whole time a doctor is charting. -->
+      <div id="doc-sticky-bar" style="display:none;position:sticky;top:0;z-index:40;background:#fff;border:1.5px solid var(--border);border-radius:10px;padding:10px 14px;margin-bottom:10px;box-shadow:0 3px 10px rgba(14,25,40,.08)">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px">
+          <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+            <div>
+              <div style="font-weight:800;font-size:1.02rem;color:var(--ink)" id="dsb-name">—</div>
+              <div style="font-size:.74rem;color:var(--slate);margin-top:1px" id="dsb-meta">—</div>
+            </div>
+            <div id="dsb-bg"></div>
+          </div>
+          <div id="dsb-vitals" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+        </div>
+        <div id="dsb-allergies" style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center"></div>
+        <div id="dsb-chronic" style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;align-items:center"></div>
+      </div>
+
       <!-- Tabs -->
       <div class="tabs" id="doc-tabs" style="margin-bottom:0">
         <button class="tab active" onclick="switchDocTab('notes',this)">📝 Consultation</button>
@@ -7506,7 +7524,79 @@ function selectDocPatient(p) {
   const dd=document.getElementById('doc-date'); if(dd&&!dd.value) dd.value=today();
   const sf=document.getElementById('sl-from'); if(sf&&!sf.value){sf.value=today();calcSlTo();}
   const dx=document.getElementById('doc-dx1'); if(dx&&!dx.value&&p.diagnosis) dx.value=p.diagnosis;
-  loadActiveOrders(); buildOrderTestPanel(); loadPatientHistory(p.id); loadDocVitals(p.id);
+  loadActiveOrders(); buildOrderTestPanel(); loadPatientHistory(p.id); loadDocVitals(p.id); loadDocStickyHeader(p);
+}
+
+// ── STICKY CRITICAL PATIENT HEADER (Consultation) ──────
+// Keyword rules used to surface chronic-condition tags from the most
+// recent consultation's Past Medical History text — there's no structured
+// chronic-conditions field on the patient record, so this is a heuristic
+// prompt for the doctor to double-check, not a coded diagnosis list.
+const CHRONIC_TAG_RULES = [
+  {re:/type\s*2.*(diabet|\bdm\b)|(diabet|\bdm\b).*type\s*2|\bt2dm\b|\bniddm\b/i, label:'[Diabetes Type 2]'},
+  {re:/type\s*1.*(diabet|\bdm\b)|(diabet|\bdm\b).*type\s*1|\bt1dm\b|\biddm\b/i, label:'[Diabetes Type 1]'},
+  {re:/diabet(es|ic)|\bdm\b/i, label:'[Diabetes Mellitus]'},
+  {re:/hypertensi(on|ve)|\bhtn\b/i, label:'[HTN]'},
+  {re:/\bcopd\b|chronic obstructive/i, label:'[COPD]'},
+  {re:/\basthma\b/i, label:'[Asthma]'},
+  {re:/ischemic heart|\bihd\b|coronary artery|\bcad\b/i, label:'[IHD]'},
+  {re:/chronic kidney|\bckd\b|renal failure/i, label:'[CKD]'},
+  {re:/epilepsy|seizure disorder/i, label:'[Epilepsy]'},
+  {re:/sickle cell/i, label:'[Sickle Cell]'},
+  {re:/\bhiv\b/i, label:'[HIV]'},
+  {re:/hypothyroid/i, label:'[Hypothyroid]'},
+  {re:/\btb\b|tuberculosis/i, label:'[TB]'},
+];
+function extractChronicTags(pmhText){
+  if(!pmhText) return [];
+  const tags=[]; let seenDiabetes=false;
+  for(const rule of CHRONIC_TAG_RULES){
+    if(!rule.re.test(pmhText)) continue;
+    if(rule.label.indexOf('Diabetes')!==-1){ if(seenDiabetes) continue; seenDiabetes=true; }
+    tags.push(rule.label);
+  }
+  return tags;
+}
+async function loadDocStickyHeader(p){
+  const bar=document.getElementById('doc-sticky-bar'); if(!bar) return;
+  bar.style.display='block';
+  document.getElementById('dsb-name').textContent=p.name||fullName(p);
+  document.getElementById('dsb-meta').textContent=(p.mrn||p.lab_no||'—')+' · '+(p.age||'?')+(p.age_unit||'y')+' / '+(p.sex||'—');
+  const bgEl=document.getElementById('dsb-bg'), allergyEl=document.getElementById('dsb-allergies'),
+        chronicEl=document.getElementById('dsb-chronic'), vitalsEl=document.getElementById('dsb-vitals');
+  bgEl.innerHTML=''; allergyEl.innerHTML=''; chronicEl.innerHTML=''; vitalsEl.innerHTML='';
+  if(!sb||!p.id) return;
+  const pill=(text,bg,fg,border)=>'<span style="background:'+bg+';color:'+fg+';border:1px solid '+(border||bg)+';border-radius:20px;padding:2px 10px;font-size:.7rem;font-weight:700;white-space:nowrap">'+text+'</span>';
+  try{
+    const [{data:cons},{data:vit},{data:hem}] = await Promise.all([
+      sb.from('doctor_consultations').select('allergies,pmh').eq('patient_id',p.id).order('consultation_date',{ascending:false}).limit(1).maybeSingle(),
+      sb.from('vital_signs').select('systolic,diastolic,bp_systolic,bp_diastolic,heart_rate,temperature,spo2,recorded_at').eq('patient_id',p.id).order('recorded_at',{ascending:false}).limit(1).maybeSingle(),
+      sb.from('results_hematology').select('blood_group,rh_factor').eq('patient_id',p.id).maybeSingle(),
+    ]);
+    if(hem?.blood_group) bgEl.innerHTML=pill('🩸 '+escapeHtml(hem.blood_group+(hem.rh_factor||'')),'var(--teal-lt)','var(--teal)');
+    const allergyText=(cons?.allergies||'').trim();
+    if(allergyText){
+      allergyText.split(/[,;]+/).map(s=>s.trim()).filter(Boolean).forEach(a=>{
+        allergyEl.insertAdjacentHTML('beforeend', pill('⚠ '+escapeHtml(a),'var(--red-lt)','var(--red)'));
+      });
+    } else {
+      allergyEl.innerHTML='<span style="font-size:.7rem;color:var(--slate)">No known allergies documented</span>';
+    }
+    extractChronicTags(cons?.pmh).forEach(label=>{
+      chronicEl.insertAdjacentHTML('beforeend', pill(escapeHtml(label),'var(--amber-lt)','var(--amber)'));
+    });
+    if(vit){
+      const sys=vit.systolic||vit.bp_systolic, dia=vit.diastolic||vit.bp_diastolic;
+      const chip=(label,val,abnormal)=>pill(label+' '+val, abnormal?'var(--red-lt)':'var(--bg)', abnormal?'var(--red)':'var(--ink)', abnormal?'var(--red)':'var(--border)');
+      if(sys!=null) vitalsEl.insertAdjacentHTML('beforeend', chip('BP',sys+'/'+dia, sys>140||sys<90));
+      if(vit.heart_rate!=null) vitalsEl.insertAdjacentHTML('beforeend', chip('HR',vit.heart_rate, vit.heart_rate>100||vit.heart_rate<60));
+      if(vit.temperature!=null) vitalsEl.insertAdjacentHTML('beforeend', chip('Temp',vit.temperature+'°C', vit.temperature>38.5));
+      if(vit.spo2!=null) vitalsEl.insertAdjacentHTML('beforeend', chip('SpO₂',vit.spo2+'%', vit.spo2<94));
+      if(sys==null&&vit.heart_rate==null&&vit.temperature==null&&vit.spo2==null) vitalsEl.innerHTML='<span style="font-size:.7rem;color:var(--slate)">No vitals on record</span>';
+    } else {
+      vitalsEl.innerHTML='<span style="font-size:.7rem;color:var(--slate)">No vitals on record</span>';
+    }
+  }catch(e){ /* sticky header is a convenience overlay — a failed fetch here shouldn't block charting */ }
 }
 
 async function loadDocVitals(ptId) {
