@@ -486,7 +486,6 @@ html[dir="rtl"] body{direction:rtl;}
       <div class="sb-item" data-p="tat" onclick="goPage('tat')"><span class="ic">⏱️</span><span data-i18n="nav_tat">TAT Tracker</span></div>
       <div class="sb-item" data-p="qc" onclick="goPage('qc')"><span class="ic">🔬</span><span data-i18n="nav_qc">QC Module</span></div>
       <div class="sb-item" data-p="pt-history" onclick="goPage('pt-history')"><span class="ic">🕐</span><span data-i18n="nav_pt_history">Patient Timeline</span></div>
-      <div class="sb-item" data-p="inventory" onclick="goPage('inventory')"><span class="ic">📦</span><span data-i18n="nav_inventory">Inventory</span></div>
     </div>
     <div class="sb-group" data-module="radiology">
       <div class="sb-lbl" data-i18n="navgrp_radiology">🩻 Radiology</div>
@@ -514,6 +513,10 @@ html[dir="rtl"] body{direction:rtl;}
       <div class="sb-lbl" data-i18n="navgrp_billing">💰 Billing</div>
       <div class="sb-item" data-p="billing" onclick="goPage('billing')"><span class="ic">💰</span><span data-i18n="nav_billing_full">Billing &amp; Invoices</span></div>
       <div class="sb-item" data-p="prices" onclick="goPage('prices')"><span class="ic">💲</span><span data-i18n="nav_prices">Price List</span></div>
+    </div>
+    <div class="sb-group" data-module="inventory">
+      <div class="sb-lbl" data-i18n="navgrp_inventory">📦 Inventory</div>
+      <div class="sb-item" data-p="inventory" onclick="goPage('inventory')"><span class="ic">📦</span><span data-i18n="nav_inventory">Inventory</span></div>
     </div>
     <div class="sb-group" data-module="statistics">
       <div class="sb-lbl" data-i18n="navgrp_statistics">📊 Statistics</div>
@@ -5673,7 +5676,7 @@ const CFG = {
 const ROLE_PAGES = {
   admin:['dashboard','admission','theatre','consultation','nursing','fluid-chart','appointments','infection','handover','register','worklist','samples','set-printer','hem-entry','chem-entry','sero-entry','immuno-entry','micro-entry','pcr-entry','histo-entry','cyto-entry','unified-entry','allresults','criticals','reports','print-reports-hub','rad-print','billing','prices','pt-history','labhistory','tat','inventory','qc','staff','doctors','radiology','analyzer','delivery','settings','statistics'],
   doctor:['dashboard','admission','theatre','consultation','nursing','fluid-chart','allresults','criticals','radiology','pt-history'],
-  nurse:['dashboard','nursing','fluid-chart','admission','criticals','pt-history'],
+  nurse:['dashboard','nursing','fluid-chart','admission','criticals','pt-history','inventory'],
   lab_tech:['dashboard','worklist','samples','set-printer','hem-entry','chem-entry','sero-entry','immuno-entry','micro-entry','pcr-entry','histo-entry','cyto-entry','unified-entry','allresults','criticals','reports','tat','inventory','delivery','qc','labhistory','pt-history'],
   lab_supervisor:['register','worklist','samples','set-printer','hem-entry','chem-entry','sero-entry','immuno-entry','micro-entry','unified-entry','allresults','criticals','reports','qc','labhistory','tat','inventory','delivery','staff','pt-history'],
   receptionist:['register','appointments','billing','prices','worklist','dashboard','infection','print-reports-hub','reports','rad-print'],
@@ -5706,22 +5709,26 @@ const PAGE_TITLES = {
 // A page id may appear in more than one module (e.g. 'billing' appears
 // under both Reception, for quick access mid-registration, and the
 // dedicated Billing module) — that's intentional, not a bug.
-// Dashboard / Patient Timeline / Inventory aren't named in the original
-// per-module spec; placed here rather than left unreachable (folded into
-// the closest-fitting module — Administration / Laboratory respectively).
+// Dashboard / Patient Timeline aren't named in the original per-module
+// spec; folded into the closest-fitting module (Administration /
+// Laboratory+Doctor+Nursing) rather than left unreachable. Inventory
+// originally lived here too but was pulled out into its own top-level
+// module below — hospital supplies management isn't lab-specific, and a
+// dedicated tile makes it reachable without going through Laboratory.
 const MODULE_PAGES = {
   reception:      { label:'Reception',      icon:'🏥', pages:['register','appointments','print-reports-hub'] },
   phlebotomy:     { label:'Phlebotomy',      icon:'💉', pages:['samples','set-printer'] },
-  laboratory:     { label:'Laboratory',      icon:'🔬', pages:['worklist','unified-entry','hem-entry','chem-entry','sero-entry','immuno-entry','micro-entry','pcr-entry','histo-entry','cyto-entry','reports','allresults','labhistory','criticals','qc','tat','pt-history','inventory'] },
+  laboratory:     { label:'Laboratory',      icon:'🔬', pages:['worklist','unified-entry','hem-entry','chem-entry','sero-entry','immuno-entry','micro-entry','pcr-entry','histo-entry','cyto-entry','reports','allresults','labhistory','criticals','qc','tat','pt-history'] },
   radiology:      { label:'Radiology',       icon:'🩻', pages:['radiology','rad-print'] },
   doctor:         { label:'Doctor',          icon:'🩺', pages:['consultation','pt-history'] },
   nursing:        { label:'Nursing',         icon:'🧑‍⚕️', pages:['nursing','fluid-chart','infection','handover','pt-history'] },
   admissions:     { label:'Admissions',      icon:'🛏', pages:['admission','theatre'] },
   billing:        { label:'Billing',         icon:'💰', pages:['billing','prices'] },
+  inventory:      { label:'Inventory',       icon:'📦', pages:['inventory'] },
   statistics:     { label:'Statistics',      icon:'📊', pages:['statistics'] },
   administration: { label:'Administration',  icon:'⚙️', pages:['staff','doctors','analyzer','delivery','settings','dashboard'] },
 };
-const MODULE_ORDER = ['reception','phlebotomy','laboratory','radiology','doctor','nursing','admissions','billing','statistics','administration'];
+const MODULE_ORDER = ['reception','phlebotomy','laboratory','radiology','doctor','nursing','admissions','billing','inventory','statistics','administration'];
 // Which module is currently entered (null = at the launcher/Home screen).
 // Distinct from ROLE_PAGES/currentProfile.role — this is pure navigation
 // state, reset to null by goHome() and set by enterModule() or by goPage()
