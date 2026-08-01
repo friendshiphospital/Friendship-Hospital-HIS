@@ -1801,6 +1801,7 @@ html[dir="rtl"] body{direction:rtl;}
               </tbody>
             </table>
           </div>
+          <datalist id="rx-drug-list"></datalist>
           <div style="display:flex;gap:8px;margin-bottom:12px">
             <button class="btn btn-s btn-sm" onclick="addRxRow()">+ Add Drug</button>
             <button class="btn btn-s btn-sm" onclick="addCommonRx('paracetamol')">+ Paracetamol</button>
@@ -1814,6 +1815,7 @@ html[dir="rtl"] body{direction:rtl;}
             <button class="btn btn-p" onclick="savePrescription()" style="flex:1;justify-content:center">💾 Save Prescription</button>
             <button class="btn btn-s" onclick="printPrescription()" style="flex:1;justify-content:center">🖨 Print Prescription</button>
           </div>
+          <div id="rx-stock-summary" style="display:none;margin-top:10px;background:#f8fafd;border-radius:8px;padding:10px 12px"></div>
         </div>
       </div>
 
@@ -8184,6 +8186,7 @@ function switchDocTab(tab,btn) {
   if(tab==='history') loadPatientHistory(_docPt?.id);
   if(tab==='vitals'){ loadDocVitals(_docPt?.id); loadDocVitalsTrend(_docPt?.id); }
   if(tab==='orders') { loadActiveOrders(); buildOrderTestPanel(); }
+  if(tab==='rx') loadRxDrugList();
   if(tab==='discharge'){ const d=document.getElementById('dis-date'); if(d&&!d.value) d.value=today(); const di=document.getElementById('dis-pt-id'); if(di&&_docPt) di.value=_docPt.id; }
 }
 
@@ -8417,7 +8420,88 @@ async function savePrescription() {
   try {
     await sb.from('prescriptions').insert({patient_id:_docPt.id,items:rx,notes:document.getElementById('rx-notes')?.value||'',prescribed_by:document.getElementById('doc-doctor-name')?.value||currentProfile?.full_name,prescribed_date:today(),created_by:currentProfile?.id});
     toast('\u2705 Prescription saved','ok');
+    // Stock linkage runs AFTER the prescription itself is already saved and
+    // never reverses or blocks that save \u2014 a doctor must always be able to
+    // prescribe a drug regardless of what Inventory does or doesn't know
+    // about it. Every outcome is reported honestly in #rx-stock-summary
+    // rather than silently succeeding or silently doing nothing.
+    const stockResults=await dispensePrescriptionFromInventory(rx);
+    renderRxStockSummary(stockResults);
   } catch(e){toast(e.message,'err');}
+}
+async function loadRxDrugList(){
+  const dl=document.getElementById('rx-drug-list'); if(!dl||!sb) return;
+  try{
+    const {data}=await sb.from('reagent_inventory').select('item_name').eq('is_active',true).order('item_name');
+    dl.innerHTML=(data||[]).map(it=>'<option value="'+escAttr(it.item_name)+'">').join('');
+  }catch(e){ /* datalist is a UX nicety \u2014 a failed fetch just leaves it empty */ }
+}
+// Deterministic per-day dose counts for the standard abbreviations this
+// exact form already uses (see the Frequency input's placeholder "TDS" and
+// addCommonRx()'s "QDS (every 6h)"/"TDS (every 8h)"/"OD (once daily)").
+// Deliberately does NOT try to guess anything outside this list \u2014 PRN
+// ("as needed") and STAT have no fixed daily count, and free-text a doctor
+// might type has no reliable structure to parse. Dispensing the wrong
+// quantity from real stock is worse than not auto-dispensing at all.
+const RX_FREQ_PER_DAY = { OD:1, BD:2, TDS:3, QDS:4, NOCTE:1 };
+function parseRxFrequencyPerDay(freqText){
+  const m=String(freqText||'').trim().toUpperCase().match(/^([A-Z]+)/);
+  return (m && RX_FREQ_PER_DAY[m[1]]!=null) ? RX_FREQ_PER_DAY[m[1]] : null;
+}
+function parseRxDurationDays(durText){
+  const m=String(durText||'').trim().toLowerCase().match(/(\d+(?:\.\d+)?)\s*(days?|d\b|weeks?|wks?|months?)/);
+  if(!m) return null;
+  const n=parseFloat(m[1]), unit=m[2];
+  if(unit.startsWith('week')||unit==='wk'||unit==='wks') return Math.round(n*7);
+  if(unit.startsWith('month')) return Math.round(n*30);
+  return Math.round(n);
+}
+function estimateRxQuantity(freqText,durText){
+  const perDay=parseRxFrequencyPerDay(freqText), days=parseRxDurationDays(durText);
+  return (perDay!=null && days!=null && perDay>0 && days>0) ? perDay*days : null;
+}
+// Exact (case-insensitive) match only \u2014 a fuzzy/partial match risks
+// silently dispensing the wrong drug, which is a patient-safety issue, not
+// just a bookkeeping one. Prescribing from the rx-drug-list datalist
+// suggestions (populated from this same table) makes an exact match the
+// normal case rather than the exception.
+async function findInventoryItemByDrugName(name){
+  if(!sb||!name) return null;
+  try{
+    const {data}=await sb.from('reagent_inventory').select('*').eq('is_active',true).ilike('item_name',name.trim()).limit(1).maybeSingle();
+    return data||null;
+  }catch(e){ return null; }
+}
+async function dispensePrescriptionFromInventory(rx){
+  const results=[];
+  for(const item of rx){
+    const invItem=await findInventoryItemByDrugName(item.drug);
+    if(!invItem){ results.push({drug:item.drug,status:'not_in_catalog'}); continue; }
+    const qty=estimateRxQuantity(item.freq,item.duration);
+    if(qty==null){ results.push({drug:item.drug,status:'quantity_unknown',unit:invItem.unit}); continue; }
+    try{
+      const {dispensed,shortfall}=await dispenseFromInventoryFefo(invItem.id,qty);
+      if(dispensed<=0) results.push({drug:item.drug,status:'no_stock',requested:qty,unit:invItem.unit});
+      else if(shortfall>0) results.push({drug:item.drug,status:'partial',dispensed,requested:qty,unit:invItem.unit});
+      else results.push({drug:item.drug,status:'dispensed',dispensed,unit:invItem.unit});
+    }catch(e){ results.push({drug:item.drug,status:'error',message:e.message}); }
+  }
+  return results;
+}
+function renderRxStockSummary(results){
+  const el=document.getElementById('rx-stock-summary'); if(!el) return;
+  if(!results.length){ el.style.display='none'; el.innerHTML=''; return; }
+  const line=(r)=>{
+    if(r.status==='dispensed') return '\u2705 '+escapeHtml(r.drug)+' \u2014 dispensed '+r.dispensed+' '+escapeHtml(r.unit||'')+' from stock';
+    if(r.status==='partial') return '\u26a0\ufe0f '+escapeHtml(r.drug)+' \u2014 only '+r.dispensed+' of '+r.requested+' '+escapeHtml(r.unit||'')+' available (insufficient non-expired stock)';
+    if(r.status==='no_stock') return '\u26a0\ufe0f '+escapeHtml(r.drug)+' \u2014 no eligible (non-expired) stock on hand to dispense';
+    if(r.status==='quantity_unknown') return '\u2139\ufe0f '+escapeHtml(r.drug)+' \u2014 frequency/duration not recognized for auto-dispense; adjust stock manually from Inventory if needed';
+    if(r.status==='error') return '\u26a0\ufe0f '+escapeHtml(r.drug)+' \u2014 stock check failed: '+escapeHtml(r.message||'');
+    return '\u2139\ufe0f '+escapeHtml(r.drug)+' \u2014 not found in the Inventory catalog; prescribed as usual, stock not tracked';
+  };
+  el.style.display='block';
+  el.innerHTML='<div style="font-size:.72rem;font-weight:700;text-transform:uppercase;color:var(--slate);margin-bottom:6px">\ud83d\udce6 Inventory Stock Check</div>'+
+    results.map(r=>'<div class="rx-stock-line" style="font-size:.78rem;padding:4px 0;border-bottom:1px solid var(--border)">'+line(r)+'</div>').join('');
 }
 
 function printPrescription() {
@@ -14371,8 +14455,15 @@ async function markBatchOpened(batchId){
 // just can never be selected to dispense from.
 async function dispenseFromInventoryFefo(itemId,qty){
   if(!sb||!(qty>0)) return {dispensed:0,shortfall:qty||0};
-  const {data:batches}=await sb.from('inventory_batches').select('*').eq('item_id',itemId).eq('is_active',true).gt('quantity',0);
-  const it=(window._invItems||[]).find(x=>x.id===itemId);
+  // Fetches the item fresh rather than trusting window._invItems — that
+  // cache is only populated by loadInventory() on the Inventory page
+  // itself, so a caller from anywhere else (e.g. Prescription dispensing
+  // from Doctor Consultation) would otherwise see it as undefined and
+  // silently overwrite current_stock with 0-minus-dispensed below.
+  const [{data:batches},{data:it}]=await Promise.all([
+    sb.from('inventory_batches').select('*').eq('item_id',itemId).eq('is_active',true).gt('quantity',0),
+    sb.from('reagent_inventory').select('*').eq('id',itemId).maybeSingle(),
+  ]);
   const eligible=(batches||[]).filter(b=>{ const eff=effectiveBatchExpiry(b,it); return !computeExpiryStatus(eff).locked; })
     .sort((a,b)=>(effectiveBatchExpiry(a,it)||'9999-99-99').localeCompare(effectiveBatchExpiry(b,it)||'9999-99-99'));
   let remaining=qty, dispensed=0;
