@@ -5715,11 +5715,26 @@ function firstAccessiblePageInModule(moduleKey) {
   if (role === 'admin') return mod.pages[0] || null;
   return mod.pages.find(p => allowed.includes(p)) || null;
 }
+// A role sees a tile only if it has access to at least one page inside
+// that module — reuses firstAccessiblePageInModule() (the same check
+// enterModule() itself uses to pick a landing page), so "shown on the
+// launcher" and "actually enterable" can never disagree. Statistics is
+// additionally hardcoded admin-only as defense-in-depth: no role in
+// ROLE_PAGES currently grants 'statistics' so the generic rule already
+// excludes it for everyone else, but this makes the intent explicit
+// rather than relying on that staying true by accident.
+function visibleModulesForRole() {
+  const role = currentProfile?.role || 'admin';
+  return MODULE_ORDER.filter(key => {
+    if (key === 'statistics' && role !== 'admin') return false;
+    return !!firstAccessiblePageInModule(key);
+  });
+}
 function renderLauncher() {
   const grid = document.getElementById('launcher-grid'); if (!grid) return;
   const greet = document.getElementById('launcher-greeting');
   if (greet) greet.textContent = 'Welcome, ' + (currentProfile?.full_name || 'User');
-  grid.innerHTML = MODULE_ORDER.map(key => {
+  grid.innerHTML = visibleModulesForRole().map(key => {
     const mod = MODULE_PAGES[key];
     return '<div class="launcher-tile" onclick="enterModule(\'' + key + '\')">' +
       '<div class="lt-ic">' + mod.icon + '</div><div class="lt-lbl">' + mod.label + '</div></div>';
