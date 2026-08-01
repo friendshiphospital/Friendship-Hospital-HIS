@@ -1428,12 +1428,13 @@ html[dir="rtl"] body{direction:rtl;}
             <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:#0369a1;margin-bottom:8px">🗣 Presenting Complaint</div>
             <div class="g2">
               <div class="fg"><label class="fl">Chief Complaint</label>
-                <input class="fc" id="doc-complaint" placeholder="Main symptom">
+                <input class="fc" id="doc-complaint" placeholder="Main symptom" oninput="renderDiffDxSuggestions(this.value)">
               </div>
               <div class="fg"><label class="fl">Duration</label>
                 <input class="fc" id="doc-duration" placeholder="e.g. 3 days, 2 weeks">
               </div>
             </div>
+            <div id="doc-diffdx-suggestions" style="display:none;margin:-4px 0 10px;font-size:.72rem"></div>
             <div class="fg"><label class="fl">History of Presenting Illness (HPI)</label>
               <textarea class="fc" id="doc-hpi" rows="3" placeholder="Onset, character, location, radiation, severity, timing, modifying factors, associated symptoms…"></textarea>
             </div>
@@ -1499,11 +1500,15 @@ html[dir="rtl"] body{direction:rtl;}
           <div style="background:#fff7ed;border-radius:8px;padding:10px 12px;margin-bottom:12px">
             <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:#c2410c;margin-bottom:8px">🔍 Diagnosis</div>
             <div class="g3">
-              <div class="fg" style="grid-column:1/3"><label class="fl">Primary Diagnosis</label>
-                <input class="fc" id="doc-dx1" placeholder="Primary diagnosis" style="border-color:#fb923c;font-weight:600">
+              <div class="fg" style="grid-column:1/3;position:relative"><label class="fl">Primary Diagnosis</label>
+                <input class="fc" id="doc-dx1" placeholder="Type a diagnosis or symptom to search ICD-10…" style="border-color:#fb923c;font-weight:600" autocomplete="off"
+                  oninput="searchIcd10(this.value,'dx1')" onfocus="searchIcd10(this.value,'dx1')" onblur="setTimeout(()=>hideIcd10Results('dx1'),150)">
+                <div id="icd10-results-dx1" style="display:none;position:absolute;left:0;right:0;top:100%;z-index:60;background:#fff;border:1.5px solid var(--teal);border-radius:7px;max-height:220px;overflow-y:auto;box-shadow:0 6px 16px rgba(0,0,0,.1)"></div>
               </div>
-              <div class="fg"><label class="fl">ICD-10 Code</label>
-                <input class="fc" id="doc-icd" placeholder="e.g. J18.9">
+              <div class="fg" style="position:relative"><label class="fl">ICD-10 Code</label>
+                <input class="fc" id="doc-icd" placeholder="e.g. J18.9" autocomplete="off"
+                  oninput="searchIcd10(this.value,'icd')" onfocus="searchIcd10(this.value,'icd')" onblur="setTimeout(()=>hideIcd10Results('icd'),150)">
+                <div id="icd10-results-icd" style="display:none;position:absolute;left:0;right:0;top:100%;z-index:60;background:#fff;border:1.5px solid var(--teal);border-radius:7px;max-height:220px;overflow-y:auto;box-shadow:0 6px 16px rgba(0,0,0,.1)"></div>
               </div>
             </div>
             <div class="fg"><label class="fl">Secondary Diagnosis / Comorbidities</label>
@@ -7664,6 +7669,145 @@ function applyQuickTemplate(key,label){
     if(el) el.value=v;
   });
   toast('⚡ Template applied — review and edit before saving','ok');
+}
+
+// ── ICD-10 SEARCH (Consultation) ───────────────────────
+// A curated subset of ICD-10 codes covering the presentations most common
+// in a general OPD/IPD hospital — not the full ~70,000-code terminology
+// (there's no terminology server in this architecture; see CLAUDE.md).
+// Extend this list as needed; matching is by code prefix or description
+// substring so partial typing ("pneum", "J18") both work.
+const ICD10_CATALOG = [
+  ['A00','Cholera'],['A01.0','Typhoid fever'],['A03','Shigellosis (Bacillary dysentery)'],['A06','Amoebiasis'],
+  ['A09','Infectious gastroenteritis and colitis, unspecified (Acute Gastroenteritis)'],['A15.0','Pulmonary tuberculosis'],
+  ['A37','Whooping cough'],['A41.9','Sepsis, unspecified organism'],['A46','Erysipelas'],['A49.9','Bacterial infection, unspecified'],
+  ['A50','Congenital syphilis'],['A54.9','Gonococcal infection, unspecified'],['A69.2','Lyme disease'],
+  ['A90','Dengue fever'],['A91','Dengue haemorrhagic fever'],['B01.9','Varicella (Chickenpox) without complication'],
+  ['B05.9','Measles without complication'],['B15.9','Hepatitis A, without hepatic coma'],['B16.9','Acute hepatitis B'],
+  ['B18.2','Chronic viral hepatitis C'],['B20','HIV disease'],['B26.9','Mumps without complication'],
+  ['B34.9','Viral infection, unspecified'],['B37.9','Candidiasis, unspecified'],['B50.9','Plasmodium falciparum malaria, unspecified'],
+  ['B51.9','Plasmodium vivax malaria, unspecified'],['B54','Malaria, unspecified'],['B58.9','Toxoplasmosis, unspecified'],
+  ['B65.2','Schistosomiasis due to Schistosoma haematobium'],['B77.9','Ascariasis, unspecified'],['B82.9','Intestinal parasitism, unspecified'],
+  ['D50.9','Iron deficiency anaemia, unspecified'],['D56.1','Beta thalassaemia'],['D57.1','Sickle-cell disease without crisis'],
+  ['D57.0','Sickle-cell anaemia with crisis'],['D64.9','Anaemia, unspecified'],['D69.6','Thrombocytopenia, unspecified'],
+  ['D70','Agranulocytosis'],['D73.1','Hypersplenism'],
+  ['E03.9','Hypothyroidism, unspecified'],['E05.9','Thyrotoxicosis (Hyperthyroidism), unspecified'],
+  ['E10.9','Type 1 Diabetes Mellitus, without complications'],['E11.9','Type 2 Diabetes Mellitus, without complications'],
+  ['E11.65','Type 2 Diabetes Mellitus with hyperglycaemia'],['E14.9','Diabetes mellitus, unspecified'],
+  ['E40','Kwashiorkor'],['E43','Severe protein-energy malnutrition, unspecified'],['E44.1','Mild protein-energy malnutrition'],
+  ['E66.9','Obesity, unspecified'],['E78.5','Hyperlipidaemia, unspecified'],['E86.0','Dehydration'],['E87.6','Hypokalaemia'],
+  ['F32.9','Depressive episode, unspecified'],['F41.9','Anxiety disorder, unspecified'],['F41.0','Panic disorder'],
+  ['G40.9','Epilepsy, unspecified'],['G43.9','Migraine, unspecified'],['G44.2','Tension-type headache'],
+  ['G45.9','Transient cerebral ischaemic attack, unspecified'],['G80.9','Cerebral palsy, unspecified'],
+  ['H10.9','Conjunctivitis, unspecified'],['H16.9','Keratitis, unspecified'],['H52.1','Myopia'],
+  ['H60.9','Otitis externa, unspecified'],['H66.9','Otitis media, unspecified'],['H81.1','Benign paroxysmal vertigo'],
+  ['I10','Essential (primary) hypertension'],['I11.9','Hypertensive heart disease without heart failure'],
+  ['I20.9','Angina pectoris, unspecified'],['I21.9','Acute myocardial infarction, unspecified'],
+  ['I50.9','Heart failure, unspecified'],['I63.9','Cerebral infarction (Ischaemic stroke), unspecified'],
+  ['I61.9','Intracerebral haemorrhage, unspecified'],['I64','Stroke, not specified as haemorrhage or infarction'],
+  ['I80.2','Deep vein thrombosis, unspecified site'],['I83.9','Varicose veins of lower extremities, without ulcer or inflammation'],
+  ['I95.9','Hypotension, unspecified'],
+  ['J00','Acute nasopharyngitis (Common cold)'],['J01.9','Acute sinusitis, unspecified'],['J02.9','Acute pharyngitis, unspecified'],
+  ['J03.9','Acute tonsillitis, unspecified'],['J06.9','Upper respiratory tract infection, unspecified (URTI)'],
+  ['J09','Influenza due to identified novel influenza virus'],['J11.1','Influenza with other respiratory manifestations'],
+  ['J18.9','Pneumonia, unspecified organism'],['J20.9','Acute bronchitis, unspecified'],['J21.9','Acute bronchiolitis, unspecified'],
+  ['J40','Bronchitis, not specified as acute or chronic'],['J44.9','Chronic obstructive pulmonary disease (COPD), unspecified'],
+  ['J45.9','Asthma, unspecified'],['J46','Status asthmaticus'],['J81','Pulmonary oedema'],['J86.9','Pyothorax (Empyema), unspecified'],
+  ['J90','Pleural effusion, not elsewhere classified'],['J93.9','Pneumothorax, unspecified'],['J96.0','Acute respiratory failure'],
+  ['K21.9','Gastro-oesophageal reflux disease (GERD) without oesophagitis'],['K25.9','Gastric ulcer, unspecified'],
+  ['K27.9','Peptic ulcer, site unspecified'],['K29.7','Gastritis, unspecified'],['K35.8','Acute appendicitis, unspecified'],
+  ['K52.9','Non-infective gastroenteritis and colitis, unspecified'],['K57.9','Diverticular disease of intestine, unspecified'],
+  ['K59.0','Constipation'],['K59.1','Functional diarrhoea'],['K70.3','Alcoholic cirrhosis of liver'],
+  ['K74.6','Cirrhosis of liver, unspecified'],['K76.0','Fatty (change of) liver, not elsewhere classified'],
+  ['K80.2','Cholelithiasis (Gallstones)'],['K81.9','Cholecystitis, unspecified'],['K85.9','Acute pancreatitis, unspecified'],
+  ['K92.2','Gastrointestinal haemorrhage, unspecified'],
+  ['L01.0','Impetigo'],['L02.9','Cutaneous abscess, furuncle and carbuncle, unspecified'],['L03.9','Cellulitis, unspecified'],
+  ['L20.9','Atopic dermatitis, unspecified'],['L23.9','Allergic contact dermatitis, unspecified'],['L29.9','Pruritus, unspecified'],
+  ['L30.9','Dermatitis, unspecified'],['L50.9','Urticaria, unspecified'],
+  ['M06.9','Rheumatoid arthritis, unspecified'],['M10.9','Gout, unspecified'],['M15.9','Polyosteoarthritis, unspecified'],
+  ['M17.9','Osteoarthritis of knee, unspecified'],['M25.5','Pain in joint'],['M45','Ankylosing spondylitis'],
+  ['M54.5','Low back pain'],['M54.2','Cervicalgia (Neck pain)'],['M62.6','Muscle strain'],['M79.1','Myalgia'],['M79.7','Fibromyalgia'],
+  ['N10','Acute pyelonephritis'],['N18.9','Chronic kidney disease, unspecified'],['N20.0','Calculus of kidney (Renal stone)'],
+  ['N30.9','Cystitis, unspecified'],['N39.0','Urinary tract infection, site not specified'],['N40','Benign prostatic hyperplasia'],
+  ['N76.0','Acute vaginitis'],['N95.1','Menopausal and female climacteric states'],
+  ['O21.9','Vomiting of pregnancy, unspecified'],['O23.9','Urinary tract infection in pregnancy, unspecified'],
+  ['O26.9','Pregnancy-related condition, unspecified'],['O60.9','Preterm labour, unspecified'],
+  ['O80','Single spontaneous delivery'],['O99.0','Anaemia complicating pregnancy'],
+  ['R05','Cough'],['R06.0','Dyspnoea'],['R07.4','Chest pain, unspecified'],['R10.4','Abdominal pain, unspecified'],
+  ['R11','Nausea and vomiting'],['R19.7','Diarrhoea, unspecified'],['R21','Rash and other nonspecific skin eruption'],
+  ['R42','Dizziness and giddiness'],['R50.9','Fever, unspecified'],['R51','Headache'],['R53','Malaise and fatigue'],
+  ['R55','Syncope and collapse'],['R56.9','Convulsions, unspecified'],['R57.9','Shock, unspecified'],
+  ['R60.9','Oedema, unspecified'],['R63.4','Abnormal weight loss'],['R73.9','Hyperglycaemia, unspecified'],
+  ['S06.9','Traumatic brain injury, unspecified'],['S09.9','Head injury, unspecified'],['S42.9','Fracture of shoulder and upper arm, unspecified'],
+  ['S52.9','Fracture of forearm, unspecified'],['S72.9','Fracture of femur, unspecified'],['S82.9','Fracture of lower leg, unspecified'],
+  ['T14.9','Injury, unspecified'],['T15.9','Foreign body in external eye, unspecified'],['T17.9','Foreign body in respiratory tract, unspecified'],
+  ['T63.0','Toxic effect of snake venom (Snakebite)'],['T63.4','Toxic effect of venom of scorpion (Scorpion sting)'],
+  ['T78.2','Anaphylactic shock, unspecified'],
+  ['Z00.0','General adult medical examination'],['Z34.9','Supervision of normal pregnancy, unspecified'],
+  ['Z38.0','Liveborn infant, born in hospital'],['Z51.1','Chemotherapy session for neoplasm'],['Z71.3','Dietary counselling and surveillance'],
+].map(([code,desc])=>({code,desc}));
+function searchIcd10(query,target){
+  const box=document.getElementById('icd10-results-'+target); if(!box) return;
+  const q=(query||'').trim().toLowerCase();
+  if(q.length<2){ box.style.display='none'; return; }
+  const matches=ICD10_CATALOG.filter(e=>e.code.toLowerCase().startsWith(q)||e.desc.toLowerCase().includes(q)).slice(0,8);
+  if(!matches.length){ box.style.display='none'; return; }
+  box.innerHTML=matches.map(e=>'<div onmousedown="selectIcd10(\''+e.code+'\',\''+escAttr(e.desc)+'\')" style="padding:7px 10px;cursor:pointer;border-bottom:1px solid var(--border);font-size:.76rem" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'"><span style="font-weight:800;color:var(--teal)">'+escapeHtml(e.code)+'</span> <span style="color:var(--ink)">'+escapeHtml(e.desc)+'</span></div>').join('');
+  box.style.display='block';
+}
+function hideIcd10Results(target){
+  const box=document.getElementById('icd10-results-'+target); if(box) box.style.display='none';
+}
+function selectIcd10(code,desc){
+  const dx=document.getElementById('doc-dx1'); if(dx) dx.value=desc;
+  const icd=document.getElementById('doc-icd'); if(icd) icd.value=code;
+  hideIcd10Results('dx1'); hideIcd10Results('icd');
+}
+
+// ── DIFFERENTIAL DIAGNOSIS SUGGESTIONS (Consultation) ──
+// Keyword-triggered prompts from the Chief Complaint text — a starting
+// checklist for the doctor to rule in/out, not a diagnostic engine.
+const DIFF_DX_RULES = [
+  {re:/\bfever\b|febrile/i, options:['Malaria','Typhoid Fever','Urinary Tract Infection','Pneumonia','Dengue Fever','Sepsis']},
+  {re:/chest pain/i, options:['Acute Coronary Syndrome','Pneumonia','Pulmonary Embolism','GERD','Musculoskeletal Chest Pain']},
+  {re:/abdominal pain|abdo pain|stomach ache/i, options:['Acute Appendicitis','Peptic Ulcer Disease','Gastroenteritis','Cholecystitis','Urinary Tract Infection','Ectopic Pregnancy (if female, childbearing age)']},
+  {re:/\bcough\b/i, options:['Upper Respiratory Tract Infection','Pneumonia','Pulmonary Tuberculosis','Asthma/COPD Exacerbation','Bronchitis']},
+  {re:/headache/i, options:['Tension-Type Headache','Migraine','Malaria','Meningitis','Hypertensive Urgency']},
+  {re:/diarrh(o|e)a|loose motion/i, options:['Acute Gastroenteritis','Cholera','Amoebiasis','Typhoid Fever','Food Poisoning']},
+  {re:/vomit/i, options:['Acute Gastroenteritis','Peptic Ulcer Disease','Pregnancy (if female, childbearing age)','Malaria','Raised Intracranial Pressure']},
+  {re:/short(ness)? of breath|dyspn(o|e)a|breathless/i, options:['Asthma/COPD Exacerbation','Pneumonia','Heart Failure','Pulmonary Embolism','Anaemia']},
+  {re:/back pain/i, options:['Musculoskeletal Back Pain','Pyelonephritis/Renal Colic','Ankylosing Spondylitis','Vertebral Fracture']},
+  {re:/dysuria|burning urin|urinary/i, options:['Urinary Tract Infection','Sexually Transmitted Infection','Renal Stone']},
+  {re:/\brash\b|skin eruption/i, options:['Allergic/Contact Dermatitis','Urticaria','Viral Exanthem (Measles/Chickenpox)','Drug Reaction']},
+  {re:/joint pain|arthralgia/i, options:['Rheumatoid Arthritis','Gout','Osteoarthritis','Reactive/Septic Arthritis']},
+  {re:/dizz(y|iness)|vertigo|giddiness/i, options:['Benign Paroxysmal Positional Vertigo','Anaemia','Hypotension','Hypoglycaemia']},
+  {re:/fatigue|tired|weak(ness)?/i, options:['Anaemia','Hypothyroidism','Diabetes Mellitus','Depression','Malaria']},
+];
+function suggestDifferentials(text){
+  if(!text||text.trim().length<3) return [];
+  const seen=new Set(), out=[];
+  DIFF_DX_RULES.forEach(rule=>{
+    if(!rule.re.test(text)) return;
+    rule.options.forEach(o=>{ if(!seen.has(o)){ seen.add(o); out.push(o); } });
+  });
+  return out.slice(0,8);
+}
+function renderDiffDxSuggestions(complaintText){
+  const box=document.getElementById('doc-diffdx-suggestions'); if(!box) return;
+  const suggestions=suggestDifferentials(complaintText);
+  if(!suggestions.length){ box.style.display='none'; box.innerHTML=''; return; }
+  box.style.display='block';
+  box.innerHTML='<div style="color:var(--slate);margin-bottom:4px">💡 Possible differentials to consider (tap to add):</div>'+
+    '<div style="display:flex;gap:6px;flex-wrap:wrap">'+suggestions.map(s=>
+      '<span onclick="addDifferential(\''+escAttr(s)+'\')" style="cursor:pointer;background:var(--teal-lt);color:var(--teal);border:1px solid var(--teal2);border-radius:20px;padding:3px 10px;font-weight:600">+ '+escapeHtml(s)+'</span>'
+    ).join('')+'</div>';
+}
+function addDifferential(name){
+  const el=document.getElementById('doc-diff-dx'); if(!el) return;
+  const existing=el.value.split(',').map(s=>s.trim()).filter(Boolean);
+  if(existing.some(e=>e.toLowerCase()===name.toLowerCase())) return;
+  existing.push(name);
+  el.value=existing.join(', ');
 }
 
 async function loadDocVitals(ptId) {
