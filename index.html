@@ -3525,29 +3525,101 @@ html[dir="rtl"] body{direction:rtl;}
 </div>
 
 <div class="page" id="page-inventory">
-  <div class="split2">
-    <div class="card"><div class="card-hd"><span class="card-title">📦 Add Inventory Item</span></div><div class="card-body">
-      <input type="hidden" id="inv-edit-id">
-      <div class="fg"><label class="fl">Item Name *</label><input class="fc" id="inv-name"></div>
-      <div class="g2">
-        <div class="fg"><label class="fl">Category</label><select class="fc" id="inv-cat"><option>Reagent</option><option>Consumable</option><option>Control</option><option>Calibrator</option><option>PPE</option></select></div>
-        <div class="fg"><label class="fl">Analyzer / Dept</label><input class="fc" id="inv-analyzer"></div>
-      </div>
-      <div class="g3">
-        <div class="fg"><label class="fl">Stock</label><input class="fc" type="number" id="inv-stock" value="0" min="0"></div>
-        <div class="fg"><label class="fl">Unit</label><input class="fc" id="inv-unit" value="Units"></div>
-        <div class="fg"><label class="fl">Min Level</label><input class="fc" type="number" id="inv-min" value="5"></div>
-      </div>
-      <div class="g2">
-        <div class="fg"><label class="fl">Lot No.</label><input class="fc" id="inv-lot"></div>
-        <div class="fg"><label class="fl">Expiry</label><input class="fc" type="date" id="inv-expiry"></div>
-      </div>
-      <div class="fg"><label class="fl">Supplier</label><input class="fc" id="inv-supplier"></div>
-      <button class="btn btn-p" onclick="saveInventoryItem()" style="width:100%;justify-content:center">💾 Save Item</button>
-    </div></div>
-    <div class="card"><div class="card-hd"><span class="card-title">📦 Inventory</span>
-      <div class="srch"><span>🔍</span><input id="inv-search" placeholder="Search…" oninput="filterInventory(this.value)"></div>
-    </div><div id="inv-table-body"><div class="spin-center"><div class="spinner"></div>Loading…</div></div></div>
+  <div class="tabs" id="inv-tabs" style="margin-bottom:12px">
+    <button class="tab active" onclick="switchInvTab('catalog',this)">📦 Stock Catalog</button>
+    <button class="tab" onclick="switchInvTab('req',this)">🔄 Requisitions &amp; Transfers</button>
+    <button class="tab" onclick="switchInvTab('po',this)">🛒 Purchase Orders</button>
+  </div>
+
+  <!-- ── TAB: STOCK CATALOG ── -->
+  <div id="inv-tab-catalog">
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px" id="inv-dept-chips">
+      <button class="btn btn-p btn-sm" onclick="setInvDeptFilter('',this)">All Departments</button>
+      <button class="btn btn-s btn-sm" onclick="setInvDeptFilter('Laboratory',this)">🧪 Laboratory</button>
+      <button class="btn btn-s btn-sm" onclick="setInvDeptFilter('Radiology &amp; Imaging',this)">🩻 Radiology &amp; Imaging</button>
+      <button class="btn btn-s btn-sm" onclick="setInvDeptFilter('Surgical &amp; OT Supplies',this)">💉 Surgical &amp; OT Supplies</button>
+      <button class="btn btn-s btn-sm" onclick="setInvDeptFilter('General Medical &amp; Nursing',this)">🩹 General Medical &amp; Nursing</button>
+      <button class="btn btn-s btn-sm" onclick="setInvDeptFilter('Equipment &amp; Maintenance',this)">⚙️ Equipment &amp; Maintenance</button>
+    </div>
+    <div class="split2">
+      <div class="card"><div class="card-hd"><span class="card-title" id="inv-form-title">📦 Add Inventory Item</span></div><div class="card-body">
+        <input type="hidden" id="inv-edit-id">
+        <div class="fg"><label class="fl">Item Name *</label><input class="fc" id="inv-name"></div>
+        <div class="g2">
+          <div class="fg"><label class="fl">Department</label>
+            <select class="fc" id="inv-dept" onchange="populateInvSubcategory()">
+              <option value="">— Select —</option>
+              <option>Laboratory</option>
+              <option>Radiology &amp; Imaging</option>
+              <option>Surgical &amp; OT Supplies</option>
+              <option>General Medical &amp; Nursing</option>
+              <option>Equipment &amp; Maintenance</option>
+            </select>
+          </div>
+          <div class="fg"><label class="fl">Sub-Category</label><select class="fc" id="inv-cat"><option value="">— Select department first —</option></select></div>
+        </div>
+        <div class="fg"><label class="fl">Analyzer / Ward (optional)</label><input class="fc" id="inv-analyzer" placeholder="e.g. Sysmex XN-1000, ICU, Theatre 2"></div>
+        <div class="g3">
+          <div class="fg"><label class="fl">Stock</label><input class="fc" type="number" id="inv-stock" value="0" min="0"></div>
+          <div class="fg"><label class="fl">Unit</label><input class="fc" id="inv-unit" value="Units"></div>
+          <div class="fg"><label class="fl">Min Level</label><input class="fc" type="number" id="inv-min" value="5"></div>
+        </div>
+        <div class="g2">
+          <div class="fg"><label class="fl">Barcode</label><input class="fc" id="inv-barcode" placeholder="Scan or type…"></div>
+          <div class="fg"><label class="fl">&nbsp;</label><button class="btn btn-s" onclick="generateInvBarcode()" style="width:100%;justify-content:center">🎲 Generate Barcode</button></div>
+        </div>
+        <div class="g2">
+          <div class="fg"><label class="fl">Initial Batch — Lot No.</label><input class="fc" id="inv-lot"></div>
+          <div class="fg"><label class="fl">Initial Batch — Expiry</label><input class="fc" type="date" id="inv-expiry"></div>
+        </div>
+        <div class="fg" id="inv-stability-wrap" style="display:none"><label class="fl">On-Board Stability (days once opened)</label><input class="fc" type="number" id="inv-stability" placeholder="e.g. 30"></div>
+        <div class="fg"><label class="fl">Supplier</label><input class="fc" id="inv-supplier"></div>
+        <button class="btn btn-p" onclick="saveInventoryItem()" style="width:100%;justify-content:center">💾 Save Item</button>
+      </div></div>
+      <div class="card"><div class="card-hd"><span class="card-title">📦 Inventory</span>
+        <div style="display:flex;gap:6px;align-items:center">
+          <button class="btn btn-s btn-sm" onclick="scanInventoryBarcode()">📷 Scan</button>
+          <button class="btn btn-w btn-sm" onclick="generatePurchaseOrder()">🛒 Generate PO (Low Stock)</button>
+          <div class="srch"><span>🔍</span><input id="inv-search" placeholder="Search…" oninput="filterInventory(this.value)"></div>
+        </div>
+      </div><div id="inv-table-body"><div class="spin-center"><div class="spinner"></div>Loading…</div></div></div>
+    </div>
+  </div>
+
+  <!-- ── TAB: REQUISITIONS & TRANSFERS ── -->
+  <div id="inv-tab-req" style="display:none">
+    <div class="split2">
+      <div class="card"><div class="card-hd"><span class="card-title">🔄 New Stock Requisition</span></div><div class="card-body">
+        <div class="fg"><label class="fl">Requesting Department *</label>
+          <select class="fc" id="req-dept">
+            <option>ICU</option><option>Radiology</option><option>Theatre / OT</option><option>Laboratory</option>
+            <option>Nursing Ward</option><option>OPD</option><option>Emergency</option><option>Other</option>
+          </select>
+        </div>
+        <div class="fg"><label class="fl">Item *</label>
+          <select class="fc" id="req-item"><option value="">Loading items…</option></select>
+        </div>
+        <div class="fg"><label class="fl">Quantity Requested *</label><input class="fc" type="number" min="1" id="req-qty" value="1"></div>
+        <div class="fg"><label class="fl">Notes</label><textarea class="fc" id="req-notes" rows="2" placeholder="Reason / urgency…"></textarea></div>
+        <button class="btn btn-p" onclick="submitStockRequisition()" style="width:100%;justify-content:center">📨 Submit Requisition</button>
+      </div></div>
+      <div class="card"><div class="card-hd"><span class="card-title">📋 Requisition Queue</span>
+        <select class="fc" id="req-status-filter" onchange="loadStockRequisitions()" style="width:150px;padding:5px 9px;font-size:.78rem">
+          <option value="">All Statuses</option>
+          <option value="pending">Pending</option>
+          <option value="approved">Approved</option>
+          <option value="rejected">Rejected</option>
+          <option value="fulfilled">Fulfilled</option>
+        </select>
+      </div><div id="req-table-body"><div class="spin-center"><div class="spinner"></div>Loading…</div></div></div>
+    </div>
+  </div>
+
+  <!-- ── TAB: PURCHASE ORDERS ── -->
+  <div id="inv-tab-po" style="display:none">
+    <div class="card"><div class="card-hd"><span class="card-title">🛒 Purchase Orders</span>
+      <button class="btn btn-s btn-sm" onclick="loadPurchaseOrders()">↻</button>
+    </div><div id="po-table-body"><div class="spin-center"><div class="spinner"></div>Loading…</div></div></div>
   </div>
 </div>
 
@@ -5840,8 +5912,8 @@ const ROLE_PAGES = {
   lab_supervisor:['register','worklist','samples','set-printer','hem-entry','chem-entry','sero-entry','immuno-entry','micro-entry','unified-entry','allresults','criticals','reports','qc','labhistory','tat','inventory','delivery','staff','pt-history'],
   receptionist:['register','appointments','billing','prices','worklist','dashboard','infection','print-reports-hub','reports','rad-print'],
   cashier:['billing','prices'],
-  theatre_nurse:['theatre','nursing','fluid-chart','criticals','pt-history'],
-  radiologist:['radiology','dashboard','pt-history'],
+  theatre_nurse:['theatre','nursing','fluid-chart','criticals','pt-history','inventory'],
+  radiologist:['radiology','dashboard','pt-history','inventory'],
 };
 
 const PAGE_TITLES = {
@@ -13277,8 +13349,8 @@ function renderPermissionsMatrix() {
     lab_supervisor:['dashboard','worklist','samples','hem-entry','chem-entry','sero-entry','micro-entry','pcr-entry','histo-entry','cyto-entry','allresults','criticals','reports','tat','inventory','delivery','qc','labhistory','staff'],
     receptionist:['dashboard','register','appointments','billing','prices','worklist','infection'],
     cashier:['dashboard','billing','prices','register','appointments'],
-    theatre_nurse:['dashboard','theatre','nursing','admission','fluid-chart'],
-    radiologist:['dashboard','radiology','pt-history'],
+    theatre_nurse:['dashboard','theatre','nursing','admission','fluid-chart','inventory'],
+    radiologist:['dashboard','radiology','pt-history','inventory'],
   };
   const modules=[
     {label:'🏥 Reception',pages:['register','appointments']},
@@ -13819,43 +13891,219 @@ async function loadQcResults(){
 
 async function loadQcPage(){ await loadQcLots(); await loadQcResults(); }
 
+// ── INVENTORY: departmental taxonomy, batches, FEFO, barcode ───
+// Sub-categories genuinely differ per department, so inv-cat is populated
+// dynamically from this table (driven by inv-dept) rather than one fixed
+// global enum — see migration_v2.14's note on why department/category are
+// split this way.
+const INVENTORY_TAXONOMY = {
+  'Laboratory': ['Reagents','Calibrators','Controls','Blood Bank Tubes','Specimen Containers','Stains','Microtome Blades','Other'],
+  'Radiology & Imaging': ['X-ray Films','Contrast Media (Barium/Iodine)','Ultrasound Gels','Lead Aprons','MRI Coils/Accessories','Other'],
+  'Surgical & OT Supplies': ['Sutures','Surgical Gloves','Scalpels','Sterilization Pouches','Anesthesia Consumables','Drapes','Other'],
+  'General Medical & Nursing': ['IV Cannulas','Syringes','Dressings','Gauze','Catheters','Bandages','Other'],
+  'Equipment & Maintenance': ['Analyzer Spare Parts','PPE Kits','Disinfectants','Calibration Kits','Other'],
+};
+function populateInvSubcategory(){
+  const dept=document.getElementById('inv-dept')?.value;
+  const catSel=document.getElementById('inv-cat'); if(!catSel) return;
+  const stabWrap=document.getElementById('inv-stability-wrap'); if(stabWrap) stabWrap.style.display=dept==='Laboratory'?'':'none';
+  const opts=INVENTORY_TAXONOMY[dept];
+  catSel.innerHTML=opts?opts.map(o=>'<option>'+o+'</option>').join(''):'<option value="">— Select department first —</option>';
+}
+function switchInvTab(tab,btn){
+  ['catalog','req','po'].forEach(t=>{ const el=document.getElementById('inv-tab-'+t); if(el) el.style.display=t===tab?'':'none'; });
+  document.querySelectorAll('#inv-tabs .tab').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  if(tab==='req'){ loadReqItemDropdown(); loadStockRequisitions(); }
+  if(tab==='po') loadPurchaseOrders();
+}
+function setInvDeptFilter(dept,btn){
+  window._invDeptFilter=dept;
+  document.querySelectorAll('#inv-dept-chips .btn').forEach(b=>b.classList.remove('btn-p'));
+  document.querySelectorAll('#inv-dept-chips .btn').forEach(b=>b.classList.add('btn-s'));
+  if(btn){ btn.classList.remove('btn-s'); btn.classList.add('btn-p'); }
+  renderInventoryTable();
+}
+// >90 days = Healthy, <30 days (or already past) = urgent — the 30-90
+// day band is still "Expiring Soon" (amber), just not flagged urgent, so
+// nothing silently jumps straight from green to red.
+function computeExpiryStatus(dateStr){
+  if(!dateStr) return {emoji:'⚪',label:'No expiry set',color:'var(--slate)',days:null,locked:false};
+  const days=Math.ceil((new Date(dateStr+'T00:00:00')-new Date())/864e5);
+  if(days<0) return {emoji:'🔴',label:'Expired',color:'var(--red)',days,locked:true};
+  if(days<=90) return {emoji:'🟡',label:'Expiring Soon ('+days+'d)',color:'var(--amber)',days,locked:false};
+  return {emoji:'🟢',label:'Healthy',color:'var(--green)',days,locked:false};
+}
+// A batch's effective expiry is whichever comes first: its printed expiry,
+// or (if opened) opened_date + the item's on-board stability window.
+function effectiveBatchExpiry(batch,item){
+  let eff=batch.expiry_date||null;
+  if(batch.is_opened && batch.opened_date && item?.onboard_stability_days){
+    const d=new Date(batch.opened_date+'T00:00:00'); d.setDate(d.getDate()+parseInt(item.onboard_stability_days,10));
+    const openExp=d.toISOString().slice(0,10);
+    if(!eff||openExp<eff) eff=openExp;
+  }
+  return eff;
+}
 async function loadInventory(){
   if(!sb) return;
   const body=document.getElementById('inv-table-body');
   if(!body) return;
   try{
-    const {data}=await sb.from('reagent_inventory').select('*').eq('is_active',true).order('item_name');
-    if(!data?.length){ body.innerHTML='<div class="empty-state">No inventory items yet</div>'; return; }
-    window._invItems=data;
-    body.innerHTML='<div style="overflow-x:auto"><table class="tbl" id="inv-table" style="font-size:.78rem"><thead><tr><th>Item</th><th>Category</th><th>Stock</th><th>Min</th><th>Lot</th><th>Expiry</th><th></th></tr></thead><tbody>'+
-      data.map(it=>{
-        const low = (it.current_stock||0) <= (it.min_level||0);
-        const expired = it.expiry_date && new Date(it.expiry_date) < new Date();
-        return '<tr'+(low||expired?' class="pay-unpaid"':'')+'>'+
-          '<td style="font-weight:600">'+(it.item_name||'—')+'</td>'+
-          '<td>'+(it.category||'—')+'</td>'+
-          '<td style="font-weight:700;'+(low?'color:#b91c1c':'')+'">'+(it.current_stock??0)+' '+(it.unit||'')+(low?' ⚠️':'')+'</td>'+
-          '<td>'+(it.min_level??0)+'</td><td style="font-size:.72rem">'+(it.lot_no||'—')+'</td>'+
-          '<td style="'+(expired?'color:#b91c1c;font-weight:700':'')+'">'+(it.expiry_date||'—')+(expired?' ⚠️':'')+'</td>'+
-          '<td><div class="acts">'+
-            '<button class="btn btn-s btn-xs" onclick="editInventoryItem(\''+it.id+'\')">✏️</button>'+
-            '<button class="btn btn-r btn-xs" onclick="deleteInventoryItem(\''+it.id+'\')">✕</button>'+
-          '</div></td></tr>';
-      }).join('')+'</tbody></table></div>';
+    const [itemsRes,batchesRes]=await Promise.all([
+      sb.from('reagent_inventory').select('*').eq('is_active',true).order('item_name'),
+      sb.from('inventory_batches').select('*').eq('is_active',true).gt('quantity',0),
+    ]);
+    window._invItems=itemsRes.data||[];
+    window._invBatches=batchesRes.data||[];
+    if(!window._invItems.length){ body.innerHTML='<div class="empty-state">No inventory items yet</div>'; return; }
+    renderInventoryTable();
   }catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+e.message+'</div>'; }
+}
+function renderInventoryTable(){
+  const body=document.getElementById('inv-table-body'); if(!body) return;
+  const deptFilter=window._invDeptFilter||'';
+  const items=(window._invItems||[]).filter(it=>!deptFilter||it.department===deptFilter);
+  if(!items.length){ body.innerHTML='<div class="empty-state">No items in this department</div>'; return; }
+  body.innerHTML='<div style="overflow-x:auto"><table class="tbl" id="inv-table" style="font-size:.78rem"><thead><tr><th>Item</th><th>Dept / Category</th><th>Stock</th><th>Min</th><th>Expiry Status</th><th></th></tr></thead><tbody>'+
+    items.map(it=>{
+      const itBatches=(window._invBatches||[]).filter(b=>b.item_id===it.id)
+        .sort((a,b)=>(effectiveBatchExpiry(a,it)||'9999-99-99').localeCompare(effectiveBatchExpiry(b,it)||'9999-99-99'));
+      const earliestActive=itBatches.find(b=>{ const eff=effectiveBatchExpiry(b,it); return !eff || computeExpiryStatus(eff).days==null || !computeExpiryStatus(eff).locked; });
+      const statusSrc = itBatches.length ? (earliestActive?effectiveBatchExpiry(earliestActive,it):effectiveBatchExpiry(itBatches[0],it)) : it.expiry_date;
+      const status=computeExpiryStatus(statusSrc);
+      const low=(it.current_stock||0)<=(it.min_level||0);
+      return '<tr'+(low||status.locked?' class="pay-unpaid"':'')+'>'+
+        '<td style="font-weight:600">'+escapeHtml(it.item_name||'—')+(it.barcode?'<div style="font-size:.65rem;color:var(--slate);font-family:\'DM Mono\',monospace">'+escapeHtml(it.barcode)+'</div>':'')+'</td>'+
+        '<td style="font-size:.72rem">'+escapeHtml(it.department||'Uncategorized')+'<div style="color:var(--slate)">'+escapeHtml(it.category||'—')+'</div></td>'+
+        '<td style="font-weight:700;'+(low?'color:#b91c1c':'')+'">'+(it.current_stock??0)+' '+escapeHtml(it.unit||'')+(low?' ⚠️':'')+'</td>'+
+        '<td>'+(it.min_level??0)+'</td>'+
+        '<td><span class="bdg" style="background:'+status.color+'22;color:'+status.color+'">'+status.emoji+' '+escapeHtml(status.label)+'</span></td>'+
+        '<td><div class="acts">'+
+          '<button class="btn btn-s btn-xs" onclick="toggleInvBatches(\''+it.id+'\')" title="Batches">📦</button>'+
+          '<button class="btn btn-w btn-xs" onclick="promptDispenseFefo(\''+it.id+'\')" title="Dispense (FEFO)">📤</button>'+
+          '<button class="btn btn-s btn-xs" onclick="printInventoryBarcodeLabel(\''+it.id+'\')" title="Print Label">🖨</button>'+
+          '<button class="btn btn-s btn-xs" onclick="editInventoryItem(\''+it.id+'\')" title="Edit">✏️</button>'+
+          '<button class="btn btn-r btn-xs" onclick="deleteInventoryItem(\''+it.id+'\')" title="Remove">✕</button>'+
+        '</div></td></tr>'+
+        '<tr id="inv-batches-row-'+it.id+'" style="display:none"><td colspan="6" style="background:#f8fafd;padding:10px 14px">'+invBatchesPanelHtml(it,itBatches)+'</td></tr>';
+    }).join('')+'</tbody></table></div>';
+}
+function invBatchesPanelHtml(it,batches){
+  const rows=batches.length?batches.map(b=>{
+    const eff=effectiveBatchExpiry(b,it); const st=computeExpiryStatus(eff);
+    return '<tr>'+
+      '<td style="font-size:.72rem">'+escapeHtml(b.batch_no||'—')+'</td>'+
+      '<td>'+(b.quantity??0)+' '+escapeHtml(it.unit||'')+'</td>'+
+      '<td style="font-size:.72rem">'+(b.expiry_date||'—')+(b.is_opened?' <span style="color:var(--amber)">(opened '+(b.opened_date||'')+')</span>':'')+'</td>'+
+      '<td><span class="bdg" style="background:'+st.color+'22;color:'+st.color+'">'+st.emoji+' '+escapeHtml(st.label)+'</span></td>'+
+      '<td>'+(b.is_opened?'—':'<button class="btn btn-s btn-xs" onclick="markBatchOpened('+b.id+')">Mark Opened</button>')+'</td>'+
+      '</tr>';
+  }).join('') : '<tr><td colspan="5" style="text-align:center;color:var(--slate);padding:10px">No active batches — this item has no FEFO detail yet</td></tr>';
+  return '<div style="font-size:.72rem;font-weight:700;text-transform:uppercase;color:var(--slate);margin-bottom:6px">📦 Batches (FEFO order — soonest expiry dispensed first)</div>'+
+    '<table class="tbl" style="width:100%;font-size:.76rem;margin-bottom:10px"><thead><tr><th>Batch/Lot</th><th>Qty</th><th>Expiry</th><th>Status</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>'+
+    '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:end">'+
+      '<div class="fg" style="margin:0"><label class="fl">New Batch/Lot No.</label><input class="fc" id="rcv-lot-'+it.id+'" style="width:120px;padding:5px 8px"></div>'+
+      '<div class="fg" style="margin:0"><label class="fl">Qty</label><input class="fc" type="number" min="1" id="rcv-qty-'+it.id+'" style="width:80px;padding:5px 8px"></div>'+
+      '<div class="fg" style="margin:0"><label class="fl">Expiry</label><input class="fc" type="date" id="rcv-exp-'+it.id+'" style="padding:5px 8px"></div>'+
+      '<button class="btn btn-p btn-sm" onclick="receiveBatchStock(\''+it.id+'\')">+ Receive Stock</button>'+
+    '</div>';
+}
+function toggleInvBatches(id){
+  const row=document.getElementById('inv-batches-row-'+id); if(!row) return;
+  row.style.display=row.style.display==='none'?'':'none';
+}
+async function receiveBatchStock(itemId){
+  if(!sb) return;
+  const lot=document.getElementById('rcv-lot-'+itemId)?.value||'';
+  const qty=parseFloat(document.getElementById('rcv-qty-'+itemId)?.value);
+  const exp=document.getElementById('rcv-exp-'+itemId)?.value||null;
+  if(isNaN(qty)||qty<=0){ toast('Enter a valid quantity','err'); return; }
+  const it=(window._invItems||[]).find(x=>x.id===itemId);
+  try{
+    await sb.from('inventory_batches').insert({item_id:itemId,batch_no:lot||null,quantity:qty,expiry_date:exp,received_date:today(),created_by:currentProfile?.id,created_by_name:currentProfile?.full_name||''});
+    await sb.from('reagent_inventory').update({current_stock:(it?.current_stock||0)+qty}).eq('id',itemId);
+    toast('✅ Batch received: +'+qty+' '+(it?.unit||''),'ok');
+    loadInventory();
+  }catch(e){ toast(e.message,'err'); }
+}
+async function markBatchOpened(batchId){
+  if(!sb) return;
+  try{ await sb.from('inventory_batches').update({is_opened:true,opened_date:today()}).eq('id',batchId); toast('Batch marked as opened','ok'); loadInventory(); }
+  catch(e){ toast(e.message,'err'); }
+}
+// FEFO: consumes from the batch with the soonest EFFECTIVE expiry first,
+// skipping any batch already 🔴 Expired (auto-locked from usage, per
+// spec) — an expired batch still shows in the panel for visibility, it
+// just can never be selected to dispense from.
+async function dispenseFromInventoryFefo(itemId,qty){
+  if(!sb||!(qty>0)) return {dispensed:0,shortfall:qty||0};
+  const {data:batches}=await sb.from('inventory_batches').select('*').eq('item_id',itemId).eq('is_active',true).gt('quantity',0);
+  const it=(window._invItems||[]).find(x=>x.id===itemId);
+  const eligible=(batches||[]).filter(b=>{ const eff=effectiveBatchExpiry(b,it); return !computeExpiryStatus(eff).locked; })
+    .sort((a,b)=>(effectiveBatchExpiry(a,it)||'9999-99-99').localeCompare(effectiveBatchExpiry(b,it)||'9999-99-99'));
+  let remaining=qty, dispensed=0;
+  for(const b of eligible){
+    if(remaining<=0) break;
+    const take=Math.min(b.quantity,remaining);
+    await sb.from('inventory_batches').update({quantity:b.quantity-take}).eq('id',b.id);
+    remaining-=take; dispensed+=take;
+  }
+  if(dispensed>0) await sb.from('reagent_inventory').update({current_stock:Math.max(0,(it?.current_stock||0)-dispensed)}).eq('id',itemId);
+  return {dispensed,shortfall:remaining};
+}
+async function promptDispenseFefo(itemId){
+  const it=(window._invItems||[]).find(x=>x.id===itemId); if(!it) return;
+  const input=prompt('Dispense how many '+(it.unit||'units')+' of "'+it.item_name+'"? (First-Expiry-First-Out — oldest non-expired batch used first)','1');
+  if(input===null) return;
+  const qty=parseFloat(input);
+  if(isNaN(qty)||qty<=0){ toast('Enter a valid quantity','err'); return; }
+  const {dispensed,shortfall}=await dispenseFromInventoryFefo(itemId,qty);
+  if(dispensed<=0){ toast('⚠️ No eligible (non-expired) stock available to dispense','err'); return; }
+  toast(shortfall>0?'⚠️ Only '+dispensed+' '+(it.unit||'')+' available (requested '+qty+') — dispensed what was on hand':'✅ Dispensed '+dispensed+' '+(it.unit||''),shortfall>0?'err':'ok');
+  loadInventory();
+}
+function generateInvBarcode(){
+  const code='INV'+Date.now().toString(36).toUpperCase()+Math.floor(Math.random()*90+10);
+  const el=document.getElementById('inv-barcode'); if(el) el.value=code;
+}
+function scanInventoryBarcode(){
+  openBarcodeScanner(code=>{
+    const it=(window._invItems||[]).find(x=>x.barcode===code);
+    if(!it){ toast('No inventory item matches scanned code: '+code,'err'); return; }
+    const search=document.getElementById('inv-search'); if(search){ search.value=it.item_name; filterInventory(it.item_name); }
+    toast('📷 Found: '+it.item_name,'ok');
+  }, {title:'📷 Scan Item Barcode'});
+}
+function printInventoryBarcodeLabel(itemId){
+  const it=(window._invItems||[]).find(x=>x.id===itemId); if(!it) return;
+  if(!it.barcode){ toast('This item has no barcode set — add one first','err'); return; }
+  const html=printHeader('Inventory Item Label')+
+    '<div style="text-align:center;padding:20px">'+
+    '<div style="font-weight:800;font-size:12pt;margin-bottom:6px">'+escapeHtml(it.item_name)+'</div>'+
+    '<svg id="lbl-inv-barcode"></svg>'+
+    '<div style="font-size:9pt;color:#64748b;margin-top:6px">'+escapeHtml(it.department||'')+' · '+escapeHtml(it.category||'')+'</div>'+
+    '</div>'+printFooter();
+  const w=openPrintWin(html,'Item Label');
+  try{ JsBarcode(w.document.getElementById('lbl-inv-barcode'), it.barcode, {format:'CODE128',width:1.4,height:40,fontSize:11,margin:4}); }catch(e){ /* label still prints without the barcode graphic if the value has invalid characters for CODE128 */ }
 }
 
 function editInventoryItem(id){
   const it=(window._invItems||[]).find(x=>x.id===id); if(!it) return;
   document.getElementById('inv-edit-id').value=it.id;
+  document.getElementById('inv-form-title').textContent='✏️ Edit Inventory Item';
   document.getElementById('inv-name').value=it.item_name||'';
-  document.getElementById('inv-cat').value=it.category||'Reagent';
+  document.getElementById('inv-dept').value=it.department||'';
+  populateInvSubcategory();
+  document.getElementById('inv-cat').value=it.category||'';
   document.getElementById('inv-analyzer').value=it.analyzer||'';
   document.getElementById('inv-stock').value=it.current_stock||0;
   document.getElementById('inv-unit').value=it.unit||'Units';
   document.getElementById('inv-min').value=it.min_level||5;
+  document.getElementById('inv-barcode').value=it.barcode||'';
   document.getElementById('inv-lot').value=it.lot_no||'';
   document.getElementById('inv-expiry').value=it.expiry_date||'';
+  document.getElementById('inv-stability').value=it.onboard_stability_days||'';
   document.getElementById('inv-supplier').value=it.supplier||'';
   toast('Item loaded for editing','warn');
 }
@@ -13880,7 +14128,10 @@ async function loadTat(){
   }catch(e){body.innerHTML='<div style="color:var(--red);padding:12px;font-size:.8rem">'+e.message+'</div>';}
 }
 function filterInventory(q){
-  document.querySelectorAll('#inv-table tbody tr').forEach(r=>{r.style.display=!q||r.textContent.toLowerCase().includes(q.toLowerCase())?'':'none';});
+  document.querySelectorAll('#inv-table tbody tr').forEach(r=>{
+    if(r.id&&r.id.startsWith('inv-batches-row-')) return; // batch-detail rows keep their own toggle state, independent of search
+    r.style.display=!q||r.textContent.toLowerCase().includes(q.toLowerCase())?'':'none';
+  });
 }
 async function loadSampleQueue(){
   const body=document.getElementById('sc-queue-body');if(!body||!sb)return;
@@ -14708,20 +14959,168 @@ async function saveInventoryItem(){
   if(!g('inv-name')){toast('Item name required','err');return;}
   const editId=g('inv-edit-id');
   const payload={
-    item_name:g('inv-name'), category:g('inv-cat'), analyzer:g('inv-analyzer'),
+    item_name:g('inv-name'), department:g('inv-dept')||null, category:g('inv-cat'), analyzer:g('inv-analyzer'),
     current_stock:parseFloat(g('inv-stock'))||0, unit:g('inv-unit')||'Units',
-    min_level:parseFloat(g('inv-min'))||5, lot_no:g('inv-lot'),
-    expiry_date:g('inv-expiry')||null, supplier:g('inv-supplier'),
+    min_level:parseFloat(g('inv-min'))||5, barcode:g('inv-barcode')||null,
+    onboard_stability_days:g('inv-stability')?parseInt(g('inv-stability'),10):null,
+    lot_no:g('inv-lot'), expiry_date:g('inv-expiry')||null, supplier:g('inv-supplier'),
     is_active:true, created_by:currentProfile?.id
   };
   try{
-    if(editId){ await sb.from('reagent_inventory').update(payload).eq('id',editId); toast('\u2705 Item updated','ok'); }
-    else{ await sb.from('reagent_inventory').insert(payload); toast('\u2705 Item saved','ok'); }
-    ['inv-edit-id','inv-name','inv-analyzer','inv-lot','inv-supplier','inv-expiry'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+    if(editId){
+      await sb.from('reagent_inventory').update(payload).eq('id',editId);
+      toast('\u2705 Item updated','ok');
+    } else {
+      const {data:created,error}=await sb.from('reagent_inventory').insert(payload).select().single();
+      if(error) throw error;
+      // Seed the first batch so a brand-new item immediately has FEFO/
+      // expiry-status detail instead of only the legacy lot_no/expiry_date
+      // columns \u2014 see migration_v2.14's note on why batches are separate.
+      if(created?.id && payload.current_stock>0){
+        await sb.from('inventory_batches').insert({item_id:created.id,batch_no:payload.lot_no||null,quantity:payload.current_stock,expiry_date:payload.expiry_date,received_date:today(),created_by:currentProfile?.id,created_by_name:currentProfile?.full_name||''});
+      }
+      toast('\u2705 Item saved','ok');
+    }
+    ['inv-edit-id','inv-name','inv-dept','inv-cat','inv-analyzer','inv-barcode','inv-lot','inv-supplier','inv-expiry','inv-stability'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
     document.getElementById('inv-stock').value='0';
     document.getElementById('inv-min').value='5';
+    document.getElementById('inv-form-title').textContent='\ud83d\udce6 Add Inventory Item';
+    populateInvSubcategory();
     loadInventory();
   }catch(e){toast(e.message,'err');}
+}
+
+// \u2500\u2500 PURCHASE ORDERS (Reorder / Par Stock \u2192 PO) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+async function generatePurchaseOrder(){
+  if(!sb) return;
+  const deptFilter=window._invDeptFilter||'';
+  const lowStock=(window._invItems||[]).filter(it=>(!deptFilter||it.department===deptFilter)&&(it.current_stock||0)<=(it.min_level||0));
+  if(!lowStock.length){ toast('No items at or below their reorder level'+(deptFilter?' in '+deptFilter:'')+' \u2014 nothing to order','ok'); return; }
+  const poNo='PO-'+new Date().toISOString().slice(0,10).replace(/-/g,'')+'-'+Math.floor(Math.random()*900+100);
+  try{
+    const {data:po,error}=await sb.from('purchase_orders').insert({po_no:poNo,status:'draft',created_by:currentProfile?.id,created_by_name:currentProfile?.full_name||''}).select().single();
+    if(error) throw error;
+    const items=lowStock.map(it=>({
+      po_id:po.id, item_id:it.id, item_name_snapshot:it.item_name,
+      qty_ordered:Math.max((it.min_level||5)*2-(it.current_stock||0),it.min_level||5),
+    }));
+    await sb.from('purchase_order_items').insert(items);
+    toast('\ud83d\uded2 Purchase Order '+poNo+' generated with '+items.length+' item(s)','ok');
+    printPurchaseOrder(po.id,{po_no:poNo,status:'draft'},items);
+    switchInvTab('po',document.querySelector('#inv-tabs .tab:nth-child(3)'));
+  }catch(e){ toast(e.message,'err'); }
+}
+async function loadPurchaseOrders(){
+  const body=document.getElementById('po-table-body'); if(!body||!sb) return;
+  body.innerHTML='<div class="spin-center"><div class="spinner"></div></div>';
+  try{
+    const {data:pos}=await sb.from('purchase_orders').select('*').order('created_at',{ascending:false}).limit(30);
+    if(!pos?.length){ body.innerHTML='<div class="empty-state">No purchase orders yet</div>'; return; }
+    const {data:allItems}=await sb.from('purchase_order_items').select('*').in('po_id',pos.map(p=>p.id));
+    window._poItems=allItems||[];
+    body.innerHTML='<div style="overflow-x:auto"><table class="tbl" style="font-size:.78rem"><thead><tr><th>PO No.</th><th>Supplier</th><th>Status</th><th>Items</th><th>Created</th><th></th></tr></thead><tbody>'+
+      pos.map(po=>{
+        const items=(allItems||[]).filter(i=>i.po_id===po.id);
+        return '<tr>'+
+          '<td style="font-weight:700;color:var(--teal)">'+escapeHtml(po.po_no)+'</td>'+
+          '<td>'+escapeHtml(po.supplier||'\u2014')+'</td>'+
+          '<td>'+statusBadge(po.status)+'</td>'+
+          '<td style="font-size:.72rem">'+items.length+' item(s)</td>'+
+          '<td style="font-size:.72rem">'+fmtDT(po.created_at)+'</td>'+
+          '<td><button class="btn btn-s btn-xs" onclick="printPurchaseOrder('+po.id+')">\ud83d\udda8 Print</button></td>'+
+          '</tr>';
+      }).join('')+'</tbody></table></div>';
+    window._poLookup={}; pos.forEach(po=>{ window._poLookup[po.id]=po; });
+  }catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+e.message+'</div>'; }
+}
+function printPurchaseOrder(poId,poMeta,items){
+  const po=poMeta||window._poLookup?.[poId]||{po_no:'PO-'+poId,status:'draft'};
+  const lineItems=items||(window._poItems||[]).filter(i=>i.po_id===poId);
+  const html=printHeader('Purchase Order \u2014 '+po.po_no)+
+    '<div style="margin-bottom:14px;font-size:9pt"><strong>Status:</strong> '+escapeHtml(po.status||'draft')+(po.supplier?' \u00b7 <strong>Supplier:</strong> '+escapeHtml(po.supplier):'')+'</div>'+
+    '<table class="tbl" style="width:100%"><thead><tr><th>Item</th><th>Qty to Order</th></tr></thead><tbody>'+
+    lineItems.map(i=>'<tr><td>'+escapeHtml(i.item_name_snapshot)+'</td><td>'+i.qty_ordered+'</td></tr>').join('')+
+    '</tbody></table>'+printFooter();
+  openPrintWin(html,'Purchase Order '+po.po_no);
+}
+
+// \u2500\u2500 DEPARTMENTAL REQUISITION & TRANSFER WORKFLOW \u2500\u2500\u2500\u2500\u2500\u2500\u2500
+function loadReqItemDropdown(){
+  const sel=document.getElementById('req-item'); if(!sel) return;
+  const items=window._invItems||[];
+  sel.innerHTML=items.length?items.map(it=>'<option value="'+it.id+'">'+escapeHtml(it.item_name)+' ('+(it.current_stock??0)+' '+escapeHtml(it.unit||'')+' on hand)</option>').join(''):'<option value="">No items in catalog</option>';
+}
+async function submitStockRequisition(){
+  if(!sb){ toast('Not connected','err'); return; }
+  const dept=document.getElementById('req-dept')?.value;
+  const itemId=document.getElementById('req-item')?.value;
+  const qty=parseFloat(document.getElementById('req-qty')?.value);
+  const notes=document.getElementById('req-notes')?.value||'';
+  if(!itemId){ toast('Select an item','err'); return; }
+  if(isNaN(qty)||qty<=0){ toast('Enter a valid quantity','err'); return; }
+  try{
+    await sb.from('stock_requisitions').insert({
+      requesting_department:dept, item_id:itemId, qty_requested:qty, notes,
+      status:'pending', requested_by:currentProfile?.id, requested_by_name:currentProfile?.full_name||'',
+    });
+    toast('\ud83d\udce8 Requisition submitted','ok');
+    document.getElementById('req-qty').value='1';
+    document.getElementById('req-notes').value='';
+    loadStockRequisitions();
+  }catch(e){ toast(e.message,'err'); }
+}
+async function loadStockRequisitions(){
+  const body=document.getElementById('req-table-body'); if(!body||!sb) return;
+  body.innerHTML='<div class="spin-center"><div class="spinner"></div></div>';
+  const statusFilter=document.getElementById('req-status-filter')?.value||'';
+  try{
+    let q=sb.from('stock_requisitions').select('*,reagent_inventory(item_name,unit)').order('created_at',{ascending:false}).limit(50);
+    if(statusFilter) q=q.eq('status',statusFilter);
+    const {data}=await q;
+    window._reqList=data||[];
+    if(!data?.length){ body.innerHTML='<div class="empty-state">No requisitions'+(statusFilter?' with this status':'')+'</div>'; return; }
+    const canDecide=currentProfile?.role==='admin'||currentProfile?.role==='lab_supervisor';
+    body.innerHTML='<div style="overflow-x:auto"><table class="tbl" style="font-size:.76rem"><thead><tr><th>Dept</th><th>Item</th><th>Qty</th><th>Requested By</th><th>Status</th><th></th></tr></thead><tbody>'+
+      data.map(r=>{
+        const itemLabel=(r.reagent_inventory?.item_name||'\u2014')+' ('+r.qty_requested+' '+(r.reagent_inventory?.unit||'')+')';
+        let actions='';
+        if(r.status==='pending'&&canDecide) actions='<button class="btn btn-p btn-xs" onclick="decideRequisition('+r.id+',\'approved\')">\u2705 Approve</button> <button class="btn btn-r btn-xs" onclick="decideRequisition('+r.id+',\'rejected\')">\u2715 Reject</button>';
+        else if(r.status==='approved'&&canDecide) actions='<button class="btn btn-w btn-xs" onclick="fulfillRequisition('+r.id+')">\ud83d\udce4 Fulfill (FEFO)</button>';
+        return '<tr>'+
+          '<td>'+escapeHtml(r.requesting_department||'\u2014')+'</td>'+
+          '<td>'+escapeHtml(itemLabel)+'</td>'+
+          '<td>'+r.qty_requested+'</td>'+
+          '<td style="font-size:.7rem">'+escapeHtml(r.requested_by_name||'\u2014')+'</td>'+
+          '<td>'+statusBadge(r.status)+'</td>'+
+          '<td><div class="acts">'+actions+'</div></td>'+
+          '</tr>';
+      }).join('')+'</tbody></table></div>';
+  }catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+e.message+'</div>'; }
+}
+async function decideRequisition(id,decision){
+  if(!sb) return;
+  const note=decision==='rejected'?prompt('Reason for rejecting this requisition:'):null;
+  if(decision==='rejected'&&note===null) return; // cancelled the prompt
+  try{
+    await sb.from('stock_requisitions').update({
+      status:decision, decided_by:currentProfile?.id, decided_by_name:currentProfile?.full_name||'',
+      decision_note:note||null, decided_at:new Date().toISOString(),
+    }).eq('id',id);
+    toast(decision==='approved'?'\u2705 Requisition approved \u2014 fulfill it to transfer stock':'Requisition rejected','ok');
+    loadStockRequisitions();
+  }catch(e){ toast(e.message,'err'); }
+}
+async function fulfillRequisition(id){
+  if(!sb) return;
+  const req=(window._reqList||[]).find(r=>r.id===id); if(!req) return;
+  const {dispensed,shortfall}=await dispenseFromInventoryFefo(req.item_id,req.qty_requested);
+  if(dispensed<=0){ toast('\u26a0\ufe0f No eligible stock available to fulfill this requisition','err'); return; }
+  try{
+    await sb.from('stock_requisitions').update({status:'fulfilled',fulfilled_at:new Date().toISOString()}).eq('id',id);
+    toast(shortfall>0?'\u26a0\ufe0f Partially fulfilled: '+dispensed+' of '+req.qty_requested+' (insufficient non-expired stock)':'\ud83d\udce4 Requisition fulfilled \u2014 '+dispensed+' transferred to '+req.requesting_department,shortfall>0?'err':'ok');
+    loadStockRequisitions();
+    loadInventory();
+  }catch(e){ toast(e.message,'err'); }
 }
 
 async function loadLabHistory(){
