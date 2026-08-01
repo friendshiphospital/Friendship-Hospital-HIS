@@ -426,7 +426,10 @@ html[dir="rtl"] body{direction:rtl;}
       <h1 id="launcher-greeting">Welcome</h1>
       <div class="sub">Choose a module to get started</div>
     </div>
-    <!-- launcher-continue button added in Phase 3 (last-visited tracking) -->
+    <button class="launcher-continue" id="launcher-continue-btn" onclick="continueLastPage()">
+      <div class="lc-l">Continue where you left off</div>
+      <div class="lc-v" id="launcher-continue-label">—</div>
+    </button>
     <div class="launcher-grid" id="launcher-grid"></div>
   </div>
   <nav id="sidebar">
@@ -5730,6 +5733,33 @@ function visibleModulesForRole() {
     return !!firstAccessiblePageInModule(key);
   });
 }
+// Last-visited page, remembered per user (not per device/browser profile —
+// keyed by the Supabase Auth user id, which is stable across sessions) so
+// a daily single-page user isn't stuck re-navigating the launcher every
+// login. Pure localStorage bookkeeping — no Supabase table, no change to
+// any save/load function.
+function lastPageStorageKey() {
+  const uid = currentUser?.id; return uid ? ('lastPage_' + uid) : null;
+}
+function recordLastPage(p) {
+  const key = lastPageStorageKey(); if (!key) return;
+  try {
+    localStorage.setItem(key, JSON.stringify({ page: p, ts: Date.now() }));
+  } catch (e) { /* localStorage full/unavailable — last-visited is a convenience, never critical */ }
+}
+function getLastPage() {
+  const key = lastPageStorageKey(); if (!key) return null;
+  try {
+    const raw = localStorage.getItem(key); if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed?.page || null;
+  } catch (e) { return null; }
+}
+function continueLastPage() {
+  const p = getLastPage();
+  if (!p) { toast('No previous page to continue to', 'warn'); return; }
+  goPage(p);
+}
 function renderLauncher() {
   const grid = document.getElementById('launcher-grid'); if (!grid) return;
   const greet = document.getElementById('launcher-greeting');
@@ -5739,6 +5769,16 @@ function renderLauncher() {
     return '<div class="launcher-tile" onclick="enterModule(\'' + key + '\')">' +
       '<div class="lt-ic">' + mod.icon + '</div><div class="lt-lbl">' + mod.label + '</div></div>';
   }).join('');
+  // Continue shortcut — only shown when there IS a remembered page and the
+  // current role can still actually reach it (a role change since the last
+  // visit, or a page removed entirely, must never surface a dead button).
+  const contBtn = document.getElementById('launcher-continue-btn');
+  const contLabel = document.getElementById('launcher-continue-label');
+  const lastPage = getLastPage();
+  const role = currentProfile?.role || 'admin';
+  const stillAccessible = lastPage && (role === 'admin' || (ROLE_PAGES[role] || []).includes(lastPage));
+  if (contBtn) contBtn.classList.toggle('show', !!stillAccessible);
+  if (stillAccessible && contLabel) contLabel.textContent = PAGE_TITLES[lastPage] || lastPage;
 }
 function goHome() {
   currentModule = null;
@@ -6234,6 +6274,7 @@ function goPage(p) {
     renderLabelPreview();
   },50); }
   const ti=document.getElementById('pg-title'); if(ti) ti.textContent=t('page_'+p)||PAGE_TITLES[p]||p;
+  recordLastPage(p);
   const run = fn => { try{ const r=fn(); if(r&&r.catch) r.catch(e=>console.warn(e)); }catch(e){console.warn(e);} };
   const td=new Date().toISOString().slice(0,10), td16=new Date().toISOString().slice(0,16);
   if(p==='dashboard') run(loadDashboard);
