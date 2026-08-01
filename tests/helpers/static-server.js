@@ -15,6 +15,15 @@ const MIME = {
   '.ico': 'image/x-icon',
 };
 
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function startStaticServer(rootDir, port = 0) {
   return new Promise((resolve, reject) => {
     const server = http.createServer((req, res) => {
@@ -23,7 +32,11 @@ function startStaticServer(rootDir, port = 0) {
       const filePath = path.join(rootDir, reqPath);
       if (!filePath.startsWith(rootDir)) { res.writeHead(403); res.end(); return; }
       fs.readFile(filePath, (err, data) => {
-        if (err) { res.writeHead(404); res.end('Not found: ' + reqPath); return; }
+        if (err) {
+          res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+          res.end('Not found: ' + escapeHtml(reqPath));
+          return;
+        }
         res.writeHead(200, { 'Content-Type': MIME[path.extname(filePath)] || 'application/octet-stream' });
         res.end(data);
       });
