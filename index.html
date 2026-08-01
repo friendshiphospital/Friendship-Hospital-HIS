@@ -458,7 +458,6 @@ html[dir="rtl"] body{direction:rtl;}
       <div class="sb-lbl" data-i18n="navgrp_reception">🏥 Reception</div>
       <div class="sb-item" data-p="register" onclick="goPage('register')"><span class="ic">📋</span><span data-i18n="nav_register">Register Patient</span></div>
       <div class="sb-item" data-p="appointments" onclick="goPage('appointments')"><span class="ic">📅</span><span data-i18n="nav_appointments">Appointments</span></div>
-      <div class="sb-item" data-p="billing" onclick="goPage('billing')"><span class="ic">💰</span><span data-i18n="nav_billing">Billing</span></div>
       <div class="sb-item" data-p="print-reports-hub" onclick="goPage('print-reports-hub')"><span class="ic">🖨</span><span data-i18n="nav_print_reports_hub">Print Reports</span></div>
     </div>
     <div class="sb-group">
@@ -5709,7 +5708,7 @@ const PAGE_TITLES = {
 // per-module spec; placed here rather than left unreachable (folded into
 // the closest-fitting module — Administration / Laboratory respectively).
 const MODULE_PAGES = {
-  reception:      { label:'Reception',      icon:'🏥', pages:['register','appointments','billing','print-reports-hub'] },
+  reception:      { label:'Reception',      icon:'🏥', pages:['register','appointments','print-reports-hub'] },
   phlebotomy:     { label:'Phlebotomy',      icon:'💉', pages:['samples','set-printer'] },
   laboratory:     { label:'Laboratory',      icon:'🔬', pages:['worklist','unified-entry','hem-entry','chem-entry','sero-entry','immuno-entry','micro-entry','pcr-entry','histo-entry','cyto-entry','reports','allresults','labhistory','criticals','qc','tat','pt-history','inventory'] },
   radiology:      { label:'Radiology',       icon:'🩻', pages:['radiology','rad-print'] },
