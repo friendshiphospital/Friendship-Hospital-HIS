@@ -2322,6 +2322,38 @@ html[dir="rtl"] body{direction:rtl;}
   </div>
 </div>
 
+<!-- Simulated DICOM/PACS viewer — there is no real DICOM file storage or
+     PACS server in this architecture (single-file static app + Supabase),
+     so this is a pan/zoom/window-level demo over a placeholder image, not
+     a real image viewer. If a study has a real pacs_url set, "View DICOM"
+     opens that in a new tab instead of this modal. -->
+<div class="ov" id="dicom-viewer-ov">
+  <div class="mo mo-lg">
+    <div class="mo-hd"><h3>🩻 DICOM Viewer (Simulated)</h3><button class="mo-x" onclick="closeDicomViewer()">✕</button></div>
+    <div class="mo-b">
+      <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:6px 10px;font-size:.68rem;color:#92400e;margin-bottom:8px">⚠️ Demo viewer over a placeholder image — no real DICOM/PACS integration exists in this app. Set a Study PACS URL on the report to link out to a real viewer instead.</div>
+      <div id="dicom-pt-label" style="font-size:.78rem;font-weight:700;margin-bottom:6px">—</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+        <button class="btn btn-s btn-xs" onclick="dicomZoom(1.2)">🔍+ Zoom In</button>
+        <button class="btn btn-s btn-xs" onclick="dicomZoom(0.8)">🔍− Zoom Out</button>
+        <button class="btn btn-s btn-xs" onclick="dicomReset()">↺ Reset</button>
+        <span style="font-size:.72rem;color:var(--slate);align-self:center">Brightness</span>
+        <input type="range" id="dicom-brightness" min="50" max="150" value="100" oninput="dicomApplyFilter()" style="width:90px">
+        <span style="font-size:.72rem;color:var(--slate);align-self:center">Contrast</span>
+        <input type="range" id="dicom-contrast" min="50" max="150" value="100" oninput="dicomApplyFilter()" style="width:90px">
+        <button class="btn btn-w btn-xs" id="dicom-measure-btn" onclick="dicomToggleMeasure()">📏 Measure</button>
+      </div>
+      <div id="dicom-canvas-wrap" style="position:relative;overflow:hidden;background:#000;border-radius:8px;height:420px;cursor:grab" onmousedown="dicomStartPan(event)" onmousemove="dicomPan(event)" onmouseup="dicomEndPan(event)" onmouseleave="dicomEndPan(event)" onwheel="dicomWheelZoom(event)" onclick="dicomCanvasClick(event)">
+        <canvas id="dicom-canvas" width="700" height="420" style="position:absolute;top:0;left:0;transform-origin:center center"></canvas>
+      </div>
+      <div id="dicom-measure-readout" style="font-size:.72rem;color:var(--slate);margin-top:6px">—</div>
+    </div>
+    <div class="mo-ft">
+      <button class="btn btn-s" onclick="closeDicomViewer()">Close</button>
+    </div>
+  </div>
+</div>
+
 <!-- Patient wallet -->
 <div class="ov" id="wallet-ov">
   <div class="mo mo-lg">
@@ -3882,7 +3914,7 @@ html[dir="rtl"] body{direction:rtl;}
           <input type="hidden" id="rad-pt-id">
           <div class="g2">
             <div class="fg"><label class="fl">Imaging Type *</label>
-              <select class="fc" id="rad-type">
+              <select class="fc" id="rad-type" onchange="updateRadSafetyFields()">
                 <optgroup label="Plain X-Ray">
                   <option>X-Ray — Chest PA</option>
                   <option>X-Ray — Chest AP (portable)</option>
@@ -3943,6 +3975,23 @@ html[dir="rtl"] body{direction:rtl;}
           <div class="fg"><label class="fl">Contraindications / Special Notes</label>
             <input class="fc" id="rad-contraindications" placeholder="Pregnancy, renal function, contrast allergy, pacemaker…">
           </div>
+          <div id="rad-pregnancy-wrap" style="display:none;background:#fef3c7;border:1.5px solid #fde68a;border-radius:8px;padding:10px 12px;margin-bottom:11px">
+            <label class="fl" style="color:#92400e">⚠️ Pregnancy Status Confirmation — Required *</label>
+            <select class="fc" id="rad-pregnancy-status">
+              <option value="">— Confirm before submitting —</option>
+              <option value="confirmed_not_pregnant">Confirmed NOT pregnant</option>
+              <option value="confirmed_pregnant">Confirmed PREGNANT — radiologist must review risk/benefit</option>
+              <option value="declined_unknown">Unable to confirm / patient declined</option>
+            </select>
+          </div>
+          <div id="rad-contrast-safety-wrap" style="display:none;background:#f0f9ff;border:1.5px solid #bae6fd;border-radius:8px;padding:10px 12px;margin-bottom:11px">
+            <div class="fl" style="color:#0369a1">🧪 Contrast Clearance</div>
+            <div class="g2">
+              <div class="fg" style="margin-bottom:0"><label class="fl">eGFR (mL/min/1.73m²)</label><input class="fc" type="number" step="0.1" id="rad-egfr" oninput="checkContrastSafety()"></div>
+              <div class="fg" style="margin-bottom:0"><label class="fl">Serum Creatinine (µmol/L)</label><input class="fc" type="number" step="0.1" id="rad-creatinine" oninput="checkContrastSafety()"></div>
+            </div>
+            <div id="rad-contrast-warning" style="display:none;margin-top:8px;font-size:.72rem;font-weight:700;color:#b91c1c">⚠️ eGFR below 30 — contrast is relatively contraindicated. Confirm risk/benefit with the radiologist before proceeding.</div>
+          </div>
           <button class="btn btn-p" onclick="submitRadRequest()" style="width:100%;justify-content:center;margin-top:4px">📋 Submit Request</button>
         </div>
       </div>
@@ -3974,6 +4023,18 @@ html[dir="rtl"] body{direction:rtl;}
         <div class="card-hd"><span class="card-title" style="color:#6366f1">📝 Write Report</span></div>
         <div class="card-body">
           <input type="hidden" id="rad-rep-id">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#f8fafd;border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin-bottom:10px">
+            <span style="font-size:.8rem;font-weight:700;color:var(--ink)">⚡ Quick Templates</span>
+            <select class="fc" id="rad-quick-template" style="max-width:260px" onchange="applyRadTemplate(this.value,this.options[this.selectedIndex].text);this.value=''">
+              <option value="">Choose a preset…</option>
+              <option value="cxr">Normal Chest X-Ray</option>
+              <option value="abd_us">Normal Abdominal Ultrasound</option>
+              <option value="brain_ct">Normal Brain CT</option>
+              <option value="pelvis_us">Normal Pelvis Ultrasound</option>
+              <option value="limb_xr">Normal Extremity X-Ray</option>
+              <option value="brain_mri">Normal Brain MRI</option>
+            </select>
+          </div>
           <div id="rad-rep-pt-info" style="background:var(--teal-lt);border:1.5px solid var(--teal2);border-radius:9px;padding:8px 12px;margin-bottom:10px;display:none">
             <div style="font-weight:700;font-size:.84rem" id="rad-rep-pt-name">—</div>
             <div style="font-size:.7rem;color:var(--slate);margin-top:2px" id="rad-rep-pt-meta">—</div>
@@ -3992,21 +4053,38 @@ html[dir="rtl"] body{direction:rtl;}
           <div class="fg"><label class="fl">Technique / Protocol</label>
             <input class="fc" id="rad-rep-technique" placeholder="e.g. PA erect, post-contrast, 1.5T, axial T1/T2 sequences…">
           </div>
-          <div class="fg"><label class="fl">Findings</label>
+          <div class="fg">
+            <div style="display:flex;justify-content:space-between;align-items:center"><label class="fl" style="margin-bottom:0">Findings</label><button type="button" class="btn btn-s btn-xs" id="rad-dictate-findings-btn" onclick="toggleRadDictation('rad-rep-findings',this)">🎤 Dictate</button></div>
             <textarea class="fc" id="rad-rep-findings" rows="6" placeholder="Systematic description of findings — normal and abnormal…"></textarea>
           </div>
-          <div class="fg"><label class="fl">Impression / Conclusion *</label>
+          <div class="fg">
+            <div style="display:flex;justify-content:space-between;align-items:center"><label class="fl" style="margin-bottom:0">Impression / Conclusion *</label><button type="button" class="btn btn-s btn-xs" id="rad-dictate-impression-btn" onclick="toggleRadDictation('rad-rep-impression',this)">🎤 Dictate</button></div>
             <textarea class="fc" id="rad-rep-impression" rows="3" placeholder="Concise summary and diagnosis…" style="border-color:#fb923c"></textarea>
           </div>
           <div class="fg"><label class="fl">Recommendation</label>
             <input class="fc" id="rad-rep-recommendation" placeholder="e.g. Correlation with clinical findings, follow-up in 3 months…">
           </div>
+          <div id="rad-dose-wrap" style="display:none" class="g3">
+            <div class="fg"><label class="fl">Recorded Dose</label><input class="fc" type="number" step="0.01" id="rad-dose-value" placeholder="e.g. 0.15"></div>
+            <div class="fg"><label class="fl">Unit</label><select class="fc" id="rad-dose-unit"><option value="mGy">mGy</option><option value="DAP (µGy·m²)">DAP (µGy·m²)</option><option value="mSv">mSv</option></select></div>
+            <div class="fg"><label class="fl">PACS URL (optional)</label><input class="fc" id="rad-pacs-url" placeholder="https://pacs.example/study/…"></div>
+          </div>
           <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
-            <label class="chk-item"><input type="checkbox" id="rad-rep-critical"> ⚠️ Contains critical / urgent finding</label>
+            <label class="chk-item"><input type="checkbox" id="rad-rep-critical"> 🚨 CRITICAL FINDING (Requires Immediate Physician Alert)</label>
           </div>
           <div id="rad-critical-detail" style="display:none;background:#fee2e2;border:1.5px solid #fca5a5;border-radius:8px;padding:10px 12px;margin-bottom:10px">
-            <div style="font-size:.75rem;font-weight:700;color:#b91c1c;margin-bottom:4px">Critical Finding — Notify immediately</div>
-            <input class="fc" id="rad-critical-desc" placeholder="Describe critical finding for immediate notification…">
+            <div style="font-size:.75rem;font-weight:700;color:#b91c1c;margin-bottom:4px">Critical Finding — Notify immediately (e.g. Pneumothorax, Acute Haemorrhage, Fracture)</div>
+            <input class="fc" id="rad-critical-desc" placeholder="Describe critical finding…" style="margin-bottom:8px">
+            <div class="g3">
+              <div class="fg" style="margin-bottom:0"><label class="fl">Physician Notified Name *</label><input class="fc" id="rad-crit-notified-name" placeholder="Dr. name"></div>
+              <div class="fg" style="margin-bottom:0"><label class="fl">Notification Time *</label><input class="fc" type="datetime-local" id="rad-crit-notified-time"></div>
+              <div class="fg" style="margin-bottom:0"><label class="fl">Channel *</label>
+                <select class="fc" id="rad-crit-channel">
+                  <option value="">— Select —</option>
+                  <option>Phone Call</option><option>In-Person</option><option>SMS</option><option>Email</option><option>Other</option>
+                </select>
+              </div>
+            </div>
           </div>
           <div style="display:flex;gap:8px">
             <button class="btn btn-p" onclick="saveRadReport()" style="flex:2;justify-content:center">💾 Save Report</button>
@@ -5456,24 +5534,6 @@ html[dir="rtl"] body{direction:rtl;}
 </div>
 
 
-<div class="ov" id="rad-report-ov">
-  <div class="mo">
-    <div class="mo-hd"><h3>🩻 Radiology Report</h3><button class="mo-x" onclick="closeOv('rad-report-ov')">✕</button></div>
-    <div class="mo-b">
-      <input type="hidden" id="rad-rep-id">
-      <div id="rad-rep-pt-info" class="pt-banner" style="margin-bottom:14px"></div>
-      <div class="fg"><label class="fl">Radiologist</label><input class="fc" id="rad-rep-radiologist"></div>
-      <div class="fg"><label class="fl">Report</label><textarea class="fc" id="rad-rep-report" rows="4"></textarea></div>
-      <div class="fg"><label class="fl">Impression</label><textarea class="fc" id="rad-rep-impression" rows="2"></textarea></div>
-      <label class="chk-item"><input type="checkbox" id="rad-rep-critical"> Contains critical / urgent finding</label>
-    </div>
-    <div class="mo-ft">
-      <button class="btn btn-s" onclick="closeOv('rad-report-ov')">Cancel</button>
-      <button class="btn btn-s" onclick="printRadReport()">🖨 Print</button>
-      <button class="btn btn-p" onclick="saveRadReport()">💾 Save Report</button>
-    </div>
-  </div>
-</div>
 
 <div class="ov" id="crit-ack-ov">
   <div class="mo mo-sm">
@@ -13465,6 +13525,187 @@ async function deleteDoctor(id) {
 // ══════════════════════════════════════════════════════════════
 // RADIOLOGY MODULE
 // ══════════════════════════════════════════════════════════════
+
+// ── QUICK REPORT TEMPLATES ──────────────────────────────
+// Same one-click-preset pattern as the Doctor Consultation module's Quick
+// Templates — every field is meant to be reviewed and edited, not signed
+// off verbatim.
+const RAD_REPORT_TEMPLATES = {
+  cxr: {
+    technique:'PA view of the chest performed in upright position.',
+    findings:'Lungs are clear bilaterally with no focal consolidation, effusion, or pneumothorax. Heart size is normal. Mediastinal contours are unremarkable. No acute bony abnormality.',
+    impression:'Normal chest radiograph.',
+  },
+  abd_us: {
+    technique:'Real-time ultrasound of the abdomen performed with curvilinear probe.',
+    findings:'Liver is normal in size and echotexture, no focal lesion. Gallbladder is unremarkable, no stones. Common bile duct not dilated. Pancreas and spleen unremarkable. Both kidneys are normal in size, shape and echogenicity, no hydronephrosis or calculus. No free fluid in the abdomen.',
+    impression:'Normal abdominal ultrasound.',
+  },
+  brain_ct: {
+    technique:'Non-contrast axial CT of the brain performed.',
+    findings:'No acute intracranial haemorrhage, mass effect, or midline shift. Grey-white matter differentiation is preserved. Ventricles and sulci are normal for age. No extra-axial collection. Visualized paranasal sinuses and mastoid air cells are clear.',
+    impression:'Normal non-contrast CT brain.',
+  },
+  pelvis_us: {
+    technique:'Transabdominal pelvic ultrasound performed with full bladder technique.',
+    findings:'Uterus is normal in size and shape with homogeneous myometrial echotexture. Endometrial stripe is unremarkable. Both ovaries are normal in size with no adnexal mass. No free fluid in the pelvis.',
+    impression:'Normal pelvic ultrasound.',
+  },
+  limb_xr: {
+    technique:'Two orthogonal views of the affected limb performed.',
+    findings:'No acute fracture or dislocation identified. Bone mineralisation is normal. Joint spaces are preserved. No significant soft tissue swelling.',
+    impression:'No radiographic evidence of fracture.',
+  },
+  brain_mri: {
+    technique:'Multiplanar, multisequence MRI of the brain performed (axial T1/T2/FLAIR, DWI).',
+    findings:'No acute infarct, haemorrhage, or extra-axial collection. Normal grey-white matter differentiation. Ventricles and sulci are age-appropriate. No abnormal enhancement. Major flow voids are preserved.',
+    impression:'Normal MRI brain.',
+  },
+};
+function applyRadTemplate(key,label){
+  const tpl=RAD_REPORT_TEMPLATES[key]; if(!tpl) return;
+  const requestId=document.getElementById('rad-rep-id')?.value;
+  if(!requestId){ toast('Open a study from the Requests list first','err'); return; }
+  const fieldMap={technique:'rad-rep-technique',findings:'rad-rep-findings',impression:'rad-rep-impression'};
+  const targetIds=Object.values(fieldMap);
+  const hasExisting=targetIds.some(id=>document.getElementById(id)?.value?.trim());
+  if(hasExisting && !confirm('This will overwrite existing text in Technique/Findings/Impression with the "'+(label||key)+'" template. Continue?')) return;
+  Object.entries(tpl).forEach(([k,v])=>{ const el=document.getElementById(fieldMap[k]); if(el) el.value=v; });
+  toast('⚡ Template applied — review and edit before saving','ok');
+}
+
+// ── VOICE DICTATION ─────────────────────────────────────
+// Browser-native Web Speech API — no library/CDN dependency. Only
+// available in Chromium-based browsers; the button is left in place but
+// toggleRadDictation() reports a clear error on unsupported browsers
+// rather than silently doing nothing.
+let _radRecognition=null, _radDictateTarget=null;
+function toggleRadDictation(targetId,btn){
+  const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SpeechRecognition){ toast('Voice dictation is not supported in this browser — try Chrome/Edge','err'); return; }
+  if(_radRecognition){ _radRecognition.stop(); return; }
+  const target=document.getElementById(targetId); if(!target) return;
+  _radDictateTarget=target;
+  _radRecognition=new SpeechRecognition();
+  _radRecognition.continuous=true; _radRecognition.interimResults=false; _radRecognition.lang='en-US';
+  _radRecognition.onresult=(e)=>{
+    let transcript='';
+    for(let i=e.resultIndex;i<e.results.length;i++){ if(e.results[i].isFinal) transcript+=e.results[i][0].transcript; }
+    if(transcript.trim()){ target.value=(target.value?target.value.trim()+' ':'')+transcript.trim(); }
+  };
+  _radRecognition.onerror=(e)=>{ toast('Dictation error: '+e.error,'err'); };
+  _radRecognition.onend=()=>{ _radRecognition=null; document.querySelectorAll('[id^="rad-dictate-"]').forEach(b=>b.textContent='🎤 Dictate'); };
+  _radRecognition.start();
+  if(btn) btn.textContent='⏹ Stop';
+  toast('🎤 Listening… click Stop when done','ok');
+}
+
+// ── RADIATION DOSE / CONTRAST / PREGNANCY SAFETY ───────
+function isIonizingModality(type){ return /^(X-Ray|CT|Mammography|DEXA)/i.test(type||''); }
+function isContrastStudy(type){ return /contrast/i.test(type||''); }
+function isFemaleChildbearing(p){ return p && p.sex==='F' && (p.age_unit||'y')==='y' && p.age>=12 && p.age<=55; }
+function updateRadSafetyFields(){
+  const type=document.getElementById('rad-type')?.value||'';
+  const pregWrap=document.getElementById('rad-pregnancy-wrap');
+  if(pregWrap) pregWrap.style.display=(isFemaleChildbearing(_radPt)&&/^(X-Ray|CT)/i.test(type))?'':'none';
+  const contrastWrap=document.getElementById('rad-contrast-safety-wrap');
+  if(contrastWrap) contrastWrap.style.display=isContrastStudy(type)?'':'none';
+}
+function checkContrastSafety(){
+  const egfr=parseFloat(document.getElementById('rad-egfr')?.value);
+  const warn=document.getElementById('rad-contrast-warning'); if(!warn) return;
+  warn.style.display=(!isNaN(egfr)&&egfr<30)?'':'none';
+}
+function updateRadDoseVisibility(){
+  const type=document.getElementById('rad-rep-study')?.value||'';
+  const wrap=document.getElementById('rad-dose-wrap'); if(wrap) wrap.style.display=isIonizingModality(type)?'':'none';
+}
+
+// ── SIMULATED DICOM/PACS VIEWER ─────────────────────────
+// There is no real DICOM file storage or PACS server in this
+// architecture (a static single-file app + Supabase) — this draws a
+// procedural placeholder "study" on a <canvas> and layers real,
+// interactive pan/zoom/window-level/measurement controls on top of it,
+// so the mechanics are genuine even though the image itself is a demo.
+// If a study has a real pacs_url set, View DICOM opens that instead.
+let _dicomState={scale:1,panX:0,panY:0,isPanning:false,lastX:0,lastY:0,measuring:false,points:[]};
+async function openDicomViewer(requestId){
+  if(!sb||!requestId) return;
+  try{
+    const {data:r}=await sb.from('radiology_requests').select('imaging_type,pacs_url,patients(name,mrn)').eq('id',requestId).single();
+    if(!r) return;
+    if(r.pacs_url){ window.open(r.pacs_url,'_blank'); return; }
+    _dicomState={scale:1,panX:0,panY:0,isPanning:false,lastX:0,lastY:0,measuring:false,points:[]};
+    document.getElementById('dicom-pt-label').textContent=(r.patients?.name||'—')+' — '+(r.imaging_type||'Study')+(r.patients?.mrn?' ('+r.patients.mrn+')':'');
+    document.getElementById('dicom-brightness').value=100;
+    document.getElementById('dicom-contrast').value=100;
+    document.getElementById('dicom-measure-readout').textContent='—';
+    drawDicomPlaceholder(r.imaging_type||'');
+    dicomApplyFilter();
+    openOv('dicom-viewer-ov');
+  }catch(e){ toast(e.message,'err'); }
+}
+function closeDicomViewer(){ closeOv('dicom-viewer-ov'); }
+function drawDicomPlaceholder(imagingType){
+  const canvas=document.getElementById('dicom-canvas'); if(!canvas) return;
+  const ctx=canvas.getContext('2d'); const W=canvas.width, H=canvas.height;
+  ctx.fillStyle='#000'; ctx.fillRect(0,0,W,H);
+  // A simple procedural body-outline silhouette so different modalities
+  // look at least visually distinct — not a real reconstruction of any kind.
+  const grad=ctx.createRadialGradient(W/2,H/2,20,W/2,H/2,W/2);
+  grad.addColorStop(0,'#d8dee6'); grad.addColorStop(0.6,'#6b7684'); grad.addColorStop(1,'#111418');
+  ctx.fillStyle=grad;
+  ctx.beginPath();
+  if(/chest|lung/i.test(imagingType)) ctx.ellipse(W/2,H/2,W*0.32,H*0.42,0,0,Math.PI*2);
+  else if(/abdomen|pelvis/i.test(imagingType)) ctx.ellipse(W/2,H/2,W*0.28,H*0.36,0,0,Math.PI*2);
+  else if(/brain|head|skull/i.test(imagingType)) ctx.ellipse(W/2,H/2,W*0.22,H*0.26,0,0,Math.PI*2);
+  else ctx.ellipse(W/2,H/2,W*0.25,H*0.35,0,0,Math.PI*2);
+  ctx.fill();
+  ctx.strokeStyle='rgba(255,255,255,.15)'; ctx.lineWidth=1;
+  for(let i=0;i<8;i++){ ctx.beginPath(); ctx.ellipse(W/2,H/2,W*0.05*i+10,H*0.06*i+10,0,0,Math.PI*2); ctx.stroke(); }
+  ctx.fillStyle='rgba(255,255,255,.55)'; ctx.font='11px monospace';
+  ctx.fillText('SIMULATED — '+(imagingType||'Study').toUpperCase(),10,H-14);
+}
+function dicomApplyFilter(){
+  const canvas=document.getElementById('dicom-canvas'); if(!canvas) return;
+  const b=document.getElementById('dicom-brightness')?.value||100;
+  const c=document.getElementById('dicom-contrast')?.value||100;
+  canvas.style.filter='brightness('+b+'%) contrast('+c+'%)';
+  dicomApplyTransform();
+}
+function dicomApplyTransform(){
+  const canvas=document.getElementById('dicom-canvas'); if(!canvas) return;
+  canvas.style.transform='translate('+_dicomState.panX+'px,'+_dicomState.panY+'px) scale('+_dicomState.scale+')';
+}
+function dicomZoom(factor){ _dicomState.scale=Math.min(6,Math.max(0.5,_dicomState.scale*factor)); dicomApplyTransform(); }
+function dicomWheelZoom(e){ e.preventDefault(); dicomZoom(e.deltaY<0?1.1:0.9); }
+function dicomReset(){ _dicomState.scale=1; _dicomState.panX=0; _dicomState.panY=0; dicomApplyTransform(); document.getElementById('dicom-brightness').value=100; document.getElementById('dicom-contrast').value=100; dicomApplyFilter(); }
+function dicomStartPan(e){ if(_dicomState.measuring) return; _dicomState.isPanning=true; _dicomState.lastX=e.clientX; _dicomState.lastY=e.clientY; }
+function dicomPan(e){
+  if(!_dicomState.isPanning) return;
+  _dicomState.panX+=e.clientX-_dicomState.lastX; _dicomState.panY+=e.clientY-_dicomState.lastY;
+  _dicomState.lastX=e.clientX; _dicomState.lastY=e.clientY;
+  dicomApplyTransform();
+}
+function dicomEndPan(){ _dicomState.isPanning=false; }
+function dicomToggleMeasure(){
+  _dicomState.measuring=!_dicomState.measuring; _dicomState.points=[];
+  const btn=document.getElementById('dicom-measure-btn'); if(btn) btn.classList.toggle('btn-p',_dicomState.measuring);
+  document.getElementById('dicom-measure-readout').textContent=_dicomState.measuring?'Click two points on the image to measure a distance (pixels — no real spatial calibration exists without genuine DICOM pixel-spacing metadata).':'—';
+}
+function dicomCanvasClick(e){
+  if(!_dicomState.measuring) return;
+  const canvas=document.getElementById('dicom-canvas'); const rect=canvas.getBoundingClientRect();
+  const x=(e.clientX-rect.left)/_dicomState.scale, y=(e.clientY-rect.top)/_dicomState.scale;
+  _dicomState.points.push({x,y});
+  if(_dicomState.points.length===2){
+    const [p1,p2]=_dicomState.points;
+    const dist=Math.hypot(p2.x-p1.x,p2.y-p1.y);
+    document.getElementById('dicom-measure-readout').textContent='Distance: '+dist.toFixed(1)+' px (uncalibrated — not a real physical measurement)';
+    _dicomState.points=[];
+  }
+}
+
 function switchRadTab(tab,btn) {
   ['requests','report','reported'].forEach(t=>{
     const el=document.getElementById('rad-tab-'+t); if(el) el.style.display=t===tab?'':'none';
@@ -13505,6 +13746,7 @@ function selectRadPatient(p) {
   document.getElementById('rad-search').value=p.name||fullName(p);
   document.getElementById('rad-search-results').style.display='none';
   const dr=document.getElementById('rad-req-doctor'); if(dr&&!dr.value&&currentProfile) dr.value=currentProfile.full_name||'';
+  updateRadSafetyFields();
 }
 
 async function submitRadRequest() {
@@ -13513,6 +13755,11 @@ async function submitRadRequest() {
   if(!ptId){toast('Select a patient first','err');return;}
   const g=id=>document.getElementById(id)?.value||'';
   if(!g('rad-indication')){toast('Clinical indication required','err');return;}
+  // Mandatory pregnancy-status confirmation for female patients of
+  // childbearing age before an X-Ray/CT request can be submitted.
+  if(document.getElementById('rad-pregnancy-wrap')?.style.display!=='none' && !g('rad-pregnancy-status')){
+    toast('\u26a0\ufe0f Pregnancy status must be confirmed before submitting this request','err'); return;
+  }
   // Check payment
   if(_radPt && !isPaymentCleared(_radPt)){checkPaymentGate(_radPt,'Radiology Request',()=>_doSubmitRadRequest());return;}
   _doSubmitRadRequest();
@@ -13520,15 +13767,20 @@ async function submitRadRequest() {
 async function _doSubmitRadRequest() {
   const ptId=document.getElementById('rad-pt-id')?.value;
   const g=id=>document.getElementById(id)?.value||'';
+  const pregWrapShown=document.getElementById('rad-pregnancy-wrap')?.style.display!=='none';
   try {
     await sb.from('radiology_requests').insert({
       patient_id:ptId, imaging_type:g('rad-type'), urgency:g('rad-urgency'),
       indication:g('rad-indication'), clinical_history:g('rad-contraindications'),
       requesting_doctor:g('rad-req-doctor')||currentProfile?.full_name,
+      pregnancy_status:pregWrapShown?(g('rad-pregnancy-status')||null):'not_applicable',
+      egfr_value:g('rad-egfr')?parseFloat(g('rad-egfr')):null,
+      creatinine_value:g('rad-creatinine')?parseFloat(g('rad-creatinine')):null,
       status:'Requested', created_by:currentProfile?.id
     });
     toast('\u2705 Radiology request submitted','ok');
-    ['rad-indication','rad-contraindications'].forEach(id=>{const el=document.getElementById(id);if(el) el.value='';});
+    ['rad-indication','rad-contraindications','rad-egfr','rad-creatinine'].forEach(id=>{const el=document.getElementById(id);if(el) el.value='';});
+    const pregSel=document.getElementById('rad-pregnancy-status'); if(pregSel) pregSel.value='';
     loadRadRequests();
   } catch(e){toast(e.message,'err');}
 }
@@ -13552,7 +13804,7 @@ async function loadRadRequests() {
           '<td style="font-size:.72rem;color:var(--slate)">'+fmtDate(r.created_at)+'</td>'+
           '<td><div style="font-weight:600;font-size:.82rem">'+(pt.name||'—')+'</div>'+
           '<div style="font-size:.68rem;color:var(--slate)">'+(pt.mrn||pt.lab_no||'')+' \u00b7 '+(pt.age||'?')+(pt.age_unit||'y')+' / '+(pt.sex||'')+' '+(pt.ward?'\u00b7 '+pt.ward:'')+'</div></td>'+
-          '<td style="font-size:.78rem;font-weight:600">'+(r.imaging_type||'—')+'</td>'+
+          '<td style="font-size:.78rem;font-weight:600">'+(r.imaging_type||'—')+(r.is_critical?' <span class="bdg" style="background:#b91c1c;color:#fff">🚨 CRITICAL</span>':'')+'</td>'+
           '<td>'+(r.urgency==='STAT'?'<span class="bdg" style="background:#fef2f2;color:#b91c1c;border:1.5px solid #fca5a5">\u26a1 STAT</span>':statusBadge(r.urgency))+'</td>'+
           '<td style="font-size:.75rem">'+(r.requesting_doctor||'—')+'</td>'+
           '<td>'+paymentTag(pt.payment_status)+'</td>'+
@@ -13560,6 +13812,7 @@ async function loadRadRequests() {
           '<td><div class="acts">'+
             '<button class="btn btn-p btn-xs" onclick="openRadReport(\''+r.id+'\')">📝 Report</button>'+
             '<button class="btn btn-s btn-xs" onclick="updateRadStatus(\''+r.id+'\',\'In Progress\')">▶ Start</button>'+
+            ((r.status==='Reported'||r.status==='Verified')?'<button class="btn btn-s btn-xs" onclick="openDicomViewer(\''+r.id+'\')">👁️ View DICOM</button>':'')+
           '</div></td></tr>';
       }).join('')+'</tbody></table></div>';
   } catch(e){body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+e.message+'</div>';}
@@ -13599,8 +13852,20 @@ async function openRadReport(requestId) {
     const dateEl=document.getElementById('rad-rep-date'); if(dateEl&&!dateEl.value) dateEl.value=today();
     const radEl=document.getElementById('rad-rep-radiologist'); if(radEl&&!radEl.value&&currentProfile) radEl.value=currentProfile.full_name||'';
     // Pre-fill existing report if any
+    if(r.technique) document.getElementById('rad-rep-technique').value=r.technique;
     if(r.report) document.getElementById('rad-rep-findings').value=r.report;
     if(r.impression) document.getElementById('rad-rep-impression').value=r.impression;
+    if(r.recommendation) document.getElementById('rad-rep-recommendation').value=r.recommendation;
+    if(r.recorded_dose!=null) document.getElementById('rad-dose-value').value=r.recorded_dose;
+    if(r.dose_unit) document.getElementById('rad-dose-unit').value=r.dose_unit;
+    if(r.pacs_url) document.getElementById('rad-pacs-url').value=r.pacs_url;
+    const critCb=document.getElementById('rad-rep-critical');
+    if(critCb){ critCb.checked=!!r.is_critical; critCb.dispatchEvent(new Event('change')); }
+    if(r.critical_finding) document.getElementById('rad-critical-desc').value=r.critical_finding;
+    if(r.physician_notified_name) document.getElementById('rad-crit-notified-name').value=r.physician_notified_name;
+    if(r.physician_notified_time) document.getElementById('rad-crit-notified-time').value=r.physician_notified_time.slice(0,16);
+    if(r.notification_channel) document.getElementById('rad-crit-channel').value=r.notification_channel;
+    updateRadDoseVisibility();
     // Switch to report tab
     document.querySelectorAll('#rad-tabs .tab')[1]?.click();
     switchRadTab('report',document.querySelectorAll('#rad-tabs .tab')[1]);
@@ -13622,12 +13887,22 @@ async function saveRadReport() {
   const g=id=>document.getElementById(id)?.value||'';
   if(!g('rad-rep-impression')){toast('Impression / Conclusion required','err');return;}
   const isCritical=document.getElementById('rad-rep-critical')?.checked;
+  // A critical finding must never go out without a documented, immediate
+  // notification — these three fields are the audit trail for that call.
+  if(isCritical && (!g('rad-crit-notified-name')||!g('rad-crit-notified-time')||!g('rad-crit-channel'))){
+    toast('⚠️ Critical finding requires Physician Notified Name, Notification Time, and Channel before saving','err'); return;
+  }
   try {
     await sb.from('radiology_requests').update({
       radiologist:g('rad-rep-radiologist')||currentProfile?.full_name,
       technique:g('rad-rep-technique'), report:g('rad-rep-findings'),
       impression:g('rad-rep-impression'), recommendation:g('rad-rep-recommendation'),
+      recorded_dose:g('rad-dose-value')?parseFloat(g('rad-dose-value')):null, dose_unit:g('rad-dose-unit')||'mGy',
+      pacs_url:g('rad-pacs-url')||null,
       is_critical:isCritical, critical_finding:isCritical?g('rad-critical-desc'):'',
+      physician_notified_name:isCritical?g('rad-crit-notified-name'):null,
+      physician_notified_time:isCritical&&g('rad-crit-notified-time')?new Date(g('rad-crit-notified-time')).toISOString():null,
+      notification_channel:isCritical?g('rad-crit-channel'):null,
       reported_at:new Date().toISOString(),
       status:'Reported', updated_at:new Date().toISOString()
     }).eq('id',requestId);
@@ -13687,13 +13962,14 @@ async function loadReportedStudies() {
       data.map(r=>'<tr>'+
         '<td style="font-size:.72rem;color:var(--slate)">'+fmtDate(r.reported_at||r.created_at)+'</td>'+
         '<td style="font-weight:600;font-size:.82rem">'+(r.patients?.name||'—')+'<div style="font-size:.68rem;color:var(--slate)">'+(r.patients?.mrn||'')+'</div></td>'+
-        '<td style="font-size:.78rem;font-weight:600">'+(r.imaging_type||'—')+'</td>'+
+        '<td style="font-size:.78rem;font-weight:600">'+(r.imaging_type||'—')+(r.is_critical?' <span class="bdg" style="background:#b91c1c;color:#fff">🚨 CRITICAL</span>':'')+'</td>'+
         '<td style="font-size:.75rem">'+(r.radiologist||'—')+'</td>'+
         '<td style="font-size:.75rem;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(r.impression||'—')+'</td>'+
         '<td>'+statusBadge(r.status)+'</td>'+
         '<td><div class="acts">'+
           '<button class="btn btn-s btn-xs" onclick="openRadReport(\''+r.id+'\')">📝</button>'+
           '<button class="btn btn-s btn-xs" onclick="printRadReportById(\''+r.id+'\')">🖨</button>'+
+          '<button class="btn btn-s btn-xs" onclick="openDicomViewer(\''+r.id+'\')">👁️</button>'+
           (r.status==='Reported'?'<button class="btn btn-p btn-xs" onclick="updateRadStatus(\''+r.id+'\',\'Verified\')">✅ Verify</button>':'')+
         '</div></td></tr>'
       ).join('')+'</tbody></table></div>';
@@ -13756,6 +14032,11 @@ document.addEventListener('DOMContentLoaded',()=>{
   if(critCb) critCb.addEventListener('change',function(){
     const det=document.getElementById('rad-critical-detail');
     if(det) det.style.display=this.checked?'':'none';
+    const timeEl=document.getElementById('rad-crit-notified-time');
+    if(this.checked && timeEl && !timeEl.value){
+      const now=new Date(); now.setMinutes(now.getMinutes()-now.getTimezoneOffset());
+      timeEl.value=now.toISOString().slice(0,16);
+    }
   });
 });
 
