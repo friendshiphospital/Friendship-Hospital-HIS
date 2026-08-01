@@ -1562,6 +1562,36 @@ html[dir="rtl"] body{direction:rtl;}
       <div id="doc-tab-vitals" class="card" style="display:none;border-radius:0 10px 10px 10px">
         <div class="card-body">
           <div id="doc-vitals-display" style="color:var(--slate);font-size:.82rem">Select a patient to view vitals</div>
+          <div id="doc-vitals-trend" style="display:none;margin-top:16px">
+            <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:var(--slate);margin-bottom:8px">📈 Trends (last visits)</div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px">
+              <div style="background:#f8fafd;border-radius:8px;padding:8px 10px">
+                <div style="font-size:.68rem;font-weight:700;color:#0369a1">BP — Systolic (mmHg)</div>
+                <canvas id="doc-trend-bp" style="width:100%;height:70px;display:block"></canvas>
+                <div id="doc-trend-bp-n" style="font-size:.62rem;color:var(--slate);margin-top:2px">—</div>
+              </div>
+              <div style="background:#f8fafd;border-radius:8px;padding:8px 10px">
+                <div style="font-size:.68rem;font-weight:700;color:#166534">Heart Rate (bpm)</div>
+                <canvas id="doc-trend-hr" style="width:100%;height:70px;display:block"></canvas>
+                <div id="doc-trend-hr-n" style="font-size:.62rem;color:var(--slate);margin-top:2px">—</div>
+              </div>
+              <div style="background:#f8fafd;border-radius:8px;padding:8px 10px">
+                <div style="font-size:.68rem;font-weight:700;color:#c2410c">Temperature (°C)</div>
+                <canvas id="doc-trend-temp" style="width:100%;height:70px;display:block"></canvas>
+                <div id="doc-trend-temp-n" style="font-size:.62rem;color:var(--slate);margin-top:2px">—</div>
+              </div>
+              <div style="background:#f8fafd;border-radius:8px;padding:8px 10px">
+                <div style="font-size:.68rem;font-weight:700;color:#7c3aed">SpO₂ (%)</div>
+                <canvas id="doc-trend-spo2" style="width:100%;height:70px;display:block"></canvas>
+                <div id="doc-trend-spo2-n" style="font-size:.62rem;color:var(--slate);margin-top:2px">—</div>
+              </div>
+              <div style="background:#f8fafd;border-radius:8px;padding:8px 10px">
+                <div style="font-size:.68rem;font-weight:700;color:#b45309">Blood Glucose (mmol/L)</div>
+                <canvas id="doc-trend-gluc" style="width:100%;height:70px;display:block"></canvas>
+                <div id="doc-trend-gluc-n" style="font-size:.62rem;color:var(--slate);margin-top:2px">—</div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -7540,7 +7570,7 @@ function selectDocPatient(p) {
   const dd=document.getElementById('doc-date'); if(dd&&!dd.value) dd.value=today();
   const sf=document.getElementById('sl-from'); if(sf&&!sf.value){sf.value=today();calcSlTo();}
   const dx=document.getElementById('doc-dx1'); if(dx&&!dx.value&&p.diagnosis) dx.value=p.diagnosis;
-  loadActiveOrders(); buildOrderTestPanel(); loadPatientHistory(p.id); loadDocVitals(p.id); loadDocStickyHeader(p);
+  loadActiveOrders(); buildOrderTestPanel(); loadPatientHistory(p.id); loadDocVitals(p.id); loadDocVitalsTrend(p.id); loadDocStickyHeader(p);
 }
 
 // ── STICKY CRITICAL PATIENT HEADER (Consultation) ──────
@@ -7836,6 +7866,64 @@ async function loadDocVitals(ptId) {
   } catch(e){el.innerHTML='<div style="padding:10px;color:var(--red);font-size:.78rem">'+e.message+'</div>';}
 }
 
+// ── VITALS/LABS TREND SPARKLINES (Consultation → Last Vitals) ──
+// Plain <canvas> line-drawing, same technique already used by the Patient
+// Timeline's renderPthTrend() — no charting library, consistent with this
+// project having no build step/npm/CDN dependencies (see CLAUDE.md).
+function drawSparkline(canvas,data,opts={}) {
+  if(!canvas) return;
+  const W=canvas.offsetWidth||190, H=opts.height||70;
+  canvas.width=W; canvas.height=H;
+  const ctx=canvas.getContext('2d'); ctx.clearRect(0,0,W,H);
+  if(!data.length){ ctx.fillStyle='#94a3b8'; ctx.font='10px sans-serif'; ctx.textAlign='center'; ctx.fillText('No data',W/2,H/2); return; }
+  const pad=8;
+  const vals=data.map(d=>d.val);
+  const minV=Math.min(opts.lo??vals[0],...vals), maxV=Math.max(opts.hi??vals[0],...vals);
+  const range=(maxV-minV)||1;
+  const toX=i=>pad+i/(data.length-1||1)*(W-2*pad);
+  const toY=v=>H-pad-((v-minV)/range)*(H-2*pad);
+  if(opts.lo!=null&&opts.hi!=null){
+    const yHi=toY(Math.min(opts.hi,maxV)), yLo=toY(Math.max(opts.lo,minV));
+    ctx.fillStyle='rgba(11,122,117,.08)';
+    ctx.fillRect(pad,Math.min(yHi,yLo),W-2*pad,Math.abs(yLo-yHi));
+  }
+  ctx.beginPath(); ctx.strokeStyle=opts.color||'#0b7a75'; ctx.lineWidth=2;
+  data.forEach((d,i)=>{ const x=toX(i),y=toY(d.val); i===0?ctx.moveTo(x,y):ctx.lineTo(x,y); });
+  ctx.stroke();
+  data.forEach((d,i)=>{
+    const x=toX(i),y=toY(d.val);
+    const abnormal=opts.lo!=null&&opts.hi!=null&&(d.val<opts.lo||d.val>opts.hi);
+    ctx.beginPath(); ctx.arc(x,y,abnormal?3.5:2.5,0,Math.PI*2);
+    ctx.fillStyle=abnormal?'#b91c1c':(opts.color||'#0b7a75'); ctx.fill();
+  });
+}
+async function loadDocVitalsTrend(ptId) {
+  const wrap=document.getElementById('doc-vitals-trend'); if(!wrap) return;
+  if(!ptId||!sb){ wrap.style.display='none'; return; }
+  try {
+    const [{data:vitals},{data:chem}]=await Promise.all([
+      sb.from('vital_signs').select('systolic,diastolic,bp_systolic,bp_diastolic,heart_rate,temperature,spo2,recorded_at').eq('patient_id',ptId).order('recorded_at',{ascending:true}).limit(10),
+      sb.from('results_chemistry').select('fbs,rbs,analysis_date').eq('patient_id',ptId).order('analysis_date',{ascending:true}).limit(10),
+    ]);
+    const v=vitals||[];
+    const sys=v.filter(r=>(r.systolic??r.bp_systolic)!=null).map(r=>({val:r.systolic??r.bp_systolic}));
+    const hr=v.filter(r=>r.heart_rate!=null).map(r=>({val:r.heart_rate}));
+    const temp=v.filter(r=>r.temperature!=null).map(r=>({val:r.temperature}));
+    const spo2=v.filter(r=>r.spo2!=null).map(r=>({val:r.spo2}));
+    const gluc=(chem||[]).filter(r=>r.fbs!=null||r.rbs!=null).map(r=>({val:r.fbs??r.rbs}));
+    if(!sys.length&&!hr.length&&!temp.length&&!spo2.length&&!gluc.length){ wrap.style.display='none'; return; }
+    wrap.style.display='';
+    drawSparkline(document.getElementById('doc-trend-bp'),sys,{color:'#0369a1',lo:90,hi:140});
+    drawSparkline(document.getElementById('doc-trend-hr'),hr,{color:'#166534',lo:60,hi:100});
+    drawSparkline(document.getElementById('doc-trend-temp'),temp,{color:'#c2410c',lo:36,hi:37.5});
+    drawSparkline(document.getElementById('doc-trend-spo2'),spo2,{color:'#7c3aed',lo:94,hi:100});
+    drawSparkline(document.getElementById('doc-trend-gluc'),gluc,{color:'#b45309',lo:3.9,hi:7.8});
+    const stat=(arr)=>arr.length?'n='+arr.length+' | Min: '+Math.min(...arr.map(d=>d.val))+' | Max: '+Math.max(...arr.map(d=>d.val)):'No data';
+    setText('doc-trend-bp-n',stat(sys)); setText('doc-trend-hr-n',stat(hr)); setText('doc-trend-temp-n',stat(temp));
+    setText('doc-trend-spo2-n',stat(spo2)); setText('doc-trend-gluc-n',stat(gluc));
+  } catch(e){ /* trend charts are supplementary — a failed fetch shouldn't block the Last Vitals tab */ }
+}
+
 function switchDocTab(tab,btn) {
   ['notes','vitals','orders','rx','sl','ref','discharge','history'].forEach(t=>{
     const el=document.getElementById('doc-tab-'+t); if(el) el.style.display=t===tab?'':'none';
@@ -7843,7 +7931,7 @@ function switchDocTab(tab,btn) {
   document.querySelectorAll('#doc-tabs .tab').forEach(b=>b.classList.remove('active'));
   if(btn) btn.classList.add('active');
   if(tab==='history') loadPatientHistory(_docPt?.id);
-  if(tab==='vitals') loadDocVitals(_docPt?.id);
+  if(tab==='vitals'){ loadDocVitals(_docPt?.id); loadDocVitalsTrend(_docPt?.id); }
   if(tab==='orders') { loadActiveOrders(); buildOrderTestPanel(); }
   if(tab==='discharge'){ const d=document.getElementById('dis-date'); if(d&&!d.value) d.value=today(); const di=document.getElementById('dis-pt-id'); if(di&&_docPt) di.value=_docPt.id; }
 }
