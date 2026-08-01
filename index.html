@@ -1396,6 +1396,17 @@ html[dir="rtl"] body{direction:rtl;}
       <!-- ── TAB: CONSULTATION NOTES ── -->
       <div id="doc-tab-notes" class="card" style="border-radius:0 10px 10px 10px">
         <div class="card-body">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#f8fafd;border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin-bottom:12px">
+            <span style="font-size:.8rem;font-weight:700;color:var(--ink)">⚡ Quick Templates</span>
+            <select class="fc" id="doc-quick-template" style="max-width:280px" onchange="applyQuickTemplate(this.value,this.options[this.selectedIndex].text);this.value=''">
+              <option value="">Choose a preset…</option>
+              <option value="gastro">Acute Gastroenteritis</option>
+              <option value="urti">Upper Respiratory Tract Infection (URTI)</option>
+              <option value="dm_htn_fu">Routine Diabetic/Hypertension Follow-Up</option>
+              <option value="malaria">Malaria / Febrile Illness Screen</option>
+            </select>
+            <span style="font-size:.68rem;color:var(--slate)">Pre-fills complaint, HPI, exam &amp; diagnosis — always review before saving</span>
+          </div>
           <div class="g3">
             <div class="fg"><label class="fl">Consulting Doctor</label>
               <input class="fc" id="doc-doctor-name" placeholder="Dr. name">
@@ -7597,6 +7608,62 @@ async function loadDocStickyHeader(p){
       vitalsEl.innerHTML='<span style="font-size:.7rem;color:var(--slate)">No vitals on record</span>';
     }
   }catch(e){ /* sticky header is a convenience overlay — a failed fetch here shouldn't block charting */ }
+}
+
+// ── QUICK TEMPLATES / MACROS (Consultation) ────────────
+// One-click starting points for the most common OPD presentations — every
+// field is meant to be reviewed and edited before saving, not charted
+// verbatim. Keyed by the doc-quick-template <option value>.
+const CONSULT_TEMPLATES = {
+  gastro: {
+    complaint:'Vomiting and watery diarrhea', duration:'2 days',
+    hpi:'Sudden onset of frequent watery, non-bloody diarrhea associated with vomiting and mild diffuse abdominal cramps. No fever spikes reported. Denies recent travel or similarly affected contacts. Adequate oral intake tolerated in small sips.',
+    general:'Alert, mildly dehydrated, no acute distress',
+    abd:'Soft, mild diffuse tenderness, no guarding or rebound, bowel sounds hyperactive',
+    other_exam:'Mucous membranes slightly dry, skin turgor normal, capillary refill <2s',
+    dx1:'Acute Gastroenteritis', icd:'A09', dx2:'',
+  },
+  urti: {
+    complaint:'Sore throat, cough and nasal congestion', duration:'3 days',
+    hpi:'Gradual onset of sore throat, rhinorrhea, nasal congestion and dry cough. Mild low-grade fever. No shortness of breath, chest pain, or hemoptysis. No sick contacts with confirmed infectious illness reported.',
+    general:'Alert, mild malaise, no respiratory distress',
+    resp:'Clear air entry bilaterally, no wheeze or crepitations',
+    other_exam:'Oropharynx mildly injected, no exudate, no cervical lymphadenopathy',
+    dx1:'Upper Respiratory Tract Infection', icd:'J06.9', dx2:'',
+  },
+  dm_htn_fu: {
+    complaint:'Routine follow-up for Diabetes/Hypertension', duration:'N/A — chronic follow-up',
+    hpi:'Known diabetic/hypertensive patient on regular treatment presenting for routine follow-up. No new symptoms of hyperglycemia/hypoglycemia (polyuria, polydipsia, sweating, palpitations) or hypertensive symptoms (headache, visual changes, chest pain) reported. Reports compliance with medications and diet.',
+    general:'Alert, well, no acute distress',
+    cvs:'Normal S1 S2, no murmurs, peripheral pulses palpable',
+    other_exam:'No pedal edema, feet examined — no ulcers or sensory loss',
+    dx1:'Type 2 Diabetes Mellitus', icd:'E11.9', dx2:'Essential (primary) Hypertension',
+  },
+  malaria: {
+    complaint:'Fever with chills and body aches', duration:'4 days',
+    hpi:'Intermittent high-grade fever with chills and rigors, associated headache, myalgia and generalized body aches. No localizing urinary, respiratory or gastrointestinal symptoms reported. Resides in/recent travel to malaria-endemic area.',
+    general:'Febrile, alert, mild pallor',
+    abd:'Mild splenomegaly may be present, otherwise soft and non-tender',
+    other_exam:'No rash, no neck stiffness, no photophobia',
+    dx1:'Malaria (Suspected — Febrile Illness Screen)', icd:'B54', dx2:'',
+  },
+};
+const CONSULT_TEMPLATE_FIELD_MAP = {
+  complaint:'doc-complaint', duration:'doc-duration', hpi:'doc-hpi',
+  general:'doc-general', cvs:'doc-cvs', resp:'doc-resp', abd:'doc-abd', cns:'doc-cns', msk:'doc-msk', other_exam:'doc-other-exam',
+  dx1:'doc-dx1', icd:'doc-icd', dx2:'doc-dx2',
+};
+function applyQuickTemplate(key,label){
+  const tpl=CONSULT_TEMPLATES[key]; if(!tpl) return;
+  if(!_docPt){ toast('Select a patient first','err'); return; }
+  const targetIds=Object.keys(tpl).map(k=>CONSULT_TEMPLATE_FIELD_MAP[k]).filter(Boolean);
+  const hasExisting=targetIds.some(id=>document.getElementById(id)?.value?.trim());
+  if(hasExisting && !confirm('This will overwrite existing text in the Complaint/HPI/Examination/Diagnosis fields with the "'+(label||key)+'" template. Continue?')) return;
+  Object.entries(tpl).forEach(([k,v])=>{
+    const id=CONSULT_TEMPLATE_FIELD_MAP[k]; const el=id&&document.getElementById(id);
+    if(el) el.value=v;
+  });
+  toast('⚡ Template applied — review and edit before saving','ok');
 }
 
 async function loadDocVitals(ptId) {
