@@ -90,6 +90,30 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);font
 .sb-item .ic{width:17px;text-align:center;font-size:.87rem;flex-shrink:0;}
 .sb-badge{margin-left:auto;background:var(--red);color:#fff;font-size:.58rem;font-weight:700;min-width:17px;height:17px;border-radius:9px;display:flex;align-items:center;justify-content:center;padding:0 4px;}
 .sb-foot{margin-top:auto;padding:12px 16px;border-top:1px solid rgba(255,255,255,.06);font-size:.62rem;color:rgba(255,255,255,.2);line-height:1.8;}
+.sb-home-btn{margin:10px 16px 0;padding:8px 10px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);border-radius:8px;color:#fff;font-size:.76rem;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:7px;transition:background .15s;font-family:'DM Sans',sans-serif;width:calc(100% - 32px);}
+.sb-home-btn:hover{background:rgba(255,255,255,.16);}
+/* LAUNCHER (Home screen) — the module-tile grid that replaces the
+   always-visible sidebar as the entry point. A sibling of #sidebar/#main
+   inside #app, shown/hidden via goHome()/enterModule() rather than being
+   one of the existing .page divs — it isn't part of the ROLE_PAGES/goPage
+   page system at all, since it's the thing you navigate FROM, not a
+   destination page. */
+#launcher-screen{display:none;position:fixed;inset:0;background:linear-gradient(160deg,var(--bg) 0%,#eaf2f7 100%);z-index:250;overflow-y:auto;}
+#launcher-screen.show{display:block;}
+.launcher-topbar{display:flex;justify-content:space-between;align-items:center;padding:16px 24px;}
+.launcher-topbar .lt-brand{font-family:'DM Serif Display',serif;color:var(--ink2);font-size:1rem;}
+.launcher-hd{padding:14px 22px 6px;text-align:center;}
+.launcher-hd h1{font-family:'DM Serif Display',serif;color:var(--ink2);font-size:1.7rem;}
+.launcher-hd .sub{color:var(--slate);font-size:.86rem;margin-top:5px;}
+.launcher-continue{display:none;max-width:440px;margin:18px auto 0;background:linear-gradient(100deg,var(--teal),#0e5a56);color:#fff;border-radius:12px;padding:14px 20px;text-align:center;cursor:pointer;box-shadow:0 10px 26px rgba(11,122,117,.24);border:none;font-family:'DM Sans',sans-serif;width:100%;}
+.launcher-continue.show{display:block;}
+.launcher-continue .lc-l{font-size:.63rem;text-transform:uppercase;letter-spacing:.5px;opacity:.85;}
+.launcher-continue .lc-v{font-size:.94rem;font-weight:700;margin-top:3px;}
+.launcher-grid{max-width:920px;margin:28px auto 44px;padding:0 22px;display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px;}
+.launcher-tile{background:var(--card);border:1.5px solid var(--border);border-radius:16px;padding:28px 14px;text-align:center;cursor:pointer;transition:all .18s;box-shadow:0 2px 10px rgba(14,25,40,.05);}
+.launcher-tile:hover{transform:translateY(-3px);box-shadow:0 12px 28px rgba(11,122,117,.15);border-color:var(--teal2);}
+.launcher-tile .lt-ic{font-size:2.2rem;margin-bottom:9px;}
+.launcher-tile .lt-lbl{font-size:.86rem;font-weight:700;color:var(--ink2);}
 /* MAIN */
 #main{margin-left:var(--sw);flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden;}
 .topbar{height:var(--hh);flex-shrink:0;background:var(--card);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 22px;gap:10px;z-index:200;}
@@ -388,6 +412,23 @@ html[dir="rtl"] body{direction:rtl;}
 </div>
 <!-- APP SHELL -->
 <div id="app">
+  <!-- LAUNCHER (Home screen) — module-tile grid, the app's entry point.
+       Shown/hidden by goHome()/enterModule(), independent of the
+       .page/goPage() system (see the CSS comment above #launcher-screen).
+       Sits alongside #sidebar/#main rather than being one of the .page
+       divs, since "no module entered yet" isn't a destination page. -->
+  <div id="launcher-screen">
+    <div class="launcher-topbar">
+      <div class="lt-brand">🏥 Friendship Hospital — Al Damazin</div>
+      <button class="btn btn-s btn-sm" onclick="doLogout()">⏻ Sign Out</button>
+    </div>
+    <div class="launcher-hd">
+      <h1 id="launcher-greeting">Welcome</h1>
+      <div class="sub">Choose a module to get started</div>
+    </div>
+    <!-- launcher-continue button added in Phase 3 (last-visited tracking) -->
+    <div class="launcher-grid" id="launcher-grid"></div>
+  </div>
   <nav id="sidebar">
     <div class="sb-brand">
       <h1>🏥 Friendship Hospital</h1>
@@ -398,6 +439,7 @@ html[dir="rtl"] body{direction:rtl;}
       <div class="sb-av" id="sb-av">?</div>
       <div class="sb-ui"><div class="nm" id="sb-name">—</div><div class="rl" id="sb-role">—</div></div>
     </div>
+    <button class="sb-home-btn" onclick="goHome()">🏠 <span data-i18n="nav_home">Home</span></button>
     <div id="conn-badge" class="online" onclick="toggleSyncPanel()">
       <span class="dot"></span> <span id="conn-text">Online</span>
     </div>
@@ -5632,6 +5674,76 @@ const PAGE_TITLES = {
   delivery:'Result Delivery',settings:'Settings',
 };
 
+// ── LAUNCHER MODULES (navigation restructure) ──────────────────────────
+// Groups every page id into one of the 10 launcher tiles. This is purely
+// a navigation grouping — it does not replace or duplicate ROLE_PAGES
+// (which still enforces WHO can reach a page); MODULE_PAGES only controls
+// WHERE a page shows up once someone with access goes looking for it.
+// A page id may appear in more than one module (e.g. 'billing' appears
+// under both Reception, for quick access mid-registration, and the
+// dedicated Billing module) — that's intentional, not a bug.
+// Dashboard / Patient Timeline / Inventory aren't named in the original
+// per-module spec; placed here rather than left unreachable (folded into
+// the closest-fitting module — Administration / Laboratory respectively).
+const MODULE_PAGES = {
+  reception:      { label:'Reception',      icon:'🏥', pages:['register','appointments','billing','print-reports-hub'] },
+  phlebotomy:     { label:'Phlebotomy',      icon:'💉', pages:['samples','set-printer'] },
+  laboratory:     { label:'Laboratory',      icon:'🔬', pages:['worklist','unified-entry','hem-entry','chem-entry','sero-entry','immuno-entry','micro-entry','pcr-entry','histo-entry','cyto-entry','reports','allresults','labhistory','criticals','qc','tat','pt-history','inventory'] },
+  radiology:      { label:'Radiology',       icon:'🩻', pages:['radiology','rad-print'] },
+  doctor:         { label:'Doctor',          icon:'🩺', pages:['consultation'] },
+  nursing:        { label:'Nursing',         icon:'🧑‍⚕️', pages:['nursing','fluid-chart','infection','handover'] },
+  admissions:     { label:'Admissions',      icon:'🛏', pages:['admission','theatre'] },
+  billing:        { label:'Billing',         icon:'💰', pages:['billing','prices'] },
+  statistics:     { label:'Statistics',      icon:'📊', pages:['statistics'] },
+  administration: { label:'Administration',  icon:'⚙️', pages:['staff','doctors','analyzer','delivery','settings','dashboard'] },
+};
+const MODULE_ORDER = ['reception','phlebotomy','laboratory','radiology','doctor','nursing','admissions','billing','statistics','administration'];
+// Which module is currently entered (null = at the launcher/Home screen).
+// Distinct from ROLE_PAGES/currentProfile.role — this is pure navigation
+// state, reset to null by goHome() and set by enterModule() or by goPage()
+// auto-detecting it for a page reached some other way (global search,
+// notification bell, "Continue" shortcut).
+let currentModule = null;
+function pageToModule(p) {
+  for (const key of MODULE_ORDER) { if (MODULE_PAGES[key].pages.includes(p)) return key; }
+  return null;
+}
+function firstAccessiblePageInModule(moduleKey) {
+  const mod = MODULE_PAGES[moduleKey]; if (!mod) return null;
+  const role = currentProfile?.role || 'admin';
+  const allowed = ROLE_PAGES[role] || [];
+  if (role === 'admin') return mod.pages[0] || null;
+  return mod.pages.find(p => allowed.includes(p)) || null;
+}
+function renderLauncher() {
+  const grid = document.getElementById('launcher-grid'); if (!grid) return;
+  const greet = document.getElementById('launcher-greeting');
+  if (greet) greet.textContent = 'Welcome, ' + (currentProfile?.full_name || 'User');
+  grid.innerHTML = MODULE_ORDER.map(key => {
+    const mod = MODULE_PAGES[key];
+    return '<div class="launcher-tile" onclick="enterModule(\'' + key + '\')">' +
+      '<div class="lt-ic">' + mod.icon + '</div><div class="lt-lbl">' + mod.label + '</div></div>';
+  }).join('');
+}
+function goHome() {
+  currentModule = null;
+  document.getElementById('sidebar').style.display = 'none';
+  document.getElementById('main').style.display = 'none';
+  const ls = document.getElementById('launcher-screen'); if (ls) ls.classList.add('show');
+  renderLauncher();
+}
+function enterModule(moduleKey) {
+  if (!MODULE_PAGES[moduleKey]) return;
+  const target = firstAccessiblePageInModule(moduleKey);
+  if (!target) { toast('No pages available in this module for your role', 'err'); return; }
+  currentModule = moduleKey;
+  const ls = document.getElementById('launcher-screen'); if (ls) ls.classList.remove('show');
+  document.getElementById('sidebar').style.display = '';
+  document.getElementById('main').style.display = '';
+  filterSidebar();
+  goPage(target);
+}
+
 // ── LANGUAGE (Phase 4) ─────────────────────────────────
 // Scope, deliberately: navigation labels (sidebar) + page titles are fully
 // translated — that's every key below prefixed nav_/navgrp_/page_. A small,
@@ -6011,7 +6123,7 @@ function showApp() {
   if(nm) nm.textContent = currentProfile?.full_name||'User';
   if(rl) rl.textContent = currentProfile?.role||'admin';
   if(av) av.textContent = (currentProfile?.full_name||'U')[0].toUpperCase();
-  filterSidebar(); loadSettings(); goPage('dashboard');
+  filterSidebar(); loadSettings(); goHome();
   updateTopbarDate(); setInterval(updateTopbarDate,60000);
   checkCriticals(); setInterval(checkCriticals,120000);
   refreshNotifications(); setInterval(refreshNotifications,120000);
@@ -6019,11 +6131,38 @@ function showApp() {
 }
 function filterSidebar() {
   const role=currentProfile?.role||'admin';
-  if(role==='admin') return;
-  const allowed=ROLE_PAGES[role]||[];
-  document.querySelectorAll('.sb-item').forEach(el=>{
-    const p=el.dataset.p; if(!p) return;
-    el.style.display=allowed.includes(p)?'':'none';
+  // Role-based visibility — UNCHANGED from before the launcher restructure:
+  // admin bypasses this entirely, everyone else only sees pages ROLE_PAGES
+  // grants them. This is the app's actual access boundary (RLS is the real
+  // one server-side); nothing about it changes here.
+  if(role==='admin') {
+    document.querySelectorAll('.sb-item').forEach(el=>{ el.style.display=''; });
+  } else {
+    const allowed=ROLE_PAGES[role]||[];
+    document.querySelectorAll('.sb-item').forEach(el=>{
+      const p=el.dataset.p; if(!p) return;
+      el.style.display=allowed.includes(p)?'':'none';
+    });
+  }
+  // Module scoping (new, additive) — layered on TOP of the role filter
+  // above, never instead of it, so entering a module can only ever hide
+  // items further, not reveal anything a role-based check already hid.
+  // Applies to admin too: "scoped sidebar per module" is the whole point
+  // of the launcher restructure, admin included.
+  if(currentModule && MODULE_PAGES[currentModule]) {
+    const modPages = MODULE_PAGES[currentModule].pages;
+    document.querySelectorAll('.sb-item').forEach(el=>{
+      const p=el.dataset.p; if(!p) return;
+      if(!modPages.includes(p)) el.style.display='none';
+    });
+  }
+  // Hide any group heading left with zero visible items, so switching
+  // modules doesn't leave an empty "🏥 Hospital"-style label with nothing
+  // underneath it.
+  document.querySelectorAll('.sb-group').forEach(grp=>{
+    const items=[...grp.querySelectorAll('.sb-item')];
+    const anyVisible=items.some(el=>el.style.display!=='none');
+    grp.style.display = items.length && !anyVisible ? 'none' : '';
   });
 }
 async function doLogout() {
@@ -6045,6 +6184,19 @@ function goPage(p) {
     const role=currentProfile.role||'receptionist', allowed=ROLE_PAGES[role]||[];
     if(!allowed.includes(p)&&role!=='admin'){ toast('Access denied','err'); return; }
   }
+  // Module auto-detection — handles every call site that reaches goPage()
+  // directly rather than through a launcher tile (global search results,
+  // the notification bell, "Continue" shortcuts, printInvoice-adjacent
+  // jumps, etc.) so those keep working unchanged: if the target page isn't
+  // in the currently-entered module, switch to whichever module it DOES
+  // belong to and make sure the launcher is out of the way.
+  if(!currentModule || !MODULE_PAGES[currentModule]?.pages.includes(p)) {
+    const mod = pageToModule(p);
+    if(mod) { currentModule = mod; filterSidebar(); }
+  }
+  const ls=document.getElementById('launcher-screen'); if(ls) ls.classList.remove('show');
+  const sbEl=document.getElementById('sidebar'); if(sbEl) sbEl.style.display='';
+  const mainEl=document.getElementById('main'); if(mainEl) mainEl.style.display='';
   document.querySelectorAll('.page').forEach(el=>el.classList.remove('active'));
   const pg=document.getElementById('page-'+p);
   if(!pg){ console.warn('No page: page-'+p); return; }
