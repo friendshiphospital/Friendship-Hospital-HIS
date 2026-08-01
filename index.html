@@ -446,10 +446,14 @@ html[dir="rtl"] body{direction:rtl;}
     <div id="conn-badge" class="online" onclick="toggleSyncPanel()">
       <span class="dot"></span> <span id="conn-text">Online</span>
     </div>
-    <div class="sb-group">
-      <div class="sb-lbl" data-i18n="navgrp_overview">Overview</div>
-      <div class="sb-item" data-p="dashboard" onclick="goPage('dashboard')"><span class="ic">📊</span><span data-i18n="nav_dashboard">Dashboard</span></div>
-    </div>
+    <!-- Regrouped (nav restructure Phase 4) to match MODULE_PAGES exactly,
+         one sb-group per launcher tile, in MODULE_ORDER. Every sb-item
+         below is unchanged from before (same data-p/onclick/icon/i18n key)
+         except the three new Phlebotomy sub-views, which are pure
+         navigation shortcuts into tabs that already existed on the
+         Sample Collection page — see goSamplesTab() and the ISO 15189
+         "Rejections"/"Receive in Lab" tabs in #page-samples. Nothing here
+         changes what any page loads or saves. -->
     <div class="sb-group">
       <div class="sb-lbl" data-i18n="navgrp_reception">🏥 Reception</div>
       <div class="sb-item" data-p="register" onclick="goPage('register')"><span class="ic">📋</span><span data-i18n="nav_register">Register Patient</span></div>
@@ -458,20 +462,16 @@ html[dir="rtl"] body{direction:rtl;}
       <div class="sb-item" data-p="print-reports-hub" onclick="goPage('print-reports-hub')"><span class="ic">🖨</span><span data-i18n="nav_print_reports_hub">Print Reports</span></div>
     </div>
     <div class="sb-group">
-      <div class="sb-lbl" data-i18n="navgrp_hospital">🏥 Hospital</div>
-      <div class="sb-item" data-p="admission" onclick="goPage('admission')"><span class="ic">🛏</span><span data-i18n="nav_admission">Admissions</span></div>
-      <div class="sb-item" data-p="theatre" onclick="goPage('theatre')"><span class="ic">🔪</span><span data-i18n="nav_theatre">Theatre / OT</span></div>
-      <div class="sb-item" data-p="consultation" onclick="goPage('consultation')"><span class="ic">📋</span><span data-i18n="nav_consultation">Doctor Orders</span></div>
-      <div class="sb-item" data-p="nursing" onclick="goPage('nursing')"><span class="ic">💉</span><span data-i18n="nav_nursing">Nursing &amp; Vitals</span></div>
-      <div class="sb-item" data-p="fluid-chart" onclick="goPage('fluid-chart')"><span class="ic">💧</span><span data-i18n="nav_fluid_chart">Fluid Balance</span></div>
-      <div class="sb-item" data-p="infection" onclick="goPage('infection')"><span class="ic">🦠</span><span data-i18n="nav_infection">Infection Flags</span></div>
-      <div class="sb-item" data-p="handover" onclick="goPage('handover')"><span class="ic">📋</span><span data-i18n="nav_handover">Handover Notes</span></div>
+      <div class="sb-lbl" data-i18n="navgrp_phlebotomy">💉 Phlebotomy</div>
+      <div class="sb-item" data-p="samples" id="sb-samples-collection" onclick="goSamplesTab('collection','sb-samples-collection')"><span class="ic">🩸</span><span data-i18n="nav_samples">Sample Collection</span></div>
+      <div class="sb-item" data-p="samples" id="sb-samples-receiving" onclick="goSamplesTab('receive','sb-samples-receiving')"><span class="ic">📥</span><span data-i18n="nav_sample_receiving">Sample Receiving</span></div>
+      <div class="sb-item" data-p="samples" id="sb-samples-unreceived" onclick="goSamplesTab('receive','sb-samples-unreceived')"><span class="ic">📭</span><span data-i18n="nav_unreceived_samples">Unreceived Samples</span></div>
+      <div class="sb-item" data-p="samples" id="sb-samples-reject" onclick="goSamplesTab('reject','sb-samples-reject')"><span class="ic">⛔</span><span data-i18n="nav_rejection">Rejection</span></div>
+      <div class="sb-item" data-p="set-printer" onclick="goPage('set-printer')"><span class="ic">🖨</span><span data-i18n="nav_set_printer">Barcode / Print Setup</span></div>
     </div>
     <div class="sb-group">
       <div class="sb-lbl" data-i18n="navgrp_lab">🔬 Laboratory</div>
       <div class="sb-item" data-p="worklist" onclick="goPage('worklist')"><span class="ic">📋</span><span data-i18n="nav_worklist">Worklist</span></div>
-      <div class="sb-item" data-p="samples" onclick="goPage('samples')"><span class="ic">🩸</span><span data-i18n="nav_samples">Sample Collection</span></div>
-      <div class="sb-item" data-p="set-printer" onclick="goPage('set-printer')"><span class="ic">🖨</span><span data-i18n="nav_set_printer">Set Printer</span></div>
       <div class="sb-item" data-p="hem-entry" onclick="goPage('hem-entry')"><span class="ic">🩸</span><span data-i18n="nav_hem_entry">Haematology Entry</span></div>
       <div class="sb-item" data-p="chem-entry" onclick="goPage('chem-entry')"><span class="ic">⚗️</span><span data-i18n="nav_chem_entry">Chemistry Entry</span></div>
       <div class="sb-item" data-p="sero-entry" onclick="goPage('sero-entry')"><span class="ic">💉</span><span data-i18n="nav_sero_entry">Serology Entry</span></div>
@@ -483,6 +483,31 @@ html[dir="rtl"] body{direction:rtl;}
       <div class="sb-item" data-p="allresults" onclick="goPage('allresults')"><span class="ic">📂</span><span data-i18n="nav_allresults">All Results</span></div>
       <div class="sb-item" data-p="criticals" onclick="goPage('criticals')"><span class="ic">🚨</span><span data-i18n="nav_criticals">Critical Values</span><span class="sb-badge" id="crit-badge" style="display:none">0</span></div>
       <div class="sb-item" data-p="reports" onclick="goPage('reports')"><span class="ic">🖨</span><span data-i18n="nav_reports">Print Reports</span></div>
+      <div class="sb-item" data-p="labhistory" onclick="goPage('labhistory')"><span class="ic">📈</span><span data-i18n="nav_labhistory">Lab History</span></div>
+      <div class="sb-item" data-p="tat" onclick="goPage('tat')"><span class="ic">⏱️</span><span data-i18n="nav_tat">TAT Tracker</span></div>
+      <div class="sb-item" data-p="qc" onclick="goPage('qc')"><span class="ic">🔬</span><span data-i18n="nav_qc">QC Module</span></div>
+      <div class="sb-item" data-p="pt-history" onclick="goPage('pt-history')"><span class="ic">🕐</span><span data-i18n="nav_pt_history">Patient Timeline</span></div>
+      <div class="sb-item" data-p="inventory" onclick="goPage('inventory')"><span class="ic">📦</span><span data-i18n="nav_inventory">Inventory</span></div>
+    </div>
+    <div class="sb-group">
+      <div class="sb-lbl" data-i18n="navgrp_radiology">🩻 Radiology</div>
+      <div class="sb-item" data-p="radiology" onclick="goPage('radiology')"><span class="ic">🩻</span><span data-i18n="nav_radiology">Radiology</span></div>
+    </div>
+    <div class="sb-group">
+      <div class="sb-lbl" data-i18n="navgrp_doctor">🩺 Doctor</div>
+      <div class="sb-item" data-p="consultation" onclick="goPage('consultation')"><span class="ic">📋</span><span data-i18n="nav_consultation">Doctor Orders</span></div>
+    </div>
+    <div class="sb-group">
+      <div class="sb-lbl" data-i18n="navgrp_nursing">🧑‍⚕️ Nursing</div>
+      <div class="sb-item" data-p="nursing" onclick="goPage('nursing')"><span class="ic">💉</span><span data-i18n="nav_nursing">Nursing &amp; Vitals</span></div>
+      <div class="sb-item" data-p="fluid-chart" onclick="goPage('fluid-chart')"><span class="ic">💧</span><span data-i18n="nav_fluid_chart">Fluid Balance</span></div>
+      <div class="sb-item" data-p="infection" onclick="goPage('infection')"><span class="ic">🦠</span><span data-i18n="nav_infection">Infection Flags</span></div>
+      <div class="sb-item" data-p="handover" onclick="goPage('handover')"><span class="ic">📋</span><span data-i18n="nav_handover">Handover Notes</span></div>
+    </div>
+    <div class="sb-group">
+      <div class="sb-lbl" data-i18n="navgrp_admissions">🛏 Admissions</div>
+      <div class="sb-item" data-p="admission" onclick="goPage('admission')"><span class="ic">🛏</span><span data-i18n="nav_admission">Admissions</span></div>
+      <div class="sb-item" data-p="theatre" onclick="goPage('theatre')"><span class="ic">🔪</span><span data-i18n="nav_theatre">Theatre / OT</span></div>
     </div>
     <div class="sb-group">
       <div class="sb-lbl" data-i18n="navgrp_billing">💰 Billing</div>
@@ -490,19 +515,14 @@ html[dir="rtl"] body{direction:rtl;}
       <div class="sb-item" data-p="prices" onclick="goPage('prices')"><span class="ic">💲</span><span data-i18n="nav_prices">Price List</span></div>
     </div>
     <div class="sb-group">
-      <div class="sb-lbl" data-i18n="navgrp_analytics">📊 Analytics</div>
-      <div class="sb-item" data-p="pt-history" onclick="goPage('pt-history')"><span class="ic">🕐</span><span data-i18n="nav_pt_history">Patient Timeline</span></div>
-      <div class="sb-item" data-p="labhistory" onclick="goPage('labhistory')"><span class="ic">📈</span><span data-i18n="nav_labhistory">Lab History</span></div>
-      <div class="sb-item" data-p="tat" onclick="goPage('tat')"><span class="ic">⏱️</span><span data-i18n="nav_tat">TAT Tracker</span></div>
-      <div class="sb-item" data-p="inventory" onclick="goPage('inventory')"><span class="ic">📦</span><span data-i18n="nav_inventory">Inventory</span></div>
-      <div class="sb-item" data-p="qc" onclick="goPage('qc')"><span class="ic">🔬</span><span data-i18n="nav_qc">QC Module</span></div>
+      <div class="sb-lbl" data-i18n="navgrp_statistics">📊 Statistics</div>
+      <div class="sb-item" data-p="statistics" onclick="goPage('statistics')"><span class="ic">📊</span><span data-i18n="nav_statistics">Statistics</span></div>
     </div>
     <div class="sb-group">
       <div class="sb-lbl" data-i18n="navgrp_admin">⚙️ Administration</div>
-      <div class="sb-item" data-p="statistics" onclick="goPage('statistics')"><span class="ic">📊</span><span data-i18n="nav_statistics">Statistics</span></div>
+      <div class="sb-item" data-p="dashboard" onclick="goPage('dashboard')"><span class="ic">📊</span><span data-i18n="nav_dashboard">Dashboard</span></div>
       <div class="sb-item" data-p="staff" onclick="goPage('staff')"><span class="ic">👥</span><span data-i18n="nav_staff">Staff</span></div>
       <div class="sb-item" data-p="doctors" onclick="goPage('doctors')"><span class="ic">🩺</span><span data-i18n="nav_doctors">Doctors</span></div>
-      <div class="sb-item" data-p="radiology" onclick="goPage('radiology')"><span class="ic">🩻</span><span data-i18n="nav_radiology">Radiology</span></div>
       <div class="sb-item" data-p="analyzer" onclick="goPage('analyzer')"><span class="ic">🔌</span><span data-i18n="nav_analyzer">Analyzer Interface</span></div>
       <div class="sb-item" data-p="delivery" onclick="goPage('delivery')"><span class="ic">📲</span><span data-i18n="nav_delivery">Result Delivery</span></div>
       <div class="sb-item" data-p="settings" onclick="goPage('settings')"><span class="ic">⚙️</span><span data-i18n="nav_settings">Settings</span></div>
@@ -2746,11 +2766,11 @@ html[dir="rtl"] body{direction:rtl;}
 
 <div class="page" id="page-samples">
   <div class="tabs">
-    <button class="tab active" onclick="switchSampleTab('collection',this)">🩸 Collection</button>
-    <button class="tab" onclick="switchSampleTab('receive',this)">📥 Receive in Lab</button>
-    <button class="tab" onclick="switchSampleTab('unreceive',this)">↩️ Unreceive</button>
-    <button class="tab" onclick="switchSampleTab('reject',this)">⛔ Rejections</button>
-    <button class="tab" onclick="switchSampleTab('queue',this)">📋 Queue</button>
+    <button class="tab active" id="sc-tabbtn-collection" onclick="switchSampleTab('collection',this)">🩸 Collection</button>
+    <button class="tab" id="sc-tabbtn-receive" onclick="switchSampleTab('receive',this)">📥 Receive in Lab</button>
+    <button class="tab" id="sc-tabbtn-unreceive" onclick="switchSampleTab('unreceive',this)">↩️ Unreceive</button>
+    <button class="tab" id="sc-tabbtn-reject" onclick="switchSampleTab('reject',this)">⛔ Rejections</button>
+    <button class="tab" id="sc-tabbtn-queue" onclick="switchSampleTab('queue',this)">📋 Queue</button>
   </div>
 
   <!-- ── TAB: COLLECTION ── -->
@@ -10340,6 +10360,24 @@ function switchSampleTab(tab, btn) {
   if(tab==='receive') loadReceiveQueue();
   if(tab==='queue') loadSampleQueueFull();
   if(tab==='reject') loadRejectionLog();
+}
+// Deep-links from the Phlebotomy module's sidebar (Sample Receiving /
+// Unreceived Samples / Rejection) into a specific tab of the existing
+// Sample Collection page — these are navigation shortcuts only, reusing
+// switchSampleTab()'s own tab-switch + data-load logic exactly as-is, not
+// new views or duplicated queries. Refines goPage()'s data-p-based
+// sidebar highlight (which can't distinguish between several sb-items
+// that all share data-p="samples") down to the specific item clicked —
+// itemId rather than tab, since "Sample Receiving" and "Unreceived
+// Samples" both land on the same 'receive' tab (the existing page never
+// separated "do the receiving" from "see what's awaiting receipt" into
+// two different views) but are still two distinct, independently
+// highlighted sidebar entries.
+function goSamplesTab(tab, itemId) {
+  goPage('samples');
+  document.querySelectorAll('.sb-item[data-p="samples"]').forEach(el=>el.classList.remove('active'));
+  const item = itemId && document.getElementById(itemId); if(item) item.classList.add('active');
+  switchSampleTab(tab, document.getElementById('sc-tabbtn-'+tab));
 }
 
 function checkSampleRejection() {
