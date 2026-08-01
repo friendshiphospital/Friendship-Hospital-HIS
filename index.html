@@ -8146,9 +8146,15 @@ async function loadDocVitalsTrend(ptId) {
   const wrap=document.getElementById('doc-vitals-trend'); if(!wrap) return;
   if(!ptId||!sb){ wrap.style.display='none'; return; }
   try {
+    // Glucose reads the append-only history table (migration_v2.17) since
+    // results_chemistry itself holds at most one row per patient — reading
+    // it directly here would always cap this sparkline at a single point.
+    // The history query is caught independently so a deployment that
+    // hasn't applied migration_v2.17 yet still gets the vitals sparklines
+    // (BP/HR/temp/SpO2) instead of losing all five to one Promise.all rejection.
     const [{data:vitals},{data:chem}]=await Promise.all([
       sb.from('vital_signs').select('systolic,diastolic,bp_systolic,bp_diastolic,heart_rate,temperature,spo2,recorded_at').eq('patient_id',ptId).order('recorded_at',{ascending:true}).limit(10),
-      sb.from('results_chemistry').select('fbs,rbs,analysis_date').eq('patient_id',ptId).order('analysis_date',{ascending:true}).limit(10),
+      sb.from('results_chemistry_history').select('fbs,rbs,analysis_date').eq('patient_id',ptId).order('analysis_date',{ascending:true}).limit(10).then(r=>r,()=>({data:[]})),
     ]);
     const v=vitals||[];
     const sys=v.filter(r=>(r.systolic??r.bp_systolic)!=null).map(r=>({val:r.systolic??r.bp_systolic}));
@@ -9041,8 +9047,15 @@ async function loadPthTimeline() {
       sb.from('critical_values').select('*').eq('patient_id',ptId).order('notified_at',{ascending:false}),
       sb.from('radiology_requests').select('*').eq('patient_id',ptId).order('created_at',{ascending:false}),
       sb.from('invoices').select('*').eq('patient_id',ptId).order('created_at',{ascending:false}),
-      sb.from('results_hematology').select('hgb,wbc,plt,analysis_date,is_verified').eq('patient_id',ptId).order('analysis_date'),
-      sb.from('results_chemistry').select('creat,urea,fbs,alt,ast,alp,ggt,analysis_date,is_verified').eq('patient_id',ptId).order('analysis_date'),
+      // Trend history reads the append-only twin tables (migration_v2.17) —
+      // results_hematology/results_chemistry hold at most one row per
+      // patient, so trend charts can never show more than one point off
+      // them directly. Each caught independently so a deployment that
+      // hasn't applied migration_v2.17 yet still gets the rest of the
+      // timeline (admissions/criticals/radiology/invoices/etc.) instead of
+      // this whole Promise.all rejecting.
+      sb.from('results_hematology_history').select('hgb,wbc,plt,analysis_date,is_verified').eq('patient_id',ptId).order('analysis_date').then(r=>r,()=>({data:[]})),
+      sb.from('results_chemistry_history').select('creat,urea,fbs,alt,ast,alp,ggt,analysis_date,is_verified').eq('patient_id',ptId).order('analysis_date').then(r=>r,()=>({data:[]})),
       sb.from('doctor_consultations').select('*').eq('patient_id',ptId).order('consultation_date',{ascending:false}),
       ...resultTableNames.map(t=>sb.from(t).select('*').eq('patient_id',ptId)),
     ]);
@@ -9270,6 +9283,27 @@ const DELTA_RULES = {
   na:   {table:'results_chemistry',  label:'Sodium',       unit:'mmol/L',              type:'abs', direction:'either', threshold:10},
   creat:{table:'results_chemistry',  label:'Creatinine',   unit:'µmol/L',         type:'pct', direction:'rise',   threshold:50},
 };
+// Append-only history twin of each current-panel table (see
+// migration_v2.17_lab_result_history.sql) — results_hematology/
+// results_chemistry are upserted one row per PATIENT (onConflict:
+// 'patient_id'), so they can never hold more than the latest save. These
+// history tables get one row per SAVE instead, so trend charts and
+// delta-checking have real prior visits to read, not just "whatever
+// hasn't been overwritten yet".
+const RESULT_HISTORY_TABLE = {
+  results_hematology: 'results_hematology_history',
+  results_chemistry: 'results_chemistry_history',
+};
+// Writes the same payload saveResultWithSafetyChecks() just upserted into
+// the current-panel table into its history twin too. Best-effort: on a
+// deployment that hasn't run migration_v2.17 yet, the insert 404s/errors
+// and is swallowed here rather than blocking the save that already
+// succeeded — the current-panel table remains the source of truth either way.
+async function logResultHistory(table,payload){
+  const histTable=RESULT_HISTORY_TABLE[table];
+  if(!histTable||!sb) return;
+  try{ await sb.from(histTable).insert(payload); }catch(e){ /* additive — never block the result save on this */ }
+}
 function computeDelta(prev,curr,rule){ return rule.type==='pct' ? ((curr-prev)/prev)*100 : curr-prev; }
 function deltaBreaches(delta,rule){
   if(rule.direction==='drop') return delta<=-rule.threshold;
@@ -9280,8 +9314,25 @@ async function runDeltaCheck(table,ptId,payload){
   if(!sb||!ptId) return [];
   const fields=Object.keys(DELTA_RULES).filter(f=>DELTA_RULES[f].table===table && payload[f]!=null);
   if(!fields.length) return [];
+  // Compare against the history table's most recent prior SAVE (recorded_at
+  // desc), not the current-panel row about to be overwritten by this same
+  // save — see migration_v2.17_lab_result_history.sql. Falls back to the
+  // current-panel table (the old behaviour) if this patient has no history
+  // rows yet — pre-migration data, or a deployment that hasn't applied
+  // migration_v2.17 yet, where the history select below will error.
+  const histTable=RESULT_HISTORY_TABLE[table];
+  let prevRow=null;
+  if(histTable){
+    try{
+      const {data}=await sb.from(histTable).select(fields.join(',')+',analysis_date').eq('patient_id',ptId).order('recorded_at',{ascending:false}).limit(1).maybeSingle();
+      prevRow=data;
+    }catch(e){ /* history table missing/unreachable — fall back below */ }
+  }
   try{
-    const {data:prevRow}=await sb.from(table).select(fields.join(',')+',analysis_date').eq('patient_id',ptId).maybeSingle();
+    if(!prevRow){
+      const {data}=await sb.from(table).select(fields.join(',')+',analysis_date').eq('patient_id',ptId).maybeSingle();
+      prevRow=data;
+    }
     if(!prevRow) return [];
     const breaches=[];
     fields.forEach(f=>{
@@ -9362,6 +9413,7 @@ async function saveResultWithSafetyChecks(opts){
     payload.is_verified=finalVerify; payload.verified_at=finalVerify?new Date().toISOString():null;
     try{
       await sb.from(table).upsert(payload,{onConflict:'patient_id'});
+      await logResultHistory(table,payload);
       if(hasCrit) await logCriticalValues(ptId,payload,deptLabel);
       if(finalVerify) await updateSampleStatus(ptId,'Completed');
       toast(autoVerified?'🟢 '+successLabel+' auto-verified & released':(finalVerify?'✅ '+successLabel+' saved & verified':'💾 '+successLabel+' saved — pending tech sign-off'),'ok');
