@@ -6081,6 +6081,27 @@ const DEPT_META = {
   cyto:{label:'🧫 Cytology', page:'cyto-entry', ptIdField:'cyto-entry-pt-id', barId:'cyto-entry-pt-bar', saveFn:'saveCytoEntry', printFn:'printCytoReport', keywords:['cytology','pap','fna','fluid']}
 };
 
+// ── ESCAPING HELPERS ──────────────────────────────────
+// escapeHtml: for interpolating untrusted text (patient names, etc.) into
+// HTML content — neutralizes &, <, >, and quotes so it can't break out of
+// the surrounding markup or be reinterpreted as a tag.
+function escapeHtml(v){
+  return String(v??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+// escAttr: for interpolating untrusted text into a single-quoted JS string
+// literal embedded inside a double-quoted HTML attribute (e.g.
+// onclick="fn('...')"). Two layers need escaping, in order: (1) backslash
+// then single-quote, so the value can't terminate the JS string early;
+// (2) &, ", <, > as HTML entities, so it can't terminate the surrounding
+// double-quoted attribute itself (the browser decodes these back to plain
+// characters before JS ever sees the string, so the JS-string escaping
+// from step 1 is preserved) — escaping only the single quote and not the
+// double quote (as the old code did) still let a literal `"` in the value
+// break out of the attribute entirely.
+function escAttr(v){
+  return String(v??'').replace(/\\/g,'\\\\').replace(/'/g,"\\'")
+    .replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
 // ── TOAST ─────────────────────────────────────────────
 function toast(msg, type='') {
   const w = document.getElementById('toast-wrap');
@@ -12804,7 +12825,7 @@ async function searchRadPrintPatient(q){
     if(!box) return;
     if(!data?.length){ box.style.display='none'; return; }
     box.style.display='block';
-    box.innerHTML=data.map(p=>'<div onclick="loadRadPrintStudies(\''+p.id+'\',\''+(p.name||fullName(p)).replace(/'/g,"\\'")+'\')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:.8rem" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'"><div style="font-weight:700">'+(p.name||fullName(p))+'</div><div style="font-size:.7rem;color:var(--slate)">'+(p.mrn||p.lab_no||'—')+'</div></div>').join('');
+    box.innerHTML=data.map(p=>'<div onclick="loadRadPrintStudies(\''+escAttr(p.id)+'\',\''+escAttr(p.name||fullName(p))+'\')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:.8rem" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'"><div style="font-weight:700">'+escapeHtml(p.name||fullName(p))+'</div><div style="font-size:.7rem;color:var(--slate)">'+escapeHtml(p.mrn||p.lab_no||'—')+'</div></div>').join('');
   }catch(e){}
 }
 async function loadRadPrintStudies(ptId, ptName){
