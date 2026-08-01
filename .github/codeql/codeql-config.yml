@@ -1,0 +1,68 @@
+# CodeQL scan-path exclusions for Friendship Hospital HIS.
+#
+# The files listed under paths-ignore are NOT dead/duplicate source code —
+# they are historical snapshots of index.html, each created via GitHub's
+# web-upload "rename" workflow right before a new index.html was pushed
+# (see git log: every one of these is literally a "Rename index.html to
+# <name>" commit). CLAUDE.md documents this convention explicitly and says
+# not to edit them or treat them as current -- only index.html is live.
+#
+# CodeQL was scanning every one of these old snapshots independently,
+# which is why a single real finding in index.html turned into 900+ alerts
+# (the same historical code duplicated across ~40 renamed copies). This
+# file excludes exactly those known snapshot filenames -- listed
+# explicitly rather than by wildcard, so a future legitimate file can never
+# be accidentally swept in by a loose glob pattern. index.html and the
+# Supabase Edge Functions under supabase/functions/ are NOT excluded and
+# keep being scanned normally.
+#
+# Regenerate this list any time a new snapshot is added:
+#   git ls-files '*.html' '*.htm' | grep -vFx 'index.html'
+
+name: Friendship Hospital HIS CodeQL config
+paths-ignore:
+- G.34.index.html
+- Ol 36..ndex.html
+- Ol.15.index.html
+- Ol.2.index.html
+- Ol.3..index.html
+- Old .16.index.html
+- Old 13.index.html
+- Old 8.index.html
+- Old 9.index.html
+- Old,15index.html
+- Old,16.index.html
+- Old,18.index.html
+- Old,20.index.html
+- Old,24.index.html
+- Old,28.index.html
+- Old,33.index.html
+- Old.,4.index.html
+- Old.1.index.html
+- Old.10..index.html
+- Old.11.index.html
+- Old.12.index.html
+- Old.14.index.html
+- Old.19.index.html
+- Old.21.index.html
+- Old.23.index.html
+- Old.25.index.html
+- Old.26.index.html
+- Old.29.index.html
+- Old.30.index.html
+- Old.31.index.html
+- Old.36.index.html
+- Old.38.index.html
+- Old.39.,.index.html
+- Old.39.index.html
+- Old.40.;index.html
+- Old.41.!index.html
+- Old.41.index.html
+- Old.42.index.html
+- Old.43..index.html
+- Old.5.index.html
+- Old.6.index.html
+- Old.7.index.html
+- Old.9index.html
+- Old35..index.html
+- iold.22.ndex.html

@@ -76,6 +76,12 @@ jobs:
         # For more details on CodeQL's query packs, refer to: https://docs.github.com/en/code-security/code-scanning/automatically-scanning-your-code-for-vulnerabilities-and-errors/configuring-code-scanning#using-queries-in-ql-packs
         # queries: security-extended,security-and-quality
 
+        # Excludes the ~40 historical index.html snapshot files (see
+        # CLAUDE.md's repo-structure section) from scanning — without this,
+        # a single real finding in the live index.html was being multiplied
+        # into 900+ alerts across every renamed copy of the same old code.
+        config-file: ./.github/codeql/codeql-config.yml
+
     # If the analyze step fails for one of the languages you are analyzing with
     # "We were unable to automatically build your code", modify the matrix above
     # to set the build mode to "manual" for that language. Then modify this step
