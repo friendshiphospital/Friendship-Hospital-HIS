@@ -84,13 +84,13 @@ VALUES ('<uuid>', 'Administrator', 'admin', 'Administration');
 |------|-------|
 | Admin | Everything |
 | Doctor | Consultation, Nursing, Fluid, Admissions, Theatre, Radiology, History |
-| Nurse | Nursing, Fluid, Admissions, Handover, Infection, Samples |
+| Nurse | Nursing, Fluid, Admissions, Handover, Infection, Samples, Inventory |
 | Lab Tech | Worklist, Samples, All Result Entry, Criticals, QC, TAT, Inventory, Delivery |
 | Lab Supervisor | All Lab Tech + Verification + Staff Activity |
 | Receptionist | Register, Appointments, Billing, Prices, Infection |
 | Cashier | Billing, Prices, Register, Appointments |
-| Theatre Nurse | Theatre, Nursing, Admissions, Fluid |
-| Radiologist | Radiology, Patient History |
+| Theatre Nurse | Theatre, Nursing, Admissions, Fluid, Inventory |
+| Radiologist | Radiology, Patient History, Inventory |
 
 ---
 
