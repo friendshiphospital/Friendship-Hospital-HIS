@@ -3911,9 +3911,7 @@ html[dir="rtl"] body{direction:rtl;}
         <div id="cfg-conn-status" style="margin-top:8px;font-size:.78rem"></div>
       </div></div>
       <div class="card"><div class="card-hd"><span class="card-title">📲 SMS / Messaging Provider</span></div><div class="card-body">
-        <div style="font-size:.72rem;color:var(--slate);margin-bottom:8px">Generic REST config — sendSms() POSTs {to, message, sender} as JSON with this URL and a Bearer token. Matches most SMS gateway APIs directly; some providers need a different request shape (form-encoded, a different field naming) and would need sendSms() adjusted to match once a specific provider is chosen.</div>
-        <div class="fg"><label class="fl">SMS API URL</label><input class="fc" id="cfg-sms-api-url" placeholder="https://api.yourprovider.com/sms/send"></div>
-        <div class="fg"><label class="fl">API Key / Bearer Token</label><input class="fc" id="cfg-sms-api-key"></div>
+        <div style="font-size:.72rem;color:var(--slate);margin-bottom:8px">The gateway URL and API key are configured server-side only, as Supabase Edge Function secrets — see <code>supabase/functions/send-sms</code> — so the key is never stored in this browser. Run <code>supabase secrets set SMS_API_URL=... SMS_API_KEY=...</code> once to configure the provider. Sender ID isn't sensitive and can still be set per deployment here.</div>
         <div class="fg"><label class="fl">Sender ID</label><input class="fc" id="cfg-sms-sender-id" placeholder="FriendshipHosp"></div>
       </div></div>
       <div class="card" id="cfg-override-pin-card" style="display:none"><div class="card-hd"><span class="card-title">🔑 My Anti-Fraud Override PIN</span></div><div class="card-body">
@@ -5659,13 +5657,12 @@ const CFG = {
   // so a site can tune what counts as "overdue" without editing code.
   get unpaidAlertHours(){ return parseFloat(localStorage.getItem('cfg_unpaid_alert_hours'))||72; },
   get admissionAlertHours(){ return parseFloat(localStorage.getItem('cfg_admission_alert_hours'))||4; },
-  // SMS provider (Phase 8) — same localStorage-only pattern as the Supabase
-  // URL/key: entered at runtime per deployment, never committed. Generic
-  // "POST {to, message, ...} with a Bearer token" shape, since no specific
-  // provider is wired in — see sendSms()'s comment for what adapting this
-  // to a real provider's exact request format would involve.
-  get smsApiUrl(){ return localStorage.getItem('cfg_sms_api_url')||''; },
-  get smsApiKey(){ return localStorage.getItem('cfg_sms_api_key')||''; },
+  // SMS provider (Phase 8) — the gateway URL and API key live server-side
+  // only now, as Supabase Edge Function secrets (see supabase/functions/
+  // send-sms), not in localStorage — a Bearer token sitting in client
+  // storage was flagged by CodeQL (js/clear-text-storage-of-sensitive-data)
+  // and readable by anyone with access to the browser. Only the sender id
+  // (not sensitive) is still a per-deployment client setting.
   get smsSenderId(){ return localStorage.getItem('cfg_sms_sender_id')||''; },
   // Shift Management / Anti-fraud (RCM engine) — same localStorage-only,
   // per-deployment config pattern as everything else in CFG.
@@ -6389,8 +6386,6 @@ function loadSettings() {
   g('cfg-email','cfg_email'); g('cfg-currency','cfg_currency'); g('cfg-lab-prefix','cfg_lab_prefix'); g('cfg-footer','cfg_footer');
   const uah=document.getElementById('cfg-unpaid-alert-hours'); if(uah) uah.value=CFG.unpaidAlertHours;
   const aah=document.getElementById('cfg-admission-alert-hours'); if(aah) aah.value=CFG.admissionAlertHours;
-  const su=document.getElementById('cfg-sms-api-url'); if(su) su.value=CFG.smsApiUrl;
-  const sk=document.getElementById('cfg-sms-api-key'); if(sk) sk.value=CFG.smsApiKey;
   const ss=document.getElementById('cfg-sms-sender-id'); if(ss) ss.value=CFG.smsSenderId;
   const ane=document.getElementById('cfg-admin-notify-email'); if(ane) ane.value=CFG.adminNotifyEmail;
   const dot=document.getElementById('cfg-discount-override-pct'); if(dot) dot.value=CFG.discountOverrideThreshold;
@@ -6445,7 +6440,6 @@ function saveSettings() {
   localStorage.setItem('cfg_footer',g('cfg-footer'));
   const uah=parseFloat(g('cfg-unpaid-alert-hours')); localStorage.setItem('cfg_unpaid_alert_hours', (isNaN(uah)||uah<=0)?72:uah);
   const aah=parseFloat(g('cfg-admission-alert-hours')); localStorage.setItem('cfg_admission_alert_hours', (isNaN(aah)||aah<=0)?4:aah);
-  localStorage.setItem('cfg_sms_api_url',g('cfg-sms-api-url')); localStorage.setItem('cfg_sms_api_key',g('cfg-sms-api-key'));
   localStorage.setItem('cfg_sms_sender_id',g('cfg-sms-sender-id'));
   localStorage.setItem('cfg_admin_notify_email', g('cfg-admin-notify-email')||'admin@hospital.com');
   const dot=parseFloat(g('cfg-discount-override-pct')); localStorage.setItem('cfg_discount_override_pct', (isNaN(dot)||dot<0)?15:dot);
@@ -6808,26 +6802,21 @@ function notifJumpToInventory(){
 
 // ── SMS (Phase 8) ──────────────────────────────────────
 // Generic REST send — cannot be tested against a real gateway in this
-// environment (no provider account/credentials exist here). The request
-// shape ({to, message, sender} as JSON with a Bearer token) matches most
-// SMS gateway APIs directly, but isn't guaranteed to match whichever
-// specific provider ends up configured; adjust the fetch() body/headers
-// below to match that provider's actual API once chosen. Every attempt is
-// logged to sms_log via dbWrite (offline-safe, same as every other write
-// in this app) regardless of whether the send itself succeeds, so there's
-// always a record of what was tried.
+// environment (no provider account/credentials exist here). The actual
+// gateway URL and API key live server-side only, as Supabase Edge
+// Function secrets (see supabase/functions/send-sms) — this call never
+// sees them, it just invokes the function with the message to send. Every
+// attempt is logged to sms_log via dbWrite (offline-safe, same as every
+// other write in this app) regardless of whether the send itself
+// succeeds, so there's always a record of what was tried.
 async function sendSms(phone, message, purpose, patientId){
   if(!phone){ toast('No phone number on file','err'); return {ok:false, error:'no_phone'}; }
-  if(!CFG.smsApiUrl){ toast('SMS provider not configured — see Settings','err'); return {ok:false, error:'not_configured'}; }
+  if(!sb){ toast('Not connected','err'); return {ok:false, error:'not_connected'}; }
   let ok=false, errorMsg=null;
   try{
-    const res=await fetch(CFG.smsApiUrl, {
-      method:'POST',
-      headers:{'Content-Type':'application/json', 'Authorization':'Bearer '+CFG.smsApiKey},
-      body:JSON.stringify({to:phone, message, sender:CFG.smsSenderId||undefined})
-    });
-    ok=res.ok;
-    if(!ok) errorMsg='HTTP '+res.status;
+    const {data,error}=await sb.functions.invoke('send-sms', {body:{to:phone, message, sender:CFG.smsSenderId||undefined}});
+    if(error) throw error;
+    if(data?.error){ errorMsg=data.error; } else { ok=!!data?.ok; }
   }catch(e){ errorMsg=e.message||'Network error'; }
   try{
     await dbWrite('sms_log','insert',{
