@@ -5202,6 +5202,49 @@ html[dir="rtl"] body{direction:rtl;}
       </div>
     </div>
   </div>
+
+  <!-- Instrument Data Stream / Middleware panel -->
+  <div class="card" style="margin-top:16px">
+    <div class="card-hd"><span class="card-title">📡 Instrument Data Stream / Middleware</span></div>
+    <div class="card-body">
+      <div style="font-size:.72rem;color:var(--slate);margin-bottom:10px">Simulates incoming analyzer messages and parses real ASTM/HL7 v2 text client-side. A live TCP/MLLP listener needs a middleware server that can hold a socket open (see the note above) — not possible from a static browser app — so this panel is where message parsing and result-mapping can be built and tested against realistic messages today, ready to plug a real listener into later.</div>
+      <div class="g3" style="align-items:end">
+        <div class="fg"><label class="fl">Simulate From</label>
+          <select class="fc" id="im-sim-profile">
+            <option value="sysmex">Sysmex XN-1000 (Haematology, ASTM)</option>
+            <option value="cobas">Roche Cobas c311 (Chemistry, HL7)</option>
+            <option value="mindray">Mindray BC-5150 (Haematology, ASTM)</option>
+          </select>
+        </div>
+        <div class="fg"><label class="fl">Sample Barcode / Lab No</label>
+          <input class="fc" id="im-sim-barcode" placeholder="e.g. FH-25-000123 (blank = random)">
+        </div>
+        <button class="btn btn-p" onclick="simulateInstrumentMessage()" style="justify-content:center">▶ Simulate Incoming Message</button>
+      </div>
+      <details style="margin:12px 0">
+        <summary style="cursor:pointer;font-size:.78rem;font-weight:700;color:var(--teal)">✎ Paste a raw ASTM/HL7 message instead</summary>
+        <div class="g3" style="margin-top:8px;align-items:end">
+          <div class="fg" style="grid-column:1/3"><label class="fl">Raw Message</label>
+            <textarea class="fc" id="im-paste-raw" rows="3" style="font-family:'DM Mono',monospace;font-size:.72rem" placeholder="Paste a raw ASTM or HL7 v2 message — segments/records may be separated by newlines or carriage returns"></textarea>
+          </div>
+          <div>
+            <div class="fg"><label class="fl">Protocol</label>
+              <select class="fc" id="im-paste-protocol"><option value="ASTM">ASTM</option><option value="HL7">HL7</option></select>
+            </div>
+            <button class="btn btn-s" onclick="parsePastedInstrumentMessage()" style="width:100%;justify-content:center">Parse &amp; Add to Stream</button>
+          </div>
+        </div>
+      </details>
+      <div style="overflow-x:auto;margin-top:6px">
+        <table class="tbl">
+          <thead><tr><th>Machine</th><th>Sample Barcode / Lab No</th><th>Test Parameter</th><th>Raw Value</th><th>Sync Status</th><th></th></tr></thead>
+          <tbody id="instrument-msg-body">
+            <tr><td colspan="6" style="text-align:center;padding:18px;color:var(--slate);font-size:.8rem">No instrument messages yet — simulate one above</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
 </div><!-- /page-analyzer -->
 
     </div><!-- /.content -->
@@ -6469,6 +6512,7 @@ function goPage(p) {
   else if(p==='allresults'){ setD('ar-date-from',new Date(Date.now()-7*864e5).toISOString().slice(0,10)); setD('ar-date-to',td); run(loadAllResults); }
   else if(p==='criticals') run(loadCriticals);
   else if(p==='qc') run(loadQcPage);
+  else if(p==='analyzer') run(loadInstrumentMessages);
   else if(p==='labhistory'){ setD('lh-from',new Date(Date.now()-7*864e5).toISOString().slice(0,10)); setD('lh-to',td); }
   else if(p==='tat'){ setD('tat-filter-date',td); run(loadTat); }
   else if(p==='inventory') run(loadInventory);
@@ -10403,6 +10447,203 @@ function addAnalyzerRow() {
     '<td><span class="bdg bdg-sl">Not Connected</span></td>'+
     '<td><button class="btn btn-r btn-xs" onclick="this.closest(\x27tr\x27).remove()">✕</button></td>';
   tbody.appendChild(tr);
+}
+
+// ── INSTRUMENT INTERFACING / MIDDLEWARE (ASTM/HL7) ─────
+// Real client-side parsing of ASTM E1394/LIS2-A2 and HL7 v2 ORU messages
+// — not a mockup. What this can't do is hold open a live TCP/MLLP socket
+// to an actual analyzer; that needs a middleware server (see the note on
+// this page). This panel simulates realistic incoming messages from three
+// canned analyzer profiles, or accepts a pasted raw message, parses it,
+// and (if the test name is recognized) can push the value straight into
+// the matching Haematology/Chemistry result-entry field.
+function astmHl7Timestamp(){ return new Date().toISOString().replace(/[-:T]/g,'').slice(0,14); }
+
+// Maps a parsed test code/name (case-insensitive) to where it lands in
+// the result-entry forms. Deliberately covers the analytes already wired
+// into the Delta Checking engine plus glucose — extend as more instrument
+// feeds/analytes are added.
+const INSTRUMENT_FIELD_MAP = {
+  HGB:{table:'results_hematology',field:'hgb',targetInput:'he-hgb',label:'Haemoglobin'},
+  HEMOGLOBIN:{table:'results_hematology',field:'hgb',targetInput:'he-hgb',label:'Haemoglobin'},
+  WBC:{table:'results_hematology',field:'wbc',targetInput:'he-wbc',label:'WBC'},
+  PLT:{table:'results_hematology',field:'plt',targetInput:'he-plt',label:'Platelets'},
+  PLATELETS:{table:'results_hematology',field:'plt',targetInput:'he-plt',label:'Platelets'},
+  NA:{table:'results_chemistry',field:'na',targetInput:'ce-na',label:'Sodium'},
+  SODIUM:{table:'results_chemistry',field:'na',targetInput:'ce-na',label:'Sodium'},
+  K:{table:'results_chemistry',field:'k',targetInput:'ce-k',label:'Potassium'},
+  POTASSIUM:{table:'results_chemistry',field:'k',targetInput:'ce-k',label:'Potassium'},
+  GLU:{table:'results_chemistry',field:'fbs',targetInput:'ce-fbs',label:'Glucose'},
+  GLUCOSE:{table:'results_chemistry',field:'fbs',targetInput:'ce-fbs',label:'Glucose'},
+  CREAT:{table:'results_chemistry',field:'creat',targetInput:'ce-creat',label:'Creatinine'},
+  CREATININE:{table:'results_chemistry',field:'creat',targetInput:'ce-creat',label:'Creatinine'},
+};
+function mapInstrumentField(testCode){ return INSTRUMENT_FIELD_MAP[(testCode||'').trim().toUpperCase()]||null; }
+
+// ASTM E1394/LIS2-A2: pipe-delimited records, one per line (real
+// transmissions use a control-character frame around each line, but the
+// R "result" record format below is the same either way). R record shape:
+// R|seq|^^^TESTCODE|value|units|refRange|abnormalFlag|...
+function parseAstmMessage(raw){
+  const lines=(raw||'').split(/\r\n|\r|\n/).map(l=>l.trim()).filter(Boolean);
+  let sampleId=null;
+  const results=[];
+  lines.forEach(line=>{
+    const f=line.split('|');
+    if(f[0]==='O'){ sampleId=f[2]||sampleId; }
+    else if(f[0]==='R'){
+      const comp=(f[2]||'').split('^').filter(Boolean);
+      const testCode=comp[comp.length-1]||'';
+      if(testCode) results.push({testCode,value:f[3]||'',units:f[4]||'',refRange:f[5]||'',abnormalFlag:f[6]||''});
+    }
+  });
+  if(!results.length) throw new Error('No R (result) records found in ASTM message');
+  return {sampleId,results};
+}
+// HL7 v2 ORU^R01: segments separated by CR (accepts plain newlines too,
+// since messages get pasted as text). OBX carries each result:
+// OBX|seq|type|TESTCODE^Name^CodingSystem||value|units|refRange|abnormalFlag|...
+function parseHl7Message(raw){
+  const segs=(raw||'').split(/\r\n|\r|\n/).map(l=>l.trim()).filter(Boolean);
+  let sampleId=null;
+  const results=[];
+  segs.forEach(seg=>{
+    const f=seg.split('|');
+    if(f[0]==='PID'){ sampleId=f[3]||sampleId; }
+    else if(f[0]==='OBX'){
+      const obsId=(f[3]||'').split('^');
+      const testCode=obsId[0]||'';
+      if(testCode) results.push({testCode,value:f[5]||'',units:f[6]||'',refRange:f[7]||'',abnormalFlag:f[8]||''});
+    }
+  });
+  if(!results.length) throw new Error('No OBX (result) segments found in HL7 message');
+  return {sampleId,results};
+}
+
+const INSTRUMENT_PROFILES={
+  sysmex:{machineId:'Sysmex XN-1000',protocol:'ASTM',build(barcode){
+    const hgb=(11+Math.random()*7).toFixed(1), wbc=(3+Math.random()*10).toFixed(1), plt=(100+Math.random()*350).toFixed(0);
+    const ts=astmHl7Timestamp();
+    return ['H|\\^&|||Sysmex XN-1000|||||||P|LIS2-A2|'+ts,
+      'P|1||'+barcode+'||',
+      'O|1|'+barcode+'||^^^HGB^WBC^PLT|R||'+ts,
+      'R|1|^^^HGB|'+hgb+'|g/dL|12.0-17.5|'+(hgb<12?'L':hgb>17.5?'H':'N')+'||F||tech||'+ts,
+      'R|2|^^^WBC|'+wbc+'|10*3/uL|4.0-11.0|'+(wbc<4?'L':wbc>11?'H':'N')+'||F||tech||'+ts,
+      'R|3|^^^PLT|'+plt+'|10*3/uL|150-400|'+(plt<150?'L':plt>400?'H':'N')+'||F||tech||'+ts,
+      'L|1|N'].join('\r');
+  }},
+  cobas:{machineId:'Roche Cobas c311',protocol:'HL7',build(barcode){
+    const na=(130+Math.random()*20).toFixed(0), k=(3+Math.random()*3).toFixed(1), glu=(3.5+Math.random()*10).toFixed(1);
+    const ts=astmHl7Timestamp();
+    return ['MSH|^~\\&|Cobas c311|Lab|LIS|Hospital|'+ts+'||ORU^R01|1|P|2.3',
+      'PID|1||'+barcode+'||',
+      'OBX|1|NM|NA^Sodium^L||'+na+'|mmol/L|136-145|'+(na<136?'L':na>145?'H':'N')+'|||F',
+      'OBX|2|NM|K^Potassium^L||'+k+'|mmol/L|3.5-5.1|'+(k<3.5?'L':k>5.1?'H':'N')+'|||F',
+      'OBX|3|NM|GLU^Glucose^L||'+glu+'|mmol/L|3.9-6.1|'+(glu<3.9?'L':glu>6.1?'H':'N')+'|||F'].join('\r');
+  }},
+  mindray:{machineId:'Mindray BC-5150',protocol:'ASTM',build(barcode){
+    const hgb=(10+Math.random()*8).toFixed(1), wbc=(2+Math.random()*12).toFixed(1), plt=(50+Math.random()*450).toFixed(0);
+    const ts=astmHl7Timestamp();
+    return ['H|\\^&|||Mindray BC-5150|||||||P|LIS2-A2|'+ts,
+      'P|1||'+barcode+'||',
+      'O|1|'+barcode+'||^^^HGB^WBC^PLT|R||'+ts,
+      'R|1|^^^HGB|'+hgb+'|g/dL|12.0-17.5|'+(hgb<12?'L':hgb>17.5?'H':'N')+'||F||tech||'+ts,
+      'R|2|^^^WBC|'+wbc+'|10*3/uL|4.0-11.0|'+(wbc<4?'L':wbc>11?'H':'N')+'||F||tech||'+ts,
+      'R|3|^^^PLT|'+plt+'|10*3/uL|150-400|'+(plt<150?'L':plt>400?'H':'N')+'||F||tech||'+ts,
+      'L|1|N'].join('\r');
+  }},
+};
+
+let _instrumentMessages=[];
+async function loadInstrumentMessages(){
+  if(!sb) return;
+  try{
+    const {data}=await sb.from('instrument_messages').select('*').order('created_at',{ascending:false}).limit(30);
+    _instrumentMessages=data||[];
+    renderInstrumentMessages();
+  }catch(e){ /* panel still works from in-memory state below if this fails */ }
+}
+async function ingestInstrumentResults(machineId,protocol,raw,barcode,parsed){
+  for(const r of parsed.results){
+    const map=mapInstrumentField(r.testCode);
+    const row={machine_id:machineId,protocol,raw_message:raw,sample_barcode:barcode||parsed.sampleId||null,
+      test_parameter:r.testCode,raw_value:r.value,parsed_value:parseFloat(r.value),
+      sync_status:map?'auto_mapped':'pending_mapping',mapped_table:map?map.table:null,mapped_field:map?map.field:null};
+    try{
+      const res=await dbWrite('instrument_messages','insert',row);
+      row.id=res?.data?.[0]?.id;
+    }catch(e){ /* still shown in the panel from local state even if the DB write failed */ }
+    row.created_at=new Date().toISOString();
+    _instrumentMessages.unshift(row);
+  }
+  renderInstrumentMessages();
+}
+async function logInstrumentParseError(machineId,protocol,raw,barcode,errMsg){
+  const row={machine_id:machineId,protocol,raw_message:raw,sample_barcode:barcode||null,sync_status:'error',error_detail:errMsg};
+  try{ const res=await dbWrite('instrument_messages','insert',row); row.id=res?.data?.[0]?.id; }catch(e){}
+  row.created_at=new Date().toISOString();
+  _instrumentMessages.unshift(row);
+  renderInstrumentMessages();
+}
+async function simulateInstrumentMessage(){
+  const profile=INSTRUMENT_PROFILES[document.getElementById('im-sim-profile')?.value]; if(!profile) return;
+  const barcode=document.getElementById('im-sim-barcode')?.value?.trim()||('SIM-'+Math.floor(10000+Math.random()*90000));
+  const raw=profile.build(barcode);
+  try{
+    const parsed=profile.protocol==='ASTM'?parseAstmMessage(raw):parseHl7Message(raw);
+    await ingestInstrumentResults(profile.machineId,profile.protocol,raw,barcode,parsed);
+    toast('📡 Simulated message from '+profile.machineId+' ingested ('+parsed.results.length+' result'+(parsed.results.length!==1?'s':'')+')','ok');
+  }catch(e){
+    await logInstrumentParseError(profile.machineId,profile.protocol,raw,barcode,e.message);
+    toast('🔴 Failed to parse simulated message: '+e.message,'err');
+  }
+}
+async function parsePastedInstrumentMessage(){
+  const raw=document.getElementById('im-paste-raw')?.value?.trim();
+  const protocol=document.getElementById('im-paste-protocol')?.value||'ASTM';
+  if(!raw){ toast('Paste a message first','err'); return; }
+  const machineId='Manual Paste ('+protocol+')';
+  try{
+    const parsed=protocol==='ASTM'?parseAstmMessage(raw):parseHl7Message(raw);
+    await ingestInstrumentResults(machineId,protocol,raw,parsed.sampleId,parsed);
+    toast('✅ Parsed '+parsed.results.length+' result(s) from pasted message','ok');
+    document.getElementById('im-paste-raw').value='';
+  }catch(e){
+    await logInstrumentParseError(machineId,protocol,raw,null,e.message);
+    toast('🔴 Parse error: '+e.message,'err');
+  }
+}
+function renderInstrumentMessages(){
+  const body=document.getElementById('instrument-msg-body'); if(!body) return;
+  if(!_instrumentMessages.length){ body.innerHTML='<tr><td colspan="6" style="text-align:center;padding:18px;color:var(--slate);font-size:.8rem">No instrument messages yet — simulate one above</td></tr>'; return; }
+  const statusBadge=s=>s==='auto_mapped'?'<span class="bdg bdg-g">🟢 Auto-Mapped</span>':s==='error'?'<span class="bdg bdg-r">🔴 Communication Error</span>':'<span class="bdg bdg-a">🟡 Pending Mapping</span>';
+  body.innerHTML=_instrumentMessages.map((m,i)=>
+    '<tr>'+
+    '<td>'+escapeHtml(m.machine_id||'—')+'</td>'+
+    '<td style="font-family:\'DM Mono\',monospace">'+escapeHtml(m.sample_barcode||'—')+'</td>'+
+    '<td>'+escapeHtml(m.test_parameter||'—')+'</td>'+
+    '<td>'+escapeHtml(m.raw_value!=null?String(m.raw_value):(m.error_detail||'—'))+'</td>'+
+    '<td>'+statusBadge(m.sync_status)+'</td>'+
+    '<td>'+(m.sync_status!=='error'&&!m.imported_at?'<button class="btn btn-p btn-xs" onclick="mapAndImportInstrumentResult('+i+')">📥 Map &amp; Import</button>':(m.imported_at?'<span class="bdg bdg-t">✓ Imported</span>':''))+'</td>'+
+    '</tr>'
+  ).join('');
+}
+async function mapAndImportInstrumentResult(i){
+  const m=_instrumentMessages[i]; if(!m) return;
+  const map=mapInstrumentField(m.test_parameter);
+  if(!map){ toast('No known mapping for "'+m.test_parameter+'" — enter it manually in the result form','err'); return; }
+  const pageId=map.table==='results_hematology'?'page-hem-entry':'page-chem-entry';
+  const ptIdField=map.table==='results_hematology'?'hem-entry-pt-id':'chem-entry-pt-id';
+  if(!document.getElementById(ptIdField)?.value){ toast('Load the matching patient in '+(map.table==='results_hematology'?'Haematology':'Chemistry')+' entry first','err'); return; }
+  const input=document.getElementById(map.targetInput);
+  if(!input){ toast('Target field not found on the entry form','err'); return; }
+  input.value=m.raw_value;
+  input.dispatchEvent(new Event('input',{bubbles:true}));
+  m.imported_at=new Date().toISOString(); m.imported_by=currentProfile?.id; m.imported_by_name=currentProfile?.full_name||'';
+  try{ if(typeof m.id==='number') await sb.from('instrument_messages').update({imported_at:m.imported_at,imported_by:m.imported_by,imported_by_name:m.imported_by_name}).eq('id',m.id); }catch(e){}
+  renderInstrumentMessages();
+  toast('📥 Imported '+map.label+' = '+m.raw_value+' into '+(map.table==='results_hematology'?'Haematology':'Chemistry')+' entry — review before saving','ok');
+  goPage(map.table==='results_hematology'?'hem-entry':'chem-entry');
 }
 
 
