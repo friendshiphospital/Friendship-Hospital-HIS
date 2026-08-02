@@ -7422,27 +7422,47 @@ document.addEventListener('click', (e)=>{
 });
 
 // ── DASHBOARD ─────────────────────────────────────────
+// Shared by loadDashboard() and loadAdmissionStats() (Bed Management /
+// Admissions page) — both used to run their own independent
+// admissions+beds queries, which meant the same Active/ICU/Surgical/
+// Available-Beds numbers could disagree between the two screens if one
+// page's data was fetched a moment before/after the other's. Routing both
+// through this single function makes that impossible: there is exactly
+// one place that counts active admissions and available beds.
+async function computeBedOccupancyStats() {
+  const [admR,bedR]=await Promise.all([
+    sb.from('admissions').select('id,ward,status',{count:'exact'}).eq('status','Active'),
+    sb.from('beds').select('status,ward'),
+  ]);
+  const activeAdm=admR.data||[], beds=bedR.data||[];
+  return {
+    activeAdm, beds,
+    active:admR.count??activeAdm.length,
+    icu:activeAdm.filter(a=>a.ward==='ICU').length,
+    surgical:activeAdm.filter(a=>a.ward==='Surgical').length,
+    availableBeds:beds.filter(b=>b.status==='Available').length,
+  };
+}
 async function loadDashboard() {
   if(!sb) return;
   try {
     const td=today();
-    const [ptR,admR,vhR,vcR,crR,bedR,disR]=await Promise.all([
+    const [ptR,statsR,vhR,vcR,crR,disR]=await Promise.all([
       sb.from('patients').select('id',{count:'exact'}).gte('created_at',td+'T00:00:00'),
-      sb.from('admissions').select('id,ward,status',{count:'exact'}).eq('status','Active'),
+      computeBedOccupancyStats(),
       sb.from('results_hematology').select('id',{count:'exact'}).eq('is_verified',true).gte('created_at',td+'T00:00:00'),
       sb.from('results_chemistry').select('id',{count:'exact'}).eq('is_verified',true).gte('created_at',td+'T00:00:00'),
       sb.from('critical_values').select('id',{count:'exact'}).eq('is_acknowledged',false),
-      sb.from('beds').select('status'),
       sb.from('admissions').select('id',{count:'exact'}).eq('status','Discharged').gte('discharge_date',td+'T00:00:00'),
     ]);
     setText('ds-today',ptR.count||0); setText('ds-critical',crR.count||0);
     setText('ds-verified',(vhR.count||0)+(vcR.count||0));
     setText('ds-pending',Math.max(0,(ptR.count||0)-((vhR.count||0)+(vcR.count||0))));
-    const activeAdm=admR.data||[];
-    setText('ds-admissions',admR.count||0);
+    const activeAdm=statsR.activeAdm;
+    setText('ds-admissions',statsR.active);
     setText('ds-theatre',activeAdm.filter(a=>a.ward==='Theatre').length);
-    const beds=bedR.data||[];
-    setText('ds-beds',beds.filter(b=>b.status==='Available').length);
+    const beds=statsR.beds;
+    setText('ds-beds',statsR.availableBeds);
     setText('ds-discharged',disR.count||0);
     const cb=document.getElementById('dash-crit-alert');
     if(cb){ cb.style.display=(crR.count||0)>0?'flex':'none'; const ct=document.getElementById('dash-crit-text'); if(ct) ct.textContent=(crR.count||0)+' unacknowledged critical value'+((crR.count||0)!==1?'s':''); }
@@ -7515,11 +7535,8 @@ function filterAdmList(q) {
 async function loadAdmissionStats() {
   if(!sb) return;
   try {
-    const {data}=await sb.from('admissions').select('ward,status').eq('status','Active');
-    const a=data||[];
-    setText('as-active',a.length); setText('as-icu',a.filter(x=>x.ward==='ICU').length); setText('as-surgical',a.filter(x=>x.ward==='Surgical').length);
-    const {data:beds}=await sb.from('beds').select('status');
-    setText('as-beds',(beds||[]).filter(b=>b.status==='Available').length);
+    const s=await computeBedOccupancyStats();
+    setText('as-active',s.active); setText('as-icu',s.icu); setText('as-surgical',s.surgical); setText('as-beds',s.availableBeds);
   } catch(e){}
 }
 // ── WARD BED GRID (Bed Management / IPD overhaul, Phase 2) ────────────
