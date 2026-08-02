@@ -958,7 +958,7 @@ html[dir="rtl"] body{direction:rtl;}
             <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:#0369a1;margin-bottom:8px">🫀 Blood Pressure</div>
             <div class="g3">
               <div class="fg"><label class="fl">Systolic (mmHg)</label>
-                <input class="fc" type="number" id="vs-sys" placeholder="120" oninput="flagVital(this,70,180);calcMAP()">
+                <input class="fc" type="number" id="vs-sys" placeholder="120" oninput="flagVital(this,70,180);calcMAP();calcNEWS2()">
                 <span id="vs-sys-flag" style="font-size:.7rem;font-weight:700"></span>
               </div>
               <div class="fg"><label class="fl">Diastolic (mmHg)</label>
@@ -975,11 +975,11 @@ html[dir="rtl"] body{direction:rtl;}
             <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:#166534;margin-bottom:8px">💓 Pulse & Respiration</div>
             <div class="g3">
               <div class="fg"><label class="fl">HR (bpm)</label>
-                <input class="fc" type="number" id="vs-hr" placeholder="80" oninput="flagVital(this,50,100)">
+                <input class="fc" type="number" id="vs-hr" placeholder="80" oninput="flagVital(this,50,100);calcNEWS2()">
                 <span id="vs-hr-flag" style="font-size:.7rem;font-weight:700"></span>
               </div>
               <div class="fg"><label class="fl">RR (/min)</label>
-                <input class="fc" type="number" id="vs-rr" placeholder="16" oninput="flagVital(this,10,20)">
+                <input class="fc" type="number" id="vs-rr" placeholder="16" oninput="flagVital(this,10,20);calcNEWS2()">
                 <span id="vs-rr-flag" style="font-size:.7rem;font-weight:700"></span>
               </div>
               <div class="fg"><label class="fl">Pulse Rhythm</label>
@@ -995,15 +995,15 @@ html[dir="rtl"] body{direction:rtl;}
             <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:#c2410c;margin-bottom:8px">🌡️ Temperature & Oxygenation</div>
             <div class="g3">
               <div class="fg"><label class="fl">Temp (°C)</label>
-                <input class="fc" type="number" id="vs-temp" placeholder="37.0" step="0.1" oninput="flagVital(this,36,38.5)">
+                <input class="fc" type="number" id="vs-temp" placeholder="37.0" step="0.1" oninput="flagVital(this,36,38.5);calcNEWS2()">
                 <span id="vs-temp-flag" style="font-size:.7rem;font-weight:700"></span>
               </div>
               <div class="fg"><label class="fl">SpO₂ (%)</label>
-                <input class="fc" type="number" id="vs-spo2" placeholder="98" oninput="flagVital(this,94,100)">
+                <input class="fc" type="number" id="vs-spo2" placeholder="98" oninput="flagVital(this,94,100);calcNEWS2()">
                 <span id="vs-spo2-flag" style="font-size:.7rem;font-weight:700"></span>
               </div>
               <div class="fg"><label class="fl">O₂ Delivery</label>
-                <select class="fc" id="vs-o2-route">
+                <select class="fc" id="vs-o2-route" onchange="calcNEWS2()">
                   <option value="">Room Air</option><option>Nasal Cannula</option>
                   <option>Simple Mask</option><option>Non-rebreather</option>
                   <option>Venturi Mask</option><option>CPAP</option><option>Ventilator</option>
@@ -2013,7 +2013,7 @@ html[dir="rtl"] body{direction:rtl;}
             <textarea class="fc" id="dis-followup" rows="2" placeholder="OPD review date, when to return to A&E…"></textarea>
           </div>
           <div style="display:flex;gap:8px;margin-top:8px">
-            <button class="btn btn-p" onclick="saveDischarge()" style="flex:2;justify-content:center">💾 Save Discharge Summary</button>
+            <button class="btn btn-p" onclick="saveDischarge('consultation')" style="flex:2;justify-content:center">💾 Save Discharge Summary</button>
             <button class="btn btn-s" onclick="printDischarge()" style="flex:1;justify-content:center">🖨 Print</button>
           </div>
           <input type="hidden" id="dis-pt-id">
@@ -7478,7 +7478,7 @@ async function renderStatsLab(from,to){
   const sectionCounts=await Promise.all(Object.values(sectionTables).map(t=>sb.from(t).select('id',{count:'exact',head:true}).gte('created_at',from).lte('created_at',to)));
   const [{count:orders},{count:crits}]=await Promise.all([
     sb.from('patients').select('id',{count:'exact',head:true}).not('lab_no','is',null).gte('created_at',from).lte('created_at',to),
-    sb.from('critical_values').select('id',{count:'exact',head:true}).gte('notified_at',from).lte('notified_at',to),
+    sb.from('critical_values').select('id',{count:'exact',head:true}).gte('created_at',from).lte('created_at',to),
   ]);
   let html='<div class="stat-grid">'+statCard('Lab Orders',orders||0,'var(--teal)')+statCard('Critical Values',crits||0,'#ef4444');
   const sectionNames=Object.keys(sectionTables);
@@ -7890,12 +7890,12 @@ async function loadDashboard() {
     const [rptS,admS,critS]=await Promise.all([
       sb.from('patients').select('id,name,first_name,last_name,created_at').order('created_at',{ascending:false}).limit(5),
       sb.from('admissions').select('id,admission_no,created_at,admission_type').order('created_at',{ascending:false}).limit(4),
-      sb.from('critical_values').select('id,test_name,result_value,notified_at').order('notified_at',{ascending:false}).limit(3),
+      sb.from('critical_values').select('id,parameter,value,created_at').order('created_at',{ascending:false}).limit(3),
     ]);
     const events=[];
     (rptS.data||[]).forEach(p=>events.push({t:new Date(p.created_at),icon:'📋',text:'Patient registered: '+(p.name||fullName(p))}));
     (admS.data||[]).forEach(a=>events.push({t:new Date(a.created_at),icon:'🛏',text:'Admission '+a.admission_no+' ('+a.admission_type+')'}));
-    (critS.data||[]).forEach(c=>events.push({t:new Date(c.notified_at),icon:'🚨',text:'Critical: '+c.test_name+' = '+c.result_value}));
+    (critS.data||[]).forEach(c=>events.push({t:new Date(c.created_at),icon:'🚨',text:'Critical: '+c.parameter+' = '+c.value}));
     events.sort((a,b)=>b.t-a.t);
     const feed=document.getElementById('dash-activity');
     if(feed) feed.innerHTML=events.slice(0,10).map(e=>'<div class="act-item"><span class="act-icon">'+e.icon+'</span><div class="act-body"><div class="act-text">'+e.text+'</div><div class="act-time">'+fmtDT(e.t)+'</div></div></div>').join('')||'<div style="font-size:.78rem;color:var(--slate);padding:8px">No recent activity</div>';
@@ -8463,16 +8463,45 @@ async function openDischarge(admId) {
   } catch(e){}
 }
 function appendDischInstr(txt) { const el=document.getElementById('disch-instructions'); if(!el) return; el.value=(el.value?el.value+'\n':'')+txt; }
-async function saveDischarge() {
+async function saveDischarge(source) {
   if(!sb||!_currentAdmId){ toast('Error: no admission','err'); return; }
   const g=id=>document.getElementById(id)?.value||'';
   try {
     const {data:adm}=await sb.from('admissions').select('patient_id,admission_date,ward,room,bed').eq('id',_currentAdmId).single();
     const los=adm?Math.ceil((new Date()-new Date(adm.admission_date))/(864e5)):0;
-    await sb.from('discharge_summaries').insert({patient_id:adm.patient_id,admission_id:_currentAdmId,discharge_date:g('disch-date'),discharge_type:g('disch-type'),final_diagnosis:g('disch-dx'),procedures_done:g('disch-procedures'),discharge_condition:g('disch-condition'),follow_up_date:g('disch-fu-date')||null,follow_up_with:g('disch-fu-with'),discharge_instructions:g('disch-instructions'),los_days:los,prepared_by:g('disch-prepared-by'),created_by:currentProfile?.id});
+    // Bug fix: the Consultation module's Discharge tab has its own field-id
+    // namespace (dis-*) distinct from the Admissions-modal discharge form
+    // (disch-*) — only branch into reading dis-* when explicitly invoked
+    // from that tab (source==='consultation'), so the Admissions-modal path
+    // below is completely unchanged and can never pick up stale/unrelated
+    // text left in the other tab's hidden fields.
+    const payload = source==='consultation' ? {
+      patient_id:adm.patient_id, admission_id:_currentAdmId,
+      discharge_date:g('dis-date')||today(), discharge_type:g('dis-type'),
+      final_diagnosis:g('dis-dx'), primary_diagnosis:g('dis-dx'),
+      discharge_condition:g('dis-condition'), condition_at_discharge:g('dis-condition'),
+      reason_for_admission:g('dis-reason'), clinical_findings:g('dis-clinical'),
+      investigations_summary:g('dis-investigations'), treatment_given:g('dis-treatment'),
+      discharge_medications:g('dis-meds'), followup_instructions:g('dis-followup'),
+      discharge_instructions:g('dis-followup'),
+      los_days:parseInt(g('dis-los'),10)||los,
+      doctor_name:currentProfile?.full_name||'', prepared_by:currentProfile?.full_name||'',
+      created_by:currentProfile?.id,
+    } : {
+      patient_id:adm.patient_id, admission_id:_currentAdmId,
+      discharge_date:g('disch-date'), discharge_type:g('disch-type'),
+      final_diagnosis:g('disch-dx'), procedures_done:g('disch-procedures'),
+      discharge_condition:g('disch-condition'),
+      follow_up_date:g('disch-fu-date')||null, follow_up_with:g('disch-fu-with'),
+      discharge_instructions:g('disch-instructions'), los_days:los,
+      prepared_by:g('disch-prepared-by'), created_by:currentProfile?.id,
+    };
+    await sb.from('discharge_summaries').insert(payload);
     await sb.from('admissions').update({status:'Discharged',discharge_date:new Date().toISOString()}).eq('id',_currentAdmId);
     if(adm.ward&&adm.bed&&adm.bed!=='—'){ try{ await sb.from('beds').update({status:'Available',current_patient_id:null,current_admission_id:null,status_changed_at:new Date().toISOString()}).eq('ward',adm.ward).eq('room',adm.room).eq('bed_number',adm.bed); }catch(e){} }
-    toast('✅ Patient discharged','ok'); closeOv('discharge-ov'); loadAdmissions(); loadAdmissionStats();
+    toast('✅ Patient discharged','ok');
+    if(source==='consultation'){ _currentAdmId=null; } else { closeOv('discharge-ov'); }
+    loadAdmissions(); loadAdmissionStats();
   } catch(e){ toast(e.message,'err'); }
 }
 function printDischargeSummary() {
@@ -8680,7 +8709,7 @@ async function saveVitals() {
       o2_delivery:g('vs-o2-route'), o2_flow:gn('vs-o2-flow'), fio2:gn('vs-fio2'),
       gcs_eye:parseInt(g('vs-gcs-e'))||null, gcs_verbal:parseInt(g('vs-gcs-v'))||null, gcs_motor:parseInt(g('vs-gcs-m'))||null,
       pain_score:_painScore||parseInt(document.getElementById('vs-pain')?.value)||null,
-      news2_score:window._extra_news2||null,
+      news2_score:calcNEWS2()||null,
       fluid_in_ml:(parseFloat(g('vs-iv-in'))||0)+(parseFloat(g('vs-po-in'))||0),
       fluid_out_ml:(parseFloat(g('vs-urine'))||0)+(parseFloat(g('vs-other-out'))||0),
       urine_output_ml:gn('vs-urine'), net_balance:((parseFloat(g('vs-iv-in'))||0)+(parseFloat(g('vs-po-in'))||0)-(parseFloat(g('vs-urine'))||0)-(parseFloat(g('vs-other-out'))||0)),
@@ -8741,7 +8770,18 @@ async function saveHandover() {
   if(!sb){ toast('Not connected','err'); return; }
   const g=id=>document.getElementById(id)?.value||'';
   if(!g('ho-notes')){ toast('Enter handover notes','err'); return; }
-  try { await sb.from('ward_handover_notes').insert({ward:g('ho-ward'),shift:g('ho-shift'),handover_date:g('ho-date')||today(),notes:g('ho-notes'),handing_over:g('ho-from'),receiving:g('ho-to'),created_by:currentProfile?.id}); toast('✅ Handover saved','ok'); document.getElementById('ho-notes').value=''; }
+  try {
+    await sb.from('ward_handover_notes').insert({
+      ward:g('ho-ward'),shift:g('ho-shift'),handover_date:g('ho-date')||today(),
+      notes:g('ho-notes'),handing_over:g('ho-from'),receiving:g('ho-to'),
+      patient_count:parseInt(g('ho-count'),10)||null,
+      critical_patients:g('ho-critical')||null,
+      pending_tasks:g('ho-pending')||null,
+      created_by:currentProfile?.id,
+    });
+    toast('✅ Handover saved','ok');
+    ['ho-notes','ho-critical','ho-pending','ho-count'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  }
   catch(e){ toast(e.message,'err'); }
 }
 // ── FLUID CHART ────────────────────────────────────────
@@ -9233,7 +9273,26 @@ function switchDocTab(tab,btn) {
   if(tab==='vitals'){ loadDocVitals(_docPt?.id); loadDocVitalsTrend(_docPt?.id); }
   if(tab==='orders') { loadActiveOrders(); buildOrderTestPanel(); }
   if(tab==='rx') loadRxDrugList();
-  if(tab==='discharge'){ const d=document.getElementById('dis-date'); if(d&&!d.value) d.value=today(); const di=document.getElementById('dis-pt-id'); if(di&&_docPt) di.value=_docPt.id; }
+  if(tab==='discharge'){ const d=document.getElementById('dis-date'); if(d&&!d.value) d.value=today(); const di=document.getElementById('dis-pt-id'); if(di&&_docPt) di.value=_docPt.id; loadDischargeTabAdmission(); }
+}
+// Bug fix (Documentation/Logbook Phase 0 audit): the Consultation Discharge
+// tab never used to resolve/set _currentAdmId (only openDischarge(), reached
+// from the Admissions module, did) — so saveDischarge() would either error
+// "no admission" or, worse, silently write against whatever _currentAdmId
+// happened to be left over from a different patient browsed earlier in the
+// session. This resolves the CURRENT patient's active admission explicitly
+// every time the Discharge tab is opened, and also auto-fills Admission
+// Date so the LOS auto-calc (calcLOS()) works without manual entry.
+async function loadDischargeTabAdmission() {
+  _currentAdmId = null;
+  if(!sb||!_docPt?.id) return;
+  try {
+    const {data:adm} = await sb.from('admissions').select('id,admission_date').eq('patient_id',_docPt.id).eq('status','Active').order('admission_date',{ascending:false}).limit(1).maybeSingle();
+    if(!adm) return;
+    _currentAdmId = adm.id;
+    const admDateEl = document.getElementById('dis-admit-date');
+    if(admDateEl && !admDateEl.value){ admDateEl.value = (adm.admission_date||'').slice(0,10); calcLOS(); }
+  } catch(e){}
 }
 
 function switchOrderType(t,btn) {
@@ -10451,7 +10510,7 @@ async function loadPthTimeline() {
     const [labPt,adms,crits,rads,invs,hemHist,chemHist,consults,...resultRows]=await Promise.all([
       sb.from('patients').select('id,created_at,tests_requested,priority,diagnosis').eq('id',ptId).single(),
       sb.from('admissions').select('*').eq('patient_id',ptId).order('admission_date',{ascending:false}),
-      sb.from('critical_values').select('*').eq('patient_id',ptId).order('notified_at',{ascending:false}),
+      sb.from('critical_values').select('*').eq('patient_id',ptId).order('created_at',{ascending:false}),
       sb.from('radiology_requests').select('*').eq('patient_id',ptId).order('created_at',{ascending:false}),
       sb.from('invoices').select('*').eq('patient_id',ptId).order('created_at',{ascending:false}),
       // Trend history reads the append-only twin tables (migration_v2.17) —
@@ -10472,7 +10531,7 @@ async function loadPthTimeline() {
     const pt=labPt.data;
     if(pt) events.push({t:new Date(pt.created_at),type:'lab',icon:'📋',title:'Patient Registered',detail:'Tests: '+((pt.tests_requested||[]).join(', ')||'—'),color:'var(--teal)',data:pt});
     (adms.data||[]).forEach(a=>events.push({t:new Date(a.admission_date),type:'admission',icon:'🛏',title:'Admitted — '+(a.ward||''),detail:(a.primary_diagnosis||'—')+' | Dr. '+(a.admitting_doctor||'—')+' | '+a.status,color:'var(--blue)',data:a}));
-    (crits.data||[]).forEach(c=>events.push({t:new Date(c.notified_at),type:'lab',icon:'🚨',title:'Critical: '+c.test_name,detail:'Value: '+c.result_value+' | '+(c.is_acknowledged?'Acknowledged':'⚠️ Unacknowledged'),color:'var(--red)',data:c}));
+    (crits.data||[]).forEach(c=>events.push({t:new Date(c.created_at),type:'lab',icon:'🚨',title:'Critical: '+c.parameter,detail:'Value: '+c.value+' | '+(c.is_acknowledged?'Acknowledged':'⚠️ Unacknowledged'),color:'var(--red)',data:c}));
     (rads.data||[]).forEach(r=>events.push({t:new Date(r.created_at),type:'radiology',icon:'🩻',title:r.imaging_type||'Radiology',detail:(r.urgency||'')+' | '+(r.status||'Requested'),color:'var(--sero)',data:r}));
     (invs.data||[]).forEach(i=>events.push({t:new Date(i.created_at),type:'billing',icon:'💰',title:'Invoice '+(i.invoice_no||''),detail:((i.net_amount||0).toFixed(2))+' '+(i.currency||CFG.currency)+' | '+i.payment_status,color:'var(--amber)',data:i}));
     (consults.data||[]).forEach(c=>events.push({t:new Date(c.consultation_date||c.created_at),type:'consultation',icon:'🩺',title:'Doctor Visit'+(c.visit_type?' — '+c.visit_type:''),detail:(c.primary_diagnosis?'Dx: '+c.primary_diagnosis+' — ':'')+(c.chief_complaint||'—')+(c.consulting_doctor?' | Dr. '+c.consulting_doctor:''),color:'#7c3aed',data:c}));
@@ -12051,6 +12110,8 @@ async function loadHandoverNotes() {
             <div style="font-size:.78rem"><span style="color:var(--slate);font-weight:600">Handing Over:</span> ${h.handing_over||'—'}</div>
             <div style="font-size:.78rem"><span style="color:var(--slate);font-weight:600">Receiving:</span> ${h.receiving||'—'}</div>
           </div>
+          ${h.critical_patients?'<div style="margin-bottom:8px"><div style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:var(--red);margin-bottom:3px">Critical / High-Dependency Patients</div><div style="background:#fef2f2;border-radius:7px;padding:8px 10px;font-size:.8rem;line-height:1.6;white-space:pre-wrap">'+h.critical_patients+'</div></div>':''}
+          ${h.pending_tasks?'<div style="margin-bottom:8px"><div style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:var(--blue);margin-bottom:3px">Pending Tasks / Outstanding Orders</div><div style="background:#eff6ff;border-radius:7px;padding:8px 10px;font-size:.8rem;line-height:1.6;white-space:pre-wrap">'+h.pending_tasks+'</div></div>':''}
           ${h.notes?'<div style="background:var(--bg);border-radius:7px;padding:10px 12px;font-size:.82rem;line-height:1.6;white-space:pre-wrap">'+h.notes+'</div>':'<div style="color:var(--slate);font-size:.8rem">No notes recorded.</div>'}
         </div>
       </div>`).join('');
@@ -12517,18 +12578,18 @@ async function printDischarge() {
       `<div><div style="font-size:8pt;color:#64748b">MRN</div><div style="font-weight:700;color:var(--teal)">${pt.mrn||'—'}</div></div>`+
       `<div><div style="font-size:8pt;color:#64748b">Admission Date</div><div>${fmtDate(d.admission_date||pt.created_at)}</div></div>`+
       `<div><div style="font-size:8pt;color:#64748b">Discharge Date</div><div>${fmtDate(d.discharge_date||d.created_at)}</div></div>`+
-      `<div><div style="font-size:8pt;color:#64748b">Consultant</div><div>${d.doctor_name||'—'}</div></div>`+
+      `<div><div style="font-size:8pt;color:#64748b">Consultant</div><div>${d.doctor_name||d.prepared_by||'—'}</div></div>`+
       `<div><div style="font-size:8pt;color:#64748b">Ward</div><div>${pt.ward||'—'}</div></div>`+
       `<div><div style="font-size:8pt;color:#64748b">LOS</div><div>${d.los_days||'—'} days</div></div>`+
       `<div><div style="font-size:8pt;color:#64748b">Discharge Type</div><div>${d.discharge_type||'—'}</div></div></div>`+
       sec('Reason for Admission / Presenting Complaint', d.reason_for_admission||d.chief_complaint)+
       sec('History & Clinical Findings', d.clinical_findings)+
-      sec('Diagnosis', d.primary_diagnosis||d.diagnosis)+
+      sec('Diagnosis', d.primary_diagnosis||d.diagnosis||d.final_diagnosis)+
       sec('Investigations', d.investigations_summary)+
-      sec('Treatment & Procedures', d.treatment_given)+
-      sec('Condition at Discharge', d.condition_at_discharge)+
+      sec('Treatment & Procedures', d.treatment_given||d.procedures_done)+
+      sec('Condition at Discharge', d.condition_at_discharge||d.discharge_condition)+
       sec('Medications on Discharge', d.discharge_medications)+
-      sec('Follow-up Instructions', d.followup_instructions)+
+      sec('Follow-up Instructions', d.followup_instructions||d.discharge_instructions||(d.follow_up_date?('Follow-up on '+fmtDate(d.follow_up_date)+(d.follow_up_with?' with '+d.follow_up_with:'')):''))+
       sec('GP / Referral Notes', d.referral_notes)+
       '<div style="margin-top:20px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;text-align:center">'+
       '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">Discharging Doctor</div>'+
@@ -13165,7 +13226,7 @@ async function loadRecentHandovers() {
     if(!data?.length){body.innerHTML='<div class="empty-state">No handovers yet</div>';return;}
     body.innerHTML=data.map(h=>`<div style="border-left:3px solid var(--teal);padding:8px 12px;margin-bottom:8px;background:var(--bg);border-radius:0 8px 8px 0">
       <div style="display:flex;justify-content:space-between">
-        <span style="font-weight:700;font-size:.82rem">${h.ward} — ${h.shift||'?'} shift</span>
+        <span style="font-weight:700;font-size:.82rem">${h.ward} — ${h.shift||'?'} shift${h.critical_patients?' <span class="bdg bdg-r" style="margin-left:4px">⚠️ Critical</span>':''}</span>
         <span style="font-size:.7rem;color:var(--slate)">${fmtDT(h.created_at)}</span>
       </div>
       <div style="font-size:.75rem;color:var(--slate);margin-top:2px">
