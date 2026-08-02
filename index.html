@@ -8372,20 +8372,56 @@ async function _submitOtherOrder() {
   } catch(e){toast(e.message,'err');}
 }
 
+// Merges three sources into one Orders list so the doctor sees what
+// reception already sent, not just what they themselves place:
+//   1. doctor_orders (Nursing/Diet/Physio/Other, and Lab orders the doctor
+//      placed themselves) — order_type!=='Radiology' only, see #3.
+//   2. patients.tests_requested minus whatever's already covered by a
+//      doctor_orders Lab row — the remainder is exactly the tests reception
+//      requested at registration that the doctor hasn't separately logged.
+//   3. radiology_requests directly (not doctor_orders) — every radiology
+//      order, reception- or doctor-placed, already gets a radiology_requests
+//      row (see submitRegistration()/_submitRadOrder()/_doSubmitRadRequest());
+//      sourcing from there instead of doctor_orders avoids a doctor-placed
+//      study ever being listed twice.
 async function loadActiveOrders() {
   const el=document.getElementById('active-orders-list');
   if(!el||!_docPt?.id||!sb) return;
   try {
-    const {data}=await sb.from('doctor_orders').select('*').eq('patient_id',_docPt.id).neq('status','Cancelled').order('ordered_at',{ascending:false}).limit(20);
-    if(!data?.length){el.innerHTML='<div style="font-size:.78rem;color:var(--slate);padding:8px 0">No active orders</div>';return;}
+    const [ordersRes,radRes,ptRes]=await Promise.all([
+      sb.from('doctor_orders').select('*').eq('patient_id',_docPt.id).neq('status','Cancelled').order('ordered_at',{ascending:false}).limit(20),
+      sb.from('radiology_requests').select('imaging_type,urgency,status,requesting_doctor,created_at,payment_deferred,payment_deferred_by_name').eq('patient_id',_docPt.id).order('created_at',{ascending:false}).limit(20),
+      sb.from('patients').select('tests_requested,created_at').eq('id',_docPt.id).maybeSingle(),
+    ]);
+    const allDoctorOrders=ordersRes.data||[];
+    const nonRadOrders=allDoctorOrders.filter(o=>o.order_type!=='Radiology').map(o=>({
+      order_type:o.order_type, order_detail:o.order_detail, status:o.status, ordered_at:o.ordered_at,
+      orderedByLabel:o.ordered_by||'—', payment_deferred:o.payment_deferred, payment_deferred_by_name:o.payment_deferred_by_name,
+      id:o.id, cancellable:true,
+    }));
+    const labOrderedDetails=new Set(allDoctorOrders.filter(o=>o.order_type==='Lab').map(o=>o.order_detail));
+    const regRows=((ptRes.data?.tests_requested)||[]).filter(t=>!labOrderedDetails.has(t)).map(t=>({
+      order_type:'Lab', order_detail:t, status:'Pending', ordered_at:ptRes.data?.created_at,
+      orderedByLabel:'📋 Reception (at Registration)', id:null, cancellable:false,
+    }));
+    const radRows=(radRes.data||[]).map(r=>({
+      order_type:'Radiology', order_detail:r.imaging_type||'—', status:r.status, ordered_at:r.created_at,
+      orderedByLabel:r.requesting_doctor?('Dr. '+r.requesting_doctor):'📋 Reception (at Registration)',
+      payment_deferred:r.payment_deferred, payment_deferred_by_name:r.payment_deferred_by_name,
+      id:null, cancellable:false, // cancel via the Radiology module itself, not this generic order list
+    }));
+    const merged=[...nonRadOrders,...regRows,...radRows].sort((a,b)=>new Date(b.ordered_at||0)-new Date(a.ordered_at||0));
+    if(!merged.length){el.innerHTML='<div style="font-size:.78rem;color:var(--slate);padding:8px 0">No active orders</div>';return;}
     const tc={Lab:'#dbeafe',Radiology:'#ede9fe',Nursing:'#dcfce7',Diet:'#fef9c3',Physio:'#fce7f3',Other:'#f3f4f6'};
-    el.innerHTML=data.map(o=>'<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)">'+
+    el.innerHTML=merged.map(o=>'<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)">'+
       '<span style="background:'+(tc[o.order_type]||'#f3f4f6')+';padding:2px 8px;border-radius:20px;font-size:.68rem;font-weight:700;white-space:nowrap">'+o.order_type+'</span>'+
-      '<span style="flex:1;font-size:.78rem">'+o.order_detail+'</span>'+
-      (o.payment_deferred?'<span class="bdg" style="background:#fef2f2;color:#b91c1c;border:1.5px solid #fca5a5;white-space:nowrap" title="Granted by '+escapeHtml(o.payment_deferred_by_name||'')+' at '+fmtDT(o.payment_deferred_at)+'">\u26a0 Payment Deferred \u2014 STAT</span>':'')+
+      '<span style="flex:1;font-size:.78rem">'+escapeHtml(o.order_detail||'')+'</span>'+
+      '<span style="font-size:.68rem;color:var(--slate);white-space:nowrap" title="Ordered by">'+escapeHtml(o.orderedByLabel||'—')+'</span>'+
+      (o.payment_deferred?'<span class="bdg" style="background:#fef2f2;color:#b91c1c;border:1.5px solid #fca5a5;white-space:nowrap" title="Granted by '+escapeHtml(o.payment_deferred_by_name||'')+'">\u26a0 Payment Deferred \u2014 STAT</span>':'')+
       '<span style="font-size:.68rem;color:var(--slate);white-space:nowrap">'+fmtDT(o.ordered_at)+'</span>'+
       statusBadge(o.status)+
-      '<button class="btn btn-r btn-xs" onclick="cancelOrder(\x27'+o.id+'\x27)">\u2715</button></div>').join('');
+      (o.cancellable?'<button class="btn btn-r btn-xs" onclick="cancelOrder(\x27'+o.id+'\x27)">\u2715</button>':'')+
+      '</div>').join('');
   } catch(e){}
 }
 
