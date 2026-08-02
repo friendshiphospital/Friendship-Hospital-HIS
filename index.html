@@ -193,6 +193,12 @@ html[dir="rtl"] body{direction:rtl;}
    colour change on the tile itself (colour already means occupancy
    status here); just a small pill the charge nurse can notice or ignore. */
 .bed-tile-readiness{margin-top:5px;display:inline-block;font-size:.6rem;font-weight:700;background:rgba(255,255,255,.55);color:inherit;border:1px solid currentColor;border-radius:20px;padding:1px 7px;opacity:.85;}
+/* Isolation overlay (Phase 5d) — a hazard-striped border PLUS an icon
+   label, deliberately not just a colour swap, since tile colour already
+   carries occupancy-status meaning here. Visible at a glance without
+   opening the drawer. */
+.bed-tile.bed-isolation{border:2px dashed #7c3aed;box-shadow:inset 0 0 0 1px rgba(124,58,237,.25);}
+.bed-tile-iso{position:absolute;top:3px;left:6px;font-size:.62rem;font-weight:800;color:#7c3aed;background:rgba(255,255,255,.85);border-radius:4px;padding:0 4px;line-height:1.5;}
 /* TOGGLE SWITCH */
 .tgl-wrap{display:inline-flex;align-items:center;gap:9px;cursor:pointer;user-select:none;}
 .tgl-wrap input{display:none;}
@@ -7614,13 +7620,21 @@ const BED_STATUS_CLASS={Available:'bed-av',Occupied:'bed-oc',Cleaning:'bed-cl',M
 async function loadBedGrid() {
   const grid=document.getElementById('bed-grid-container'); if(!grid||!sb) return;
   try {
-    const [{data:beds,error:bedsErr},{data:adms}]=await Promise.all([
+    const [{data:beds,error:bedsErr},{data:adms},{data:flags}]=await Promise.all([
       sb.from('beds').select('*').order('ward').order('room').order('bed_number'),
-      sb.from('admissions').select('id,ward,admission_no,admitting_doctor,admission_date,discharge_planning_started_at,patients(name,mrn)').eq('status','Active'),
+      sb.from('admissions').select('id,ward,patient_id,admission_no,admitting_doctor,admission_date,discharge_planning_started_at,patients(name,mrn)').eq('status','Active'),
+      // Isolation overlay (Phase 5d) — read-only against the EXISTING
+      // Infection Flags feature (loadInfectionFlags()'s same table/active
+      // convention), no new flag-creation path introduced here.
+      sb.from('infection_flags').select('patient_id,flag_type').eq('active',true),
     ]);
     if(bedsErr) throw bedsErr;
     const admById={}; (adms||[]).forEach(a=>admById[a.id]=a);
-    _bedGridData=(beds||[]).map(b=>({...b,_admission:b.current_admission_id?admById[b.current_admission_id]:null}));
+    const isolationByPatient={}; (flags||[]).forEach(f=>{ if(f.patient_id&&!isolationByPatient[f.patient_id]) isolationByPatient[f.patient_id]=f.flag_type||'Isolation'; });
+    _bedGridData=(beds||[]).map(b=>{
+      const adm=b.current_admission_id?admById[b.current_admission_id]:null;
+      return {...b,_admission:adm,_isolation:adm?isolationByPatient[adm.patient_id]||null:null};
+    });
     renderBedGridWardTabs(); renderBedGrid();
   } catch(e){ grid.innerHTML='<div style="padding:14px;color:var(--red);font-size:.78rem">'+e.message+'</div>'; }
 }
@@ -7734,8 +7748,15 @@ function renderBedGrid() {
     } else { info=b.status; }
     const readiness=dischargeReadinessFlag(b);
     const readinessBadge=readiness?'<div class="bed-tile-readiness" title="Rule-based prompt, not a prediction — '+escAttr(readiness)+'">🏁 Check discharge?</div>':'';
-    return '<div class="bed-tile '+cls+slaCls+'" onclick="bedTileClick(\x27'+b.id+'\x27)">'+
+    // Isolation overlay (Phase 5d) — an icon + border treatment, not just
+    // colour, since tile colour already means occupancy status here.
+    // Only shown for beds that actually have a linked patient with an
+    // active infection flag (Occupied/Discharge Pending only).
+    const isoCls=b._isolation?' bed-isolation':'';
+    const isoMarker=b._isolation?'<div class="bed-tile-iso" title="Active isolation precaution — '+escAttr(b._isolation)+'">☣ '+escapeHtml(b._isolation)+'</div>':'';
+    return '<div class="bed-tile '+cls+slaCls+isoCls+'" onclick="bedTileClick(\x27'+b.id+'\x27)">'+
       '<div class="bed-tile-menu" onclick="event.stopPropagation();openBedStatusMenu(event,\x27'+b.id+'\x27)">⋮</div>'+
+      isoMarker+
       '<div class="bed-tile-loc">'+b.ward+' · '+b.room+'</div>'+
       '<div class="bed-tile-num">Bed '+b.bed_number+'</div>'+
       '<div class="bed-tile-info">'+info+'</div>'+
