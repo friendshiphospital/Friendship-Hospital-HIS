@@ -1720,7 +1720,7 @@ html[dir="rtl"] body{direction:rtl;}
           <div id="order-tab-radiology" style="display:none">
             <div class="g2" style="margin-top:8px">
               <div class="fg"><label class="fl">Imaging Type</label>
-                <select class="fc" id="ord-rad-type">
+                <select class="fc" id="ord-rad-type" onchange="updateOrdRadSafetyFields()">
                   <option>X-Ray — Chest PA</option>
                   <option>X-Ray — Abdomen</option>
                   <option>X-Ray — Pelvis</option>
@@ -1756,6 +1756,27 @@ html[dir="rtl"] body{direction:rtl;}
             </div>
             <div class="fg"><label class="fl">Relevant History / Contraindications</label>
               <input class="fc" id="ord-rad-history" placeholder="Pregnancy, renal function, contrast allergy, pacemaker…">
+            </div>
+            <!-- Safety-field parity (Radiology Phase 4): the same
+                 pregnancy/contrast gate the dedicated Radiology module's
+                 own request form has always had — previously absent here,
+                 so an order placed from Doctor Orders could bypass it
+                 entirely. -->
+            <div class="fg" id="ord-rad-pregnancy-wrap" style="display:none">
+              <label class="fl">Pregnancy Status (required — female, childbearing age, X-Ray/CT)</label>
+              <select class="fc" id="ord-rad-pregnancy-status">
+                <option value="">— Confirm before submitting —</option>
+                <option value="confirmed_not_pregnant">Confirmed not pregnant</option>
+                <option value="confirmed_pregnant">Confirmed pregnant</option>
+                <option value="declined_unknown">Declined to answer / unknown</option>
+              </select>
+            </div>
+            <div class="fg" id="ord-rad-contrast-wrap" style="display:none">
+              <div class="g2">
+                <div class="fg"><label class="fl">eGFR</label><input class="fc" type="number" id="ord-rad-egfr" oninput="checkOrdRadContrastSafety()"></div>
+                <div class="fg"><label class="fl">Creatinine</label><input class="fc" type="number" id="ord-rad-creatinine"></div>
+              </div>
+              <div id="ord-rad-contrast-warning" style="display:none;color:var(--red);font-size:.74rem;font-weight:600">⚠️ eGFR &lt;30 — contrast nephrotoxicity risk, confirm with radiologist</div>
             </div>
             <button class="btn btn-p btn-sm" onclick="submitRadOrder()" style="margin-top:8px">🩻 Submit Radiology Request</button>
           </div>
@@ -2682,9 +2703,9 @@ html[dir="rtl"] body{direction:rtl;}
             <div class="fg"><label class="fl" data-i18n="reg_lname">Last Name</label><input class="fc" id="r-lname" oninput="regValidate()"></div>
           </div>
           <div class="g4">
-            <div class="fg"><label class="fl" data-i18n="reg_age">Age *</label><input class="fc" type="number" id="r-age" min="0" oninput="regValidate()"></div>
-            <div class="fg"><label class="fl" data-i18n="reg_unit">Unit</label><select class="fc" id="r-age-unit"><option>Years</option><option>Months</option><option>Days</option></select></div>
-            <div class="fg"><label class="fl" data-i18n="reg_sex">Sex *</label><select class="fc" id="r-sex" onchange="regValidate()"><option value="">—</option><option>Male</option><option>Female</option></select></div>
+            <div class="fg"><label class="fl" data-i18n="reg_age">Age *</label><input class="fc" type="number" id="r-age" min="0" oninput="regValidate();updateRegRadSafetyFields()"></div>
+            <div class="fg"><label class="fl" data-i18n="reg_unit">Unit</label><select class="fc" id="r-age-unit" onchange="updateRegRadSafetyFields()"><option>Years</option><option>Months</option><option>Days</option></select></div>
+            <div class="fg"><label class="fl" data-i18n="reg_sex">Sex *</label><select class="fc" id="r-sex" onchange="regValidate();updateRegRadSafetyFields()"><option value="">—</option><option>Male</option><option>Female</option></select></div>
             <div class="fg"><label class="fl" data-i18n="reg_dob">D.O.B</label><input class="fc" type="date" id="r-dob" onchange="calcAgeFromDob()"></div>
           </div>
           <div class="g2">
@@ -2835,6 +2856,26 @@ html[dir="rtl"] body{direction:rtl;}
             </div>
             <div class="fg"><label class="fl" data-i18n="reg_clinical_indication">Clinical Indication</label>
               <textarea class="fc" id="r-rad-indication" rows="2" placeholder="Reason for study, specific question to be answered…"></textarea>
+            </div>
+            <!-- Safety-field parity (Radiology Phase 4): the same
+                 pregnancy/contrast gate the dedicated Radiology module's
+                 own request form has always had — Reception was the
+                 other order-entry path confirmed to bypass it entirely. -->
+            <div class="fg" id="r-rad-pregnancy-wrap" style="display:none">
+              <label class="fl">Pregnancy Status (required — female, childbearing age, X-Ray/CT)</label>
+              <select class="fc" id="r-rad-pregnancy-status">
+                <option value="">— Confirm before submitting —</option>
+                <option value="confirmed_not_pregnant">Confirmed not pregnant</option>
+                <option value="confirmed_pregnant">Confirmed pregnant</option>
+                <option value="declined_unknown">Declined to answer / unknown</option>
+              </select>
+            </div>
+            <div class="fg" id="r-rad-contrast-wrap" style="display:none">
+              <div class="g2">
+                <div class="fg"><label class="fl">eGFR</label><input class="fc" type="number" id="r-rad-egfr" oninput="checkRegRadContrastSafety()"></div>
+                <div class="fg"><label class="fl">Creatinine</label><input class="fc" type="number" id="r-rad-creatinine"></div>
+              </div>
+              <div id="r-rad-contrast-warning" style="display:none;color:var(--red);font-size:.74rem;font-weight:600">⚠️ eGFR &lt;30 — contrast nephrotoxicity risk, confirm with radiologist</div>
             </div>
           </div>
 
@@ -9440,6 +9481,7 @@ function switchOrderType(t,btn) {
   });
   document.querySelectorAll('#doc-tab-orders .tabs .tab').forEach(b=>b.classList.remove('active'));
   if(btn) btn.classList.add('active');
+  if(t==='radiology') updateOrdRadSafetyFields();
 }
 
 function switchOrderTestTab(tab,btn) {
@@ -9502,8 +9544,29 @@ async function _submitLabOrder(deferred) {
   } catch(e){toast(e.message,'err');}
 }
 
+// Safety-field parity (Radiology Phase 4): mirrors updateRadSafetyFields()/
+// checkContrastSafety() from the dedicated Radiology module's own request
+// form \u2014 this order-entry path previously had no pregnancy/contrast
+// fields at all, so it could bypass those checks entirely (confirmed gap
+// from the Phase 0 audit). Uses _docPt (this tab's own patient context)
+// instead of _radPt.
+function updateOrdRadSafetyFields(){
+  const type=document.getElementById('ord-rad-type')?.value||'';
+  const pregWrap=document.getElementById('ord-rad-pregnancy-wrap');
+  if(pregWrap) pregWrap.style.display=(isFemaleChildbearing(_docPt)&&/^(X-Ray|CT)/i.test(type))?'':'none';
+  const contrastWrap=document.getElementById('ord-rad-contrast-wrap');
+  if(contrastWrap) contrastWrap.style.display=isContrastStudy(type)?'':'none';
+}
+function checkOrdRadContrastSafety(){
+  const egfr=parseFloat(document.getElementById('ord-rad-egfr')?.value);
+  const warn=document.getElementById('ord-rad-contrast-warning'); if(!warn) return;
+  warn.style.display=(!isNaN(egfr)&&egfr<30)?'':'none';
+}
 async function submitRadOrder() {
   if(!sb||!_docPt){toast('Select patient','err');return;}
+  if(document.getElementById('ord-rad-pregnancy-wrap')?.style.display!=='none' && !document.getElementById('ord-rad-pregnancy-status')?.value){
+    toast('\u26a0\ufe0f Pregnancy status must be confirmed before submitting this request','err'); return;
+  }
   const isStat=document.getElementById('ord-rad-urgency')?.value==='STAT';
   if(!isPaymentCleared(_docPt)){
     checkPaymentGate(_docPt,'Radiology Order',()=>_submitRadOrder(false),{isStat,onDeferred:()=>_submitRadOrder(true)});
@@ -9514,11 +9577,12 @@ async function submitRadOrder() {
 async function _submitRadOrder(deferred) {
   const g=id=>document.getElementById(id)?.value||'';
   const deferralFields=buildPaymentDeferralFields(deferred);
+  const pregWrapShown=document.getElementById('ord-rad-pregnancy-wrap')?.style.display!=='none';
   try {
     let radiologyNo;
     for(let attempt=0; attempt<3; attempt++){
       radiologyNo = await getNextNumber('radiology_number');
-      const {error:radErr} = await sb.from('radiology_requests').insert({patient_id:_docPt.id,radiology_no:radiologyNo,imaging_type:g('ord-rad-type'),urgency:g('ord-rad-urgency'),indication:g('ord-rad-indication'),clinical_history:g('ord-rad-history'),requesting_doctor:g('doc-doctor-name')||currentProfile?.full_name,status:'Requested',created_by:currentProfile?.id,...deferralFields});
+      const {error:radErr} = await sb.from('radiology_requests').insert({patient_id:_docPt.id,radiology_no:radiologyNo,imaging_type:g('ord-rad-type'),urgency:g('ord-rad-urgency'),indication:g('ord-rad-indication'),clinical_history:g('ord-rad-history'),requesting_doctor:g('doc-doctor-name')||currentProfile?.full_name,pregnancy_status:pregWrapShown?(g('ord-rad-pregnancy-status')||null):'not_applicable',egfr_value:g('ord-rad-egfr')?parseFloat(g('ord-rad-egfr')):null,creatinine_value:g('ord-rad-creatinine')?parseFloat(g('ord-rad-creatinine')):null,status:'Requested',created_by:currentProfile?.id,...deferralFields});
       if(!radErr) break;
       const isCollision = radErr?.code==='23505' || /duplicate key|unique constraint/i.test(radErr?.message||'');
       if(isCollision && attempt<2) continue;
@@ -9527,6 +9591,8 @@ async function _submitRadOrder(deferred) {
     await sb.from('doctor_orders').insert({patient_id:_docPt.id,order_type:'Radiology',order_detail:g('ord-rad-type'),priority:g('ord-rad-urgency'),notes:g('ord-rad-indication'),ordered_by:g('doc-doctor-name')||currentProfile?.full_name,ordered_at:new Date().toISOString(),status:'Pending',created_by:currentProfile?.id,...deferralFields});
     advanceVisitStatus(_docPt.id,'Orders Pending');
     toast((deferred?'\u26a1 \u2705 Radiology request submitted (\u26a0 Payment Deferred \u2014 STAT) \u2014 No. ':'\u2705 Radiology request submitted \u2014 No. ')+radiologyNo,'ok'); loadActiveOrders();
+    ['ord-rad-egfr','ord-rad-creatinine'].forEach(id=>{const el=document.getElementById(id);if(el) el.value='';});
+    const pregSel=document.getElementById('ord-rad-pregnancy-status'); if(pregSel) pregSel.value='';
   } catch(e){toast(e.message,'err');}
 }
 
@@ -10142,6 +10208,9 @@ async function submitRegistration() {
   if(!document.getElementById('r-consent')?.checked){ toast('Patient consent required','err'); return; }
   if(_regDestinations.size===0){ toast('Please select at least one visit destination (Doctor / Lab / Radiology / Admission)','err'); return; }
   if(_regDestinations.has('radiology') && !g('r-rad-type')){ toast('Please select an imaging type','err'); return; }
+  if(_regDestinations.has('radiology') && document.getElementById('r-rad-pregnancy-wrap')?.style.display!=='none' && !g('r-rad-pregnancy-status')){
+    toast('⚠️ Pregnancy status must be confirmed before submitting this radiology request','err'); return;
+  }
   if(!sb && navigator.onLine){ toast('Not connected','err'); return; }
   const tests=[...document.querySelectorAll('.test-chk:checked')].map(c=>c.value);
   const destList=[..._regDestinations];
@@ -10221,13 +10290,18 @@ async function submitRegistration() {
       try{ await dbWrite('sample_records','insert',{patient_id:pt.id,status:'Pending'}); }catch(e){}
 
     // Auto-create a real radiology order (not just an invoice line) when Radiology was selected
-    if(needsRad)
+    if(needsRad){
+      const regPregWrapShown=document.getElementById('r-rad-pregnancy-wrap')?.style.display!=='none';
       try{ await dbWrite('radiology_requests','insert',{
         patient_id:pt.id, radiology_no:radiologyNo,
         imaging_type:g('r-rad-type'), urgency:g('r-rad-urgency')||'Routine',
         indication:g('r-rad-indication'), clinical_history:g('r-rad-history'),
+        pregnancy_status:regPregWrapShown?(g('r-rad-pregnancy-status')||null):'not_applicable',
+        egfr_value:g('r-rad-egfr')?parseFloat(g('r-rad-egfr')):null,
+        creatinine_value:g('r-rad-creatinine')?parseFloat(g('r-rad-creatinine')):null,
         requesting_doctor:getRegDoctor(), status:'Requested', created_by:currentProfile?.id
       }); }catch(e){}
+    }
 
     // Auto-create ONE invoice covering every selected destination (lab + radiology + doctor + admission + registration)
     const invNo = genOfflineId('INV');
@@ -11493,7 +11567,30 @@ function setDest(dest) {
   }
   buildRegInvoicePreview();
 }
-function onRegRadTypeChange() { buildRegInvoicePreview(); }
+function onRegRadTypeChange() { buildRegInvoicePreview(); updateRegRadSafetyFields(); }
+// Safety-field parity (Radiology Phase 4) — Reception path. Registration
+// has no patient object yet (this may be a brand-new patient being
+// registered), so this reads the form's own sex/age fields directly
+// rather than reusing isFemaleChildbearing(p), which expects an already-
+// loaded patient record with normalized sex/age_unit values.
+function isRegFemaleChildbearing(){
+  const sex=document.getElementById('r-sex')?.value;
+  const age=parseFloat(document.getElementById('r-age')?.value);
+  const unit=document.getElementById('r-age-unit')?.value||'Years';
+  return sex==='Female' && unit==='Years' && age>=12 && age<=55;
+}
+function updateRegRadSafetyFields(){
+  const type=document.getElementById('r-rad-type')?.value||'';
+  const pregWrap=document.getElementById('r-rad-pregnancy-wrap');
+  if(pregWrap) pregWrap.style.display=(isRegFemaleChildbearing()&&/^(X-Ray|CT)/i.test(type))?'':'none';
+  const contrastWrap=document.getElementById('r-rad-contrast-wrap');
+  if(contrastWrap) contrastWrap.style.display=isContrastStudy(type)?'':'none';
+}
+function checkRegRadContrastSafety(){
+  const egfr=parseFloat(document.getElementById('r-rad-egfr')?.value);
+  const warn=document.getElementById('r-rad-contrast-warning'); if(!warn) return;
+  warn.style.display=(!isNaN(egfr)&&egfr<30)?'':'none';
+}
 
 function onPayMethodChange() {
   const method = document.getElementById('r-pay-method')?.value;
@@ -11638,7 +11735,7 @@ function clearRegForm() {
   ['r-fname','r-mname','r-lname','r-age','r-phone','r-national-id','r-kin-name',
    'r-kin-phone','r-diagnosis','r-ins-co','r-ins-no','r-dob',
    'r-pay-amount','r-pay-notes','r-pay-ins-co','r-pay-ins-no','r-pay-preauth',
-   'r-rad-type','r-rad-history','r-rad-indication','r-adm-los','r-adm-consultant','r-adm-reason'].forEach(id=>{
+   'r-rad-type','r-rad-history','r-rad-indication','r-rad-egfr','r-rad-creatinine','r-rad-pregnancy-status','r-adm-los','r-adm-consultant','r-adm-reason'].forEach(id=>{
     const el=document.getElementById(id); if(el) el.value='';
   });
   document.querySelectorAll('.test-chk').forEach(c=>c.checked=false);
@@ -15876,8 +15973,27 @@ async function saveRadReport() {
     // for the bell's own periodic poll.
     refreshNotifications();
     try{
-      const {data:rr}=await sb.from('radiology_requests').select('patient_id').eq('id',requestId).maybeSingle();
+      const {data:rr}=await sb.from('radiology_requests').select('patient_id,imaging_type,patients(mrn,lab_no)').eq('id',requestId).maybeSingle();
       if(rr?.patient_id) checkAndAdvanceToResultsReady(rr.patient_id);
+      // Radiology Phase 4: integrate critical findings into the SAME
+      // shared critical_values/Criticals-page/notification-bell pipeline
+      // Lab and Blood Bank already use, rather than leaving radiology
+      // critical findings visible only inside the Radiology module's own
+      // lists (the gap confirmed by the Phase 0 audit). This does not
+      // replace the structured name/time/channel capture above — both
+      // are kept, since that detail is genuinely richer than Lab's.
+      if(isCritical&&rr?.patient_id){
+        try{
+          await sb.from('critical_values').insert({
+            patient_id:rr.patient_id, department:'Radiology',
+            parameter:(rr.imaging_type||'Radiology')+' — Critical Finding',
+            value:g('rad-critical-desc'), unit:'', reference:'N/A',
+            mrn:rr.patients?.mrn||null, lab_no:rr.patients?.lab_no||null,
+            is_acknowledged:false, notified_by:g('rad-crit-notified-name'),
+            created_by:currentProfile?.id,
+          });
+        }catch(e){}
+      }
     }catch(e){}
   } catch(e){toast(e.message,'err');}
 }
