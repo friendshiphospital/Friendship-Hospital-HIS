@@ -6058,13 +6058,21 @@ const MODULE_PAGES = {
   radiology:      { label:'Radiology',       icon:'🩻', pages:['radiology','rad-print'] },
   doctor:         { label:'Doctor',          icon:'🩺', pages:['consultation','pt-history'] },
   nursing:        { label:'Nursing',         icon:'🧑‍⚕️', pages:['nursing','fluid-chart','infection','handover','pt-history'] },
-  admissions:     { label:'Admissions',      icon:'🛏', pages:['admission','theatre'] },
+  // Split from the original combined "Admissions" tile (previously
+  // pages:['admission','theatre']) into two top-level tiles — Bed
+  // Management (IPD) and Theatre/OT — so each is reachable on its own. No
+  // ROLE_PAGES change needed: visibleModulesForRole()/
+  // firstAccessiblePageInModule() already compute tile visibility generically
+  // from ROLE_PAGES' existing 'admission'/'theatre' page grants, so the same
+  // roles that could reach either page before still can, just via two tiles.
+  admissions:     { label:'Bed Management (IPD)', icon:'🛏', pages:['admission'] },
+  theatre:        { label:'Theatre / OT',      icon:'🔪', pages:['theatre'] },
   billing:        { label:'Billing',         icon:'💰', pages:['billing','prices'] },
   inventory:      { label:'Inventory',       icon:'📦', pages:['inventory'] },
   statistics:     { label:'Statistics',      icon:'📊', pages:['statistics'] },
   administration: { label:'Administration',  icon:'⚙️', pages:['staff','doctors','analyzer','delivery','settings','dashboard'] },
 };
-const MODULE_ORDER = ['reception','phlebotomy','laboratory','radiology','doctor','nursing','admissions','billing','inventory','statistics','administration'];
+const MODULE_ORDER = ['reception','phlebotomy','laboratory','radiology','doctor','nursing','admissions','theatre','billing','inventory','statistics','administration'];
 // Which module is currently entered (null = at the launcher/Home screen).
 // Distinct from ROLE_PAGES/currentProfile.role — this is pure navigation
 // state, reset to null by goHome() and set by enterModule() or by goPage()
