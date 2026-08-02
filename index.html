@@ -189,6 +189,10 @@ html[dir="rtl"] body{direction:rtl;}
    Maintenance either way; this just flags it's overdue. */
 .bed-tile.bed-sla-amber{border-color:var(--amber);box-shadow:inset 0 0 0 2px rgba(217,119,6,.35);}
 .bed-tile.bed-sla-red{background:var(--red-lt);color:var(--red);border-color:var(--red);box-shadow:inset 0 0 0 2px rgba(185,28,28,.4);}
+/* Discharge-readiness (Phase 5c) — a subtle badge, deliberately NOT a
+   colour change on the tile itself (colour already means occupancy
+   status here); just a small pill the charge nurse can notice or ignore. */
+.bed-tile-readiness{margin-top:5px;display:inline-block;font-size:.6rem;font-weight:700;background:rgba(255,255,255,.55);color:inherit;border:1px solid currentColor;border-radius:20px;padding:1px 7px;opacity:.85;}
 /* TOGGLE SWITCH */
 .tgl-wrap{display:inline-flex;align-items:center;gap:9px;cursor:pointer;user-select:none;}
 .tgl-wrap input{display:none;}
@@ -4272,6 +4276,12 @@ html[dir="rtl"] body{direction:rtl;}
         <button class="btn btn-p btn-sm" onclick="saveBedSlaSettings()">💾 Save Turnaround SLA</button>
         <div id="cfg-bed-sla-status" style="margin-top:7px;font-size:.78rem;color:var(--green)"></div>
       </div></div>
+      <div class="card"><div class="card-hd"><span class="card-title">🏁 Discharge-Readiness Flag</span></div><div class="card-body">
+        <div style="font-size:.72rem;color:var(--slate);margin-bottom:8px">A rule-based badge (not a prediction) on Occupied bed tiles — a prompt for the charge nurse to check, never an automated action. Triggers when either: the patient's LOS exceeds their ward's own current average LOS by this margin, or discharge planning was started (the Discharge form was opened) but never finalized.</div>
+        <div class="fg"><label class="fl">LOS margin over ward average (%)</label><input class="fc" type="number" min="1" id="cfg-discharge-readiness-margin" placeholder="50"></div>
+        <button class="btn btn-p btn-sm" onclick="saveDischargeReadinessSettings()">💾 Save</button>
+        <div id="cfg-discharge-readiness-status" style="margin-top:7px;font-size:.78rem;color:var(--green)"></div>
+      </div></div>
       <div class="card"><div class="card-hd"><span class="card-title">🔢 ID Counters</span></div><div class="card-body">
         <div style="font-size:.74rem;color:var(--slate);margin-bottom:8px">These counters generate every File Number, Lab No., and Radiology No. Correcting one only changes what the <em>next</em> number will be — it does not renumber existing records. Only use this to fix a genuine mistake.</div>
         <div id="cfg-counters-body"><div class="spin-center"><div class="spinner"></div>Loading…</div></div>
@@ -6070,6 +6080,12 @@ const CFG = {
   set bedTurnaroundAmberMin(v){ localStorage.setItem('cfg_bed_turnaround_amber_min', v); },
   get bedTurnaroundRedMin(){ return parseInt(localStorage.getItem('cfg_bed_turnaround_red_min'),10)||90; },
   set bedTurnaroundRedMin(v){ localStorage.setItem('cfg_bed_turnaround_red_min', v); },
+  // Discharge-readiness flag (Phase 5c) — how far LOS may exceed the
+  // ward's own average LOS (among currently active admissions) before the
+  // rule-based badge appears. Rule-based, not predictive — see
+  // dischargeReadinessFlag() for the exact two conditions.
+  get dischargeReadinessLosMarginPct(){ return parseInt(localStorage.getItem('cfg_discharge_readiness_los_margin_pct'),10)||50; },
+  set dischargeReadinessLosMarginPct(v){ localStorage.setItem('cfg_discharge_readiness_los_margin_pct', v); },
 };
 
 const ROLE_PAGES = {
@@ -6880,6 +6896,7 @@ function loadSettings() {
   updateFollowupPricingValueVisibility();
   const bsa=document.getElementById('cfg-bed-sla-amber'); if(bsa) bsa.value=CFG.bedTurnaroundAmberMin;
   const bsr=document.getElementById('cfg-bed-sla-red'); if(bsr) bsr.value=CFG.bedTurnaroundRedMin;
+  const drm=document.getElementById('cfg-discharge-readiness-margin'); if(drm) drm.value=CFG.dischargeReadinessLosMarginPct;
   loadBedConfig();
   loadIdCounters();
 }
@@ -6905,6 +6922,13 @@ function saveBedSlaSettings(){
   CFG.bedTurnaroundAmberMin=(isNaN(amber)||amber<=0)?30:amber;
   CFG.bedTurnaroundRedMin=(isNaN(red)||red<=0)?90:red;
   const el=document.getElementById('cfg-bed-sla-status');
+  if(el){ el.textContent='✅ Saved'; setTimeout(()=>el.textContent='',3000); }
+  if(document.getElementById('page-admission')?.classList.contains('active')) renderBedGrid();
+}
+function saveDischargeReadinessSettings(){
+  const margin=parseInt(document.getElementById('cfg-discharge-readiness-margin')?.value,10);
+  CFG.dischargeReadinessLosMarginPct=(isNaN(margin)||margin<=0)?50:margin;
+  const el=document.getElementById('cfg-discharge-readiness-status');
   if(el){ el.textContent='✅ Saved'; setTimeout(()=>el.textContent='',3000); }
   if(document.getElementById('page-admission')?.classList.contains('active')) renderBedGrid();
 }
@@ -7592,7 +7616,7 @@ async function loadBedGrid() {
   try {
     const [{data:beds,error:bedsErr},{data:adms}]=await Promise.all([
       sb.from('beds').select('*').order('ward').order('room').order('bed_number'),
-      sb.from('admissions').select('id,admission_no,admitting_doctor,admission_date,patients(name,mrn)').eq('status','Active'),
+      sb.from('admissions').select('id,ward,admission_no,admitting_doctor,admission_date,discharge_planning_started_at,patients(name,mrn)').eq('status','Active'),
     ]);
     if(bedsErr) throw bedsErr;
     const admById={}; (adms||[]).forEach(a=>admById[a.id]=a);
@@ -7663,6 +7687,36 @@ function fmtMinutesElapsed(mins) {
   if(mins<60) return mins+'m';
   return Math.floor(mins/60)+'h '+(mins%60)+'m';
 }
+// Discharge-readiness flag (Phase 5c) — RULE-BASED, not predictive/ML;
+// the badge copy must always say so explicitly, same honesty standard as
+// DIFF_DX_RULES ("a starting checklist... not a diagnostic engine"). Two
+// independent triggers, either is sufficient:
+//   1. LOS exceeds this admission's ward's own current average LOS (among
+//      active admissions in that ward right now) by a configurable margin.
+//   2. Discharge planning was started (the Discharge form was opened —
+//      admissions.discharge_planning_started_at) but the admission is
+//      still Active, i.e. never actually finalized.
+// Surfaces as a small badge only — never changes tile colour, never an
+// alert, purely a "worth checking" prompt for the charge nurse.
+function wardAverageLosDays(ward) {
+  const los=a=>Math.max(0,(Date.now()-new Date(a.admission_date).getTime())/864e5);
+  const admsInWard=_bedGridData.filter(b=>b.ward===ward&&b._admission).map(b=>b._admission);
+  if(admsInWard.length<2) return null; // an "average" of one admission isn't a meaningful baseline
+  return admsInWard.reduce((sum,a)=>sum+los(a),0)/admsInWard.length;
+}
+function dischargeReadinessFlag(b) {
+  if((b.status!=='Occupied'&&b.status!=='Discharge Pending')||!b._admission) return null;
+  const adm=b._admission;
+  const losDays=Math.max(0,(Date.now()-new Date(adm.admission_date).getTime())/864e5);
+  const wardAvg=wardAverageLosDays(b.ward);
+  const overAverage=wardAvg!=null&&losDays>wardAvg*(1+CFG.dischargeReadinessLosMarginPct/100);
+  const planningStalled=!!adm.discharge_planning_started_at;
+  if(!overAverage&&!planningStalled) return null;
+  const reasons=[];
+  if(overAverage) reasons.push('LOS ('+losDays.toFixed(1)+'d) exceeds ward average ('+wardAvg.toFixed(1)+'d) by over '+CFG.dischargeReadinessLosMarginPct+'%');
+  if(planningStalled) reasons.push('Discharge form was opened but not finalized');
+  return reasons.join(' · ');
+}
 function renderBedGrid() {
   const grid=document.getElementById('bed-grid-container'); if(!grid) return;
   const beds=_bedGridWard==='all'?_bedGridData:_bedGridData.filter(b=>b.ward===_bedGridWard);
@@ -7678,11 +7732,14 @@ function renderBedGrid() {
       const mins=bedTurnaroundMinutes(b);
       info=b.status+(mins!=null?'<br><span style="font-weight:700">⏱ '+fmtMinutesElapsed(mins)+'</span>':'');
     } else { info=b.status; }
+    const readiness=dischargeReadinessFlag(b);
+    const readinessBadge=readiness?'<div class="bed-tile-readiness" title="Rule-based prompt, not a prediction — '+escAttr(readiness)+'">🏁 Check discharge?</div>':'';
     return '<div class="bed-tile '+cls+slaCls+'" onclick="bedTileClick(\x27'+b.id+'\x27)">'+
       '<div class="bed-tile-menu" onclick="event.stopPropagation();openBedStatusMenu(event,\x27'+b.id+'\x27)">⋮</div>'+
       '<div class="bed-tile-loc">'+b.ward+' · '+b.room+'</div>'+
       '<div class="bed-tile-num">Bed '+b.bed_number+'</div>'+
       '<div class="bed-tile-info">'+info+'</div>'+
+      readinessBadge+
     '</div>';
   }).join('');
 }
@@ -8026,6 +8083,11 @@ async function openDischarge(admId) {
   try {
     const {data:adm}=await sb.from('admissions').select('*,patients(*)').eq('id',admId).single();
     if(!adm) return;
+    // Best-effort, non-blocking: stamps that discharge planning has begun
+    // for this admission (Phase 5c's discharge-readiness flag reads it) —
+    // the existing discharge flow itself is unchanged, this never blocks
+    // or delays opening the form.
+    if(!adm.discharge_planning_started_at){ try{ await sb.from('admissions').update({discharge_planning_started_at:new Date().toISOString()}).eq('id',admId); }catch(e){} }
     const pt=adm.patients, los=Math.ceil((new Date()-new Date(adm.admission_date))/(864e5));
     const banner=document.getElementById('disch-pt-banner');
     if(banner) banner.innerHTML='<div class="pb-i"><div class="pb-l">Patient</div><div class="pb-v">'+(pt?.name||fullName(pt))+'</div></div><div class="pb-i"><div class="pb-l">Adm No</div><div class="pb-v">'+adm.admission_no+'</div></div><div class="pb-i"><div class="pb-l">Admitted</div><div class="pb-v">'+fmtDT(adm.admission_date)+'</div></div><div class="pb-i"><div class="pb-l">LOS</div><div class="pb-v">'+los+' day'+(los!==1?'s':'')+'</div></div>';
