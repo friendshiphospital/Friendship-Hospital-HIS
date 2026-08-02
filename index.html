@@ -1562,6 +1562,11 @@ html[dir="rtl"] body{direction:rtl;}
             <button class="btn btn-s" onclick="printConsultation()" style="flex:1;justify-content:center">🖨 Print Notes</button>
           </div>
           <div id="doc-status-msg" style="margin-top:6px;font-size:.78rem;text-align:center"></div>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
+            <button class="btn btn-w" id="doc-complete-btn" onclick="completeAndSignOffVisit()" style="flex:1;justify-content:center">✅ Complete &amp; Sign Off</button>
+            <span id="doc-signoff-badge"></span>
+            <button class="btn btn-s btn-sm" id="doc-signoff-unlock-btn" style="display:none" onclick="toggleConsultationLockOverride()">🔓 Unlock to Edit (Admin)</button>
+          </div>
         </div>
       </div>
 
@@ -2297,6 +2302,20 @@ html[dir="rtl"] body{direction:rtl;}
 </div>
 
 <!-- Delta Check safety alert — mandatory tech sign-off with reason code -->
+<div class="ov" id="followup-schedule-ov">
+  <div class="mo">
+    <div class="mo-hd"><h3>📅 Schedule Follow-up</h3><button class="mo-x" onclick="closeOv('followup-schedule-ov')">✕</button></div>
+    <div class="mo-b">
+      <div class="fg"><label class="fl">Follow-up Date</label><input type="date" class="fc" id="fu-date"></div>
+      <div class="fg"><label class="fl">Reason (optional)</label><textarea class="fc" id="fu-reason" rows="2" placeholder="e.g. Review blood pressure control"></textarea></div>
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button class="btn btn-p" onclick="saveFollowUpSchedule()" style="flex:1;justify-content:center">💾 Save Follow-up &amp; Complete</button>
+        <button class="btn btn-s" onclick="skipFollowUpAndComplete()" style="flex:1;justify-content:center">Skip</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="ov" id="delta-alert-ov">
   <div class="mo mo-lg">
     <div class="mo-hd"><h3>⚠️ Delta Check Alert — Mandatory Review</h3><button class="mo-x" onclick="closeOv('delta-alert-ov')">✕</button></div>
@@ -4176,6 +4195,20 @@ html[dir="rtl"] body{direction:rtl;}
           <strong>ON:</strong> a result auto-verifies and releases straight to the doctor's view only if it's within the reference range, triggers no Delta Check alert, the department's QC is currently passing, and it isn't a critical/panic value — anything else still falls back to manual sign-off. A Delta Check breach always blocks auto-verification and requires a mandatory reason code, regardless of this setting.
         </div>
       </div></div>
+      <div class="card"><div class="card-hd"><span class="card-title">📅 Follow-Up Visit Policy</span></div><div class="card-body">
+        <div style="font-size:.72rem;color:var(--slate);margin-bottom:8px">Controls the default follow-up date a doctor is offered when completing a visit (Consultation → Complete &amp; Sign Off), and the pricing Reception is offered — never applied silently — when a patient with an open, unused follow-up registers again within this window.</div>
+        <div class="fg"><label class="fl">Follow-up Window (days)</label><input class="fc" type="number" min="1" id="cfg-followup-window-days" placeholder="7"></div>
+        <div class="fg"><label class="fl">Pricing Rule</label>
+          <select class="fc" id="cfg-followup-pricing-rule" onchange="updateFollowupPricingValueVisibility()">
+            <option value="free">Free</option>
+            <option value="percentage">Percentage discount</option>
+            <option value="fixed">Fixed price</option>
+          </select>
+        </div>
+        <div class="fg" id="cfg-followup-pricing-value-wrap"><label class="fl" id="cfg-followup-pricing-value-label">Discount %</label><input class="fc" type="number" min="0" step="0.01" id="cfg-followup-pricing-value"></div>
+        <button class="btn btn-p btn-sm" onclick="saveFollowupPolicySettings()">💾 Save Follow-Up Policy</button>
+        <div id="cfg-followup-policy-status" style="margin-top:7px;font-size:.78rem;color:var(--green)"></div>
+      </div></div>
       <div class="card" id="cfg-override-pin-card" style="display:none"><div class="card-hd"><span class="card-title">🔑 My Anti-Fraud Override PIN</span></div><div class="card-body">
         <div style="font-size:.72rem;color:var(--slate);margin-bottom:8px">Lets you approve a void/refund/discount-override at the counter with a PIN instead of your full password. Stored as a bcrypt hash — never in plain text, never readable by anyone else, admin or otherwise. Requires migration_v2.12_override_pin.sql to be applied.</div>
         <div class="fg"><label class="fl">New PIN (6+ digits, numeric)</label><input class="fc" type="password" inputmode="numeric" maxlength="12" id="cfg-override-pin" placeholder="e.g. 482913"></div>
@@ -5957,6 +5990,16 @@ const CFG = {
   // per-deployment config pattern as everything else in CFG.
   get adminNotifyEmail(){ return localStorage.getItem('cfg_admin_notify_email')||'admin@hospital.com'; },
   get discountOverrideThreshold(){ return parseFloat(localStorage.getItem('cfg_discount_override_pct'))||15; },
+  // Follow-Up Visit Policy (Phase 5 Admin Settings) — read here in Phase 4
+  // too, only for the default date suggestion when a doctor schedules a
+  // follow-up (completeAndSignOffVisit()). Default window matches what was
+  // requested: 7 days, free pricing.
+  get followupWindowDays(){ return parseInt(localStorage.getItem('cfg_followup_window_days'),10)||7; },
+  set followupWindowDays(v){ localStorage.setItem('cfg_followup_window_days', v); },
+  get followupPricingRule(){ return localStorage.getItem('cfg_followup_pricing_rule')||'free'; }, // 'free' | 'percentage' | 'fixed'
+  set followupPricingRule(v){ localStorage.setItem('cfg_followup_pricing_rule', v); },
+  get followupPricingValue(){ return parseFloat(localStorage.getItem('cfg_followup_pricing_value'))||0; }, // % for 'percentage', amount for 'fixed'
+  set followupPricingValue(v){ localStorage.setItem('cfg_followup_pricing_value', v); },
   // Lab Auto-Verification & Smart Rules Engine — OFF by default (fail
   // closed: every result requires manual tech sign-off unless a lab
   // explicitly turns this on). See runDeltaCheck()/checkAutoVerifyEligible()
@@ -6671,8 +6714,72 @@ function fmtDate(d){ if(!d) return '—'; return new Date(d).toLocaleDateString(
 function fmtDT(d){ if(!d) return '—'; return new Date(d).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}); }
 function fullName(p){ if(!p) return '—'; return [p.first_name,p.middle_name,p.last_name].filter(Boolean).join(' ')||p.name||'—'; }
 function statusBadge(s){
-  const m={Active:'bdg-b',Discharged:'bdg-g',Scheduled:'bdg-b',Completed:'bdg-g','In Progress':'bdg-a',Cancelled:'bdg-r',Postponed:'bdg-sl',paid:'bdg-g',unpaid:'bdg-r',partial:'bdg-a',Pending:'bdg-sl',Routine:'bdg-sl',Urgent:'bdg-a',STAT:'bdg-r',Critical:'bdg-r'};
+  const m={Active:'bdg-b',Discharged:'bdg-g',Scheduled:'bdg-b',Completed:'bdg-g','In Progress':'bdg-a',Cancelled:'bdg-r',Postponed:'bdg-sl',paid:'bdg-g',unpaid:'bdg-r',partial:'bdg-a',Pending:'bdg-sl',Routine:'bdg-sl',Urgent:'bdg-a',STAT:'bdg-r',Critical:'bdg-r',
+    // Visit-level status (Phase 4) — same badge classes, no second colour scheme.
+    Registered:'bdg-sl','Payment Pending':'bdg-a','With Doctor':'bdg-b','Orders Pending':'bdg-a','Results Ready':'bdg-g','Visit Complete':'bdg-g'};
   return '<span class="bdg '+(m[s]||'bdg-sl')+'">'+(s||'—')+'</span>';
+}
+// ── VISIT STATUS (distinct from sample_records.status, which tracks one
+// specimen, not the whole visit) — see migration_v2.19_visit_status_and_
+// followup.sql. "Payment Pending" is computed here, not stored: the DB
+// column only ever holds Registered/With Doctor/Orders Pending/Results
+// Ready/Visit Complete.
+const VISIT_STATUS_ORDER=['Registered','With Doctor','Orders Pending','Results Ready','Visit Complete'];
+function effectiveVisitStatus(p){
+  const s=p?.visit_status||'Registered';
+  if(s==='Registered' && (p?.payment_status==='unpaid'||p?.payment_status==='insurance_pending')) return 'Payment Pending';
+  return s;
+}
+function visitStatusBadge(p){ return statusBadge(effectiveVisitStatus(p)); }
+// Advances a visit's stored status forward only — never regresses (e.g. a
+// doctor re-opening a patient who already has orders placed must not reset
+// them back to "With Doctor"), and never touches a visit already at the
+// terminal, doctor-only "Visit Complete" state.
+async function advanceVisitStatus(patientId,targetStatus){
+  if(!sb||!patientId) return;
+  try{
+    const {data:pt}=await sb.from('patients').select('visit_status').eq('id',patientId).maybeSingle();
+    const current=pt?.visit_status||'Registered';
+    if(current==='Visit Complete') return;
+    const curIdx=VISIT_STATUS_ORDER.indexOf(current), targetIdx=VISIT_STATUS_ORDER.indexOf(targetStatus);
+    if(targetIdx>curIdx) await sb.from('patients').update({visit_status:targetStatus}).eq('id',patientId);
+  }catch(e){ /* best-effort — visit status is a tracking convenience, never block the real action it's attached to */ }
+}
+// "Orders Pending" -> "Results Ready" only once every LAB and RADIOLOGY
+// order for this visit is done. Nursing/Diet/Physio/Other orders are
+// deliberately excluded from this check — doctor_orders has no
+// "completed" concept for those order types anywhere in this app today
+// (their status only ever becomes Cancelled or stays Pending), so
+// including them would mean a visit with any such order could never
+// reach Results Ready at all.
+async function checkAndAdvanceToResultsReady(patientId){
+  if(!sb||!patientId) return;
+  try{
+    const [{data:sample},{data:radRows}]=await Promise.all([
+      sb.from('sample_records').select('status').eq('patient_id',patientId).maybeSingle(),
+      sb.from('radiology_requests').select('status').eq('patient_id',patientId),
+    ]);
+    const labDone=!sample||['Completed','Released'].includes(sample.status);
+    const radDone=(radRows||[]).every(r=>['Reported','Verified'].includes(r.status));
+    if(labDone && radDone) await advanceVisitStatus(patientId,'Results Ready');
+  }catch(e){}
+}
+// {done,total} across Lab (counts as 1 unit — sample_records is one row
+// per visit, not per test) + Radiology (1 unit per study) — "2 of 3
+// complete" style progress, shown where useful (Doctor Queue, sticky
+// header) rather than on every single queue.
+async function visitOrderProgress(patientId){
+  if(!sb||!patientId) return null;
+  try{
+    const [{data:sample},{data:radRows}]=await Promise.all([
+      sb.from('sample_records').select('status').eq('patient_id',patientId).maybeSingle(),
+      sb.from('radiology_requests').select('status').eq('patient_id',patientId),
+    ]);
+    let done=0,total=0;
+    if(sample){ total++; if(['Completed','Released'].includes(sample.status)) done++; }
+    (radRows||[]).forEach(r=>{ total++; if(['Reported','Verified'].includes(r.status)) done++; });
+    return total?{done,total}:null;
+  }catch(e){ return null; }
 }
 function setText(id,v){ const el=document.getElementById(id); if(el) el.textContent=v; }
 
@@ -6691,8 +6798,28 @@ function loadSettings() {
   const pinCard=document.getElementById('cfg-override-pin-card'); if(pinCard) pinCard.style.display = currentProfile?.role==='admin' ? '' : 'none';
   const cu=document.getElementById('cfg-sb-url'); if(cu) cu.value=localStorage.getItem('sb_url')||'';
   const ck=document.getElementById('cfg-sb-key'); if(ck) ck.value=localStorage.getItem('sb_key')||'';
+  const fwd=document.getElementById('cfg-followup-window-days'); if(fwd) fwd.value=CFG.followupWindowDays;
+  const fpr=document.getElementById('cfg-followup-pricing-rule'); if(fpr) fpr.value=CFG.followupPricingRule;
+  const fpv=document.getElementById('cfg-followup-pricing-value'); if(fpv) fpv.value=CFG.followupPricingValue;
+  updateFollowupPricingValueVisibility();
   loadBedConfig();
   loadIdCounters();
+}
+function updateFollowupPricingValueVisibility(){
+  const rule=document.getElementById('cfg-followup-pricing-rule')?.value||'free';
+  const wrap=document.getElementById('cfg-followup-pricing-value-wrap');
+  const label=document.getElementById('cfg-followup-pricing-value-label');
+  if(wrap) wrap.style.display=rule==='free'?'none':'';
+  if(label) label.textContent=rule==='percentage'?'Discount %':'Fixed Price ('+CFG.currency+')';
+}
+function saveFollowupPolicySettings(){
+  const days=parseInt(document.getElementById('cfg-followup-window-days')?.value,10);
+  CFG.followupWindowDays=(isNaN(days)||days<=0)?7:days;
+  CFG.followupPricingRule=document.getElementById('cfg-followup-pricing-rule')?.value||'free';
+  const val=parseFloat(document.getElementById('cfg-followup-pricing-value')?.value);
+  CFG.followupPricingValue=isNaN(val)?0:val;
+  const el=document.getElementById('cfg-followup-policy-status');
+  if(el){ el.textContent='✅ Saved'; setTimeout(()=>el.textContent='',3000); }
 }
 // Settings is already admin-only (see ROLE_PAGES), so no extra role check is
 // needed here — but the destructive-ish correction itself still requires
@@ -7004,7 +7131,7 @@ async function checkCriticals() {
 // highlighting; no new column was needed, just surfacing it here too
 // instead of it only being visible to someone already on that page).
 // Both time thresholds are configurable from Settings rather than hardcoded.
-let _notifState={crits:[],unpaid:[],pendingAdm:[],lowStock:[],deferredDue:[]};
+let _notifState={crits:[],unpaid:[],pendingAdm:[],lowStock:[],deferredDue:[],resultsReady:[]};
 async function refreshNotifications(){
   if(!sb) return;
   try{
@@ -7052,8 +7179,28 @@ async function refreshNotifications(){
       ...(deferredRadRes.data||[]).filter(r=>stillUnpaid(r.patients)).map(r=>({kind:'Radiology',label:r.imaging_type||'Radiology report',patient_id:r.patient_id,patients:r.patients})),
     ];
 
-    _notifState={crits,unpaid,pendingAdm,lowStock,deferredDue};
-    const total=crits.length+unpaid.length+pendingAdm.length+lowStock.length+deferredDue.length;
+    // "Results Ready" — doctor/admin only, patients routed to Doctor whose
+    // Lab work or Radiology study just finished (see loadActiveOrders()'s
+    // View Result/View Report buttons, the click-through destination once
+    // notifJumpToPatientResults() lands on them). Scoped to this role so
+    // every other role's bell isn't paying for these extra queries.
+    let resultsReady=[];
+    if(currentProfile?.role==='doctor'||currentProfile?.role==='admin'){
+      const since24h=new Date(now-24*3600000).toISOString();
+      const {data:queuePts}=await sb.from('patients').select('id,name,first_name,last_name,mrn,lab_no,visit_destination,created_at').ilike('visit_destination','%doctor%').gte('created_at',since24h).limit(50);
+      if(queuePts?.length){
+        const ids=queuePts.map(p=>p.id);
+        const [{data:doneSamples},{data:doneRad}]=await Promise.all([
+          sb.from('sample_records').select('patient_id').in('patient_id',ids).in('status',['Completed','Released']),
+          sb.from('radiology_requests').select('patient_id').in('patient_id',ids).in('status',['Reported','Verified']),
+        ]);
+        const readyIds=new Set([...(doneSamples||[]).map(s=>s.patient_id),...(doneRad||[]).map(r=>r.patient_id)]);
+        resultsReady=queuePts.filter(p=>readyIds.has(p.id));
+      }
+    }
+
+    _notifState={crits,unpaid,pendingAdm,lowStock,deferredDue,resultsReady};
+    const total=crits.length+unpaid.length+pendingAdm.length+lowStock.length+deferredDue.length+resultsReady.length;
     const countEl=document.getElementById('notif-bell-count');
     if(countEl){ countEl.style.display=total>0?'block':'none'; countEl.textContent=total>99?'99+':total; }
     renderNotifList();
@@ -7061,12 +7208,18 @@ async function refreshNotifications(){
 }
 function renderNotifList(){
   const list=document.getElementById('notif-list'); if(!list) return;
-  const {crits,unpaid,pendingAdm,lowStock,deferredDue}=_notifState;
-  if(!crits.length && !unpaid.length && !pendingAdm.length && !lowStock.length && !(deferredDue&&deferredDue.length)){
+  const {crits,unpaid,pendingAdm,lowStock,deferredDue,resultsReady}=_notifState;
+  if(!crits.length && !unpaid.length && !pendingAdm.length && !lowStock.length && !(deferredDue&&deferredDue.length) && !(resultsReady&&resultsReady.length)){
     list.innerHTML='<div style="padding:16px;text-align:center;color:var(--slate);font-size:.78rem">✅ Nothing needs attention</div>';
     return;
   }
   let html='';
+  if(resultsReady&&resultsReady.length){
+    html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;color:#166534;background:#f0fdf4">\ud83d\udd14 Results Ready ('+resultsReady.length+')</div>';
+    html+=resultsReady.map(p=>'<div onclick="notifJumpToPatientResults(\''+p.id+'\')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'">'+
+      '<div style="font-weight:700;font-size:.8rem">'+(p.name||fullName(p))+' <span style="font-weight:400;color:var(--slate);font-size:.68rem">'+(p.mrn||p.lab_no||'')+'</span></div>'+
+      '<div style="font-size:.72rem;color:#166534">Lab/Radiology result ready for review</div></div>').join('');
+  }
   if(deferredDue&&deferredDue.length){
     html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;color:#b91c1c;background:#fff1f2">\u26a0 Deferred Payments Now Due ('+deferredDue.length+')</div>';
     html+=deferredDue.map(d=>{
@@ -7142,6 +7295,21 @@ async function notifJumpToDeferredPayment(patientId){
   try{
     const {data}=await sb.from('invoices').select('id').eq('patient_id',patientId).in('payment_status',['unpaid','insurance_pending']).order('created_at',{ascending:false}).limit(1).maybeSingle();
     if(data?.id) setTimeout(()=>editInvoice(data.id),250);
+  }catch(e){}
+}
+async function notifJumpToPatientResults(patientId){
+  closeNotifPanel();
+  goPage('consultation');
+  if(!sb||!patientId) return;
+  try{
+    const {data}=await sb.from('patients').select('*').eq('id',patientId).single();
+    if(data) setTimeout(()=>{
+      selectDocPatient(data);
+      // Land straight on the Orders tab, where View Result/View Report live,
+      // rather than the default Notes tab — this IS the click-through.
+      const ordersBtn=[...document.querySelectorAll('#doc-tabs .tab')].find(b=>/orders/i.test(b.textContent||''));
+      switchDocTab('orders',ordersBtn||null);
+    },250);
   }catch(e){}
 }
 
@@ -7801,7 +7969,7 @@ async function loadDoctorQueue() {
   try {
     const dest = window._docFilter||'';
     let q = sb.from('patients')
-      .select('id,name,first_name,last_name,mrn,lab_no,tests_requested,age,age_unit,sex,priority,diagnosis,doctor,source,ward,payment_status,visit_destination,created_at')
+      .select('id,name,first_name,last_name,mrn,lab_no,tests_requested,age,age_unit,sex,priority,diagnosis,doctor,source,ward,payment_status,visit_destination,visit_status,created_at')
       .order('created_at',{ascending:false}).limit(50);
     // Default: show today's patients for all destinations
     // Filter buttons narrow down by destination
@@ -7814,17 +7982,29 @@ async function loadDoctorQueue() {
     }
     const {data} = await q;
     if(!data?.length){body.innerHTML='<div class="empty-state"><div class="empty-icon">🩺</div><div class="empty-title">No patients</div></div>';return;}
+    // "Result Ready" badge — same readiness signal as the notification
+    // bell's resultsReady category, batched here for every queue card at
+    // once rather than a query per card.
+    const ids=data.map(p=>p.id);
+    const [{data:doneSamples},{data:doneRad}]=await Promise.all([
+      sb.from('sample_records').select('patient_id').in('patient_id',ids).in('status',['Completed','Released']),
+      sb.from('radiology_requests').select('patient_id').in('patient_id',ids).in('status',['Reported','Verified']),
+    ]);
+    const readyIds=new Set([...(doneSamples||[]).map(s=>s.patient_id),...(doneRad||[]).map(r=>r.patient_id)]);
     body.innerHTML = data.map(p => {
       const unpaid=p.payment_status==='unpaid'||p.payment_status==='insurance_pending';
+      const ready=readyIds.has(p.id);
       return '<div onclick="selectDocPatient('+JSON.stringify(p).replace(/"/g,'&quot;')+')" class="doc-queue-card'+(unpaid?' pay-unpaid':'')+
         '" style="padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;cursor:pointer;margin-bottom:6px;transition:all .12s"'+
         ' onmouseover="this.style.borderColor=\x27var(--teal)\x27;this.style.background=\x27var(--teal-lt)\x27"'+
         ' onmouseout="this.style.borderColor=\x27var(--border)\x27;this.style.background=\x27#fff\x27">'+
         '<div style="display:flex;align-items:center;justify-content:space-between;gap:6px">'+
         '<span style="font-weight:700;font-size:.84rem">'+(p.name||fullName(p))+'</span>'+
+        (ready?'<span class="bdg" style="background:#dcfce7;color:#166534" title="Lab/Radiology result ready for review">\ud83d\udd14 Result Ready</span>':'')+
         paymentTag(p.payment_status)+'</div>'+
         '<div style="font-size:.69rem;color:var(--slate);margin-top:3px">'+(p.mrn||'')+' · '+(p.age||'?')+(p.age_unit||'y')+'/'+(p.sex||'?')+' · '+(p.diagnosis||'—')+'</div>'+
-        '<div style="font-size:.68rem;margin-top:2px;color:var(--teal);font-weight:600">'+(p.visit_destination?'\u2192 '+p.visit_destination:'')+' '+(p.priority&&p.priority!=='Routine'?'· '+p.priority:'')+'</div></div>';
+        '<div style="font-size:.68rem;margin-top:2px;color:var(--teal);font-weight:600">'+(p.visit_destination?'\u2192 '+p.visit_destination:'')+' '+(p.priority&&p.priority!=='Routine'?'· '+p.priority:'')+'</div>'+
+        '<div style="margin-top:4px">'+visitStatusBadge(p)+'</div></div>';
     }).join('');
   } catch(e){ body.innerHTML='<div style="padding:10px;color:var(--red);font-size:.78rem">'+e.message+'</div>'; }
 }
@@ -7838,6 +8018,8 @@ function setDocFilter(filter,btn) {
 
 function selectDocPatient(p) {
   _docPt=p;
+  advanceVisitStatus(p.id,'With Doctor');
+  loadConsultationSignOffState(p.id);
   const unpaid=p.payment_status==='unpaid'||p.payment_status==='insurance_pending';
   document.getElementById('doc-pay-warn').innerHTML = unpaid?paymentBanner(p):'';
   document.getElementById('doc-pt-banner').style.display='block';
@@ -8285,6 +8467,7 @@ async function _submitLabOrder(deferred) {
       throw updErr;
     }
     try{ await sb.from('sample_records').upsert({patient_id:_docPt.id,status:'Pending',...deferralFields},{onConflict:'patient_id'}); }catch(e){}
+    advanceVisitStatus(_docPt.id,'Orders Pending');
     toast((deferred?'\u26a1 \u2705 Lab orders placed (\u26a0 Payment Deferred \u2014 STAT): ':'\u2705 Lab orders placed: ')+checked.join(', ')+' — Lab No. '+labNo,'ok');
     document.querySelectorAll('.order-test-chk:checked').forEach(c=>c.checked=false);
     loadActiveOrders();
@@ -8314,6 +8497,7 @@ async function _submitRadOrder(deferred) {
       throw radErr;
     }
     await sb.from('doctor_orders').insert({patient_id:_docPt.id,order_type:'Radiology',order_detail:g('ord-rad-type'),priority:g('ord-rad-urgency'),notes:g('ord-rad-indication'),ordered_by:g('doc-doctor-name')||currentProfile?.full_name,ordered_at:new Date().toISOString(),status:'Pending',created_by:currentProfile?.id,...deferralFields});
+    advanceVisitStatus(_docPt.id,'Orders Pending');
     toast((deferred?'\u26a1 \u2705 Radiology request submitted (\u26a0 Payment Deferred \u2014 STAT) \u2014 No. ':'\u2705 Radiology request submitted \u2014 No. ')+radiologyNo,'ok'); loadActiveOrders();
   } catch(e){toast(e.message,'err');}
 }
@@ -8327,6 +8511,7 @@ async function _submitNursingOrder() {
   const g=id=>document.getElementById(id)?.value||'';
   try {
     await sb.from('doctor_orders').insert({patient_id:_docPt.id,order_type:'Nursing',order_detail:g('ord-nrs-type')+(g('ord-nrs-detail')?' — '+g('ord-nrs-detail'):''),ordered_by:g('doc-doctor-name')||currentProfile?.full_name,ordered_at:new Date().toISOString(),status:'Pending',created_by:currentProfile?.id});
+    advanceVisitStatus(_docPt.id,'Orders Pending');
     toast('\u2705 Nursing order submitted','ok'); loadActiveOrders();
   } catch(e){toast(e.message,'err');}
 }
@@ -8340,6 +8525,7 @@ async function _submitDietOrder() {
   const g=id=>document.getElementById(id)?.value||'';
   try {
     await sb.from('doctor_orders').insert({patient_id:_docPt.id,order_type:'Diet',order_detail:g('ord-diet-type')+(g('ord-diet-kcal')?' — '+g('ord-diet-kcal'):'')+( g('ord-diet-notes')?' | '+g('ord-diet-notes'):''),ordered_by:g('doc-doctor-name')||currentProfile?.full_name,ordered_at:new Date().toISOString(),status:'Pending',created_by:currentProfile?.id});
+    advanceVisitStatus(_docPt.id,'Orders Pending');
     toast('\u2705 Diet order saved','ok'); loadActiveOrders();
   } catch(e){toast(e.message,'err');}
 }
@@ -8353,6 +8539,7 @@ async function _submitPhysioOrder() {
   const g=id=>document.getElementById(id)?.value||'';
   try {
     await sb.from('doctor_orders').insert({patient_id:_docPt.id,order_type:'Physio',order_detail:g('ord-physio-reason')+' | '+g('ord-physio-area')+' | '+g('ord-physio-freq')+(g('ord-physio-goal')?' | '+g('ord-physio-goal'):''),ordered_by:g('doc-doctor-name')||currentProfile?.full_name,ordered_at:new Date().toISOString(),status:'Pending',created_by:currentProfile?.id});
+    advanceVisitStatus(_docPt.id,'Orders Pending');
     toast('\u2705 Physio referral submitted','ok'); loadActiveOrders();
   } catch(e){toast(e.message,'err');}
 }
@@ -8368,24 +8555,95 @@ async function _submitOtherOrder() {
   const g=id=>document.getElementById(id)?.value||'';
   try {
     await sb.from('doctor_orders').insert({patient_id:_docPt.id,order_type:'Other',order_detail:g('ord-other-detail'),ordered_by:g('doc-doctor-name')||currentProfile?.full_name,ordered_at:new Date().toISOString(),status:'Pending',created_by:currentProfile?.id});
+    advanceVisitStatus(_docPt.id,'Orders Pending');
     toast('\u2705 Order saved','ok'); document.getElementById('ord-other-detail').value=''; loadActiveOrders();
   } catch(e){toast(e.message,'err');}
 }
 
+// Merges three sources into one Orders list so the doctor sees what
+// reception already sent, not just what they themselves place:
+//   1. doctor_orders (Nursing/Diet/Physio/Other, and Lab orders the doctor
+//      placed themselves) — order_type!=='Radiology' only, see #3.
+//   2. patients.tests_requested minus whatever's already covered by a
+//      doctor_orders Lab row — the remainder is exactly the tests reception
+//      requested at registration that the doctor hasn't separately logged.
+//   3. radiology_requests directly (not doctor_orders) — every radiology
+//      order, reception- or doctor-placed, already gets a radiology_requests
+//      row (see submitRegistration()/_submitRadOrder()/_doSubmitRadRequest());
+//      sourcing from there instead of doctor_orders avoids a doctor-placed
+//      study ever being listed twice.
+// Resolves a lab test name (order_detail, e.g. "CBC") to the full dept
+// key printResultByDept()/the fns/dp maps there use ("haematology" etc.),
+// reusing DEPT_META's own keyword lists rather than a second hardcoded
+// test->department table — same matching approach loadWorklist()'s dept
+// filter already uses.
+const DEPT_SHORT_TO_FULL={hem:'haematology',chem:'chemistry',sero:'serology',immuno:'immunology',micro:'microbiology',pcr:'pcr',histo:'histopathology',cyto:'cytology'};
+function resolveDeptFullNameForTest(testName){
+  const t=(testName||'').toLowerCase();
+  for(const shortKey of Object.keys(DEPT_META)){
+    const kws=DEPT_META[shortKey].keywords||[];
+    if(kws.some(k=>t.includes(String(k).toLowerCase()))) return DEPT_SHORT_TO_FULL[shortKey]||null;
+  }
+  return null;
+}
 async function loadActiveOrders() {
   const el=document.getElementById('active-orders-list');
   if(!el||!_docPt?.id||!sb) return;
   try {
-    const {data}=await sb.from('doctor_orders').select('*').eq('patient_id',_docPt.id).neq('status','Cancelled').order('ordered_at',{ascending:false}).limit(20);
-    if(!data?.length){el.innerHTML='<div style="font-size:.78rem;color:var(--slate);padding:8px 0">No active orders</div>';return;}
+    const [ordersRes,radRes,ptRes,sampleRes]=await Promise.all([
+      sb.from('doctor_orders').select('*').eq('patient_id',_docPt.id).neq('status','Cancelled').order('ordered_at',{ascending:false}).limit(20),
+      sb.from('radiology_requests').select('id,imaging_type,urgency,status,requesting_doctor,created_at,payment_deferred,payment_deferred_by_name').eq('patient_id',_docPt.id).order('created_at',{ascending:false}).limit(20),
+      sb.from('patients').select('tests_requested,created_at').eq('id',_docPt.id).maybeSingle(),
+      sb.from('sample_records').select('status').eq('patient_id',_docPt.id).maybeSingle(),
+    ]);
+    const allDoctorOrders=ordersRes.data||[];
+    // A specific test's own result can't be checked individually (results_*
+    // tables are one row per patient covering every test in that
+    // department, not one row per ordered test) — sample_records.status
+    // reaching Completed/Released is the same granularity the rest of the
+    // app already treats as "this patient's lab work for this visit is
+    // ready", so View Result uses that as its readiness signal too.
+    const labResultsReady=['Completed','Released'].includes(sampleRes.data?.status);
+    const nonRadOrders=allDoctorOrders.filter(o=>o.order_type!=='Radiology').map(o=>({
+      order_type:o.order_type, order_detail:o.order_detail, status:o.status, ordered_at:o.ordered_at,
+      orderedByLabel:o.ordered_by||'—', payment_deferred:o.payment_deferred, payment_deferred_by_name:o.payment_deferred_by_name,
+      id:o.id, cancellable:true,
+      canView:o.order_type==='Lab'&&labResultsReady,
+    }));
+    const labOrderedDetails=new Set(allDoctorOrders.filter(o=>o.order_type==='Lab').map(o=>o.order_detail));
+    const regRows=((ptRes.data?.tests_requested)||[]).filter(t=>!labOrderedDetails.has(t)).map(t=>({
+      order_type:'Lab', order_detail:t, status:labResultsReady?'Completed':'Pending', ordered_at:ptRes.data?.created_at,
+      orderedByLabel:'📋 Reception (at Registration)', id:null, cancellable:false, canView:labResultsReady,
+    }));
+    const radRows=(radRes.data||[]).map(r=>({
+      order_type:'Radiology', order_detail:r.imaging_type||'—', status:r.status, ordered_at:r.created_at,
+      orderedByLabel:r.requesting_doctor?('Dr. '+r.requesting_doctor):'📋 Reception (at Registration)',
+      payment_deferred:r.payment_deferred, payment_deferred_by_name:r.payment_deferred_by_name,
+      id:null, cancellable:false, // cancel via the Radiology module itself, not this generic order list
+      canView:r.status==='Reported'||r.status==='Verified', radRequestId:r.id,
+    }));
+    const merged=[...nonRadOrders,...regRows,...radRows].sort((a,b)=>new Date(b.ordered_at||0)-new Date(a.ordered_at||0));
+    if(!merged.length){el.innerHTML='<div style="font-size:.78rem;color:var(--slate);padding:8px 0">No active orders</div>';return;}
     const tc={Lab:'#dbeafe',Radiology:'#ede9fe',Nursing:'#dcfce7',Diet:'#fef9c3',Physio:'#fce7f3',Other:'#f3f4f6'};
-    el.innerHTML=data.map(o=>'<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)">'+
+    el.innerHTML=merged.map(o=>{
+      let viewBtn='';
+      if(o.canView&&o.order_type==='Lab'){
+        const dept=resolveDeptFullNameForTest(o.order_detail);
+        if(dept) viewBtn='<button class="btn btn-s btn-xs" onclick="printResultByDept(\x27'+_docPt.id+'\x27,\x27'+dept+'\x27)">\ud83d\udc41 View Result</button>';
+      } else if(o.canView&&o.order_type==='Radiology'&&o.radRequestId){
+        viewBtn='<button class="btn btn-s btn-xs" onclick="printRadReportById(\x27'+o.radRequestId+'\x27)">\ud83d\udc41 View Report</button>';
+      }
+      return '<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)">'+
       '<span style="background:'+(tc[o.order_type]||'#f3f4f6')+';padding:2px 8px;border-radius:20px;font-size:.68rem;font-weight:700;white-space:nowrap">'+o.order_type+'</span>'+
-      '<span style="flex:1;font-size:.78rem">'+o.order_detail+'</span>'+
-      (o.payment_deferred?'<span class="bdg" style="background:#fef2f2;color:#b91c1c;border:1.5px solid #fca5a5;white-space:nowrap" title="Granted by '+escapeHtml(o.payment_deferred_by_name||'')+' at '+fmtDT(o.payment_deferred_at)+'">\u26a0 Payment Deferred \u2014 STAT</span>':'')+
+      '<span style="flex:1;font-size:.78rem">'+escapeHtml(o.order_detail||'')+'</span>'+
+      '<span style="font-size:.68rem;color:var(--slate);white-space:nowrap" title="Ordered by">'+escapeHtml(o.orderedByLabel||'—')+'</span>'+
+      (o.payment_deferred?'<span class="bdg" style="background:#fef2f2;color:#b91c1c;border:1.5px solid #fca5a5;white-space:nowrap" title="Granted by '+escapeHtml(o.payment_deferred_by_name||'')+'">\u26a0 Payment Deferred \u2014 STAT</span>':'')+
       '<span style="font-size:.68rem;color:var(--slate);white-space:nowrap">'+fmtDT(o.ordered_at)+'</span>'+
       statusBadge(o.status)+
-      '<button class="btn btn-r btn-xs" onclick="cancelOrder(\x27'+o.id+'\x27)">\u2715</button></div>').join('');
+      viewBtn+
+      (o.cancellable?'<button class="btn btn-r btn-xs" onclick="cancelOrder(\x27'+o.id+'\x27)">\u2715</button>':'')+
+      '</div>';
+    }).join('');
   } catch(e){}
 }
 
@@ -8446,6 +8704,99 @@ function printConsultation() {
     '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">'+g('doc-doctor-name')+'<br>Consulting Doctor</div>'+
     '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">Date: '+g('doc-date')+'</div></div>'+printFooter();
   openPrintWin(html,'Consultation Note');
+}
+
+// ── VISIT COMPLETION / CONSULTATION SIGN-OFF LOCK ──────────────────────
+// Same seriousness, same pattern as the lab verify/release lock
+// (applyResultLock()/canOverrideResultLock() in index.html): once a
+// consultation is signed off, the Notes tab locks; only admin can override.
+function canOverrideConsultationLock(){ return currentProfile?.role==='admin'; }
+function applyConsultationNotesLock(locked){
+  const tab=document.getElementById('doc-tab-notes'); if(!tab) return;
+  const overridden=document.body.dataset.consultLockOverride==='1';
+  const effectiveLock=locked && !overridden;
+  tab.querySelectorAll('input,textarea,select').forEach(el=>{ el.disabled=effectiveLock; });
+  const badge=document.getElementById('doc-signoff-badge');
+  if(badge) badge.innerHTML=locked?'<span class="bdg bdg-g">🔒 Signed Off'+(overridden?' — editing (override)':'')+'</span>':'';
+  const completeBtn=document.getElementById('doc-complete-btn');
+  if(completeBtn) completeBtn.style.display=locked?'none':'';
+  const unlockBtn=document.getElementById('doc-signoff-unlock-btn');
+  if(unlockBtn) unlockBtn.style.display=(locked&&canOverrideConsultationLock())?'inline-block':'none';
+  if(unlockBtn) unlockBtn.textContent=overridden?'🔒 Re-lock':'🔓 Unlock to Edit (Admin)';
+}
+function toggleConsultationLockOverride(){
+  document.body.dataset.consultLockOverride=document.body.dataset.consultLockOverride==='1'?'0':'1';
+  applyConsultationNotesLock(true);
+}
+// Called from selectDocPatient() — reflects whether THIS visit's most
+// recent consultation note is already signed off, so re-opening a
+// completed visit shows the lock immediately rather than only after the
+// next save attempt.
+async function loadConsultationSignOffState(patientId){
+  document.body.dataset.consultLockOverride='0';
+  if(!sb||!patientId){ applyConsultationNotesLock(false); return; }
+  try{
+    const {data}=await sb.from('doctor_consultations').select('is_signed_off').eq('patient_id',patientId).order('created_at',{ascending:false}).limit(1).maybeSingle();
+    applyConsultationNotesLock(!!data?.is_signed_off);
+  }catch(e){ applyConsultationNotesLock(false); }
+}
+let _pendingSignOffPatientId=null;
+async function completeAndSignOffVisit(){
+  if(!sb||!_docPt){ toast('Select patient first','err'); return; }
+  try{
+    const {data:existing}=await sb.from('doctor_consultations').select('id,is_signed_off').eq('patient_id',_docPt.id).order('created_at',{ascending:false}).limit(1).maybeSingle();
+    if(!existing){ toast('⚠️ Save consultation notes before completing this visit','err'); return; }
+    if(existing.is_signed_off){ toast('This visit is already signed off','warn'); return; }
+    _pendingSignOffPatientId=_docPt.id;
+    if(confirm('Schedule a follow-up for this patient?')){
+      const suggested=new Date(); suggested.setDate(suggested.getDate()+CFG.followupWindowDays);
+      const dateEl=document.getElementById('fu-date'); if(dateEl) dateEl.value=suggested.toISOString().slice(0,10);
+      const reasonEl=document.getElementById('fu-reason'); if(reasonEl) reasonEl.value='';
+      openOv('followup-schedule-ov');
+    } else {
+      await _finalizeVisitComplete();
+    }
+  }catch(e){ toast(e.message,'err'); }
+}
+async function saveFollowUpSchedule(){
+  const date=document.getElementById('fu-date')?.value;
+  if(!date){ toast('Select a follow-up date','err'); return; }
+  if(!sb||!_docPt||!_pendingSignOffPatientId){ toast('No visit pending completion','err'); return; }
+  try{
+    await sb.from('follow_ups').insert({
+      patient_mrn:_docPt.mrn, origin_patient_id:_docPt.id,
+      scheduled_by:currentProfile?.id, scheduled_by_name:currentProfile?.full_name||'',
+      target_date:date, reason:document.getElementById('fu-reason')?.value||null,
+    });
+  }catch(e){ toast('Follow-up could not be saved: '+e.message,'err'); }
+  closeOv('followup-schedule-ov');
+  await _finalizeVisitComplete();
+}
+async function skipFollowUpAndComplete(){
+  closeOv('followup-schedule-ov');
+  await _finalizeVisitComplete();
+}
+async function _finalizeVisitComplete(){
+  const patientId=_pendingSignOffPatientId; _pendingSignOffPatientId=null;
+  if(!sb||!patientId) return;
+  try{
+    const {data:consult}=await sb.from('doctor_consultations').select('id').eq('patient_id',patientId).order('created_at',{ascending:false}).limit(1).maybeSingle();
+    if(consult?.id){
+      await sb.from('doctor_consultations').update({
+        is_signed_off:true, signed_off_by:currentProfile?.id,
+        signed_off_by_name:currentProfile?.full_name||'', signed_off_at:new Date().toISOString(),
+      }).eq('id',consult.id);
+    }
+    // A manual, explicit doctor action — always sets Visit Complete
+    // directly rather than going through advanceVisitStatus()'s forward-
+    // only check, since the doctor's sign-off is authoritative regardless
+    // of what automatic order-tracking would otherwise infer.
+    await sb.from('patients').update({visit_status:'Visit Complete'}).eq('id',patientId);
+    if(_docPt?.id===patientId) _docPt.visit_status='Visit Complete';
+    applyConsultationNotesLock(true);
+    toast('✅ Visit completed and signed off','ok');
+    if(typeof loadDoctorQueue==='function') loadDoctorQueue();
+  }catch(e){ toast(e.message,'err'); }
 }
 
 function addRxRow() {
@@ -8694,6 +9045,38 @@ function updateTestSummary() {
   const s=document.getElementById('r-tests-summary'), l=document.getElementById('r-tests-list'); if(!s||!l) return;
   if(checked.length){ s.style.display='block'; l.textContent=checked.join(', '); } else s.style.display='none';
 }
+// Looked up by MRN (not patients.id — a fresh uuid every visit, see
+// submitRegistration()) among this patient's OPEN (used=false) follow_ups,
+// "within the configured window" meaning the visit is happening within
+// CFG.followupWindowDays of the originally scheduled target_date, in
+// either direction (early or a few days late still counts). Never applies
+// anything itself — always asks via confirm() and returns null if declined
+// or nothing matches, so the caller's normal, undiscounted invoice path
+// runs unless a receptionist actively opts in.
+async function checkAndApplyFollowUpPricing(mrn){
+  if(!sb||!mrn) return null;
+  try{
+    const {data:openFollowUps}=await sb.from('follow_ups').select('*').eq('patient_mrn',mrn).eq('used',false);
+    if(!openFollowUps?.length) return null;
+    const today=new Date(); today.setHours(0,0,0,0);
+    const windowMs=CFG.followupWindowDays*864e5;
+    const relevant=openFollowUps.filter(f=>{
+      if(!f.target_date) return false;
+      const target=new Date(f.target_date+'T00:00:00');
+      return Math.abs(target-today)<=windowMs;
+    });
+    if(!relevant.length) return null;
+    relevant.sort((a,b)=>Math.abs(new Date(a.target_date)-today)-Math.abs(new Date(b.target_date)-today));
+    const fu=relevant[0];
+    const ruleLabel=CFG.followupPricingRule==='percentage'?CFG.followupPricingValue+'% discounted'
+      :CFG.followupPricingRule==='fixed'?'fixed-price ('+CFG.followupPricingValue+' '+CFG.currency+')'
+      :'free';
+    const apply=confirm('This patient has a follow-up scheduled by '+(fu.scheduled_by_name||'a doctor')+
+      (fu.reason?' for "'+fu.reason+'"':'')+', due '+fu.target_date+
+      ' — apply '+ruleLabel+' follow-up pricing to this registration?');
+    return apply?{followUpId:fu.id}:null;
+  }catch(e){ return null; }
+}
 async function submitRegistration() {
   if(!requireActiveShift()) return;
   const g=id=>document.getElementById(id)?.value||'';
@@ -8734,6 +9117,10 @@ async function submitRegistration() {
       // registry in sync with the correction.
       try{ await sb?.from('patients_master').update(masterFields).eq('mrn',mrn); }catch(e){}
     }
+    // Deliberate, confirmed prompt only — never a silent discount. A brand
+    // new mrn (no prior visit) can never match an open follow_up, so this
+    // is a safe no-op for genuinely new patients.
+    const followUpMatch = await checkAndApplyFollowUpPricing(mrn);
     // Per-visit File Number, Lab No., Radiology No. — generated fresh every
     // time, even for a returning patient. Wrapped in a retry loop: if the
     // insert still hits a unique-constraint collision (23505) despite the
@@ -8761,6 +9148,7 @@ async function submitRegistration() {
         tests_requested:tests, priority:g('r-priority'),
         visit_destination:destString||'lab',
         payment_status:g('r-pay-status')||'unpaid',
+        visit_status:'Registered',
         created_by:currentProfile?.id
       };
       try {
@@ -8791,19 +9179,35 @@ async function submitRegistration() {
     const invNo = genOfflineId('INV');
     const lineItems = await buildAutoInvoiceLines(tests, destList);
     const subTotal = lineItems.reduce((s,i)=>s+(i.total_price||0),0);
+    // Follow-up pricing (Phase 5) — only ever applied after the receptionist
+    // actively confirmed it in checkAndApplyFollowUpPricing() above, never
+    // silently. 'fixed' is expressed as a discount so net_amount lands on
+    // the configured flat price via the same total/discount/net columns
+    // every other invoice already uses, rather than a parallel mechanism.
+    let followUpDiscount=0;
+    if(followUpMatch){
+      if(CFG.followupPricingRule==='free') followUpDiscount=subTotal;
+      else if(CFG.followupPricingRule==='percentage') followUpDiscount=subTotal*(CFG.followupPricingValue/100);
+      else if(CFG.followupPricingRule==='fixed') followUpDiscount=Math.max(0,subTotal-CFG.followupPricingValue);
+      followUpDiscount=Math.min(Math.max(0,followUpDiscount),subTotal);
+    }
+    const netAmount=subTotal-followUpDiscount;
     const amtPaid = parseFloat(g('r-pay-amount'))||0;
-    const finalPayStatus = payMethod==='waiver'?'waived': amtPaid>=subTotal&&subTotal>0?'paid': amtPaid>0?'partial': payStatus;
+    const finalPayStatus = payMethod==='waiver'?'waived': amtPaid>=netAmount&&netAmount>0?'paid': amtPaid>0?'partial': payStatus;
     try {
       await dbWrite('invoices','insert',{
         patient_id:pt.id, patient_name:fullname, lab_no:labNo,
         invoice_no:invNo, invoice_type:(destList.length===1&&destList[0]==='lab')?'lab':'hospital',
-        line_items:lineItems, total_amount:subTotal, discount_amount:0, net_amount:subTotal,
+        line_items:lineItems, total_amount:subTotal, discount_amount:followUpDiscount, net_amount:netAmount,
         currency:CFG.currency, payment_status:finalPayStatus, payment_method:payMethod,
         insurance_company:g('r-pay-ins-co')||g('r-ins-co'),
         insurance_no:g('r-pay-ins-no')||g('r-ins-no'),
-        pre_auth_no:g('r-pay-preauth'), notes:g('r-pay-notes'),
+        pre_auth_no:g('r-pay-preauth'), notes:(followUpMatch?'Follow-up pricing applied ('+CFG.followupPricingRule+'). ':'')+g('r-pay-notes'),
         created_by:currentProfile?.id
       });
+      if(followUpMatch){
+        try{ await sb.from('follow_ups').update({used:true,used_at:new Date().toISOString(),used_patient_id:pt.id}).eq('id',followUpMatch.followUpId); }catch(e){}
+      }
     } catch(invErr){ console.warn('Invoice creation failed:',invErr.message); }
 
     // Update patient payment_status (only meaningful if the insert above already landed;
@@ -8848,7 +9252,7 @@ async function loadWorklist() {
     const dept=document.getElementById('wl-dept')?.value||'';
     const prio=document.getElementById('wl-priority-filter')?.value||'';
     const srcFilter=document.getElementById('wl-source-filter')?.value||'';
-    let q=sb.from('patients').select('id,name,first_name,last_name,mrn,lab_no,age,age_unit,sex,priority,diagnosis,doctor,ward,tests_requested,payment_status,visit_destination,created_at').order('created_at',{ascending:false}).limit(200);
+    let q=sb.from('patients').select('id,name,first_name,last_name,mrn,lab_no,age,age_unit,sex,priority,diagnosis,doctor,ward,tests_requested,payment_status,visit_destination,visit_status,created_at').order('created_at',{ascending:false}).limit(200);
     if(mode==='today'){ const s=new Date(); s.setHours(0,0,0,0); q=q.gte('created_at',s.toISOString()); }
     else if(mode==='week'){ const s=new Date(); s.setDate(s.getDate()-7); q=q.gte('created_at',s.toISOString()); }
     else if(mode==='date'){ const d=document.getElementById('wl-date')?.value; if(d) q=q.gte('created_at',d+'T00:00:00').lte('created_at',d+'T23:59:59'); }
@@ -8895,7 +9299,7 @@ async function loadWorklist() {
         : '<div class="empty-state">No results for selected filters</div>';
       return;
     }
-    body.innerHTML='<div style="overflow-x:auto"><table class="tbl" id="wl-table"><thead><tr><th>Lab No</th><th>MRN</th><th>Name</th><th>Age/Sex</th><th>Tests</th><th>Doctor</th><th>Priority</th><th>Payment</th><th>Sample</th><th>Source</th><th>Date</th><th>Actions</th></tr></thead><tbody>'+
+    body.innerHTML='<div style="overflow-x:auto"><table class="tbl" id="wl-table"><thead><tr><th>Lab No</th><th>MRN</th><th>Name</th><th>Age/Sex</th><th>Tests</th><th>Doctor</th><th>Priority</th><th>Payment</th><th>Sample</th><th>Visit</th><th>Source</th><th>Date</th><th>Actions</th></tr></thead><tbody>'+
       filtered.map(p=>{
         const unpaid=p.payment_status==='unpaid'||p.payment_status==='insurance_pending';
         const stt=sampleMap[p.id]?.status||'Pending';
@@ -8914,6 +9318,7 @@ async function loadWorklist() {
           '<td>'+(p.priority==='STAT'?'<span class="bdg" style="background:#fef2f2;color:#b91c1c;border:1.5px solid #fca5a5">\u26a1 STAT</span>':statusBadge(p.priority))+'</td>'+
           '<td>'+paymentTag(p.payment_status)+'</td>'+
           '<td>'+statusBadge(stt)+'</td>'+
+          '<td>'+visitStatusBadge(p)+'</td>'+
           '<td style="font-size:.72rem">'+(src||'—')+'</td>'+
           '<td style="font-size:.7rem;color:var(--slate)">'+fmtDT(p.created_at)+'</td>'+
           '<td><div class="acts">'+
@@ -9328,6 +9733,11 @@ function switchMicroTab(tab,btn) {
 async function updateSampleStatus(patientId, status, extra={}){
   if(!sb||!patientId) return;
   try{ await sb.from('sample_records').update({status, ...extra}).eq('patient_id',patientId); }catch(e){ /* best-effort — a missing sample_records row shouldn't block the actual save/release */ }
+  // Every department's verify flow (Hem/Chem/Sero/Immuno/Micro/PCR/Histo/
+  // Cyto) already calls this with 'Completed' on verify and 'Released' on
+  // release — hooking the visit-status check here covers all of them from
+  // one place instead of duplicating the check in each save function.
+  if(status==='Completed'||status==='Released') checkAndAdvanceToResultsReady(patientId);
 }
 
 // ── BARCODE SCANNING (camera, via html5-qrcode) ──────────────────────
@@ -10314,11 +10724,11 @@ async function loadRecentPatients() {
   try {
     const today = new Date(); today.setHours(0,0,0,0);
     const {data}=await sb.from('patients')
-      .select('id,name,first_name,last_name,mrn,lab_no,age,age_unit,sex,priority,tests_requested,payment_status,visit_destination,created_at')
+      .select('id,name,first_name,last_name,mrn,lab_no,age,age_unit,sex,priority,tests_requested,payment_status,visit_destination,visit_status,created_at')
       .order('created_at',{ascending:false}).limit(40);
     if(!data?.length){ body.innerHTML='<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-title">No patients yet</div></div>'; return; }
     body.innerHTML='<div id="reg-recent-table" style="overflow-x:auto"><table class="tbl"><thead><tr>'+
-      '<th>MRN</th><th>Name</th><th>Age/Sex</th><th>Destination</th><th>Payment</th><th>Priority</th><th>Time</th></tr></thead><tbody>'+
+      '<th>MRN</th><th>Name</th><th>Age/Sex</th><th>Destination</th><th>Payment</th><th>Priority</th><th>Visit</th><th>Time</th></tr></thead><tbody>'+
       data.map(p=>{
         const destParts=(p.visit_destination||'lab').split(',').map(s=>s.trim()).filter(Boolean);
         const iconMap={doctor:'🩺',lab:'🔬',radiology:'🩻',admission:'🛏'};
@@ -10331,6 +10741,7 @@ async function loadRecentPatients() {
           '<td>'+destIcon+' '+(p.visit_destination||'—')+'</td>'+
           '<td>'+paymentTag(p.payment_status)+'</td>'+
           '<td>'+statusBadge(p.priority)+'</td>'+
+          '<td>'+visitStatusBadge(p)+'</td>'+
           '<td style="font-size:.72rem">'+fmtDT(p.created_at)+'</td></tr>';
       }).join('')+
       '</tbody></table></div>';
@@ -11810,8 +12221,8 @@ async function loadNursingQueue() {
     // Load ALL patients from last 24h + active admissions
     const since24h = new Date(Date.now()-24*3600*1000).toISOString();
     const [recentRes, admRes] = await Promise.all([
-      sb.from('patients').select('id,name,first_name,last_name,mrn,lab_no,age,age_unit,sex,payment_status,diagnosis,ward,visit_destination,priority,created_at').gte('created_at',since24h).order('created_at',{ascending:false}).limit(100),
-      sb.from('admissions').select('patient_id,ward,bed_number,status,patients(id,name,mrn,lab_no,age,age_unit,sex,payment_status,diagnosis)').in('status',['Active','Critical']).limit(80)
+      sb.from('patients').select('id,name,first_name,last_name,mrn,lab_no,age,age_unit,sex,payment_status,diagnosis,ward,visit_destination,visit_status,priority,created_at').gte('created_at',since24h).order('created_at',{ascending:false}).limit(100),
+      sb.from('admissions').select('patient_id,ward,bed_number,status,patients(id,name,mrn,lab_no,age,age_unit,sex,payment_status,visit_status,diagnosis)').in('status',['Active','Critical']).limit(80)
     ]);
     // Build unified set — admitted patients first, then recent
     const seen=new Set(); const rows=[];
@@ -11833,7 +12244,7 @@ async function loadNursingQueue() {
     }
     const destIcon={doctor:'\ud83e\ude7a',lab:'\ud83d\udd2c',radiology:'\ud83e\udea7',admission:'\ud83d\udecf'};
     body.innerHTML='<div style="overflow-x:auto"><table class="tbl"><thead><tr>'+
-      '<th>MRN</th><th>Name</th><th>Age/Sex</th><th>Location</th><th>Destination</th><th>Payment</th><th>Actions</th></tr></thead><tbody>'+
+      '<th>MRN</th><th>Name</th><th>Age/Sex</th><th>Location</th><th>Destination</th><th>Payment</th><th>Visit</th><th>Actions</th></tr></thead><tbody>'+
       filtered.map(p=>{
         const unpaid=p.payment_status==='unpaid'||p.payment_status==='insurance_pending';
         const nm=(p.name||[p.first_name,p.last_name].filter(Boolean).join(' ')||'\u2014').replace(/'/g,'\u2019');
@@ -11848,6 +12259,7 @@ async function loadNursingQueue() {
           '<td>'+wardBadge+'</td>'+
           '<td><span style="font-size:.72rem">'+destIconStr+' '+dest+'</span></td>'+
           '<td>'+paymentTag(p.payment_status)+'</td>'+
+          '<td>'+visitStatusBadge(p)+'</td>'+
           '<td><div class="acts">'+
             '<button class="btn btn-p btn-xs" onclick="selectVitalsFromQueue(\''+p.id+'\',\''+nm+'\');event.stopPropagation()">\ud83d\udcc8 Vitals</button>'+
             '<button class="btn btn-s btn-xs" onclick="goPage(\x27fluid-chart\x27);event.stopPropagation()">\ud83d\udca7 Fluid</button>'+
@@ -14013,6 +14425,7 @@ async function _doSubmitRadRequest(deferred) {
       status:'Requested', created_by:currentProfile?.id,
       ...deferralFields
     });
+    advanceVisitStatus(ptId,'Orders Pending');
     toast(deferred?'\u26a1 \u2705 Radiology request submitted (\u26a0 Payment Deferred \u2014 STAT)':'\u2705 Radiology request submitted','ok');
     ['rad-indication','rad-contraindications','rad-egfr','rad-creatinine'].forEach(id=>{const el=document.getElementById(id);if(el) el.value='';});
     const pregSel=document.getElementById('rad-pregnancy-status'); if(pregSel) pregSel.value='';
@@ -14025,7 +14438,7 @@ async function loadRadRequests() {
   body.innerHTML='<div class="spin-center"><div class="spinner"></div>Loading…</div>';
   const sf=document.getElementById('rad-status-filter')?.value||'';
   try {
-    let q=sb.from('radiology_requests').select('*,patients(name,mrn,lab_no,age,age_unit,sex,ward,payment_status)').order('created_at',{ascending:false}).limit(80);
+    let q=sb.from('radiology_requests').select('*,patients(name,mrn,lab_no,age,age_unit,sex,ward,payment_status,visit_status)').order('created_at',{ascending:false}).limit(80);
     if(sf) q=q.eq('status',sf);
     const {data:all}=await q;
     // Same queue-side payment enforcement as loadSampleQueue(): an unpaid/
@@ -14045,7 +14458,7 @@ async function loadRadRequests() {
     }
     const urgColor={STAT:'#fff1f2',Urgent:'#fffbeb',Routine:''};
     body.innerHTML='<div style="overflow-x:auto"><table class="tbl"><thead><tr>'+
-      '<th>Date</th><th>Patient</th><th>Study</th><th>Urgency</th><th>Requesting Dr</th><th>Payment</th><th>Status</th><th>Actions</th></tr></thead><tbody>'+
+      '<th>Date</th><th>Patient</th><th>Study</th><th>Urgency</th><th>Requesting Dr</th><th>Payment</th><th>Status</th><th>Visit</th><th>Actions</th></tr></thead><tbody>'+
       data.map(r=>{
         const pt=r.patients||{};
         const unpaid=pt.payment_status==='unpaid'||pt.payment_status==='insurance_pending';
@@ -14058,6 +14471,7 @@ async function loadRadRequests() {
           '<td style="font-size:.75rem">'+(r.requesting_doctor||'—')+'</td>'+
           '<td>'+paymentTag(pt.payment_status)+(r.payment_deferred?' <span class="bdg" style="background:#fef2f2;color:#b91c1c;border:1.5px solid #fca5a5">\u26a0 Payment Deferred \u2014 STAT</span>':'')+'</td>'+
           '<td>'+statusBadge(r.status)+'</td>'+
+          '<td>'+visitStatusBadge(pt)+'</td>'+
           '<td><div class="acts">'+
             '<button class="btn btn-p btn-xs" onclick="openRadReport(\''+r.id+'\')">📝 Report</button>'+
             '<button class="btn btn-s btn-xs" onclick="updateRadStatus(\''+r.id+'\',\'In Progress\')">▶ Start</button>'+
@@ -14163,6 +14577,10 @@ async function saveRadReport() {
     // Payments Now Due" category. Refresh immediately rather than waiting
     // for the bell's own periodic poll.
     refreshNotifications();
+    try{
+      const {data:rr}=await sb.from('radiology_requests').select('patient_id').eq('id',requestId).maybeSingle();
+      if(rr?.patient_id) checkAndAdvanceToResultsReady(rr.patient_id);
+    }catch(e){}
   } catch(e){toast(e.message,'err');}
 }
 
