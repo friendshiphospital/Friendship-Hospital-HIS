@@ -4195,6 +4195,20 @@ html[dir="rtl"] body{direction:rtl;}
           <strong>ON:</strong> a result auto-verifies and releases straight to the doctor's view only if it's within the reference range, triggers no Delta Check alert, the department's QC is currently passing, and it isn't a critical/panic value — anything else still falls back to manual sign-off. A Delta Check breach always blocks auto-verification and requires a mandatory reason code, regardless of this setting.
         </div>
       </div></div>
+      <div class="card"><div class="card-hd"><span class="card-title">📅 Follow-Up Visit Policy</span></div><div class="card-body">
+        <div style="font-size:.72rem;color:var(--slate);margin-bottom:8px">Controls the default follow-up date a doctor is offered when completing a visit (Consultation → Complete &amp; Sign Off), and the pricing Reception is offered — never applied silently — when a patient with an open, unused follow-up registers again within this window.</div>
+        <div class="fg"><label class="fl">Follow-up Window (days)</label><input class="fc" type="number" min="1" id="cfg-followup-window-days" placeholder="7"></div>
+        <div class="fg"><label class="fl">Pricing Rule</label>
+          <select class="fc" id="cfg-followup-pricing-rule" onchange="updateFollowupPricingValueVisibility()">
+            <option value="free">Free</option>
+            <option value="percentage">Percentage discount</option>
+            <option value="fixed">Fixed price</option>
+          </select>
+        </div>
+        <div class="fg" id="cfg-followup-pricing-value-wrap"><label class="fl" id="cfg-followup-pricing-value-label">Discount %</label><input class="fc" type="number" min="0" step="0.01" id="cfg-followup-pricing-value"></div>
+        <button class="btn btn-p btn-sm" onclick="saveFollowupPolicySettings()">💾 Save Follow-Up Policy</button>
+        <div id="cfg-followup-policy-status" style="margin-top:7px;font-size:.78rem;color:var(--green)"></div>
+      </div></div>
       <div class="card" id="cfg-override-pin-card" style="display:none"><div class="card-hd"><span class="card-title">🔑 My Anti-Fraud Override PIN</span></div><div class="card-body">
         <div style="font-size:.72rem;color:var(--slate);margin-bottom:8px">Lets you approve a void/refund/discount-override at the counter with a PIN instead of your full password. Stored as a bcrypt hash — never in plain text, never readable by anyone else, admin or otherwise. Requires migration_v2.12_override_pin.sql to be applied.</div>
         <div class="fg"><label class="fl">New PIN (6+ digits, numeric)</label><input class="fc" type="password" inputmode="numeric" maxlength="12" id="cfg-override-pin" placeholder="e.g. 482913"></div>
@@ -6784,8 +6798,28 @@ function loadSettings() {
   const pinCard=document.getElementById('cfg-override-pin-card'); if(pinCard) pinCard.style.display = currentProfile?.role==='admin' ? '' : 'none';
   const cu=document.getElementById('cfg-sb-url'); if(cu) cu.value=localStorage.getItem('sb_url')||'';
   const ck=document.getElementById('cfg-sb-key'); if(ck) ck.value=localStorage.getItem('sb_key')||'';
+  const fwd=document.getElementById('cfg-followup-window-days'); if(fwd) fwd.value=CFG.followupWindowDays;
+  const fpr=document.getElementById('cfg-followup-pricing-rule'); if(fpr) fpr.value=CFG.followupPricingRule;
+  const fpv=document.getElementById('cfg-followup-pricing-value'); if(fpv) fpv.value=CFG.followupPricingValue;
+  updateFollowupPricingValueVisibility();
   loadBedConfig();
   loadIdCounters();
+}
+function updateFollowupPricingValueVisibility(){
+  const rule=document.getElementById('cfg-followup-pricing-rule')?.value||'free';
+  const wrap=document.getElementById('cfg-followup-pricing-value-wrap');
+  const label=document.getElementById('cfg-followup-pricing-value-label');
+  if(wrap) wrap.style.display=rule==='free'?'none':'';
+  if(label) label.textContent=rule==='percentage'?'Discount %':'Fixed Price ('+CFG.currency+')';
+}
+function saveFollowupPolicySettings(){
+  const days=parseInt(document.getElementById('cfg-followup-window-days')?.value,10);
+  CFG.followupWindowDays=(isNaN(days)||days<=0)?7:days;
+  CFG.followupPricingRule=document.getElementById('cfg-followup-pricing-rule')?.value||'free';
+  const val=parseFloat(document.getElementById('cfg-followup-pricing-value')?.value);
+  CFG.followupPricingValue=isNaN(val)?0:val;
+  const el=document.getElementById('cfg-followup-policy-status');
+  if(el){ el.textContent='✅ Saved'; setTimeout(()=>el.textContent='',3000); }
 }
 // Settings is already admin-only (see ROLE_PAGES), so no extra role check is
 // needed here — but the destructive-ish correction itself still requires
@@ -9011,6 +9045,38 @@ function updateTestSummary() {
   const s=document.getElementById('r-tests-summary'), l=document.getElementById('r-tests-list'); if(!s||!l) return;
   if(checked.length){ s.style.display='block'; l.textContent=checked.join(', '); } else s.style.display='none';
 }
+// Looked up by MRN (not patients.id — a fresh uuid every visit, see
+// submitRegistration()) among this patient's OPEN (used=false) follow_ups,
+// "within the configured window" meaning the visit is happening within
+// CFG.followupWindowDays of the originally scheduled target_date, in
+// either direction (early or a few days late still counts). Never applies
+// anything itself — always asks via confirm() and returns null if declined
+// or nothing matches, so the caller's normal, undiscounted invoice path
+// runs unless a receptionist actively opts in.
+async function checkAndApplyFollowUpPricing(mrn){
+  if(!sb||!mrn) return null;
+  try{
+    const {data:openFollowUps}=await sb.from('follow_ups').select('*').eq('patient_mrn',mrn).eq('used',false);
+    if(!openFollowUps?.length) return null;
+    const today=new Date(); today.setHours(0,0,0,0);
+    const windowMs=CFG.followupWindowDays*864e5;
+    const relevant=openFollowUps.filter(f=>{
+      if(!f.target_date) return false;
+      const target=new Date(f.target_date+'T00:00:00');
+      return Math.abs(target-today)<=windowMs;
+    });
+    if(!relevant.length) return null;
+    relevant.sort((a,b)=>Math.abs(new Date(a.target_date)-today)-Math.abs(new Date(b.target_date)-today));
+    const fu=relevant[0];
+    const ruleLabel=CFG.followupPricingRule==='percentage'?CFG.followupPricingValue+'% discounted'
+      :CFG.followupPricingRule==='fixed'?'fixed-price ('+CFG.followupPricingValue+' '+CFG.currency+')'
+      :'free';
+    const apply=confirm('This patient has a follow-up scheduled by '+(fu.scheduled_by_name||'a doctor')+
+      (fu.reason?' for "'+fu.reason+'"':'')+', due '+fu.target_date+
+      ' — apply '+ruleLabel+' follow-up pricing to this registration?');
+    return apply?{followUpId:fu.id}:null;
+  }catch(e){ return null; }
+}
 async function submitRegistration() {
   if(!requireActiveShift()) return;
   const g=id=>document.getElementById(id)?.value||'';
@@ -9051,6 +9117,10 @@ async function submitRegistration() {
       // registry in sync with the correction.
       try{ await sb?.from('patients_master').update(masterFields).eq('mrn',mrn); }catch(e){}
     }
+    // Deliberate, confirmed prompt only — never a silent discount. A brand
+    // new mrn (no prior visit) can never match an open follow_up, so this
+    // is a safe no-op for genuinely new patients.
+    const followUpMatch = await checkAndApplyFollowUpPricing(mrn);
     // Per-visit File Number, Lab No., Radiology No. — generated fresh every
     // time, even for a returning patient. Wrapped in a retry loop: if the
     // insert still hits a unique-constraint collision (23505) despite the
@@ -9109,19 +9179,35 @@ async function submitRegistration() {
     const invNo = genOfflineId('INV');
     const lineItems = await buildAutoInvoiceLines(tests, destList);
     const subTotal = lineItems.reduce((s,i)=>s+(i.total_price||0),0);
+    // Follow-up pricing (Phase 5) — only ever applied after the receptionist
+    // actively confirmed it in checkAndApplyFollowUpPricing() above, never
+    // silently. 'fixed' is expressed as a discount so net_amount lands on
+    // the configured flat price via the same total/discount/net columns
+    // every other invoice already uses, rather than a parallel mechanism.
+    let followUpDiscount=0;
+    if(followUpMatch){
+      if(CFG.followupPricingRule==='free') followUpDiscount=subTotal;
+      else if(CFG.followupPricingRule==='percentage') followUpDiscount=subTotal*(CFG.followupPricingValue/100);
+      else if(CFG.followupPricingRule==='fixed') followUpDiscount=Math.max(0,subTotal-CFG.followupPricingValue);
+      followUpDiscount=Math.min(Math.max(0,followUpDiscount),subTotal);
+    }
+    const netAmount=subTotal-followUpDiscount;
     const amtPaid = parseFloat(g('r-pay-amount'))||0;
-    const finalPayStatus = payMethod==='waiver'?'waived': amtPaid>=subTotal&&subTotal>0?'paid': amtPaid>0?'partial': payStatus;
+    const finalPayStatus = payMethod==='waiver'?'waived': amtPaid>=netAmount&&netAmount>0?'paid': amtPaid>0?'partial': payStatus;
     try {
       await dbWrite('invoices','insert',{
         patient_id:pt.id, patient_name:fullname, lab_no:labNo,
         invoice_no:invNo, invoice_type:(destList.length===1&&destList[0]==='lab')?'lab':'hospital',
-        line_items:lineItems, total_amount:subTotal, discount_amount:0, net_amount:subTotal,
+        line_items:lineItems, total_amount:subTotal, discount_amount:followUpDiscount, net_amount:netAmount,
         currency:CFG.currency, payment_status:finalPayStatus, payment_method:payMethod,
         insurance_company:g('r-pay-ins-co')||g('r-ins-co'),
         insurance_no:g('r-pay-ins-no')||g('r-ins-no'),
-        pre_auth_no:g('r-pay-preauth'), notes:g('r-pay-notes'),
+        pre_auth_no:g('r-pay-preauth'), notes:(followUpMatch?'Follow-up pricing applied ('+CFG.followupPricingRule+'). ':'')+g('r-pay-notes'),
         created_by:currentProfile?.id
       });
+      if(followUpMatch){
+        try{ await sb.from('follow_ups').update({used:true,used_at:new Date().toISOString(),used_patient_id:pt.id}).eq('id',followUpMatch.followUpId); }catch(e){}
+      }
     } catch(invErr){ console.warn('Invoice creation failed:',invErr.message); }
 
     // Update patient payment_status (only meaningful if the insert above already landed;
