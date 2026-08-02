@@ -5474,14 +5474,21 @@ html[dir="rtl"] body{direction:rtl;}
 
 <div class="ov" id="adm-detail-ov">
   <div class="mo mo-xl">
-    <div class="mo-hd"><h3>🛏 Admission Details</h3><button class="mo-x" onclick="closeOv('adm-detail-ov')">✕</button></div>
+    <div class="mo-hd"><h3>🛏 Admission Details</h3>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn btn-p btn-xs" onclick="dischargeFromAdmDetail()">🏥 Discharge</button>
+        <button class="mo-x" onclick="closeAdmDetail()">✕</button>
+      </div>
+    </div>
     <div class="mo-b">
       <div id="adm-detail-banner" class="pt-banner" style="margin-bottom:14px"></div>
-      <div class="tabs"><button class="tab active" onclick="switchAdmDetailTab('overview',this)">📋 Overview</button><button class="tab" onclick="switchAdmDetailTab('labs',this)">🔬 Lab Orders</button><button class="tab" onclick="switchAdmDetailTab('vitals',this)">📈 Vital Signs</button><button class="tab" onclick="switchAdmDetailTab('orders',this)">📋 Orders</button><button class="tab" onclick="switchAdmDetailTab('theatre',this)">🔪 Theatre</button></div>
+      <div class="tabs"><button class="tab active" onclick="switchAdmDetailTab('overview',this)">📋 Overview</button><button class="tab" onclick="switchAdmDetailTab('labs',this)">🔬 Lab Orders</button><button class="tab" onclick="switchAdmDetailTab('vitals',this)">📈 Vital Signs</button><button class="tab" onclick="switchAdmDetailTab('orders',this)">📋 Orders</button><button class="tab" onclick="switchAdmDetailTab('meds',this)">💊 Medications</button><button class="tab" onclick="switchAdmDetailTab('transfer',this)">🔄 Transfer</button><button class="tab" onclick="switchAdmDetailTab('theatre',this)">🔪 Theatre</button></div>
       <div id="adm-detail-overview" class="adm-tab-content active"></div>
       <div id="adm-detail-labs" class="adm-tab-content"></div>
       <div id="adm-detail-vitals" class="adm-tab-content"></div>
       <div id="adm-detail-orders" class="adm-tab-content"></div>
+      <div id="adm-detail-meds" class="adm-tab-content"></div>
+      <div id="adm-detail-transfer" class="adm-tab-content"></div>
       <div id="adm-detail-theatre" class="adm-tab-content"></div>
     </div>
   </div>
@@ -7737,24 +7744,150 @@ function clearAdmForm() {
   const b=document.getElementById('adm-pt-banner'); if(b) b.style.display='none';
   generateAdmNo(); document.getElementById('adm-date').value=new Date().toISOString().slice(0,16);
 }
+let _admDetailLosTimer=null;
+let _admDetailCtx=null; // {admId,patId,name,ward,room,bed,admNo} — reused by the Medications/Transfer tabs and Discharge action
 async function openAdmDetail(admId) {
   if(!sb) return; _currentAdmId=admId; openOv('adm-detail-ov');
   try {
     const {data:adm}=await sb.from('admissions').select('*,patients(*)').eq('id',admId).single();
     if(!adm) return;
     const pt=adm.patients;
+    _admDetailCtx={admId,patId:pt?.id,name:pt?.name||fullName(pt),ward:adm.ward,room:adm.room,bed:adm.bed,admNo:adm.admission_no};
     const banner=document.getElementById('adm-detail-banner');
     if(banner) banner.innerHTML='<div class="pb-i"><div class="pb-l">Patient</div><div class="pb-v">'+(pt?.name||fullName(pt))+'</div></div><div class="pb-i"><div class="pb-l">MRN</div><div class="pb-v">'+(pt?.mrn||'—')+'</div></div><div class="pb-i"><div class="pb-l">Age/Sex</div><div class="pb-v">'+(pt?.age||'?')+(pt?.age_unit||'')+' / '+(pt?.sex||'')+'</div></div><div class="pb-i"><div class="pb-l">Ward/Bed</div><div class="pb-v">'+(adm.ward||'—')+' / '+(adm.bed||'—')+'</div></div><div class="pb-i"><div class="pb-l">Adm No</div><div class="pb-v">'+(adm.admission_no||'—')+'</div></div><div class="pb-i"><div class="pb-l">Status</div><div class="pb-v">'+statusBadge(adm.status)+'</div></div>';
     const ov=document.getElementById('adm-detail-overview');
-    if(ov) ov.innerHTML='<div class="g2" style="padding:10px 0"><div><b>Admission Date:</b> '+fmtDT(adm.admission_date)+'</div><div><b>Type:</b> '+adm.admission_type+'</div><div><b>Doctor:</b> '+(adm.admitting_doctor||'—')+'</div><div><b>Diagnosis:</b> '+(adm.primary_diagnosis||'—')+'</div><div><b>Notes:</b> '+(adm.notes||'—')+'</div></div>';
+    if(ov) ov.innerHTML='<div class="g2" style="padding:10px 0"><div><b>Admission Date:</b> '+fmtDT(adm.admission_date)+'</div><div><b>Type:</b> '+adm.admission_type+'</div><div><b>Doctor:</b> '+(adm.admitting_doctor||'—')+'</div><div><b>Diagnosis:</b> '+(adm.primary_diagnosis||'—')+'</div><div><b>Length of Stay:</b> <span id="adm-detail-los" style="font-weight:700;color:var(--teal)"></span></div><div><b>Notes:</b> '+(adm.notes||'—')+'</div></div>';
+    updateAdmDetailLos(adm.admission_date);
+    if(_admDetailLosTimer) clearInterval(_admDetailLosTimer);
+    _admDetailLosTimer=setInterval(()=>updateAdmDetailLos(adm.admission_date),30000);
     switchAdmDetailTab('overview',null);
     loadAdmDetailVitals(admId,pt?.id); loadAdmDetailOrders(admId);
+    loadAdmDetailMeds(admId,pt?.id); loadAdmDetailTransfer(admId,adm.ward,adm.room,adm.bed);
   } catch(e){ console.error(e); }
+}
+// Live LOS counter — recomputed every 30s while the drawer stays open, not
+// just once at open time, since a charge nurse may leave it open a while.
+function updateAdmDetailLos(admissionDate) {
+  const el=document.getElementById('adm-detail-los'); if(!el||!admissionDate) return;
+  const ms=new Date()-new Date(admissionDate);
+  const days=Math.floor(ms/864e5), hours=Math.floor((ms%864e5)/36e5);
+  el.textContent=days+'d '+hours+'h';
+}
+function closeAdmDetail() {
+  if(_admDetailLosTimer){ clearInterval(_admDetailLosTimer); _admDetailLosTimer=null; }
+  _admDetailCtx=null;
+  closeOv('adm-detail-ov');
 }
 function switchAdmDetailTab(tab,btn) {
   document.querySelectorAll('.adm-tab-content').forEach(el=>el.classList.remove('active'));
   const el=document.getElementById('adm-detail-'+tab); if(el) el.classList.add('active');
   if(btn){ document.querySelectorAll('#adm-detail-ov .tab').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); }
+}
+// Deep-links into the EXISTING Nursing MAR (Medications tab) for this
+// patient rather than reimplementing medication administration inside the
+// drawer — mirrors how Discharge below links to the existing discharge
+// summary generator instead of rebuilding it.
+async function loadAdmDetailMeds(admId,patId) {
+  const el=document.getElementById('adm-detail-meds'); if(!el||!sb) return;
+  el.innerHTML='<div class="spin-center"><div class="spinner"></div>Loading…</div>';
+  try {
+    const {data}=await sb.from('vital_signs').select('recorded_at,mar_entries,recorded_by').eq('admission_id',admId).not('mar_entries','is',null).order('recorded_at',{ascending:false}).limit(5);
+    const rows=(data||[]).flatMap(v=>(Array.isArray(v.mar_entries)?v.mar_entries:[]).map(m=>({...m,_recorded_at:v.recorded_at,_by:v.recorded_by})));
+    const list=rows.length?('<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Drug</th><th>Dose</th><th>Route</th><th>Status</th><th>Time</th></tr></thead><tbody>'+
+      rows.slice(0,8).map(m=>'<tr><td>'+(m.drug||'—')+'</td><td>'+(m.dose||'—')+'</td><td>'+(m.route||'—')+'</td><td>'+statusBadge(m.status||'—')+'</td><td>'+fmtDT(m._recorded_at)+'</td></tr>').join('')+
+      '</tbody></table></div>'):'<div style="padding:10px 0;font-size:.78rem;color:var(--slate)">No MAR entries recorded yet for this admission</div>';
+    el.innerHTML=list+'<button class="btn btn-p" style="margin-top:10px" onclick="openMarForAdmPatient()">💊 Open Full MAR in Nursing</button>';
+  } catch(e){ el.innerHTML='<div style="padding:10px;color:var(--red);font-size:.78rem">'+e.message+'</div>'; }
+}
+function openMarForAdmPatient() {
+  const c=_admDetailCtx; if(!c) return;
+  closeAdmDetail();
+  goPage('nursing');
+  loadVitalsForPatient(c.patId,c.admId,c.name,c.ward,c.bed,c.admNo);
+  const idEl=document.getElementById('vs-pt-id'); if(idEl) idEl.value=c.patId;
+  switchNurseTab('meds',null);
+}
+// Transfer (genuinely new — nothing like this existed before). Logs to
+// bed_transfers (migration_v2.21, for review) and updates the admission's
+// ward/room/bed plus frees the old bed / occupies the new one, the same
+// two beds writes submitAdmission()/saveDischarge() already make.
+async function loadAdmDetailTransfer(admId,ward,room,bed) {
+  const el=document.getElementById('adm-detail-transfer'); if(!el||!sb) return;
+  el.innerHTML='<div style="padding:6px 0">'+
+    '<div style="font-size:.78rem;color:var(--slate);margin-bottom:10px">Current bed: <strong>'+(ward||'—')+' / '+(room||'—')+' / '+(bed||'—')+'</strong></div>'+
+    '<div class="g3">'+
+      '<div class="fg"><label class="fl">New Ward</label><select class="fc" id="xfer-ward" onchange="loadTransferRooms()"><option value="">Select…</option></select></div>'+
+      '<div class="fg"><label class="fl">New Room</label><select class="fc" id="xfer-room" onchange="loadTransferBeds()"><option>—</option></select></div>'+
+      '<div class="fg"><label class="fl">New Bed</label><select class="fc" id="xfer-bed"><option>—</option></select></div>'+
+    '</div>'+
+    '<div class="fg"><label class="fl">Reason for Transfer</label><textarea class="fc" id="xfer-reason" rows="2" placeholder="e.g. Deteriorating — requires ICU level care"></textarea></div>'+
+    '<button class="btn btn-p" onclick="submitBedTransfer()">🔄 Confirm Transfer</button>'+
+    '<div style="margin-top:16px">'+
+      '<div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:var(--slate);margin-bottom:6px">Transfer History</div>'+
+      '<div id="xfer-history"><div style="font-size:.75rem;color:var(--slate)">Loading…</div></div>'+
+    '</div>'+
+  '</div>';
+  try {
+    const {data}=await sb.from('beds').select('ward').order('ward');
+    const wards=[...new Set((data||[]).map(b=>b.ward).filter(Boolean))];
+    const wardSel=document.getElementById('xfer-ward');
+    if(wardSel) wardSel.innerHTML='<option value="">Select…</option>'+wards.map(w=>'<option>'+w+'</option>').join('');
+  } catch(e){}
+  loadTransferHistory(admId);
+}
+async function loadTransferRooms() {
+  const ward=document.getElementById('xfer-ward')?.value; const rs=document.getElementById('xfer-room');
+  if(!ward||!rs||!sb) return;
+  try {
+    const {data}=await sb.from('beds').select('room').eq('ward',ward).eq('status','Available').order('room');
+    const rooms=[...new Set((data||[]).map(b=>b.room))];
+    rs.innerHTML=rooms.map(r=>'<option>'+r+'</option>').join('')||'<option>—</option>';
+  } catch(e){}
+  loadTransferBeds();
+}
+async function loadTransferBeds() {
+  const ward=document.getElementById('xfer-ward')?.value, room=document.getElementById('xfer-room')?.value;
+  const bs=document.getElementById('xfer-bed'); if(!ward||!room||!bs||!sb) return;
+  try {
+    const {data}=await sb.from('beds').select('bed_number').eq('ward',ward).eq('room',room).eq('status','Available').order('bed_number');
+    bs.innerHTML=(data||[]).map(b=>'<option>'+b.bed_number+'</option>').join('')||'<option>—</option>';
+  } catch(e){}
+}
+async function loadTransferHistory(admId) {
+  const el=document.getElementById('xfer-history'); if(!el||!sb) return;
+  try {
+    const {data}=await sb.from('bed_transfers').select('*').eq('admission_id',admId).order('transferred_at',{ascending:false});
+    if(!data?.length){ el.innerHTML='<div style="font-size:.75rem;color:var(--slate)">No transfers recorded</div>'; return; }
+    el.innerHTML='<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>From</th><th>To</th><th>Reason</th><th>By</th><th>Time</th></tr></thead><tbody>'+
+      data.map(x=>'<tr><td>'+x.from_ward+' / '+x.from_room+' / '+x.from_bed+'</td><td>'+x.to_ward+' / '+x.to_room+' / '+x.to_bed+'</td><td style="font-size:.75rem">'+(x.reason||'—')+'</td><td>'+(x.transferred_by_name||'—')+'</td><td>'+fmtDT(x.transferred_at)+'</td></tr>').join('')+
+      '</tbody></table></div>';
+  } catch(e){ el.innerHTML='<div style="font-size:.75rem;color:var(--red)">'+e.message+'</div>'; }
+}
+async function submitBedTransfer() {
+  if(!sb||!_currentAdmId){ toast('Not connected','err'); return; }
+  const newWard=document.getElementById('xfer-ward')?.value;
+  const newRoom=document.getElementById('xfer-room')?.value;
+  const newBed=document.getElementById('xfer-bed')?.value;
+  const reason=document.getElementById('xfer-reason')?.value?.trim();
+  if(!newWard||!newRoom||!newBed||newBed==='—'){ toast('Select a destination ward/room/bed','err'); return; }
+  if(!reason){ toast('Enter a transfer reason','err'); return; }
+  try {
+    const {data:adm,error}=await sb.from('admissions').select('ward,room,bed,patient_id').eq('id',_currentAdmId).single();
+    if(error) throw error;
+    if(adm.ward===newWard && adm.room===newRoom && adm.bed===newBed){ toast('Destination is the same as the current bed','err'); return; }
+    await sb.from('bed_transfers').insert({admission_id:_currentAdmId,patient_id:adm.patient_id,from_ward:adm.ward,from_room:adm.room,from_bed:adm.bed,to_ward:newWard,to_room:newRoom,to_bed:newBed,reason,transferred_by:currentProfile?.id,transferred_by_name:currentProfile?.full_name,transferred_at:new Date().toISOString()});
+    await sb.from('admissions').update({ward:newWard,room:newRoom,bed:newBed}).eq('id',_currentAdmId);
+    if(adm.bed&&adm.bed!=='—'){ try{ await sb.from('beds').update({status:'Available',current_patient_id:null,current_admission_id:null}).eq('ward',adm.ward).eq('room',adm.room).eq('bed_number',adm.bed); }catch(e){} }
+    try{ await sb.from('beds').update({status:'Occupied',current_patient_id:adm.patient_id,current_admission_id:_currentAdmId}).eq('ward',newWard).eq('room',newRoom).eq('bed_number',newBed); }catch(e){}
+    toast('✅ Patient transferred to '+newWard+' / '+newRoom+' / '+newBed,'ok');
+    openAdmDetail(_currentAdmId);
+    loadBedGrid(); loadAdmissions(); loadAdmissionStats();
+  } catch(e){ toast(e.message,'err'); }
+}
+function dischargeFromAdmDetail() {
+  const admId=_currentAdmId; if(!admId) return;
+  closeAdmDetail();
+  openDischarge(admId);
 }
 async function loadAdmDetailVitals(admId,patId) {
   const el=document.getElementById('adm-detail-vitals'); if(!el||!sb) return;
