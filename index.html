@@ -7004,7 +7004,7 @@ async function checkCriticals() {
 // highlighting; no new column was needed, just surfacing it here too
 // instead of it only being visible to someone already on that page).
 // Both time thresholds are configurable from Settings rather than hardcoded.
-let _notifState={crits:[],unpaid:[],pendingAdm:[],lowStock:[],deferredDue:[]};
+let _notifState={crits:[],unpaid:[],pendingAdm:[],lowStock:[],deferredDue:[],resultsReady:[]};
 async function refreshNotifications(){
   if(!sb) return;
   try{
@@ -7052,8 +7052,28 @@ async function refreshNotifications(){
       ...(deferredRadRes.data||[]).filter(r=>stillUnpaid(r.patients)).map(r=>({kind:'Radiology',label:r.imaging_type||'Radiology report',patient_id:r.patient_id,patients:r.patients})),
     ];
 
-    _notifState={crits,unpaid,pendingAdm,lowStock,deferredDue};
-    const total=crits.length+unpaid.length+pendingAdm.length+lowStock.length+deferredDue.length;
+    // "Results Ready" — doctor/admin only, patients routed to Doctor whose
+    // Lab work or Radiology study just finished (see loadActiveOrders()'s
+    // View Result/View Report buttons, the click-through destination once
+    // notifJumpToPatientResults() lands on them). Scoped to this role so
+    // every other role's bell isn't paying for these extra queries.
+    let resultsReady=[];
+    if(currentProfile?.role==='doctor'||currentProfile?.role==='admin'){
+      const since24h=new Date(now-24*3600000).toISOString();
+      const {data:queuePts}=await sb.from('patients').select('id,name,first_name,last_name,mrn,lab_no,visit_destination,created_at').ilike('visit_destination','%doctor%').gte('created_at',since24h).limit(50);
+      if(queuePts?.length){
+        const ids=queuePts.map(p=>p.id);
+        const [{data:doneSamples},{data:doneRad}]=await Promise.all([
+          sb.from('sample_records').select('patient_id').in('patient_id',ids).in('status',['Completed','Released']),
+          sb.from('radiology_requests').select('patient_id').in('patient_id',ids).in('status',['Reported','Verified']),
+        ]);
+        const readyIds=new Set([...(doneSamples||[]).map(s=>s.patient_id),...(doneRad||[]).map(r=>r.patient_id)]);
+        resultsReady=queuePts.filter(p=>readyIds.has(p.id));
+      }
+    }
+
+    _notifState={crits,unpaid,pendingAdm,lowStock,deferredDue,resultsReady};
+    const total=crits.length+unpaid.length+pendingAdm.length+lowStock.length+deferredDue.length+resultsReady.length;
     const countEl=document.getElementById('notif-bell-count');
     if(countEl){ countEl.style.display=total>0?'block':'none'; countEl.textContent=total>99?'99+':total; }
     renderNotifList();
@@ -7061,12 +7081,18 @@ async function refreshNotifications(){
 }
 function renderNotifList(){
   const list=document.getElementById('notif-list'); if(!list) return;
-  const {crits,unpaid,pendingAdm,lowStock,deferredDue}=_notifState;
-  if(!crits.length && !unpaid.length && !pendingAdm.length && !lowStock.length && !(deferredDue&&deferredDue.length)){
+  const {crits,unpaid,pendingAdm,lowStock,deferredDue,resultsReady}=_notifState;
+  if(!crits.length && !unpaid.length && !pendingAdm.length && !lowStock.length && !(deferredDue&&deferredDue.length) && !(resultsReady&&resultsReady.length)){
     list.innerHTML='<div style="padding:16px;text-align:center;color:var(--slate);font-size:.78rem">✅ Nothing needs attention</div>';
     return;
   }
   let html='';
+  if(resultsReady&&resultsReady.length){
+    html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;color:#166534;background:#f0fdf4">\ud83d\udd14 Results Ready ('+resultsReady.length+')</div>';
+    html+=resultsReady.map(p=>'<div onclick="notifJumpToPatientResults(\''+p.id+'\')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'">'+
+      '<div style="font-weight:700;font-size:.8rem">'+(p.name||fullName(p))+' <span style="font-weight:400;color:var(--slate);font-size:.68rem">'+(p.mrn||p.lab_no||'')+'</span></div>'+
+      '<div style="font-size:.72rem;color:#166534">Lab/Radiology result ready for review</div></div>').join('');
+  }
   if(deferredDue&&deferredDue.length){
     html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;color:#b91c1c;background:#fff1f2">\u26a0 Deferred Payments Now Due ('+deferredDue.length+')</div>';
     html+=deferredDue.map(d=>{
@@ -7142,6 +7168,21 @@ async function notifJumpToDeferredPayment(patientId){
   try{
     const {data}=await sb.from('invoices').select('id').eq('patient_id',patientId).in('payment_status',['unpaid','insurance_pending']).order('created_at',{ascending:false}).limit(1).maybeSingle();
     if(data?.id) setTimeout(()=>editInvoice(data.id),250);
+  }catch(e){}
+}
+async function notifJumpToPatientResults(patientId){
+  closeNotifPanel();
+  goPage('consultation');
+  if(!sb||!patientId) return;
+  try{
+    const {data}=await sb.from('patients').select('*').eq('id',patientId).single();
+    if(data) setTimeout(()=>{
+      selectDocPatient(data);
+      // Land straight on the Orders tab, where View Result/View Report live,
+      // rather than the default Notes tab — this IS the click-through.
+      const ordersBtn=[...document.querySelectorAll('#doc-tabs .tab')].find(b=>/orders/i.test(b.textContent||''));
+      switchDocTab('orders',ordersBtn||null);
+    },250);
   }catch(e){}
 }
 
@@ -7814,14 +7855,25 @@ async function loadDoctorQueue() {
     }
     const {data} = await q;
     if(!data?.length){body.innerHTML='<div class="empty-state"><div class="empty-icon">🩺</div><div class="empty-title">No patients</div></div>';return;}
+    // "Result Ready" badge — same readiness signal as the notification
+    // bell's resultsReady category, batched here for every queue card at
+    // once rather than a query per card.
+    const ids=data.map(p=>p.id);
+    const [{data:doneSamples},{data:doneRad}]=await Promise.all([
+      sb.from('sample_records').select('patient_id').in('patient_id',ids).in('status',['Completed','Released']),
+      sb.from('radiology_requests').select('patient_id').in('patient_id',ids).in('status',['Reported','Verified']),
+    ]);
+    const readyIds=new Set([...(doneSamples||[]).map(s=>s.patient_id),...(doneRad||[]).map(r=>r.patient_id)]);
     body.innerHTML = data.map(p => {
       const unpaid=p.payment_status==='unpaid'||p.payment_status==='insurance_pending';
+      const ready=readyIds.has(p.id);
       return '<div onclick="selectDocPatient('+JSON.stringify(p).replace(/"/g,'&quot;')+')" class="doc-queue-card'+(unpaid?' pay-unpaid':'')+
         '" style="padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;cursor:pointer;margin-bottom:6px;transition:all .12s"'+
         ' onmouseover="this.style.borderColor=\x27var(--teal)\x27;this.style.background=\x27var(--teal-lt)\x27"'+
         ' onmouseout="this.style.borderColor=\x27var(--border)\x27;this.style.background=\x27#fff\x27">'+
         '<div style="display:flex;align-items:center;justify-content:space-between;gap:6px">'+
         '<span style="font-weight:700;font-size:.84rem">'+(p.name||fullName(p))+'</span>'+
+        (ready?'<span class="bdg" style="background:#dcfce7;color:#166534" title="Lab/Radiology result ready for review">\ud83d\udd14 Result Ready</span>':'')+
         paymentTag(p.payment_status)+'</div>'+
         '<div style="font-size:.69rem;color:var(--slate);margin-top:3px">'+(p.mrn||'')+' · '+(p.age||'?')+(p.age_unit||'y')+'/'+(p.sex||'?')+' · '+(p.diagnosis||'—')+'</div>'+
         '<div style="font-size:.68rem;margin-top:2px;color:var(--teal);font-weight:600">'+(p.visit_destination?'\u2192 '+p.visit_destination:'')+' '+(p.priority&&p.priority!=='Routine'?'· '+p.priority:'')+'</div></div>';
@@ -8384,44 +8436,78 @@ async function _submitOtherOrder() {
 //      row (see submitRegistration()/_submitRadOrder()/_doSubmitRadRequest());
 //      sourcing from there instead of doctor_orders avoids a doctor-placed
 //      study ever being listed twice.
+// Resolves a lab test name (order_detail, e.g. "CBC") to the full dept
+// key printResultByDept()/the fns/dp maps there use ("haematology" etc.),
+// reusing DEPT_META's own keyword lists rather than a second hardcoded
+// test->department table — same matching approach loadWorklist()'s dept
+// filter already uses.
+const DEPT_SHORT_TO_FULL={hem:'haematology',chem:'chemistry',sero:'serology',immuno:'immunology',micro:'microbiology',pcr:'pcr',histo:'histopathology',cyto:'cytology'};
+function resolveDeptFullNameForTest(testName){
+  const t=(testName||'').toLowerCase();
+  for(const shortKey of Object.keys(DEPT_META)){
+    const kws=DEPT_META[shortKey].keywords||[];
+    if(kws.some(k=>t.includes(String(k).toLowerCase()))) return DEPT_SHORT_TO_FULL[shortKey]||null;
+  }
+  return null;
+}
 async function loadActiveOrders() {
   const el=document.getElementById('active-orders-list');
   if(!el||!_docPt?.id||!sb) return;
   try {
-    const [ordersRes,radRes,ptRes]=await Promise.all([
+    const [ordersRes,radRes,ptRes,sampleRes]=await Promise.all([
       sb.from('doctor_orders').select('*').eq('patient_id',_docPt.id).neq('status','Cancelled').order('ordered_at',{ascending:false}).limit(20),
-      sb.from('radiology_requests').select('imaging_type,urgency,status,requesting_doctor,created_at,payment_deferred,payment_deferred_by_name').eq('patient_id',_docPt.id).order('created_at',{ascending:false}).limit(20),
+      sb.from('radiology_requests').select('id,imaging_type,urgency,status,requesting_doctor,created_at,payment_deferred,payment_deferred_by_name').eq('patient_id',_docPt.id).order('created_at',{ascending:false}).limit(20),
       sb.from('patients').select('tests_requested,created_at').eq('id',_docPt.id).maybeSingle(),
+      sb.from('sample_records').select('status').eq('patient_id',_docPt.id).maybeSingle(),
     ]);
     const allDoctorOrders=ordersRes.data||[];
+    // A specific test's own result can't be checked individually (results_*
+    // tables are one row per patient covering every test in that
+    // department, not one row per ordered test) — sample_records.status
+    // reaching Completed/Released is the same granularity the rest of the
+    // app already treats as "this patient's lab work for this visit is
+    // ready", so View Result uses that as its readiness signal too.
+    const labResultsReady=['Completed','Released'].includes(sampleRes.data?.status);
     const nonRadOrders=allDoctorOrders.filter(o=>o.order_type!=='Radiology').map(o=>({
       order_type:o.order_type, order_detail:o.order_detail, status:o.status, ordered_at:o.ordered_at,
       orderedByLabel:o.ordered_by||'—', payment_deferred:o.payment_deferred, payment_deferred_by_name:o.payment_deferred_by_name,
       id:o.id, cancellable:true,
+      canView:o.order_type==='Lab'&&labResultsReady,
     }));
     const labOrderedDetails=new Set(allDoctorOrders.filter(o=>o.order_type==='Lab').map(o=>o.order_detail));
     const regRows=((ptRes.data?.tests_requested)||[]).filter(t=>!labOrderedDetails.has(t)).map(t=>({
-      order_type:'Lab', order_detail:t, status:'Pending', ordered_at:ptRes.data?.created_at,
-      orderedByLabel:'📋 Reception (at Registration)', id:null, cancellable:false,
+      order_type:'Lab', order_detail:t, status:labResultsReady?'Completed':'Pending', ordered_at:ptRes.data?.created_at,
+      orderedByLabel:'📋 Reception (at Registration)', id:null, cancellable:false, canView:labResultsReady,
     }));
     const radRows=(radRes.data||[]).map(r=>({
       order_type:'Radiology', order_detail:r.imaging_type||'—', status:r.status, ordered_at:r.created_at,
       orderedByLabel:r.requesting_doctor?('Dr. '+r.requesting_doctor):'📋 Reception (at Registration)',
       payment_deferred:r.payment_deferred, payment_deferred_by_name:r.payment_deferred_by_name,
       id:null, cancellable:false, // cancel via the Radiology module itself, not this generic order list
+      canView:r.status==='Reported'||r.status==='Verified', radRequestId:r.id,
     }));
     const merged=[...nonRadOrders,...regRows,...radRows].sort((a,b)=>new Date(b.ordered_at||0)-new Date(a.ordered_at||0));
     if(!merged.length){el.innerHTML='<div style="font-size:.78rem;color:var(--slate);padding:8px 0">No active orders</div>';return;}
     const tc={Lab:'#dbeafe',Radiology:'#ede9fe',Nursing:'#dcfce7',Diet:'#fef9c3',Physio:'#fce7f3',Other:'#f3f4f6'};
-    el.innerHTML=merged.map(o=>'<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)">'+
+    el.innerHTML=merged.map(o=>{
+      let viewBtn='';
+      if(o.canView&&o.order_type==='Lab'){
+        const dept=resolveDeptFullNameForTest(o.order_detail);
+        if(dept) viewBtn='<button class="btn btn-s btn-xs" onclick="printResultByDept(\x27'+_docPt.id+'\x27,\x27'+dept+'\x27)">\ud83d\udc41 View Result</button>';
+      } else if(o.canView&&o.order_type==='Radiology'&&o.radRequestId){
+        viewBtn='<button class="btn btn-s btn-xs" onclick="printRadReportById(\x27'+o.radRequestId+'\x27)">\ud83d\udc41 View Report</button>';
+      }
+      return '<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)">'+
       '<span style="background:'+(tc[o.order_type]||'#f3f4f6')+';padding:2px 8px;border-radius:20px;font-size:.68rem;font-weight:700;white-space:nowrap">'+o.order_type+'</span>'+
       '<span style="flex:1;font-size:.78rem">'+escapeHtml(o.order_detail||'')+'</span>'+
       '<span style="font-size:.68rem;color:var(--slate);white-space:nowrap" title="Ordered by">'+escapeHtml(o.orderedByLabel||'—')+'</span>'+
       (o.payment_deferred?'<span class="bdg" style="background:#fef2f2;color:#b91c1c;border:1.5px solid #fca5a5;white-space:nowrap" title="Granted by '+escapeHtml(o.payment_deferred_by_name||'')+'">\u26a0 Payment Deferred \u2014 STAT</span>':'')+
       '<span style="font-size:.68rem;color:var(--slate);white-space:nowrap">'+fmtDT(o.ordered_at)+'</span>'+
       statusBadge(o.status)+
+      viewBtn+
       (o.cancellable?'<button class="btn btn-r btn-xs" onclick="cancelOrder(\x27'+o.id+'\x27)">\u2715</button>':'')+
-      '</div>').join('');
+      '</div>';
+    }).join('');
   } catch(e){}
 }
 
