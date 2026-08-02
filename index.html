@@ -166,6 +166,24 @@ html[dir="rtl"] body{direction:rtl;}
 .bdg-b{background:var(--blue-lt);color:var(--blue);}
 .bdg-sl{background:#f1f5f9;color:var(--slate);}
 .bdg-t{background:var(--teal-lt);color:var(--teal);}
+/* BED GRID (Bed Management / IPD) */
+.bed-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:9px;}
+.bed-tile{position:relative;border-radius:9px;padding:9px 10px 8px;cursor:pointer;border:1.5px solid transparent;transition:transform .12s,box-shadow .12s;min-height:76px;}
+.bed-tile:hover{transform:translateY(-2px);box-shadow:0 4px 10px rgba(0,0,0,.1);}
+.bed-tile-menu{position:absolute;top:3px;right:5px;font-size:.9rem;line-height:1;padding:2px 4px;border-radius:5px;color:inherit;opacity:.55;}
+.bed-tile-menu:hover{opacity:1;background:rgba(0,0,0,.06);}
+.bed-tile-loc{font-size:.64rem;font-weight:700;text-transform:uppercase;letter-spacing:.02em;opacity:.75;}
+.bed-tile-num{font-size:.86rem;font-weight:800;margin:2px 0 3px;}
+.bed-tile-info{font-size:.66rem;line-height:1.35;}
+.bed-av{background:var(--green-lt);color:var(--green);}
+.bed-oc{background:var(--red-lt);color:var(--red);}
+.bed-cl{background:var(--amber-lt);color:var(--amber);}
+.bed-dp{background:var(--blue-lt);color:var(--blue);}
+.bed-dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:4px;vertical-align:middle;}
+.bed-dot.bed-av{background:var(--green);}
+.bed-dot.bed-oc{background:var(--red);}
+.bed-dot.bed-cl{background:var(--amber);}
+.bed-dot.bed-dp{background:var(--blue);}
 /* TOGGLE SWITCH */
 .tgl-wrap{display:inline-flex;align-items:center;gap:9px;cursor:pointer;user-select:none;}
 .tgl-wrap input{display:none;}
@@ -688,6 +706,22 @@ html[dir="rtl"] body{direction:rtl;}
 </div>
 
 <div class="page" id="page-admission">
+  <div class="card" style="margin-bottom:14px">
+    <div class="card-hd">
+      <span class="card-title">🛏 Ward Bed Grid</span>
+      <span style="font-size:.68rem;color:var(--slate)">Tap an available bed to admit · tap an occupied bed to open its chart</span>
+    </div>
+    <div class="card-body">
+      <div class="tabs" id="bed-grid-ward-tabs" style="margin-bottom:10px"></div>
+      <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:.7rem;color:var(--slate);margin-bottom:10px">
+        <span><span class="bed-dot bed-av"></span>Available</span>
+        <span><span class="bed-dot bed-oc"></span>Occupied</span>
+        <span><span class="bed-dot bed-cl"></span>Cleaning / Maintenance</span>
+        <span><span class="bed-dot bed-dp"></span>Discharge Pending</span>
+      </div>
+      <div id="bed-grid-container" class="bed-grid"><div class="spin-center"><div class="spinner"></div>Loading…</div></div>
+    </div>
+  </div>
   <div class="split2">
     <div>
       <div class="card">
@@ -6682,7 +6716,7 @@ function goPage(p) {
   const run = fn => { try{ const r=fn(); if(r&&r.catch) r.catch(e=>console.warn(e)); }catch(e){console.warn(e);} };
   const td=new Date().toISOString().slice(0,10), td16=new Date().toISOString().slice(0,16);
   if(p==='dashboard') run(loadDashboard);
-  else if(p==='admission'){ run(loadAdmissions); run(loadAdmissionStats); run(loadDoctorDropdowns); run(loadBedsForWard); generateAdmNo(); setD('adm-date',td16); }
+  else if(p==='admission'){ run(loadAdmissions); run(loadAdmissionStats); run(loadDoctorDropdowns); run(loadBedsForWard); run(loadBedGrid); generateAdmNo(); setD('adm-date',td16); }
   else if(p==='theatre'){ run(loadOTSchedule); run(loadSurgeonDropdown); setD('ot-date',td); setD('ot-sched-date',td); }
   else if(p==='nursing'){ run(loadNursingQueue); setD('ho-date',td); setEl('vs-by',currentProfile?.full_name||''); }
   else if(p==='fluid-chart'){ setD('fc-date',td); run(loadFluidChart); }
@@ -7480,6 +7514,113 @@ async function loadAdmissionStats() {
     const {data:beds}=await sb.from('beds').select('status');
     setText('as-beds',(beds||[]).filter(b=>b.status==='Available').length);
   } catch(e){}
+}
+// ── WARD BED GRID (Bed Management / IPD overhaul, Phase 2) ────────────
+// A visual layer on top of the SAME beds/admissions data the Admit
+// Patient form and Admissions list already use — it does not replace
+// submitAdmission()/saveDischarge() or introduce a second source of
+// truth. Tapping an Available tile pre-fills the existing form below;
+// tapping an Occupied/Discharge Pending tile opens the existing
+// openAdmDetail() drawer (Phase 3 extends that same drawer).
+let _bedGridData=[];
+let _bedGridWard='all';
+const BED_STATUS_CLASS={Available:'bed-av',Occupied:'bed-oc',Cleaning:'bed-cl',Maintenance:'bed-cl','Discharge Pending':'bed-dp'};
+async function loadBedGrid() {
+  const grid=document.getElementById('bed-grid-container'); if(!grid||!sb) return;
+  try {
+    const [{data:beds,error:bedsErr},{data:adms}]=await Promise.all([
+      sb.from('beds').select('*').order('ward').order('room').order('bed_number'),
+      sb.from('admissions').select('id,admission_no,admitting_doctor,admission_date,patients(name,mrn)').eq('status','Active'),
+    ]);
+    if(bedsErr) throw bedsErr;
+    const admById={}; (adms||[]).forEach(a=>admById[a.id]=a);
+    _bedGridData=(beds||[]).map(b=>({...b,_admission:b.current_admission_id?admById[b.current_admission_id]:null}));
+    renderBedGridWardTabs(); renderBedGrid();
+  } catch(e){ grid.innerHTML='<div style="padding:14px;color:var(--red);font-size:.78rem">'+e.message+'</div>'; }
+}
+function renderBedGridWardTabs() {
+  const tabs=document.getElementById('bed-grid-ward-tabs'); if(!tabs) return;
+  // Pulled from the actual beds configured in Settings — never a hardcoded
+  // ward list that could drift out of sync with what's really set up.
+  const wards=[...new Set(_bedGridData.map(b=>b.ward).filter(Boolean))].sort();
+  tabs.innerHTML='<button class="tab'+(_bedGridWard==='all'?' active':'')+'" onclick="setBedGridWard(\x27all\x27,this)">All Wards</button>'+
+    wards.map(w=>'<button class="tab'+(_bedGridWard===w?' active':'')+'" onclick="setBedGridWard(\x27'+w+'\x27,this)">'+w+'</button>').join('');
+}
+function setBedGridWard(w,btn) {
+  _bedGridWard=w;
+  document.querySelectorAll('#bed-grid-ward-tabs .tab').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  renderBedGrid();
+}
+function renderBedGrid() {
+  const grid=document.getElementById('bed-grid-container'); if(!grid) return;
+  const beds=_bedGridWard==='all'?_bedGridData:_bedGridData.filter(b=>b.ward===_bedGridWard);
+  if(!beds.length){ grid.innerHTML='<div class="empty-state"><div class="empty-icon">🛏</div><div class="empty-title">No beds configured'+(_bedGridWard==='all'?'':' for '+_bedGridWard)+'</div></div>'; return; }
+  grid.innerHTML=beds.map(b=>{
+    const cls=BED_STATUS_CLASS[b.status]||'bed-av';
+    const adm=b._admission;
+    let info;
+    if(b.status==='Occupied'||b.status==='Discharge Pending'){
+      info=adm?('<strong>'+(adm.patients?.name||'—')+'</strong><br>'+(adm.patients?.mrn||'')+' · '+(adm.admitting_doctor||'—')+'<br>'+fmtDate(adm.admission_date)):'<span style="opacity:.7">Chart unavailable</span>';
+    } else { info=b.status; }
+    return '<div class="bed-tile '+cls+'" onclick="bedTileClick(\x27'+b.id+'\x27)">'+
+      '<div class="bed-tile-menu" onclick="event.stopPropagation();openBedStatusMenu(event,\x27'+b.id+'\x27)">⋮</div>'+
+      '<div class="bed-tile-loc">'+b.ward+' · '+b.room+'</div>'+
+      '<div class="bed-tile-num">Bed '+b.bed_number+'</div>'+
+      '<div class="bed-tile-info">'+info+'</div>'+
+    '</div>';
+  }).join('');
+}
+function bedTileClick(bedId) {
+  const b=_bedGridData.find(x=>x.id===bedId); if(!b) return;
+  if(b.status==='Available'){ prefillAdmitForm(b); return; }
+  if(b.status==='Occupied'||b.status==='Discharge Pending'){
+    if(b._admission?.id) openAdmDetail(b._admission.id);
+    else toast('No active admission record linked to this bed','warn');
+    return;
+  }
+  toast('This bed is '+b.status.toLowerCase()+' — unavailable for admission','warn');
+}
+async function prefillAdmitForm(b) {
+  const wardSel=document.getElementById('adm-ward'); if(wardSel) wardSel.value=b.ward;
+  await loadBedsForWard();
+  const roomSel=document.getElementById('adm-room'); if(roomSel) roomSel.value=b.room;
+  await loadBedsForRoom();
+  const bedSel=document.getElementById('adm-bed'); if(bedSel) bedSel.value=b.bed_number;
+  document.getElementById('adm-search')?.scrollIntoView({behavior:'smooth',block:'center'});
+  document.getElementById('adm-search')?.focus();
+  toast('Bed '+b.ward+' / '+b.room+' / '+b.bed_number+' selected — search and select a patient below to admit','ok');
+}
+// Small inline popover for manual status changes (Cleaning/Maintenance/
+// Discharge Pending) — deliberately kept separate from the tile's main
+// tap target so a normal tap never accidentally changes bed status.
+function openBedStatusMenu(evt,bedId) {
+  closeBedStatusMenu();
+  const b=_bedGridData.find(x=>x.id===bedId); if(!b) return;
+  const opts=[];
+  if(b.status==='Available'){ opts.push(['Cleaning','🧹 Mark Cleaning'],['Maintenance','🔧 Mark Maintenance']); }
+  else if(b.status==='Cleaning'||b.status==='Maintenance'){ opts.push(['Available','✅ Mark Available']); }
+  else if(b.status==='Occupied'){ opts.push(['Discharge Pending','🚪 Mark Discharge Pending']); }
+  else if(b.status==='Discharge Pending'){ opts.push(['Occupied','↩ Back to Occupied']); }
+  if(!opts.length) return;
+  const menu=document.createElement('div');
+  menu.id='bed-status-menu';
+  menu.style.cssText='position:fixed;z-index:900;background:#fff;border:1.5px solid var(--border);border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.15);padding:4px;min-width:170px;font-size:.76rem;';
+  menu.innerHTML=opts.map(([val,label])=>'<div style="padding:7px 10px;cursor:pointer;border-radius:5px" onmouseover="this.style.background=\x27#f0f9ff\x27" onmouseout="this.style.background=\x27\x27" onclick="setBedStatus(\x27'+bedId+'\x27,\x27'+val+'\x27)">'+label+'</div>').join('');
+  document.body.appendChild(menu);
+  const r=evt.target.getBoundingClientRect();
+  menu.style.top=(r.bottom+4)+'px'; menu.style.left=Math.min(r.left,window.innerWidth-190)+'px';
+  setTimeout(()=>document.addEventListener('click',closeBedStatusMenu,{once:true}),0);
+}
+function closeBedStatusMenu() { document.getElementById('bed-status-menu')?.remove(); }
+async function setBedStatus(bedId,newStatus) {
+  closeBedStatusMenu();
+  if(!sb){ toast('Not connected','err'); return; }
+  try {
+    await sb.from('beds').update({status:newStatus}).eq('id',bedId);
+    toast('Bed status updated to '+newStatus,'ok');
+    loadBedGrid(); loadAdmissionStats();
+  } catch(e){ toast(e.message,'err'); }
 }
 async function loadDoctorDropdowns() {
   if(!sb) return;
