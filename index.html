@@ -1124,7 +1124,7 @@ html[dir="rtl"] body{direction:rtl;}
         <div style="overflow-x:auto;padding:8px">
           <table class="tbl" id="mar-table">
             <thead>
-              <tr><th>Drug</th><th>Dose</th><th>Route</th><th>Frequency</th><th>Time Due</th><th>Status</th><th>Given By</th><th></th></tr>
+              <tr><th>Drug</th><th>Dose</th><th>Route</th><th>Frequency</th><th>Time Due</th><th>Status</th><th>Reason (Omit/Hold/Refused)</th><th>High-Alert Verify</th><th>Given By</th><th></th></tr>
             </thead>
             <tbody id="mar-body">
               <tr><td colspan="8" class="empty-state">Select a patient or add medications from doctor orders</td></tr>
@@ -1141,13 +1141,17 @@ html[dir="rtl"] body{direction:rtl;}
         <div class="card-body" style="font-size:.78rem">
           <div style="display:flex;flex-direction:column;gap:6px">
             <div style="display:flex;align-items:center;gap:10px"><span style="background:#dcfce7;color:#166534;padding:2px 10px;border-radius:4px;font-weight:700;min-width:60px;text-align:center">Given</span><span>Medication administered on time</span></div>
-            <div style="display:flex;align-items:center;gap:10px"><span style="background:#fee2e2;color:#b91c1c;padding:2px 10px;border-radius:4px;font-weight:700;min-width:60px;text-align:center">Omit</span><span>Dose omitted — document reason</span></div>
-            <div style="display:flex;align-items:center;gap:10px"><span style="background:#fef9c3;color:#92400e;padding:2px 10px;border-radius:4px;font-weight:700;min-width:60px;text-align:center">Hold</span><span>On hold — pending review</span></div>
+            <div style="display:flex;align-items:center;gap:10px"><span style="background:#fde68a;color:#92400e;padding:2px 10px;border-radius:4px;font-weight:700;min-width:60px;text-align:center">Refused</span><span>Patient declined — reason required</span></div>
+            <div style="display:flex;align-items:center;gap:10px"><span style="background:#fee2e2;color:#b91c1c;padding:2px 10px;border-radius:4px;font-weight:700;min-width:60px;text-align:center">Omit</span><span>Dose omitted for a clinical/administrative reason — reason required</span></div>
+            <div style="display:flex;align-items:center;gap:10px"><span style="background:#fef9c3;color:#92400e;padding:2px 10px;border-radius:4px;font-weight:700;min-width:60px;text-align:center">Hold</span><span>On hold — pending review — reason required</span></div>
             <div style="display:flex;align-items:center;gap:10px"><span style="background:#dbeafe;color:#1d4ed8;padding:2px 10px;border-radius:4px;font-weight:700;min-width:60px;text-align:center">PRN</span><span>Given as needed (document indication)</span></div>
             <div style="display:flex;align-items:center;gap:10px"><span style="background:#f3f4f6;color:#374151;padding:2px 10px;border-radius:4px;font-weight:700;min-width:60px;text-align:center">Due</span><span>Scheduled — not yet given</span></div>
           </div>
           <div style="margin-top:14px;padding:10px 12px;background:#fffbeb;border-radius:8px;border:1.5px solid #fde68a;font-size:.74rem;color:#92400e;line-height:1.6">
             ⚠️ <strong>ISO 15189 / CAP:</strong> Always verify patient identity with two identifiers before administering. Document each administration immediately. Never pre-sign the MAR.
+          </div>
+          <div style="margin-top:8px;padding:10px 12px;background:#fee2e2;border-radius:8px;border:1.5px solid #fca5a5;font-size:.74rem;color:#b91c1c;line-height:1.6">
+            🚨 <strong>High-alert medications</strong> (insulin, heparin, warfarin, opioids, concentrated electrolytes, etc.) cannot be marked Given without a second staff member's independent confirmation — see the Verify column.
           </div>
         </div>
       </div>
@@ -1295,6 +1299,21 @@ html[dir="rtl"] body{direction:rtl;}
             <div class="fg"><label class="fl">Receiving</label><input class="fc" id="ho-to" placeholder="Staff name / ID"></div>
           </div>
           <div class="fg"><label class="fl">Patient Count</label><input class="fc" type="number" id="ho-count" placeholder="Total patients in ward" min="0"></div>
+          <div style="background:#f0f9ff;border-radius:8px;padding:10px 12px;margin-bottom:12px">
+            <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:#0369a1;margin-bottom:8px">🗣️ SBAR Structured Handoff</div>
+            <div class="fg"><label class="fl">Situation — what is happening right now</label>
+              <textarea class="fc" id="ho-situation" rows="2" placeholder="Current status/reason this handoff matters…"></textarea>
+            </div>
+            <div class="fg"><label class="fl">Background — relevant clinical/admission history</label>
+              <textarea class="fc" id="ho-background" rows="2" placeholder="Diagnosis, admission reason, relevant history…"></textarea>
+            </div>
+            <div class="fg"><label class="fl">Assessment — current clinical assessment</label>
+              <textarea class="fc" id="ho-assessment" rows="2" placeholder="Vitals trend, clinical impression, concerns…"></textarea>
+            </div>
+            <div class="fg"><label class="fl">Recommendation — what the receiving shift should do</label>
+              <textarea class="fc" id="ho-recommendation" rows="2" placeholder="Actions, monitoring, escalation thresholds…"></textarea>
+            </div>
+          </div>
           <div class="fg"><label class="fl">Critical / High-dependency Patients</label>
             <textarea class="fc" id="ho-critical" rows="2" placeholder="List critical patients and key concerns…"></textarea>
           </div>
@@ -5908,6 +5927,24 @@ html[dir="rtl"] body{direction:rtl;}
   </div>
 </div>
 
+<!-- High-alert medication second-staff double-verification (Nursing Phase 3) -->
+<div class="ov" id="mar-verify-ov">
+  <div class="mo mo-sm">
+    <div class="mo-hd"><h3>🚨 High-Alert Medication — Second Staff Verification</h3><button class="mo-x" onclick="closeOv('mar-verify-ov')">✕</button></div>
+    <div class="mo-b">
+      <div id="mar-verify-info" style="background:var(--red-lt);border:1.5px solid var(--red);border-radius:8px;padding:12px;margin-bottom:12px;font-size:.82rem"></div>
+      <p style="font-size:.76rem;color:var(--slate);margin-bottom:10px">A second staff member must independently confirm this administration. They must sign in with their own credentials — not the same login administering the dose.</p>
+      <div class="fg"><label class="fl">Second Staff Email</label><input class="fc" id="mar-verify-email" placeholder="email@hospital.sd"></div>
+      <div class="fg"><label class="fl">Password</label><input class="fc" type="password" id="mar-verify-pass"></div>
+      <div id="mar-verify-status" style="font-size:.76rem;margin-top:4px"></div>
+    </div>
+    <div class="mo-ft">
+      <button class="btn btn-s" onclick="closeOv('mar-verify-ov')">Cancel</button>
+      <button class="btn btn-r" onclick="confirmMarVerify()">✅ Confirm Verification</button>
+    </div>
+  </div>
+</div>
+
 <div class="ov" id="bb-issue-ov">
   <div class="mo mo-lg">
     <div class="mo-hd"><h3>🩸 Issue Blood Unit — Two-Person Verification</h3><button class="mo-x" onclick="closeOv('bb-issue-ov')">✕</button></div>
@@ -8871,10 +8908,17 @@ async function saveHandover() {
       patient_count:parseInt(g('ho-count'),10)||null,
       critical_patients:g('ho-critical')||null,
       pending_tasks:g('ho-pending')||null,
+      // SBAR — genuinely structured (Situation/Background/Assessment/
+      // Recommendation), distinct fields rather than a single free-text
+      // block, per the Nursing Phase 3 spec.
+      situation:g('ho-situation')||null,
+      background:g('ho-background')||null,
+      assessment:g('ho-assessment')||null,
+      recommendation:g('ho-recommendation')||null,
       created_by:currentProfile?.id,
     });
     toast('✅ Handover saved','ok');
-    ['ho-notes','ho-critical','ho-pending','ho-count'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+    ['ho-notes','ho-critical','ho-pending','ho-count','ho-situation','ho-background','ho-assessment','ho-recommendation'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
   }
   catch(e){ toast(e.message,'err'); }
 }
@@ -12233,6 +12277,13 @@ async function loadHandoverNotes() {
             <div style="font-size:.78rem"><span style="color:var(--slate);font-weight:600">Handing Over:</span> ${h.handing_over||'—'}</div>
             <div style="font-size:.78rem"><span style="color:var(--slate);font-weight:600">Receiving:</span> ${h.receiving||'—'}</div>
           </div>
+          ${(h.situation||h.background||h.assessment||h.recommendation)?'<div style="background:#f0f9ff;border-radius:8px;padding:10px 12px;margin-bottom:10px">'+
+            '<div style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:#0369a1;margin-bottom:6px">SBAR</div>'+
+            (h.situation?'<div style="font-size:.78rem;margin-bottom:4px"><strong>S:</strong> '+h.situation+'</div>':'')+
+            (h.background?'<div style="font-size:.78rem;margin-bottom:4px"><strong>B:</strong> '+h.background+'</div>':'')+
+            (h.assessment?'<div style="font-size:.78rem;margin-bottom:4px"><strong>A:</strong> '+h.assessment+'</div>':'')+
+            (h.recommendation?'<div style="font-size:.78rem"><strong>R:</strong> '+h.recommendation+'</div>':'')+
+          '</div>':''}
           ${h.critical_patients?'<div style="margin-bottom:8px"><div style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:var(--red);margin-bottom:3px">Critical / High-Dependency Patients</div><div style="background:#fef2f2;border-radius:7px;padding:8px 10px;font-size:.8rem;line-height:1.6;white-space:pre-wrap">'+h.critical_patients+'</div></div>':''}
           ${h.pending_tasks?'<div style="margin-bottom:8px"><div style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:var(--blue);margin-bottom:3px">Pending Tasks / Outstanding Orders</div><div style="background:#eff6ff;border-radius:7px;padding:8px 10px;font-size:.8rem;line-height:1.6;white-space:pre-wrap">'+h.pending_tasks+'</div></div>':''}
           ${h.notes?'<div style="background:var(--bg);border-radius:7px;padding:10px 12px;font-size:.82rem;line-height:1.6;white-space:pre-wrap">'+h.notes+'</div>':'<div style="color:var(--slate);font-size:.8rem">No notes recorded.</div>'}
@@ -13062,44 +13113,130 @@ async function saveWoundAssessment() {
 }
 
 // MAR functions
+// High-alert drug list (Nursing Phase 3) — ISMP-style default set,
+// overridable via Settings-style localStorage (comma-separated list,
+// key 'high_alert_drugs_override'), same pattern as TEA_REFERENCE_DEFAULTS
+// override. isHighAlertDrug() is a case-insensitive substring match
+// against the row's drug-name field, since MAR drug names are free text.
+const HIGH_ALERT_DRUGS_DEFAULT=['Insulin','Heparin','Warfarin','Potassium Chloride','KCl','Morphine','Fentanyl','Pethidine','Digoxin','Chemotherapy','Methotrexate','Concentrated Sodium Chloride','Magnesium Sulfate'];
+function highAlertDrugList(){
+  const override=localStorage.getItem('high_alert_drugs_override');
+  if(override) return override.split(',').map(s=>s.trim()).filter(Boolean);
+  return HIGH_ALERT_DRUGS_DEFAULT;
+}
+function isHighAlertDrug(name){
+  if(!name) return false;
+  const n=name.toLowerCase();
+  return highAlertDrugList().some(d=>n.includes(d.toLowerCase()));
+}
 let _marRowCount = 0;
+window._marSecondVerify = {};
 function addMarRow() {
   const i = _marRowCount++;
   const tbody = document.getElementById('mar-body');
   if(!tbody) return;
   if(tbody.querySelector('td[colspan]')) tbody.innerHTML='';
   const tr = document.createElement('tr'); tr.id='mar-row-'+i;
-  tr.innerHTML=`<td><input class="fc" id="mar-drug-${i}" placeholder="Drug name" style="padding:3px 6px;min-width:120px"></td>`+
+  tr.innerHTML=`<td><input class="fc" id="mar-drug-${i}" placeholder="Drug name" style="padding:3px 6px;min-width:120px" oninput="updateMarRowUI(${i})"></td>`+
     `<td><input class="fc" id="mar-dose-${i}" placeholder="Dose" style="padding:3px 6px;width:80px"></td>`+
     `<td><select class="fc" id="mar-route-${i}" style="padding:3px 6px"><option>PO</option><option>IV</option><option>IM</option><option>SC</option><option>SL</option><option>INH</option><option>TOP</option></select></td>`+
     `<td><select class="fc" id="mar-freq-${i}" style="padding:3px 6px"><option>Once daily</option><option>Twice daily</option><option>Three times daily</option><option>Four times daily</option><option>Every 6h</option><option>Every 8h</option><option>Every 12h</option><option>PRN</option><option>Stat</option></select></td>`+
     `<td><input class="fc" type="time" id="mar-time-${i}" style="padding:3px 6px"></td>`+
-    `<td><select class="fc" id="mar-status-${i}" style="padding:3px 6px">
+    `<td><select class="fc" id="mar-status-${i}" style="padding:3px 6px" onchange="updateMarRowUI(${i})">
       <option value="Due">Due</option><option value="Given" style="color:#166534">Given ✅</option>
+      <option value="Refused" style="color:#92400e">Refused 🚫</option>
       <option value="Omit" style="color:#b91c1c">Omit ❌</option>
       <option value="Hold" style="color:#92400e">Hold ⏸</option>
       <option value="PRN" style="color:#1d4ed8">PRN</option></select></td>`+
+    `<td><input class="fc" id="mar-reason-${i}" placeholder="Required if Omit/Hold/Refused" style="padding:3px 6px;min-width:150px;display:none"></td>`+
+    `<td id="mar-verify-cell-${i}" style="min-width:110px"></td>`+
     `<td><input class="fc" id="mar-by-${i}" placeholder="Initials" style="padding:3px 6px;width:70px"></td>`+
     `<td><button class="btn btn-r btn-xs" onclick="this.closest('tr').remove()">✕</button></td>`;
   tbody.appendChild(tr);
+}
+// Shows/hides the Reason field (Omit/Hold/Refused) and the high-alert
+// second-verify control (Given + high-alert drug) as the drug name or
+// status changes.
+function updateMarRowUI(i){
+  const status=document.getElementById('mar-status-'+i)?.value;
+  const drug=document.getElementById('mar-drug-'+i)?.value;
+  const reasonEl=document.getElementById('mar-reason-'+i);
+  if(reasonEl) reasonEl.style.display=['Omit','Hold','Refused'].includes(status)?'':'none';
+  const verifyCell=document.getElementById('mar-verify-cell-'+i);
+  if(!verifyCell) return;
+  if(status==='Given'&&isHighAlertDrug(drug)){
+    const v=window._marSecondVerify[i];
+    verifyCell.innerHTML=v
+      ? '<span class="bdg bdg-g" style="font-size:.68rem">✓ '+escapeHtml(v.staffName)+'</span>'
+      : '<button class="btn btn-r btn-xs" onclick="openMarVerify('+i+')">🔒 Verify</button>';
+  } else {
+    verifyCell.innerHTML='';
+    delete window._marSecondVerify[i];
+  }
+}
+let _marVerifyRow=null;
+function openMarVerify(i){
+  _marVerifyRow=i;
+  const drug=document.getElementById('mar-drug-'+i)?.value||'—';
+  const dose=document.getElementById('mar-dose-'+i)?.value||'—';
+  const info=document.getElementById('mar-verify-info');
+  if(info) info.innerHTML='<strong>'+escapeHtml(drug)+'</strong> — '+escapeHtml(dose)+' — high-alert medication';
+  document.getElementById('mar-verify-email').value='';
+  document.getElementById('mar-verify-pass').value='';
+  const st=document.getElementById('mar-verify-status'); if(st) st.textContent='';
+  openOv('mar-verify-ov');
+}
+// Reuses verifyStaffCredentials() exactly as built for Blood Bank's
+// two-person issue verification — a throwaway Supabase client signs in
+// as the second staff member, reads their staff row, signs back out,
+// never touching the primary session. Same "must be a different person
+// than whoever is currently logged in" rule as Blood Bank's issue flow.
+async function confirmMarVerify(){
+  const i=_marVerifyRow; if(i==null) return;
+  const email=document.getElementById('mar-verify-email')?.value?.trim();
+  const pass=document.getElementById('mar-verify-pass')?.value;
+  const status=document.getElementById('mar-verify-status');
+  if(!email||!pass){ if(status){ status.style.color='var(--red)'; status.textContent='Enter the second staff member\'s email and password.'; } return; }
+  try{
+    const staff=await verifyStaffCredentials(email,pass);
+    if(!staff){ if(status){ status.style.color='var(--red)'; status.textContent='❌ Invalid credentials.'; } return; }
+    if(staff.id===currentProfile?.id){ if(status){ status.style.color='var(--red)'; status.textContent='❌ Must be a different staff member from the one administering.'; } return; }
+    window._marSecondVerify[i]={staffId:staff.id,staffName:staff.full_name};
+    closeOv('mar-verify-ov');
+    updateMarRowUI(i);
+    toast('✅ Second-staff verification confirmed','ok');
+  }catch(e){ if(status){ status.style.color='var(--red)'; status.textContent=e.message; } }
 }
 
 async function saveMAR() {
   const ptId = document.getElementById('vs-pt-id')?.value;
   if(!sb||!ptId){ toast('Load a patient first','err'); return; }
   const meds = [];
-  document.querySelectorAll('[id^="mar-row-"]').forEach(row=>{
+  const rows=[...document.querySelectorAll('[id^="mar-row-"]')];
+  for(const row of rows){
     const i=row.id.replace('mar-row-','');
+    const status=document.getElementById('mar-status-'+i)?.value;
+    const drug=document.getElementById('mar-drug-'+i)?.value;
+    const reason=document.getElementById('mar-reason-'+i)?.value?.trim();
+    // No silent Omit/Hold/Refused — a reason is mandatory.
+    if(['Omit','Hold','Refused'].includes(status)&&!reason){
+      toast('Reason required for '+status+' — '+(drug||'this row'),'err'); return;
+    }
+    // High-alert medications cannot be marked Given without an
+    // independently-confirmed second staff member.
+    if(status==='Given'&&isHighAlertDrug(drug)&&!window._marSecondVerify[i]){
+      toast('🚨 '+drug+' is high-alert — second staff verification required before it can be marked Given','err'); return;
+    }
     meds.push({
-      drug:document.getElementById('mar-drug-'+i)?.value,
-      dose:document.getElementById('mar-dose-'+i)?.value,
+      drug, dose:document.getElementById('mar-dose-'+i)?.value,
       route:document.getElementById('mar-route-'+i)?.value,
       frequency:document.getElementById('mar-freq-'+i)?.value,
       time:document.getElementById('mar-time-'+i)?.value,
-      status:document.getElementById('mar-status-'+i)?.value,
+      status, reason:reason||null,
+      second_verified_by:window._marSecondVerify[i]?.staffName||null,
       given_by:document.getElementById('mar-by-'+i)?.value,
     });
-  });
+  }
   try {
     await sb.from('vital_signs').insert({
       patient_id:ptId, recorded_at:new Date().toISOString(),
@@ -13115,19 +13252,20 @@ async function printMAR() {
   const rows = [...document.querySelectorAll('[id^="mar-row-"]')].map(row=>{
     const i=row.id.replace('mar-row-','');
     const status=document.getElementById('mar-status-'+i)?.value||'';
-    const color={Given:'#166534',Omit:'#b91c1c',Hold:'#92400e',PRN:'#1d4ed8',Due:'#374151'}[status]||'';
+    const color={Given:'#166534',Refused:'#92400e',Omit:'#b91c1c',Hold:'#92400e',PRN:'#1d4ed8',Due:'#374151'}[status]||'';
     return `<tr><td>${document.getElementById('mar-drug-'+i)?.value||'—'}</td>`+
       `<td>${document.getElementById('mar-dose-'+i)?.value||'—'}</td>`+
       `<td>${document.getElementById('mar-route-'+i)?.value||'—'}</td>`+
       `<td>${document.getElementById('mar-freq-'+i)?.value||'—'}</td>`+
       `<td>${document.getElementById('mar-time-'+i)?.value||'—'}</td>`+
       `<td style="font-weight:700;color:${color}">${status}</td>`+
+      `<td>${document.getElementById('mar-reason-'+i)?.value||'—'}</td>`+
       `<td>${document.getElementById('mar-by-'+i)?.value||'—'}</td></tr>`;
   }).join('');
   const html=printHeader('Medication Administration Record (MAR)')+
     `<div style="background:#f1f5f9;padding:10px;border-radius:8px;margin-bottom:12px;font-size:9pt"><strong>Patient:</strong> ${ptName} &nbsp;|&nbsp; <strong>Date:</strong> ${today()}</div>`+
     '<table style="width:100%;border-collapse:collapse"><thead><tr style="background:#1e3a5a;color:#fff">'+
-    '<th style="padding:5px 8px;font-size:8.5pt;text-align:left">Drug</th><th style="padding:5px 8px;font-size:8.5pt;text-align:left">Dose</th><th>Route</th><th>Frequency</th><th>Time</th><th>Status</th><th>Given By</th></tr></thead>'+
+    '<th style="padding:5px 8px;font-size:8.5pt;text-align:left">Drug</th><th style="padding:5px 8px;font-size:8.5pt;text-align:left">Dose</th><th>Route</th><th>Frequency</th><th>Time</th><th>Status</th><th>Reason</th><th>Given By</th></tr></thead>'+
     `<tbody>${rows}</tbody></table>`+
     '<div style="margin-top:16px;padding:10px 12px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;font-size:8pt;color:#92400e">'+
     'Never pre-sign. Each entry must be made at time of administration. (ISO 15189 / Hospital Policy)</div>'+
@@ -13312,6 +13450,11 @@ async function printHandoverNote() {
       <div><div style="font-size:8pt;color:#64748b">Handing Over</div><div>${g('ho-from')}</div></div>
       <div><div style="font-size:8pt;color:#64748b">Receiving</div><div>${g('ho-to')}</div></div>
     </div>`+
+    `<div style="margin-bottom:12px"><div style="font-size:8pt;font-weight:700;text-transform:uppercase;color:#0369a1;margin-bottom:4px">SBAR</div>`+
+    `<div style="font-size:9.5pt;margin-bottom:3px"><strong>Situation:</strong> ${g('ho-situation')||'—'}</div>`+
+    `<div style="font-size:9.5pt;margin-bottom:3px"><strong>Background:</strong> ${g('ho-background')||'—'}</div>`+
+    `<div style="font-size:9.5pt;margin-bottom:3px"><strong>Assessment:</strong> ${g('ho-assessment')||'—'}</div>`+
+    `<div style="font-size:9.5pt"><strong>Recommendation:</strong> ${g('ho-recommendation')||'—'}</div></div>`+
     `<div style="margin-bottom:12px"><div style="font-size:8pt;font-weight:700;text-transform:uppercase;color:#b91c1c;margin-bottom:4px">Critical / High-Dependency Patients</div><div style="font-size:9.5pt;white-space:pre-wrap">${g('ho-critical')||'None documented'}</div></div>`+
     `<div style="margin-bottom:12px"><div style="font-size:8pt;font-weight:700;text-transform:uppercase;color:#1d4ed8;margin-bottom:4px">Pending Tasks / Outstanding Orders</div><div style="font-size:9.5pt;white-space:pre-wrap">${g('ho-pending')||'None'}</div></div>`+
     `<div style="margin-bottom:12px"><div style="font-size:8pt;font-weight:700;text-transform:uppercase;color:#166534;margin-bottom:4px">General Notes</div><div style="font-size:9.5pt;white-space:pre-wrap">${g('ho-notes')||'—'}</div></div>`+
