@@ -5837,6 +5837,45 @@ html[dir="rtl"] body{direction:rtl;}
   </div>
 </div>
 
+<div class="ov" id="bb-issue-ov">
+  <div class="mo mo-lg">
+    <div class="mo-hd"><h3>🩸 Issue Blood Unit — Two-Person Verification</h3><button class="mo-x" onclick="closeOv('bb-issue-ov')">✕</button></div>
+    <div class="mo-b">
+      <input type="hidden" id="bb-issue-unit-id">
+      <div id="bb-issue-summary" style="background:var(--red-lt);border:1.5px solid var(--red);border-radius:8px;padding:12px;margin-bottom:14px;font-size:.82rem"></div>
+      <div style="background:var(--amber-lt);border:1px solid #fde68a;border-radius:8px;padding:10px 12px;font-size:.76rem;margin-bottom:14px">⚠️ Both confirmations below are MANDATORY and must be completed by two DIFFERENT staff members. Re-type the patient MRN and unit number exactly — this is a safety check, not a formality.</div>
+
+      <div id="bb-issue-step1" style="border:1.5px solid var(--teal2);border-radius:9px;padding:12px;margin-bottom:12px">
+        <div style="font-weight:700;margin-bottom:8px">1️⃣ Issuing Staff Confirmation — <span id="bb-issue-staff1-name"></span></div>
+        <div class="g2">
+          <div class="fg"><label class="fl">Re-type Patient MRN</label><input class="fc" id="bb-issue-s1-mrn"></div>
+          <div class="fg"><label class="fl">Re-type Unit Number</label><input class="fc" id="bb-issue-s1-unit"></div>
+        </div>
+        <button class="btn btn-p btn-sm" onclick="confirmIssueStep1()">✅ Confirm Issuing Identity</button>
+        <div id="bb-issue-step1-status" style="margin-top:6px;font-size:.78rem"></div>
+      </div>
+
+      <div id="bb-issue-step2" style="border:1.5px solid var(--teal2);border-radius:9px;padding:12px">
+        <div style="font-weight:700;margin-bottom:8px">2️⃣ Receiving Staff Confirmation — must be a different staff member</div>
+        <div class="g2">
+          <div class="fg"><label class="fl">Receiving Staff Email</label><input class="fc" id="bb-issue-s2-email"></div>
+          <div class="fg"><label class="fl">Receiving Staff Password</label><input class="fc" type="password" id="bb-issue-s2-pass"></div>
+        </div>
+        <div class="g2">
+          <div class="fg"><label class="fl">Re-type Patient MRN</label><input class="fc" id="bb-issue-s2-mrn"></div>
+          <div class="fg"><label class="fl">Re-type Unit Number</label><input class="fc" id="bb-issue-s2-unit"></div>
+        </div>
+        <button class="btn btn-p btn-sm" onclick="confirmIssueStep2()">✅ Confirm Receiving Identity</button>
+        <div id="bb-issue-step2-status" style="margin-top:6px;font-size:.78rem"></div>
+      </div>
+    </div>
+    <div class="mo-ft">
+      <button class="btn btn-s" onclick="closeOv('bb-issue-ov')">Cancel</button>
+      <button class="btn btn-r" id="bb-issue-final-btn" onclick="finalizeBloodIssue()" disabled>🩸 Issue Unit</button>
+    </div>
+  </div>
+</div>
+
 <div class="ov" id="ins-claim-ov">
   <div class="mo mo-lg">
     <div class="mo-hd"><h3>🏦 Insurance Claim Form</h3><button class="mo-x" onclick="closeOv('ins-claim-ov')">✕</button></div>
@@ -15831,7 +15870,9 @@ function renderBloodUnitTable(units) {
         '<td style="font-size:.75rem">'+fmtDate(u.collection_date)+'</td>'+
         '<td style="font-size:.75rem;color:'+exp.color+'">'+exp.emoji+' '+fmtDate(u.expiry_date)+(exp.days!=null?' — '+exp.label:'')+'</td>'+
         '<td>'+statusBadge(u.status)+'</td>'+
-        '<td><div class="acts"><button class="btn btn-s btn-xs" onclick="printBloodUnitLabel(\x27'+u.id+'\x27)">🏷 Label</button></div></td>'+
+        '<td><div class="acts"><button class="btn btn-s btn-xs" onclick="printBloodUnitLabel(\x27'+u.id+'\x27)">🏷 Label</button>'+
+          (u.status==='Crossmatched'?'<button class="btn btn-p btn-xs" onclick="openIssueUnit(\x27'+u.id+'\x27)">🩸 Issue</button>':'')+
+        '</div></td>'+
       '</tr>';
     }).join('')+
     '</tbody></table></div>';
@@ -16171,11 +16212,145 @@ async function renderBloodRequestCard(r) {
 async function crossmatchUnit(unitId,requestId) {
   if(!sb) return;
   try {
-    await sb.from('blood_units').update({status:'Crossmatched',request_id:requestId}).eq('id',unitId).eq('status','Available');
+    await sb.from('blood_units').update({status:'Crossmatched',request_id:requestId,crossmatched_by:currentProfile?.id,crossmatched_by_name:currentProfile?.full_name,crossmatched_at:new Date().toISOString()}).eq('id',unitId).eq('status','Available');
     await sb.from('blood_requests').update({status:'Crossmatched'}).eq('id',requestId);
     toast('✅ Unit crossmatched and reserved','ok');
     loadBloodRequests(); loadBloodUnits();
   } catch(e){ toast(e.message,'err'); }
+}
+
+// ── BLOOD BANK Phase 4: MANDATORY two-person verified issue workflow ──
+// Safety-critical — do not simplify. Two INDEPENDENT confirmations, each
+// re-typing the patient MRN and unit number (an actual read-back check,
+// not a name-only formality like the existing Critical Values
+// acknowledge — see migration_v2.27's header for why that wasn't reused
+// as-is). The second confirmer must authenticate with THEIR OWN
+// credentials via verifyStaffCredentials() and cannot be the same staff
+// member as the first confirmer — enforced client-side here AND at the
+// database level (blood_issue_log_two_person constraint).
+let _bbIssueCtx=null;
+async function openIssueUnit(unitId) {
+  if(!sb) return;
+  try {
+    const {data:unit,error}=await sb.from('blood_units').select('*,blood_requests(patient_id,request_no)').eq('id',unitId).single();
+    if(error) throw error;
+    let patient=null;
+    const patientId=unit.blood_requests?.patient_id;
+    if(patientId){ const {data}=await sb.from('patients').select('id,name,first_name,last_name,mrn').eq('id',patientId).maybeSingle(); patient=data; }
+    _bbIssueCtx={unit,patient,step1Done:false,step2Done:false,step1StaffId:null,step1StaffName:null,step2StaffId:null,step2StaffName:null};
+    document.getElementById('bb-issue-unit-id').value=unitId;
+    const summary=document.getElementById('bb-issue-summary');
+    if(summary) summary.innerHTML='<div><strong>Patient:</strong> '+escapeHtml(patient?.name||fullName(patient)||'—')+' ('+escapeHtml(patient?.mrn||'—')+')</div><div><strong>Unit:</strong> '+escapeHtml(unit.unit_no)+' — '+escapeHtml(unit.blood_group)+(unit.rh_factor==='Positive'?'+':'−')+' '+escapeHtml(unit.component_type)+'</div>';
+    const s1=document.getElementById('bb-issue-staff1-name'); if(s1) s1.textContent=currentProfile?.full_name||'—';
+    ['bb-issue-s1-mrn','bb-issue-s1-unit','bb-issue-s2-email','bb-issue-s2-pass','bb-issue-s2-mrn','bb-issue-s2-unit'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+    const st1=document.getElementById('bb-issue-step1-status'); if(st1) st1.textContent='';
+    const st2=document.getElementById('bb-issue-step2-status'); if(st2) st2.textContent='';
+    updateIssueFinalButton();
+    openOv('bb-issue-ov');
+  } catch(e){ toast(e.message,'err'); }
+}
+function confirmIssueStep1() {
+  if(!_bbIssueCtx) return;
+  const mrn=document.getElementById('bb-issue-s1-mrn')?.value?.trim();
+  const unitNo=document.getElementById('bb-issue-s1-unit')?.value?.trim();
+  const status=document.getElementById('bb-issue-step1-status');
+  if(mrn!==(_bbIssueCtx.patient?.mrn||'')||unitNo!==_bbIssueCtx.unit.unit_no){
+    if(status){ status.style.color='var(--red)'; status.textContent='❌ MRN or unit number does not match — re-check and try again.'; }
+    return;
+  }
+  _bbIssueCtx.step1Done=true;
+  _bbIssueCtx.step1StaffId=currentProfile?.id; _bbIssueCtx.step1StaffName=currentProfile?.full_name;
+  if(status){ status.style.color='var(--green)'; status.textContent='✅ Confirmed by '+(currentProfile?.full_name||'—')+' at '+fmtDT(new Date()); }
+  updateIssueFinalButton();
+}
+// Reuses the exact same "verify a specific staff member's credentials via
+// a throwaway Supabase client, then sign out, never disturbing the
+// current session" technique as requireOverride()/submitOverridePassword()
+// (migration_v2.12's Anti-Fraud Quick-PIN override) — but NOT restricted
+// to admins, since the second confirmer here is typically a nurse/doctor.
+async function verifyStaffCredentials(email,password) {
+  const url=localStorage.getItem('sb_url'), key=localStorage.getItem('sb_key');
+  if(!window.supabase||!url||!key) throw new Error('Not connected');
+  const verifyClient=window.supabase.createClient(url,key);
+  const {data:authData,error:authErr}=await verifyClient.auth.signInWithPassword({email,password});
+  if(authErr||!authData?.user){ await verifyClient.auth.signOut().catch(()=>{}); return null; }
+  const {data:staffRow}=await verifyClient.from('staff').select('id,role,full_name').eq('user_id',authData.user.id).maybeSingle();
+  await verifyClient.auth.signOut().catch(()=>{});
+  if(!staffRow) return null;
+  return {id:staffRow.id,full_name:staffRow.full_name,role:staffRow.role};
+}
+async function confirmIssueStep2() {
+  if(!_bbIssueCtx) return;
+  const email=document.getElementById('bb-issue-s2-email')?.value?.trim();
+  const pass=document.getElementById('bb-issue-s2-pass')?.value;
+  const mrn=document.getElementById('bb-issue-s2-mrn')?.value?.trim();
+  const unitNo=document.getElementById('bb-issue-s2-unit')?.value?.trim();
+  const status=document.getElementById('bb-issue-step2-status');
+  if(!email||!pass){ if(status){ status.style.color='var(--red)'; status.textContent='Enter the receiving staff’s email and password.'; } return; }
+  if(mrn!==(_bbIssueCtx.patient?.mrn||'')||unitNo!==_bbIssueCtx.unit.unit_no){
+    if(status){ status.style.color='var(--red)'; status.textContent='❌ MRN or unit number does not match — re-check and try again.'; }
+    return;
+  }
+  try {
+    const staff=await verifyStaffCredentials(email,pass);
+    if(!staff){ if(status){ status.style.color='var(--red)'; status.textContent='❌ Invalid credentials.'; } return; }
+    if(!_bbIssueCtx.step1Done||staff.id===_bbIssueCtx.step1StaffId){
+      if(status){ status.style.color='var(--red)'; status.textContent='❌ The receiving staff member must be different from the issuing staff member.'; }
+      return;
+    }
+    _bbIssueCtx.step2Done=true;
+    _bbIssueCtx.step2StaffId=staff.id; _bbIssueCtx.step2StaffName=staff.full_name;
+    if(status){ status.style.color='var(--green)'; status.textContent='✅ Confirmed by '+staff.full_name+' at '+fmtDT(new Date()); }
+    updateIssueFinalButton();
+  } catch(e){ if(status){ status.style.color='var(--red)'; status.textContent=e.message; } }
+}
+function updateIssueFinalButton() {
+  const btn=document.getElementById('bb-issue-final-btn'); if(!btn) return;
+  btn.disabled=!(_bbIssueCtx?.step1Done&&_bbIssueCtx?.step2Done);
+}
+async function finalizeBloodIssue() {
+  if(!_bbIssueCtx?.step1Done||!_bbIssueCtx?.step2Done){ toast('Both confirmations are required','err'); return; }
+  if(!sb) return;
+  const unit=_bbIssueCtx.unit;
+  try {
+    const nowIso=new Date().toISOString();
+    await sb.from('blood_units').update({
+      status:'Issued',
+      issued_by:_bbIssueCtx.step1StaffId, issued_by_name:_bbIssueCtx.step1StaffName, issued_at:nowIso,
+      received_by:_bbIssueCtx.step2StaffId, received_by_name:_bbIssueCtx.step2StaffName, received_at:nowIso,
+    }).eq('id',unit.id).eq('status','Crossmatched');
+    if(unit.request_id) await sb.from('blood_requests').update({status:'Issued'}).eq('id',unit.request_id);
+    await sb.from('blood_issue_log').insert({
+      unit_id:unit.id, request_id:unit.request_id||null, patient_id:_bbIssueCtx.patient?.id,
+      reserved_by:unit.crossmatched_by||null, reserved_by_name:unit.crossmatched_by_name||null, reserved_at:unit.crossmatched_at||null,
+      issued_by:_bbIssueCtx.step1StaffId, issued_by_name:_bbIssueCtx.step1StaffName, issued_at:nowIso,
+      received_by:_bbIssueCtx.step2StaffId, received_by_name:_bbIssueCtx.step2StaffName, received_at:nowIso,
+    });
+    toast('✅ Unit issued — two-person verification complete','ok');
+    closeOv('bb-issue-ov');
+    printBloodIssueSlip({...unit,patient:_bbIssueCtx.patient,issued_by_name:_bbIssueCtx.step1StaffName,received_by_name:_bbIssueCtx.step2StaffName,issued_at:nowIso});
+    loadBloodUnits(); loadBloodRequests();
+  } catch(e){ toast(e.message,'err'); }
+}
+function printBloodIssueSlip(u) {
+  const html=printHeader('Blood Transfusion Compatibility / Issue Slip')+
+    '<div style="padding:10px">'+
+    '<h3 style="margin-bottom:10px">🩸 Transfusion Compatibility &amp; Issue Slip</h3>'+
+    '<table class="tbl"><tbody>'+
+      '<tr><td class="tn">Patient</td><td>'+escapeHtml(u.patient?.name||fullName(u.patient)||'—')+' ('+escapeHtml(u.patient?.mrn||'—')+')</td></tr>'+
+      '<tr><td class="tn">Unit No</td><td>'+escapeHtml(u.unit_no)+'</td></tr>'+
+      '<tr><td class="tn">Component</td><td>'+escapeHtml(u.component_type)+'</td></tr>'+
+      '<tr><td class="tn">Blood Group / Rh</td><td>'+escapeHtml(u.blood_group)+(u.rh_factor==='Positive'?'+':'−')+'</td></tr>'+
+      '<tr><td class="tn">Issued By</td><td>'+escapeHtml(u.issued_by_name||'—')+'</td></tr>'+
+      '<tr><td class="tn">Received By</td><td>'+escapeHtml(u.received_by_name||'—')+'</td></tr>'+
+      '<tr><td class="tn">Issued At</td><td>'+fmtDT(u.issued_at)+'</td></tr>'+
+    '</tbody></table>'+
+    '<div style="display:flex;justify-content:space-between;margin-top:40px;font-size:9pt">'+
+      '<div>Issuing Staff Signature: ______________________</div>'+
+      '<div>Receiving Staff Signature: ______________________</div>'+
+    '</div>'+
+    '</div>'+printFooter();
+  openPrintWin(html,'Blood Issue Slip');
 }
 
 function editInventoryItem(id){
