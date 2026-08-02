@@ -176,7 +176,7 @@ select
   r.neut, r.lymph, r.mono, r.eosi, r.baso, r.neut_abs, r.lymph_abs, r.mono_abs, r.eosi_abs, r.baso_abs,
   r.pt, r.inr, r.aptt, r.tt, r.fibg, r.ddimer, r.esr,
   r.blood_group, r.rh_factor, r.film_result, r.film_comment, r.is_verified, r.verified_at,
-  coalesce(r.updated_at, r.created_at, now())
+  coalesce(r.created_at, now())
 from public.results_hematology r
 where not exists (
   select 1 from public.results_hematology_history h where h.patient_id = r.patient_id
@@ -199,7 +199,7 @@ select
   r.tchol, r.ldl, r.hdl, r.trig,
   r.troponin_i, r.hs_tnt, r.ck, r.ckmb, r.nt_probnp, r.hs_crp, r.ldh,
   r.is_verified, r.verified_at,
-  coalesce(r.updated_at, r.created_at, now())
+  coalesce(r.created_at, now())
 from public.results_chemistry r
 where not exists (
   select 1 from public.results_chemistry_history h where h.patient_id = r.patient_id
@@ -207,12 +207,6 @@ where not exists (
 
 -- ═══════════════════════════════════════════════════════════════════════
 -- END migration_v2.17_lab_result_history.sql
---
--- NOTE: Section 3's backfill references r.updated_at, which may not exist
--- on your results_hematology/results_chemistry tables (this checkout's
--- schema isn't shipped — see CLAUDE.md). If `updated_at` errors as an
--- unknown column, drop it from the two coalesce(...) calls and re-run;
--- coalesce(r.created_at, now()) alone is a safe fallback.
 --
 -- After applying, sanity-check with (read-only, safe to run):
 --   select count(*) from public.results_hematology_history;
