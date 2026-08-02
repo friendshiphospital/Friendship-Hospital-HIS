@@ -1450,6 +1450,7 @@ html[dir="rtl"] body{direction:rtl;}
         <button class="tab" onclick="switchDocTab('sl',this)">📄 Sick Leave</button>
         <button class="tab" onclick="switchDocTab('ref',this)">🔁 Referral</button>
         <button class="tab" onclick="switchDocTab('discharge',this)">🏠 Discharge</button>
+        <button class="tab" onclick="switchDocTab('consent',this)">✍️ Consent</button>
         <button class="tab" onclick="switchDocTab('history',this)">🕐 History</button>
       </div>
 
@@ -2017,6 +2018,52 @@ html[dir="rtl"] body{direction:rtl;}
             <button class="btn btn-s" onclick="printDischarge()" style="flex:1;justify-content:center">🖨 Print</button>
           </div>
           <input type="hidden" id="dis-pt-id">
+        </div>
+      </div>
+
+      <!-- ── TAB: DIGITAL INFORMED CONSENT ── -->
+      <div id="doc-tab-consent" class="card" style="display:none;border-radius:0 10px 10px 10px">
+        <div class="card-body">
+          <div class="g2">
+            <div class="fg"><label class="fl">Consent Type</label>
+              <select class="fc" id="con-type">
+                <option>Surgical Procedure</option>
+                <option>Anaesthesia</option>
+                <option>High-Risk Procedure / Intervention</option>
+                <option>Blood Transfusion</option>
+                <option>Other</option>
+              </select>
+            </div>
+            <div class="fg"><label class="fl">Date</label><input class="fc" type="date" id="con-date"></div>
+          </div>
+          <div class="fg"><label class="fl">Procedure / Intervention Description</label>
+            <textarea class="fc" id="con-procedure" rows="2" placeholder="What the patient is consenting to…"></textarea>
+          </div>
+          <div class="fg"><label class="fl">Risks, Benefits &amp; Alternatives Explained</label>
+            <textarea class="fc" id="con-risks" rows="3" placeholder="Summary of what was discussed with the patient/guardian…"></textarea>
+          </div>
+          <div class="g2">
+            <div class="fg"><label class="fl">Patient / Guardian Name</label><input class="fc" id="con-signee-name"></div>
+            <div class="fg"><label class="fl">Relationship (if guardian)</label><input class="fc" id="con-relationship" placeholder="Self / Parent / Next of kin…"></div>
+          </div>
+          <div class="fg"><label class="fl">Witnessed By</label><input class="fc" id="con-witness" placeholder="Staff name"></div>
+          <div class="fg">
+            <label class="fl">Signature</label>
+            <div style="border:1.5px dashed var(--border);border-radius:8px;background:#fff">
+              <canvas id="con-sig-pad" width="500" height="150" style="width:100%;height:150px;touch-action:none;cursor:crosshair"></canvas>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
+              <span id="con-sig-status" style="font-size:.72rem;color:var(--slate)">Sign above using mouse or touch</span>
+              <button class="btn btn-s btn-xs" onclick="clearConsentSignature()">🧹 Clear</button>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <button class="btn btn-p" onclick="saveConsentForm()" style="flex:2;justify-content:center">💾 Save Signed Consent</button>
+          </div>
+          <div style="margin-top:14px">
+            <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:var(--slate);margin-bottom:6px">Signed Consent Forms — This Patient</div>
+            <div id="con-list-body"><div class="empty-state">Select a patient</div></div>
+          </div>
         </div>
       </div>
 
@@ -6675,6 +6722,22 @@ const I18N = {
     reg_pay_method:'Payment Method', reg_pay_status:'Payment Status',
     reg_policy_no:'Policy No.', reg_preauth_no:'Pre-auth No.',
     reg_amount_paid:'Amount Paid (SDG)',
+
+    // Discharge summary print labels (Doc/Logbook Phase 2) — labels only.
+    // Free-text clinical content (diagnosis, findings, instructions) is
+    // never auto-translated: it is printed exactly as the doctor typed
+    // it, in whichever language they wrote it in. Auto-translating
+    // clinical narrative is not something this app attempts.
+    dis_title:'Discharge Summary', dis_patient:'Patient', dis_mrn:'MRN',
+    dis_admission_date:'Admission Date', dis_discharge_date:'Discharge Date',
+    dis_consultant:'Consultant', dis_ward:'Ward', dis_los:'Length of Stay',
+    dis_los_days:'days', dis_discharge_type:'Discharge Type',
+    dis_reason:'Reason for Admission / Presenting Complaint',
+    dis_clinical:'History & Clinical Findings', dis_diagnosis:'Diagnosis',
+    dis_investigations:'Investigations', dis_treatment:'Treatment & Procedures',
+    dis_condition:'Condition at Discharge', dis_medications:'Medications on Discharge',
+    dis_followup:'Follow-up Instructions', dis_referral:'GP / Referral Notes',
+    dis_sig_doctor:'Discharging Doctor', dis_sig_signature:'Signature', dis_sig_date:'Date',
   },
   ar: {
     navgrp_overview:'نظرة عامة', navgrp_reception:'🏥 الاستقبال', navgrp_hospital:'🏥 المستشفى',
@@ -6730,6 +6793,17 @@ const I18N = {
     reg_pay_method:'طريقة الدفع', reg_pay_status:'حالة الدفع',
     reg_policy_no:'رقم البوليصة', reg_preauth_no:'رقم الموافقة المسبقة',
     reg_amount_paid:'المبلغ المدفوع (جنيه سوداني)',
+
+    dis_title:'ملخص الخروج', dis_patient:'المريض', dis_mrn:'رقم الملف',
+    dis_admission_date:'تاريخ القبول', dis_discharge_date:'تاريخ الخروج',
+    dis_consultant:'الاستشاري', dis_ward:'الجناح', dis_los:'مدة الإقامة',
+    dis_los_days:'أيام', dis_discharge_type:'نوع الخروج',
+    dis_reason:'سبب القبول / الشكوى الرئيسية',
+    dis_clinical:'التاريخ المرضي والنتائج السريرية', dis_diagnosis:'التشخيص',
+    dis_investigations:'الفحوصات', dis_treatment:'العلاج والإجراءات',
+    dis_condition:'الحالة عند الخروج', dis_medications:'الأدوية عند الخروج',
+    dis_followup:'تعليمات المتابعة', dis_referral:'ملاحظات الإحالة',
+    dis_sig_doctor:'الطبيب المعالج', dis_sig_signature:'التوقيع', dis_sig_date:'التاريخ',
   }
 };
 function t(key){
@@ -9284,7 +9358,7 @@ async function loadDocVitalsTrend(ptId) {
 }
 
 function switchDocTab(tab,btn) {
-  ['notes','vitals','orders','rx','sl','ref','discharge','history'].forEach(t=>{
+  ['notes','vitals','orders','rx','sl','ref','discharge','consent','history'].forEach(t=>{
     const el=document.getElementById('doc-tab-'+t); if(el) el.style.display=t===tab?'':'none';
   });
   document.querySelectorAll('#doc-tabs .tab').forEach(b=>b.classList.remove('active'));
@@ -9294,6 +9368,7 @@ function switchDocTab(tab,btn) {
   if(tab==='orders') { loadActiveOrders(); buildOrderTestPanel(); }
   if(tab==='rx') loadRxDrugList();
   if(tab==='discharge'){ const d=document.getElementById('dis-date'); if(d&&!d.value) d.value=today(); const di=document.getElementById('dis-pt-id'); if(di&&_docPt) di.value=_docPt.id; loadDischargeTabAdmission(); }
+  if(tab==='consent'){ const d=document.getElementById('con-date'); if(d&&!d.value) d.value=today(); initConsentPad(); loadConsentForms(_docPt?.id); }
 }
 // Bug fix (Documentation/Logbook Phase 0 audit): the Consultation Discharge
 // tab never used to resolve/set _currentAdmId (only openDischarge(), reached
@@ -12617,35 +12692,150 @@ async function printDischarge() {
         .order('created_at',{ascending:false}).limit(1).single()
     ]);
     if(!pt||!d){ toast('No discharge record found','err'); return; }
-    const sec = (label,val) => val ? `<div style="margin-bottom:12px">
-      <div style="font-size:8pt;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#64748b;margin-bottom:3px">${label}</div>
-      <div style="font-size:9.5pt;line-height:1.6">${val}</div></div>` : '';
-    const html = printHeader('Discharge Summary')+
-      '<div style="background:#f1f5f9;border-radius:8px;padding:10px 14px;margin-bottom:14px;display:grid;grid-template-columns:repeat(4,1fr);gap:8px">'+
-      `<div><div style="font-size:8pt;color:#64748b">Patient</div><div style="font-weight:700">${pt.name||fullName(pt)}</div></div>`+
-      `<div><div style="font-size:8pt;color:#64748b">MRN</div><div style="font-weight:700;color:var(--teal)">${pt.mrn||'—'}</div></div>`+
-      `<div><div style="font-size:8pt;color:#64748b">Admission Date</div><div>${fmtDate(d.admission_date||pt.created_at)}</div></div>`+
-      `<div><div style="font-size:8pt;color:#64748b">Discharge Date</div><div>${fmtDate(d.discharge_date||d.created_at)}</div></div>`+
-      `<div><div style="font-size:8pt;color:#64748b">Consultant</div><div>${d.doctor_name||d.prepared_by||'—'}</div></div>`+
-      `<div><div style="font-size:8pt;color:#64748b">Ward</div><div>${pt.ward||'—'}</div></div>`+
-      `<div><div style="font-size:8pt;color:#64748b">LOS</div><div>${d.los_days||'—'} days</div></div>`+
-      `<div><div style="font-size:8pt;color:#64748b">Discharge Type</div><div>${d.discharge_type||'—'}</div></div></div>`+
-      sec('Reason for Admission / Presenting Complaint', d.reason_for_admission||d.chief_complaint)+
-      sec('History & Clinical Findings', d.clinical_findings)+
-      sec('Diagnosis', d.primary_diagnosis||d.diagnosis||d.final_diagnosis)+
-      sec('Investigations', d.investigations_summary)+
-      sec('Treatment & Procedures', d.treatment_given||d.procedures_done)+
-      sec('Condition at Discharge', d.condition_at_discharge||d.discharge_condition)+
-      sec('Medications on Discharge', d.discharge_medications)+
-      sec('Follow-up Instructions', d.followup_instructions||d.discharge_instructions||(d.follow_up_date?('Follow-up on '+fmtDate(d.follow_up_date)+(d.follow_up_with?' with '+d.follow_up_with:'')):''))+
-      sec('GP / Referral Notes', d.referral_notes)+
-      '<div style="margin-top:20px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;text-align:center">'+
-      '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">Discharging Doctor</div>'+
-      '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">Signature</div>'+
-      '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">Date</div></div>'+
-      printFooter();
-    openPrintWin(html,'Discharge Summary');
+    openPrintWin(buildDischargeSummaryHtml(pt,d),'Discharge Summary');
   } catch(e){ toast(e.message,'err'); }
+}
+// Bilingual (Doc/Logbook Phase 2): reuses the existing I18N/t() mechanism
+// (dis_* keys) and currentLang to translate the TEMPLATE labels — the
+// bilingual toggle was previously confirmed (Phase 0 audit) to NOT cover
+// discharge summaries at all. Doctor-entered clinical free text (reason,
+// findings, diagnosis, instructions, etc.) is deliberately never auto-
+// translated — it prints exactly as typed, in whichever language the
+// doctor wrote it in, since automatic translation of clinical narrative
+// is not something this app attempts (same caution as the original
+// Phase 4 scope note). RTL is applied via an inline dir/style wrapper
+// rather than editing the shared openPrintWin() shell, since that
+// function is used by every print document in the app.
+function buildDischargeSummaryHtml(pt,d){
+  const isAr = currentLang==='ar';
+  const L = key => t(key) || key;
+  const sec = (label,val) => val ? `<div style="margin-bottom:12px">
+    <div style="font-size:8pt;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#64748b;margin-bottom:3px">${label}</div>
+    <div style="font-size:9.5pt;line-height:1.6">${val}</div></div>` : '';
+  const body = printHeader(L('dis_title'))+
+    '<div style="background:#f1f5f9;border-radius:8px;padding:10px 14px;margin-bottom:14px;display:grid;grid-template-columns:repeat(4,1fr);gap:8px">'+
+    `<div><div style="font-size:8pt;color:#64748b">${L('dis_patient')}</div><div style="font-weight:700">${pt.name||fullName(pt)}</div></div>`+
+    `<div><div style="font-size:8pt;color:#64748b">${L('dis_mrn')}</div><div style="font-weight:700;color:var(--teal)">${pt.mrn||'—'}</div></div>`+
+    `<div><div style="font-size:8pt;color:#64748b">${L('dis_admission_date')}</div><div>${fmtDate(d.admission_date||pt.created_at)}</div></div>`+
+    `<div><div style="font-size:8pt;color:#64748b">${L('dis_discharge_date')}</div><div>${fmtDate(d.discharge_date||d.created_at)}</div></div>`+
+    `<div><div style="font-size:8pt;color:#64748b">${L('dis_consultant')}</div><div>${d.doctor_name||d.prepared_by||'—'}</div></div>`+
+    `<div><div style="font-size:8pt;color:#64748b">${L('dis_ward')}</div><div>${pt.ward||'—'}</div></div>`+
+    `<div><div style="font-size:8pt;color:#64748b">${L('dis_los')}</div><div>${d.los_days||'—'} ${L('dis_los_days')}</div></div>`+
+    `<div><div style="font-size:8pt;color:#64748b">${L('dis_discharge_type')}</div><div>${d.discharge_type||'—'}</div></div></div>`+
+    sec(L('dis_reason'), d.reason_for_admission||d.chief_complaint)+
+    sec(L('dis_clinical'), d.clinical_findings)+
+    sec(L('dis_diagnosis'), d.primary_diagnosis||d.diagnosis||d.final_diagnosis)+
+    sec(L('dis_investigations'), d.investigations_summary)+
+    sec(L('dis_treatment'), d.treatment_given||d.procedures_done)+
+    sec(L('dis_condition'), d.condition_at_discharge||d.discharge_condition)+
+    sec(L('dis_medications'), d.discharge_medications)+
+    sec(L('dis_followup'), d.followup_instructions||d.discharge_instructions||(d.follow_up_date?('Follow-up on '+fmtDate(d.follow_up_date)+(d.follow_up_with?' with '+d.follow_up_with:'')):''))+
+    sec(L('dis_referral'), d.referral_notes)+
+    '<div style="margin-top:20px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;text-align:center">'+
+    `<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">${L('dis_sig_doctor')}</div>`+
+    `<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">${L('dis_sig_signature')}</div>`+
+    `<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">${L('dis_sig_date')}</div></div>`+
+    printFooter();
+  return isAr ? '<div dir="rtl" lang="ar" style="text-align:right">'+body+'</div>' : body;
+}
+
+// ── Doctor Phase 2: Digital Informed Consent ────────────────────────────
+// Canvas-based e-signature pad, no external library — same plain-canvas
+// convention already used by the Levey-Jennings chart (renderQcChart())
+// and the fluid-balance trend (drawFluidTrend()), just mouse/touch-driven
+// instead of programmatically drawn. Mirrors the DICOM viewer's existing
+// mouse-event wiring pattern (dicomStartPan()/dicomPan()/dicomEndPan()).
+let _consentHasSignature=false, _consentDrawing=false, _consentPadInit=false;
+function initConsentPad(){
+  const canvas=document.getElementById('con-sig-pad'); if(!canvas||_consentPadInit) return;
+  _consentPadInit=true;
+  const ctx=canvas.getContext('2d');
+  ctx.lineWidth=2.2; ctx.lineCap='round'; ctx.strokeStyle='#0f172a';
+  const pos=e=>{
+    const r=canvas.getBoundingClientRect();
+    const t=e.touches&&e.touches.length?e.touches[0]:e;
+    return {x:(t.clientX-r.left)*(canvas.width/r.width),y:(t.clientY-r.top)*(canvas.height/r.height)};
+  };
+  const start=e=>{ _consentDrawing=true; const p=pos(e); ctx.beginPath(); ctx.moveTo(p.x,p.y); e.preventDefault(); };
+  const move=e=>{
+    if(!_consentDrawing) return;
+    const p=pos(e); ctx.lineTo(p.x,p.y); ctx.stroke();
+    if(!_consentHasSignature){ _consentHasSignature=true; const st=document.getElementById('con-sig-status'); if(st){ st.textContent='✅ Signature captured'; st.style.color='var(--green)'; } }
+    e.preventDefault();
+  };
+  const end=()=>{ _consentDrawing=false; };
+  canvas.onmousedown=start; canvas.onmousemove=move; canvas.onmouseup=end; canvas.onmouseleave=end;
+  canvas.ontouchstart=start; canvas.ontouchmove=move; canvas.ontouchend=end;
+}
+function clearConsentSignature(){
+  const canvas=document.getElementById('con-sig-pad'); const ctx=canvas?.getContext('2d');
+  if(ctx) ctx.clearRect(0,0,canvas.width,canvas.height);
+  _consentHasSignature=false;
+  const st=document.getElementById('con-sig-status'); if(st){ st.textContent='Sign above using mouse or touch'; st.style.color='var(--slate)'; }
+}
+async function saveConsentForm(){
+  if(!sb){ toast('Not connected','err'); return; }
+  const ptId=_docPt?.id; if(!ptId){ toast('Select a patient first','err'); return; }
+  const g=id=>document.getElementById(id)?.value?.trim()||'';
+  const procedure=g('con-procedure'), signeeName=g('con-signee-name');
+  if(!procedure){ toast('Describe the procedure/intervention being consented to','err'); return; }
+  if(!signeeName){ toast('Enter the patient/guardian name','err'); return; }
+  if(!_consentHasSignature){ toast('A signature is required before saving','err'); return; }
+  const canvas=document.getElementById('con-sig-pad');
+  try{
+    await sb.from('consent_forms').insert({
+      patient_id:ptId, admission_id:_currentAdmId||null,
+      consent_type:g('con-type')||document.getElementById('con-type')?.value,
+      consent_date:g('con-date')||today(),
+      procedure_description:procedure, risks_explained:g('con-risks')||null,
+      signee_name:signeeName, signee_relationship:g('con-relationship')||'Self',
+      witnessed_by:g('con-witness')||null,
+      signature_data_url:canvas.toDataURL('image/png'),
+      performed_by:currentProfile?.id, performed_by_name:currentProfile?.full_name||'',
+      created_at:new Date().toISOString(),
+    });
+    toast('✅ Consent form saved and signed','ok');
+    ['con-procedure','con-risks','con-signee-name','con-relationship','con-witness'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+    clearConsentSignature();
+    loadConsentForms(ptId);
+  }catch(e){ toast(e.message,'err'); }
+}
+async function loadConsentForms(ptId){
+  const body=document.getElementById('con-list-body'); if(!body) return;
+  if(!ptId||!sb){ body.innerHTML='<div class="empty-state">Select a patient</div>'; return; }
+  body.innerHTML='<div class="spin-center"><div class="spinner"></div>Loading…</div>';
+  try{
+    const {data}=await sb.from('consent_forms').select('*').eq('patient_id',ptId).order('created_at',{ascending:false}).limit(10);
+    if(!data?.length){ body.innerHTML='<div class="empty-state">No consent forms signed yet</div>'; return; }
+    body.innerHTML=data.map(c=>
+      '<div style="border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">'+
+      '<div><div style="font-weight:600;font-size:.82rem">'+escapeHtml(c.consent_type||'—')+' <span class="bdg bdg-g" style="margin-left:4px">✓ Signed</span></div>'+
+      '<div style="font-size:.72rem;color:var(--slate)">'+fmtDate(c.consent_date||c.created_at)+' · '+escapeHtml(c.performed_by_name||'—')+' · Signed by '+escapeHtml(c.signee_name||'—')+'</div></div>'+
+      '<button class="btn btn-s btn-xs" onclick="printConsentForm(\''+c.id+'\')">🖨 Print</button></div>'
+    ).join('');
+  }catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+e.message+'</div>'; }
+}
+async function printConsentForm(id){
+  if(!sb) return;
+  try{
+    const {data:c}=await sb.from('consent_forms').select('*,patients(name,mrn)').eq('id',id).single();
+    if(!c){ toast('Consent form not found','err'); return; }
+    const pt=c.patients||{};
+    const html=printHeader('Digital Informed Consent')+
+      '<div style="background:#f1f5f9;border-radius:8px;padding:10px 14px;margin-bottom:14px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px">'+
+      '<div><div style="font-size:8pt;color:#64748b">Patient</div><div style="font-weight:700">'+escapeHtml(pt.name||'—')+'</div></div>'+
+      '<div><div style="font-size:8pt;color:#64748b">MRN</div><div style="font-weight:700;color:var(--teal)">'+escapeHtml(pt.mrn||'—')+'</div></div>'+
+      '<div><div style="font-size:8pt;color:#64748b">Date</div><div>'+fmtDate(c.consent_date||c.created_at)+'</div></div></div>'+
+      '<div style="margin-bottom:12px"><div style="font-size:8pt;font-weight:700;text-transform:uppercase;color:#64748b;margin-bottom:3px">Consent Type</div><div style="font-size:10pt;font-weight:700">'+escapeHtml(c.consent_type||'—')+'</div></div>'+
+      '<div style="margin-bottom:12px"><div style="font-size:8pt;font-weight:700;text-transform:uppercase;color:#64748b;margin-bottom:3px">Procedure / Intervention</div><div style="font-size:9.5pt;line-height:1.6">'+escapeHtml(c.procedure_description||'—')+'</div></div>'+
+      (c.risks_explained?'<div style="margin-bottom:12px"><div style="font-size:8pt;font-weight:700;text-transform:uppercase;color:#64748b;margin-bottom:3px">Risks, Benefits &amp; Alternatives Explained</div><div style="font-size:9.5pt;line-height:1.6">'+escapeHtml(c.risks_explained)+'</div></div>':'')+
+      '<div style="margin-bottom:12px"><div style="font-size:8pt;font-weight:700;text-transform:uppercase;color:#64748b;margin-bottom:3px">Signed By</div><div style="font-size:9.5pt">'+escapeHtml(c.signee_name||'—')+' ('+escapeHtml(c.signee_relationship||'Self')+')'+(c.witnessed_by?' · Witnessed by '+escapeHtml(c.witnessed_by):'')+'</div></div>'+
+      '<div style="margin:16px 0"><div style="font-size:8pt;font-weight:700;text-transform:uppercase;color:#64748b;margin-bottom:4px">Signature</div>'+
+      (c.signature_data_url?'<img src="'+c.signature_data_url+'" style="max-width:320px;height:auto;border:1px solid #e2e8f0;border-radius:6px;background:#fff">':'<div style="color:#b91c1c">No signature on file</div>')+'</div>'+
+      '<div style="font-size:8pt;color:#64748b;margin-top:14px">Recorded by '+escapeHtml(c.performed_by_name||'—')+' · '+fmtDT(c.created_at)+'</div>'+
+      printFooter();
+    openPrintWin(html,'Informed Consent — '+(pt.name||''));
+  }catch(e){ toast(e.message,'err'); }
 }
 
 // ── 7. searchDocPatient ───────────────────────────────────
