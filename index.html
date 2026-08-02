@@ -184,6 +184,15 @@ html[dir="rtl"] body{direction:rtl;}
 .bed-dot.bed-oc{background:var(--red);}
 .bed-dot.bed-cl{background:var(--amber);}
 .bed-dot.bed-dp{background:var(--blue);}
+/* Bed turnaround SLA escalation (Phase 5b) — layered on top of .bed-cl,
+   never replaces the status colour, since a bed is still Cleaning/
+   Maintenance either way; this just flags it's overdue. */
+.bed-tile.bed-sla-amber{border-color:var(--amber);box-shadow:inset 0 0 0 2px rgba(217,119,6,.35);}
+.bed-tile.bed-sla-red{background:var(--red-lt);color:var(--red);border-color:var(--red);box-shadow:inset 0 0 0 2px rgba(185,28,28,.4);}
+/* Discharge-readiness (Phase 5c) — a subtle badge, deliberately NOT a
+   colour change on the tile itself (colour already means occupancy
+   status here); just a small pill the charge nurse can notice or ignore. */
+.bed-tile-readiness{margin-top:5px;display:inline-block;font-size:.6rem;font-weight:700;background:rgba(255,255,255,.55);color:inherit;border:1px solid currentColor;border-radius:20px;padding:1px 7px;opacity:.85;}
 /* TOGGLE SWITCH */
 .tgl-wrap{display:inline-flex;align-items:center;gap:9px;cursor:pointer;user-select:none;}
 .tgl-wrap input{display:none;}
@@ -4258,6 +4267,21 @@ html[dir="rtl"] body{direction:rtl;}
         </div>
         <div id="bed-cfg-body"><div class="spin-center"><div class="spinner"></div>Loading…</div></div>
       </div></div>
+      <div class="card"><div class="card-hd"><span class="card-title">⏱ Bed Turnaround SLA</span></div><div class="card-body">
+        <div style="font-size:.72rem;color:var(--slate);margin-bottom:8px">How long a bed may sit in Cleaning/Maintenance on the bed grid before its tile visually escalates — a prompt for housekeeping/charge nurse follow-up, not an automated action.</div>
+        <div class="g2">
+          <div class="fg"><label class="fl">Amber warning after (minutes)</label><input class="fc" type="number" min="1" id="cfg-bed-sla-amber" placeholder="30"></div>
+          <div class="fg"><label class="fl">Red escalation after (minutes)</label><input class="fc" type="number" min="1" id="cfg-bed-sla-red" placeholder="90"></div>
+        </div>
+        <button class="btn btn-p btn-sm" onclick="saveBedSlaSettings()">💾 Save Turnaround SLA</button>
+        <div id="cfg-bed-sla-status" style="margin-top:7px;font-size:.78rem;color:var(--green)"></div>
+      </div></div>
+      <div class="card"><div class="card-hd"><span class="card-title">🏁 Discharge-Readiness Flag</span></div><div class="card-body">
+        <div style="font-size:.72rem;color:var(--slate);margin-bottom:8px">A rule-based badge (not a prediction) on Occupied bed tiles — a prompt for the charge nurse to check, never an automated action. Triggers when either: the patient's LOS exceeds their ward's own current average LOS by this margin, or discharge planning was started (the Discharge form was opened) but never finalized.</div>
+        <div class="fg"><label class="fl">LOS margin over ward average (%)</label><input class="fc" type="number" min="1" id="cfg-discharge-readiness-margin" placeholder="50"></div>
+        <button class="btn btn-p btn-sm" onclick="saveDischargeReadinessSettings()">💾 Save</button>
+        <div id="cfg-discharge-readiness-status" style="margin-top:7px;font-size:.78rem;color:var(--green)"></div>
+      </div></div>
       <div class="card"><div class="card-hd"><span class="card-title">🔢 ID Counters</span></div><div class="card-body">
         <div style="font-size:.74rem;color:var(--slate);margin-bottom:8px">These counters generate every File Number, Lab No., and Radiology No. Correcting one only changes what the <em>next</em> number will be — it does not renumber existing records. Only use this to fix a genuine mistake.</div>
         <div id="cfg-counters-body"><div class="spin-center"><div class="spinner"></div>Loading…</div></div>
@@ -6048,6 +6072,20 @@ const CFG = {
   // actually gates.
   get autoVerifyEnabled(){ return localStorage.getItem('cfg_auto_verify_enabled')==='true'; },
   set autoVerifyEnabled(v){ localStorage.setItem('cfg_auto_verify_enabled', v?'true':'false'); },
+  // Bed-turnaround SLA (Bed Management / IPD overhaul, Phase 5b) — how long
+  // a bed may sit in Cleaning/Maintenance before the grid tile escalates.
+  // Two thresholds, same amber-then-red escalation as everywhere else in
+  // this app that has a soft and a hard threshold (e.g. discountOverrideThreshold).
+  get bedTurnaroundAmberMin(){ return parseInt(localStorage.getItem('cfg_bed_turnaround_amber_min'),10)||30; },
+  set bedTurnaroundAmberMin(v){ localStorage.setItem('cfg_bed_turnaround_amber_min', v); },
+  get bedTurnaroundRedMin(){ return parseInt(localStorage.getItem('cfg_bed_turnaround_red_min'),10)||90; },
+  set bedTurnaroundRedMin(v){ localStorage.setItem('cfg_bed_turnaround_red_min', v); },
+  // Discharge-readiness flag (Phase 5c) — how far LOS may exceed the
+  // ward's own average LOS (among currently active admissions) before the
+  // rule-based badge appears. Rule-based, not predictive — see
+  // dischargeReadinessFlag() for the exact two conditions.
+  get dischargeReadinessLosMarginPct(){ return parseInt(localStorage.getItem('cfg_discharge_readiness_los_margin_pct'),10)||50; },
+  set dischargeReadinessLosMarginPct(v){ localStorage.setItem('cfg_discharge_readiness_los_margin_pct', v); },
 };
 
 const ROLE_PAGES = {
@@ -6666,6 +6704,7 @@ function filterSidebar() {
   });
 }
 async function doLogout() {
+  unsubscribeBedGridRealtime();
   if(sb) await sb.auth.signOut().catch(()=>{});
   currentUser=null; currentProfile=null;
   document.getElementById('app').classList.remove('visible');
@@ -6684,6 +6723,10 @@ function goPage(p) {
     const role=currentProfile.role||'receptionist', allowed=ROLE_PAGES[role]||[];
     if(!allowed.includes(p)&&role!=='admin'){ toast('Access denied','err'); return; }
   }
+  // The bed-grid Realtime subscription (Phase 5a) is scoped to this one
+  // page — tear it down the moment we navigate away so it never keeps
+  // running (or stacks a second channel) in the background on other pages.
+  if(p!=='admission' && document.querySelector('.page.active')?.id==='page-admission') unsubscribeBedGridRealtime();
   // Module auto-detection — handles every call site that reaches goPage()
   // directly rather than through a launcher tile (global search results,
   // the notification bell, "Continue" shortcuts, printInvoice-adjacent
@@ -6723,7 +6766,7 @@ function goPage(p) {
   const run = fn => { try{ const r=fn(); if(r&&r.catch) r.catch(e=>console.warn(e)); }catch(e){console.warn(e);} };
   const td=new Date().toISOString().slice(0,10), td16=new Date().toISOString().slice(0,16);
   if(p==='dashboard') run(loadDashboard);
-  else if(p==='admission'){ run(loadAdmissions); run(loadAdmissionStats); run(loadDoctorDropdowns); run(loadBedsForWard); run(loadBedGrid); generateAdmNo(); setD('adm-date',td16); }
+  else if(p==='admission'){ run(loadAdmissions); run(loadAdmissionStats); run(loadDoctorDropdowns); run(loadBedsForWard); run(loadBedGrid); run(subscribeBedGridRealtime); generateAdmNo(); setD('adm-date',td16); }
   else if(p==='theatre'){ run(loadOTSchedule); run(loadSurgeonDropdown); setD('ot-date',td); setD('ot-sched-date',td); }
   else if(p==='nursing'){ run(loadNursingQueue); setD('ho-date',td); setEl('vs-by',currentProfile?.full_name||''); }
   else if(p==='fluid-chart'){ setD('fc-date',td); run(loadFluidChart); }
@@ -6851,6 +6894,9 @@ function loadSettings() {
   const fpr=document.getElementById('cfg-followup-pricing-rule'); if(fpr) fpr.value=CFG.followupPricingRule;
   const fpv=document.getElementById('cfg-followup-pricing-value'); if(fpv) fpv.value=CFG.followupPricingValue;
   updateFollowupPricingValueVisibility();
+  const bsa=document.getElementById('cfg-bed-sla-amber'); if(bsa) bsa.value=CFG.bedTurnaroundAmberMin;
+  const bsr=document.getElementById('cfg-bed-sla-red'); if(bsr) bsr.value=CFG.bedTurnaroundRedMin;
+  const drm=document.getElementById('cfg-discharge-readiness-margin'); if(drm) drm.value=CFG.dischargeReadinessLosMarginPct;
   loadBedConfig();
   loadIdCounters();
 }
@@ -6869,6 +6915,22 @@ function saveFollowupPolicySettings(){
   CFG.followupPricingValue=isNaN(val)?0:val;
   const el=document.getElementById('cfg-followup-policy-status');
   if(el){ el.textContent='✅ Saved'; setTimeout(()=>el.textContent='',3000); }
+}
+function saveBedSlaSettings(){
+  const amber=parseInt(document.getElementById('cfg-bed-sla-amber')?.value,10);
+  const red=parseInt(document.getElementById('cfg-bed-sla-red')?.value,10);
+  CFG.bedTurnaroundAmberMin=(isNaN(amber)||amber<=0)?30:amber;
+  CFG.bedTurnaroundRedMin=(isNaN(red)||red<=0)?90:red;
+  const el=document.getElementById('cfg-bed-sla-status');
+  if(el){ el.textContent='✅ Saved'; setTimeout(()=>el.textContent='',3000); }
+  if(document.getElementById('page-admission')?.classList.contains('active')) renderBedGrid();
+}
+function saveDischargeReadinessSettings(){
+  const margin=parseInt(document.getElementById('cfg-discharge-readiness-margin')?.value,10);
+  CFG.dischargeReadinessLosMarginPct=(isNaN(margin)||margin<=0)?50:margin;
+  const el=document.getElementById('cfg-discharge-readiness-status');
+  if(el){ el.textContent='✅ Saved'; setTimeout(()=>el.textContent='',3000); }
+  if(document.getElementById('page-admission')?.classList.contains('active')) renderBedGrid();
 }
 // Settings is already admin-only (see ROLE_PAGES), so no extra role check is
 // needed here — but the destructive-ish correction itself still requires
@@ -6984,7 +7046,7 @@ async function addBedConfig() {
   const room=document.getElementById('bed-cfg-room')?.value?.trim();
   const bed=document.getElementById('bed-cfg-bed')?.value?.trim();
   if(!room||!bed){ toast('Enter room and bed number','err'); return; }
-  try { await sb.from('beds').insert({ward,room,bed_number:bed,status:'Available'}); toast('Bed added','ok'); loadBedConfig(); document.getElementById('bed-cfg-room').value=''; document.getElementById('bed-cfg-bed').value=''; }
+  try { await sb.from('beds').insert({ward,room,bed_number:bed,status:'Available',status_changed_at:new Date().toISOString()}); toast('Bed added','ok'); loadBedConfig(); document.getElementById('bed-cfg-room').value=''; document.getElementById('bed-cfg-bed').value=''; }
   catch(e){ toast(e.message,'err'); }
 }
 async function deleteBed(id) {
@@ -7554,13 +7616,42 @@ async function loadBedGrid() {
   try {
     const [{data:beds,error:bedsErr},{data:adms}]=await Promise.all([
       sb.from('beds').select('*').order('ward').order('room').order('bed_number'),
-      sb.from('admissions').select('id,admission_no,admitting_doctor,admission_date,patients(name,mrn)').eq('status','Active'),
+      sb.from('admissions').select('id,ward,admission_no,admitting_doctor,admission_date,discharge_planning_started_at,patients(name,mrn)').eq('status','Active'),
     ]);
     if(bedsErr) throw bedsErr;
     const admById={}; (adms||[]).forEach(a=>admById[a.id]=a);
     _bedGridData=(beds||[]).map(b=>({...b,_admission:b.current_admission_id?admById[b.current_admission_id]:null}));
     renderBedGridWardTabs(); renderBedGrid();
   } catch(e){ grid.innerHTML='<div style="padding:14px;color:var(--red);font-size:.78rem">'+e.message+'</div>'; }
+}
+// ── BED GRID LIVE SYNC (Phase 5a) ──────────────────────────────────────
+// First use of Supabase Realtime anywhere in this codebase. Deliberately
+// narrow: one channel, one table (beds), only while the Bed Management
+// page is actually open (subscribed in goPage()'s 'admission' branch,
+// torn down the moment goPage() navigates anywhere else) — not a general
+// realtime layer for the app. On any beds change from ANY device, simply
+// re-runs loadBedGrid() rather than trying to patch _bedGridData in
+// place, since a full reload is already fast and this avoids a second,
+// subtler place bed state could drift from the database.
+let _bedGridChannel=null;
+// Re-renders (not re-fetches) the grid every 30s so a Cleaning/Maintenance
+// tile's elapsed-time display and SLA escalation stay current even when
+// nothing in the database has actually changed. Same lifecycle as the
+// Realtime channel — started/stopped together, both scoped to this page.
+let _bedGridSlaTimer=null;
+function subscribeBedGridRealtime() {
+  if(!_bedGridSlaTimer) _bedGridSlaTimer=setInterval(renderBedGrid,30000);
+  if(!sb||_bedGridChannel||typeof sb.channel!=='function') return;
+  try {
+    _bedGridChannel=sb.channel('beds-grid-realtime')
+      .on('postgres_changes',{event:'*',schema:'public',table:'beds'},()=>{ loadBedGrid(); })
+      .subscribe();
+  } catch(e){ console.warn('Bed grid realtime unavailable',e); }
+}
+function unsubscribeBedGridRealtime() {
+  if(_bedGridChannel&&sb){ try{ sb.removeChannel(_bedGridChannel); }catch(e){} }
+  _bedGridChannel=null;
+  if(_bedGridSlaTimer){ clearInterval(_bedGridSlaTimer); _bedGridSlaTimer=null; }
 }
 function renderBedGridWardTabs() {
   const tabs=document.getElementById('bed-grid-ward-tabs'); if(!tabs) return;
@@ -7576,22 +7667,79 @@ function setBedGridWard(w,btn) {
   if(btn) btn.classList.add('active');
   renderBedGrid();
 }
+// Bed-turnaround SLA (Phase 5b) — Cleaning/Maintenance beds show elapsed
+// time since status_changed_at (set by every status-changing write:
+// submitAdmission()/saveDischarge()/submitBedTransfer()/setBedStatus()/
+// addBedConfig()) and the tile escalates past the admin-configured
+// thresholds. Purely visual — never blocks or auto-changes anything.
+function bedTurnaroundMinutes(b) {
+  if(!b.status_changed_at) return null;
+  return Math.max(0,Math.floor((Date.now()-new Date(b.status_changed_at).getTime())/60000));
+}
+function bedTurnaroundEscalationClass(b) {
+  if(b.status!=='Cleaning'&&b.status!=='Maintenance') return '';
+  const mins=bedTurnaroundMinutes(b); if(mins==null) return '';
+  if(mins>=CFG.bedTurnaroundRedMin) return ' bed-sla-red';
+  if(mins>=CFG.bedTurnaroundAmberMin) return ' bed-sla-amber';
+  return '';
+}
+function fmtMinutesElapsed(mins) {
+  if(mins<60) return mins+'m';
+  return Math.floor(mins/60)+'h '+(mins%60)+'m';
+}
+// Discharge-readiness flag (Phase 5c) — RULE-BASED, not predictive/ML;
+// the badge copy must always say so explicitly, same honesty standard as
+// DIFF_DX_RULES ("a starting checklist... not a diagnostic engine"). Two
+// independent triggers, either is sufficient:
+//   1. LOS exceeds this admission's ward's own current average LOS (among
+//      active admissions in that ward right now) by a configurable margin.
+//   2. Discharge planning was started (the Discharge form was opened —
+//      admissions.discharge_planning_started_at) but the admission is
+//      still Active, i.e. never actually finalized.
+// Surfaces as a small badge only — never changes tile colour, never an
+// alert, purely a "worth checking" prompt for the charge nurse.
+function wardAverageLosDays(ward) {
+  const los=a=>Math.max(0,(Date.now()-new Date(a.admission_date).getTime())/864e5);
+  const admsInWard=_bedGridData.filter(b=>b.ward===ward&&b._admission).map(b=>b._admission);
+  if(admsInWard.length<2) return null; // an "average" of one admission isn't a meaningful baseline
+  return admsInWard.reduce((sum,a)=>sum+los(a),0)/admsInWard.length;
+}
+function dischargeReadinessFlag(b) {
+  if((b.status!=='Occupied'&&b.status!=='Discharge Pending')||!b._admission) return null;
+  const adm=b._admission;
+  const losDays=Math.max(0,(Date.now()-new Date(adm.admission_date).getTime())/864e5);
+  const wardAvg=wardAverageLosDays(b.ward);
+  const overAverage=wardAvg!=null&&losDays>wardAvg*(1+CFG.dischargeReadinessLosMarginPct/100);
+  const planningStalled=!!adm.discharge_planning_started_at;
+  if(!overAverage&&!planningStalled) return null;
+  const reasons=[];
+  if(overAverage) reasons.push('LOS ('+losDays.toFixed(1)+'d) exceeds ward average ('+wardAvg.toFixed(1)+'d) by over '+CFG.dischargeReadinessLosMarginPct+'%');
+  if(planningStalled) reasons.push('Discharge form was opened but not finalized');
+  return reasons.join(' · ');
+}
 function renderBedGrid() {
   const grid=document.getElementById('bed-grid-container'); if(!grid) return;
   const beds=_bedGridWard==='all'?_bedGridData:_bedGridData.filter(b=>b.ward===_bedGridWard);
   if(!beds.length){ grid.innerHTML='<div class="empty-state"><div class="empty-icon">🛏</div><div class="empty-title">No beds configured'+(_bedGridWard==='all'?'':' for '+_bedGridWard)+'</div></div>'; return; }
   grid.innerHTML=beds.map(b=>{
     const cls=BED_STATUS_CLASS[b.status]||'bed-av';
+    const slaCls=bedTurnaroundEscalationClass(b);
     const adm=b._admission;
     let info;
     if(b.status==='Occupied'||b.status==='Discharge Pending'){
       info=adm?('<strong>'+(adm.patients?.name||'—')+'</strong><br>'+(adm.patients?.mrn||'')+' · '+(adm.admitting_doctor||'—')+'<br>'+fmtDate(adm.admission_date)):'<span style="opacity:.7">Chart unavailable</span>';
+    } else if(b.status==='Cleaning'||b.status==='Maintenance') {
+      const mins=bedTurnaroundMinutes(b);
+      info=b.status+(mins!=null?'<br><span style="font-weight:700">⏱ '+fmtMinutesElapsed(mins)+'</span>':'');
     } else { info=b.status; }
-    return '<div class="bed-tile '+cls+'" onclick="bedTileClick(\x27'+b.id+'\x27)">'+
+    const readiness=dischargeReadinessFlag(b);
+    const readinessBadge=readiness?'<div class="bed-tile-readiness" title="Rule-based prompt, not a prediction — '+escAttr(readiness)+'">🏁 Check discharge?</div>':'';
+    return '<div class="bed-tile '+cls+slaCls+'" onclick="bedTileClick(\x27'+b.id+'\x27)">'+
       '<div class="bed-tile-menu" onclick="event.stopPropagation();openBedStatusMenu(event,\x27'+b.id+'\x27)">⋮</div>'+
       '<div class="bed-tile-loc">'+b.ward+' · '+b.room+'</div>'+
       '<div class="bed-tile-num">Bed '+b.bed_number+'</div>'+
       '<div class="bed-tile-info">'+info+'</div>'+
+      readinessBadge+
     '</div>';
   }).join('');
 }
@@ -7641,7 +7789,7 @@ async function setBedStatus(bedId,newStatus) {
   closeBedStatusMenu();
   if(!sb){ toast('Not connected','err'); return; }
   try {
-    await sb.from('beds').update({status:newStatus}).eq('id',bedId);
+    await sb.from('beds').update({status:newStatus,status_changed_at:new Date().toISOString()}).eq('id',bedId);
     toast('Bed status updated to '+newStatus,'ok');
     loadBedGrid(); loadAdmissionStats();
   } catch(e){ toast(e.message,'err'); }
@@ -7750,7 +7898,7 @@ async function submitAdmission() {
     }
     const {data:adm,error}=await sb.from('admissions').insert({patient_id:_admPt.id,admission_no:admNo,ip_no:newIpNo,ward,room,bed,admitting_doctor:doc,primary_diagnosis:g('adm-diagnosis'),admission_type:g('adm-type'),admission_date:g('adm-date')||new Date().toISOString(),notes:admNotes,status:'Active',created_by:currentProfile?.id}).select().single();
     if(error) throw error;
-    if(bed&&bed!=='—'){ try{ await sb.from('beds').update({status:'Occupied',current_patient_id:_admPt.id,current_admission_id:adm.id}).eq('ward',ward).eq('room',room).eq('bed_number',bed); }catch(e){} }
+    if(bed&&bed!=='—'){ try{ await sb.from('beds').update({status:'Occupied',current_patient_id:_admPt.id,current_admission_id:adm.id,status_changed_at:new Date().toISOString()}).eq('ward',ward).eq('room',room).eq('bed_number',bed); }catch(e){} }
     toast('✅ Patient admitted: '+admNo+(newIpNo?' — New File No. '+newIpNo:''),'ok'); clearAdmForm(); loadAdmissions(); loadAdmissionStats();
     const msg=document.getElementById('adm-msg'); if(msg){ msg.style.color='var(--green)'; msg.textContent='✅ Admitted: '+admNo; setTimeout(()=>msg.textContent='',4000); }
   } catch(e){ toast(e.message,'err'); }
@@ -7894,8 +8042,8 @@ async function submitBedTransfer() {
     if(adm.ward===newWard && adm.room===newRoom && adm.bed===newBed){ toast('Destination is the same as the current bed','err'); return; }
     await sb.from('bed_transfers').insert({admission_id:_currentAdmId,patient_id:adm.patient_id,from_ward:adm.ward,from_room:adm.room,from_bed:adm.bed,to_ward:newWard,to_room:newRoom,to_bed:newBed,reason,transferred_by:currentProfile?.id,transferred_by_name:currentProfile?.full_name,transferred_at:new Date().toISOString()});
     await sb.from('admissions').update({ward:newWard,room:newRoom,bed:newBed}).eq('id',_currentAdmId);
-    if(adm.bed&&adm.bed!=='—'){ try{ await sb.from('beds').update({status:'Available',current_patient_id:null,current_admission_id:null}).eq('ward',adm.ward).eq('room',adm.room).eq('bed_number',adm.bed); }catch(e){} }
-    try{ await sb.from('beds').update({status:'Occupied',current_patient_id:adm.patient_id,current_admission_id:_currentAdmId}).eq('ward',newWard).eq('room',newRoom).eq('bed_number',newBed); }catch(e){}
+    if(adm.bed&&adm.bed!=='—'){ try{ await sb.from('beds').update({status:'Available',current_patient_id:null,current_admission_id:null,status_changed_at:new Date().toISOString()}).eq('ward',adm.ward).eq('room',adm.room).eq('bed_number',adm.bed); }catch(e){} }
+    try{ await sb.from('beds').update({status:'Occupied',current_patient_id:adm.patient_id,current_admission_id:_currentAdmId,status_changed_at:new Date().toISOString()}).eq('ward',newWard).eq('room',newRoom).eq('bed_number',newBed); }catch(e){}
     toast('✅ Patient transferred to '+newWard+' / '+newRoom+' / '+newBed,'ok');
     openAdmDetail(_currentAdmId);
     loadBedGrid(); loadAdmissions(); loadAdmissionStats();
@@ -7935,6 +8083,11 @@ async function openDischarge(admId) {
   try {
     const {data:adm}=await sb.from('admissions').select('*,patients(*)').eq('id',admId).single();
     if(!adm) return;
+    // Best-effort, non-blocking: stamps that discharge planning has begun
+    // for this admission (Phase 5c's discharge-readiness flag reads it) —
+    // the existing discharge flow itself is unchanged, this never blocks
+    // or delays opening the form.
+    if(!adm.discharge_planning_started_at){ try{ await sb.from('admissions').update({discharge_planning_started_at:new Date().toISOString()}).eq('id',admId); }catch(e){} }
     const pt=adm.patients, los=Math.ceil((new Date()-new Date(adm.admission_date))/(864e5));
     const banner=document.getElementById('disch-pt-banner');
     if(banner) banner.innerHTML='<div class="pb-i"><div class="pb-l">Patient</div><div class="pb-v">'+(pt?.name||fullName(pt))+'</div></div><div class="pb-i"><div class="pb-l">Adm No</div><div class="pb-v">'+adm.admission_no+'</div></div><div class="pb-i"><div class="pb-l">Admitted</div><div class="pb-v">'+fmtDT(adm.admission_date)+'</div></div><div class="pb-i"><div class="pb-l">LOS</div><div class="pb-v">'+los+' day'+(los!==1?'s':'')+'</div></div>';
@@ -7955,7 +8108,7 @@ async function saveDischarge() {
     const los=adm?Math.ceil((new Date()-new Date(adm.admission_date))/(864e5)):0;
     await sb.from('discharge_summaries').insert({patient_id:adm.patient_id,admission_id:_currentAdmId,discharge_date:g('disch-date'),discharge_type:g('disch-type'),final_diagnosis:g('disch-dx'),procedures_done:g('disch-procedures'),discharge_condition:g('disch-condition'),follow_up_date:g('disch-fu-date')||null,follow_up_with:g('disch-fu-with'),discharge_instructions:g('disch-instructions'),los_days:los,prepared_by:g('disch-prepared-by'),created_by:currentProfile?.id});
     await sb.from('admissions').update({status:'Discharged',discharge_date:new Date().toISOString()}).eq('id',_currentAdmId);
-    if(adm.ward&&adm.bed&&adm.bed!=='—'){ try{ await sb.from('beds').update({status:'Available',current_patient_id:null,current_admission_id:null}).eq('ward',adm.ward).eq('room',adm.room).eq('bed_number',adm.bed); }catch(e){} }
+    if(adm.ward&&adm.bed&&adm.bed!=='—'){ try{ await sb.from('beds').update({status:'Available',current_patient_id:null,current_admission_id:null,status_changed_at:new Date().toISOString()}).eq('ward',adm.ward).eq('room',adm.room).eq('bed_number',adm.bed); }catch(e){} }
     toast('✅ Patient discharged','ok'); closeOv('discharge-ov'); loadAdmissions(); loadAdmissionStats();
   } catch(e){ toast(e.message,'err'); }
 }
@@ -9842,7 +9995,7 @@ async function deletePatientRecord(){
     for(const t of dependentTables){
       try{ await sb.from(t).delete().in('patient_id',ptIds); }catch(e){ /* table may not have patient_id, or may not exist in this deployment — skip */ }
     }
-    try{ await sb.from('beds').update({status:'Available',current_patient_id:null,current_admission_id:null}).in('current_patient_id',ptIds); }catch(e){}
+    try{ await sb.from('beds').update({status:'Available',current_patient_id:null,current_admission_id:null,status_changed_at:new Date().toISOString()}).in('current_patient_id',ptIds); }catch(e){}
     const {error:pErr} = await sb.from('patients').delete().in('id',ptIds);
     if(pErr) throw pErr;
     await sb.from('patients_master').delete().eq('mrn',mrn);
