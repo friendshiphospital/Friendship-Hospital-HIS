@@ -7004,7 +7004,7 @@ async function checkCriticals() {
 // highlighting; no new column was needed, just surfacing it here too
 // instead of it only being visible to someone already on that page).
 // Both time thresholds are configurable from Settings rather than hardcoded.
-let _notifState={crits:[],unpaid:[],pendingAdm:[],lowStock:[]};
+let _notifState={crits:[],unpaid:[],pendingAdm:[],lowStock:[],deferredDue:[]};
 async function refreshNotifications(){
   if(!sb) return;
   try{
@@ -7012,11 +7012,19 @@ async function refreshNotifications(){
     const unpaidCutoff=new Date(now-CFG.unpaidAlertHours*3600000).toISOString();
     const admCutoff=new Date(now-CFG.admissionAlertHours*3600000).toISOString();
 
-    const [critRes,invRes,admCandRes,invItemsRes]=await Promise.all([
+    const [critRes,invRes,admCandRes,invItemsRes,deferredLabRes,deferredRadRes]=await Promise.all([
       sb.from('critical_values').select('id,patient_id,parameter,value,department,created_at,patients(name,mrn)').eq('is_acknowledged',false).order('created_at',{ascending:false}).limit(20),
       sb.from('invoices').select('id,invoice_no,patient_name,net_amount,total_amount,currency,payment_status,created_at').in('payment_status',['unpaid','insurance_pending']).lte('created_at',unpaidCutoff).order('created_at',{ascending:true}).limit(20),
       sb.from('patients').select('id,name,first_name,last_name,mrn,visit_destination,created_at').ilike('visit_destination','%admission%').lte('created_at',admCutoff).order('created_at',{ascending:true}).limit(40),
-      sb.from('reagent_inventory').select('id,item_name,current_stock,min_level,unit').eq('is_active',true)
+      sb.from('reagent_inventory').select('id,item_name,current_stock,min_level,unit').eq('is_active',true),
+      // STAT PAYMENT DEFERRAL resurfacing — a deferred order's payment stays
+      // outstanding (see migration_v2.18_payment_deferral.sql) exactly like
+      // any other unpaid invoice, but the moment its result is actually done
+      // (sample Released / study Reported), this must resurface as an
+      // ACTIVE alert immediately, not just once CFG.unpaidAlertHours passes
+      // like the generic "Unpaid Invoices" category above.
+      sb.from('sample_records').select('patient_id,status,payment_deferred,patients(name,mrn,lab_no,payment_status)').eq('payment_deferred',true).eq('status','Released').limit(20),
+      sb.from('radiology_requests').select('id,patient_id,imaging_type,status,payment_deferred,patients(name,mrn,lab_no,payment_status)').eq('payment_deferred',true).eq('status','Reported').limit(20),
     ]);
 
     const crits=critRes.data||[], unpaid=invRes.data||[], admCandidates=admCandRes.data||[];
@@ -7036,8 +7044,16 @@ async function refreshNotifications(){
     // can't compare one column against another in a .lte() filter.
     const lowStock=(invItemsRes.data||[]).filter(it=>(it.current_stock||0)<=(it.min_level||0));
 
-    _notifState={crits,unpaid,pendingAdm,lowStock};
-    const total=crits.length+unpaid.length+pendingAdm.length+lowStock.length;
+    // Still unpaid despite the result being ready — if the patient already
+    // paid since the deferral was granted, this drops out on its own.
+    const stillUnpaid=p=>p?.payment_status==='unpaid'||p?.payment_status==='insurance_pending';
+    const deferredDue=[
+      ...(deferredLabRes.data||[]).filter(s=>stillUnpaid(s.patients)).map(s=>({kind:'Lab',label:'Lab result',patient_id:s.patient_id,patients:s.patients})),
+      ...(deferredRadRes.data||[]).filter(r=>stillUnpaid(r.patients)).map(r=>({kind:'Radiology',label:r.imaging_type||'Radiology report',patient_id:r.patient_id,patients:r.patients})),
+    ];
+
+    _notifState={crits,unpaid,pendingAdm,lowStock,deferredDue};
+    const total=crits.length+unpaid.length+pendingAdm.length+lowStock.length+deferredDue.length;
     const countEl=document.getElementById('notif-bell-count');
     if(countEl){ countEl.style.display=total>0?'block':'none'; countEl.textContent=total>99?'99+':total; }
     renderNotifList();
@@ -7045,12 +7061,21 @@ async function refreshNotifications(){
 }
 function renderNotifList(){
   const list=document.getElementById('notif-list'); if(!list) return;
-  const {crits,unpaid,pendingAdm,lowStock}=_notifState;
-  if(!crits.length && !unpaid.length && !pendingAdm.length && !lowStock.length){
+  const {crits,unpaid,pendingAdm,lowStock,deferredDue}=_notifState;
+  if(!crits.length && !unpaid.length && !pendingAdm.length && !lowStock.length && !(deferredDue&&deferredDue.length)){
     list.innerHTML='<div style="padding:16px;text-align:center;color:var(--slate);font-size:.78rem">✅ Nothing needs attention</div>';
     return;
   }
   let html='';
+  if(deferredDue&&deferredDue.length){
+    html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;color:#b91c1c;background:#fff1f2">\u26a0 Deferred Payments Now Due ('+deferredDue.length+')</div>';
+    html+=deferredDue.map(d=>{
+      const pt=d.patients||{};
+      return '<div onclick="notifJumpToDeferredPayment(\''+d.patient_id+'\')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'">'+
+        '<div style="font-weight:700;font-size:.8rem">'+(pt.name||'—')+' <span style="font-weight:400;color:var(--slate);font-size:.68rem">'+(pt.mrn||pt.lab_no||'')+'</span></div>'+
+        '<div style="font-size:.72rem;color:#b91c1c">'+d.kind+' \u2014 '+escapeHtml(d.label||'')+' ready \u00b7 payment was deferred (STAT) \u00b7 still '+(pt.payment_status==='insurance_pending'?'insurance pending':'unpaid')+'</div></div>';
+    }).join('');
+  }
   if(crits.length){
     html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;color:#b91c1c;background:#fff1f2">🚨 Unacknowledged Criticals ('+crits.length+')</div>';
     html+=crits.map(c=>{
@@ -7109,6 +7134,15 @@ async function notifJumpToAdmission(patientId){
 function notifJumpToInventory(){
   closeNotifPanel();
   goPage('inventory');
+}
+async function notifJumpToDeferredPayment(patientId){
+  closeNotifPanel();
+  goPage('billing');
+  if(!sb||!patientId) return;
+  try{
+    const {data}=await sb.from('invoices').select('id').eq('patient_id',patientId).in('payment_status',['unpaid','insurance_pending']).order('created_at',{ascending:false}).limit(1).maybeSingle();
+    if(data?.id) setTimeout(()=>editInvoice(data.id),250);
+  }catch(e){}
 }
 
 // ── SMS (Phase 8) ──────────────────────────────────────
@@ -8219,15 +8253,20 @@ function buildOrderTestPanel() {
 async function submitLabOrder() {
   if(!sb){toast('Not connected','err');return;}
   if(!_docPt){toast('Select patient first','err');return;}
-  if(!isPaymentCleared(_docPt)){checkPaymentGate(_docPt,'Lab Order',()=>_submitLabOrder());return;}
-  _submitLabOrder();
+  const isStat=document.getElementById('ord-lab-priority')?.value==='STAT';
+  if(!isPaymentCleared(_docPt)){
+    checkPaymentGate(_docPt,'Lab Order',()=>_submitLabOrder(false),{isStat,onDeferred:()=>_submitLabOrder(true)});
+    return;
+  }
+  _submitLabOrder(false);
 }
-async function _submitLabOrder() {
+async function _submitLabOrder(deferred) {
   const checked=[...document.querySelectorAll('.order-test-chk:checked')].map(c=>c.value);
   if(!checked.length){toast('Select at least one test','err');return;}
   const g=id=>document.getElementById(id)?.value||'';
+  const deferralFields=buildPaymentDeferralFields(deferred);
   try {
-    await sb.from('doctor_orders').insert(checked.map(t=>({patient_id:_docPt.id,order_type:'Lab',order_detail:t,priority:g('ord-lab-priority'),notes:g('ord-lab-notes'),ordered_by:g('doc-doctor-name')||currentProfile?.full_name,ordered_at:new Date().toISOString(),status:'Pending',created_by:currentProfile?.id})));
+    await sb.from('doctor_orders').insert(checked.map(t=>({patient_id:_docPt.id,order_type:'Lab',order_detail:t,priority:g('ord-lab-priority'),notes:g('ord-lab-notes'),ordered_by:g('doc-doctor-name')||currentProfile?.full_name,ordered_at:new Date().toISOString(),status:'Pending',created_by:currentProfile?.id,...deferralFields})));
     // A patient registered WITHOUT lab tests has no Lab Number yet — generate
     // one the first time the doctor orders a test, so it stops showing "-" on
     // the Lab Worklist. If a Lab Number already exists (tests were requested
@@ -8245,8 +8284,8 @@ async function _submitLabOrder() {
       if(isCollision && attempt<2){ labNo=null; continue; } // regenerate and retry
       throw updErr;
     }
-    try{ await sb.from('sample_records').upsert({patient_id:_docPt.id,status:'Pending'},{onConflict:'patient_id'}); }catch(e){}
-    toast('\u2705 Lab orders placed: '+checked.join(', ')+' — Lab No. '+labNo,'ok');
+    try{ await sb.from('sample_records').upsert({patient_id:_docPt.id,status:'Pending',...deferralFields},{onConflict:'patient_id'}); }catch(e){}
+    toast((deferred?'\u26a1 \u2705 Lab orders placed (\u26a0 Payment Deferred \u2014 STAT): ':'\u2705 Lab orders placed: ')+checked.join(', ')+' — Lab No. '+labNo,'ok');
     document.querySelectorAll('.order-test-chk:checked').forEach(c=>c.checked=false);
     loadActiveOrders();
   } catch(e){toast(e.message,'err');}
@@ -8254,28 +8293,37 @@ async function _submitLabOrder() {
 
 async function submitRadOrder() {
   if(!sb||!_docPt){toast('Select patient','err');return;}
-  if(!isPaymentCleared(_docPt)){checkPaymentGate(_docPt,'Radiology Order',()=>_submitRadOrder());return;}
-  _submitRadOrder();
+  const isStat=document.getElementById('ord-rad-urgency')?.value==='STAT';
+  if(!isPaymentCleared(_docPt)){
+    checkPaymentGate(_docPt,'Radiology Order',()=>_submitRadOrder(false),{isStat,onDeferred:()=>_submitRadOrder(true)});
+    return;
+  }
+  _submitRadOrder(false);
 }
-async function _submitRadOrder() {
+async function _submitRadOrder(deferred) {
   const g=id=>document.getElementById(id)?.value||'';
+  const deferralFields=buildPaymentDeferralFields(deferred);
   try {
     let radiologyNo;
     for(let attempt=0; attempt<3; attempt++){
       radiologyNo = await getNextNumber('radiology_number');
-      const {error:radErr} = await sb.from('radiology_requests').insert({patient_id:_docPt.id,radiology_no:radiologyNo,imaging_type:g('ord-rad-type'),urgency:g('ord-rad-urgency'),indication:g('ord-rad-indication'),clinical_history:g('ord-rad-history'),requesting_doctor:g('doc-doctor-name')||currentProfile?.full_name,status:'Requested',created_by:currentProfile?.id});
+      const {error:radErr} = await sb.from('radiology_requests').insert({patient_id:_docPt.id,radiology_no:radiologyNo,imaging_type:g('ord-rad-type'),urgency:g('ord-rad-urgency'),indication:g('ord-rad-indication'),clinical_history:g('ord-rad-history'),requesting_doctor:g('doc-doctor-name')||currentProfile?.full_name,status:'Requested',created_by:currentProfile?.id,...deferralFields});
       if(!radErr) break;
       const isCollision = radErr?.code==='23505' || /duplicate key|unique constraint/i.test(radErr?.message||'');
       if(isCollision && attempt<2) continue;
       throw radErr;
     }
-    await sb.from('doctor_orders').insert({patient_id:_docPt.id,order_type:'Radiology',order_detail:g('ord-rad-type'),priority:g('ord-rad-urgency'),notes:g('ord-rad-indication'),ordered_by:g('doc-doctor-name')||currentProfile?.full_name,ordered_at:new Date().toISOString(),status:'Pending',created_by:currentProfile?.id});
-    toast('\u2705 Radiology request submitted — No. '+radiologyNo,'ok'); loadActiveOrders();
+    await sb.from('doctor_orders').insert({patient_id:_docPt.id,order_type:'Radiology',order_detail:g('ord-rad-type'),priority:g('ord-rad-urgency'),notes:g('ord-rad-indication'),ordered_by:g('doc-doctor-name')||currentProfile?.full_name,ordered_at:new Date().toISOString(),status:'Pending',created_by:currentProfile?.id,...deferralFields});
+    toast((deferred?'\u26a1 \u2705 Radiology request submitted (\u26a0 Payment Deferred \u2014 STAT) \u2014 No. ':'\u2705 Radiology request submitted \u2014 No. ')+radiologyNo,'ok'); loadActiveOrders();
   } catch(e){toast(e.message,'err');}
 }
 
 async function submitNursingOrder() {
   if(!sb||!_docPt){toast('Select patient','err');return;}
+  if(!isPaymentCleared(_docPt)){checkPaymentGate(_docPt,'Nursing Order',()=>_submitNursingOrder());return;}
+  _submitNursingOrder();
+}
+async function _submitNursingOrder() {
   const g=id=>document.getElementById(id)?.value||'';
   try {
     await sb.from('doctor_orders').insert({patient_id:_docPt.id,order_type:'Nursing',order_detail:g('ord-nrs-type')+(g('ord-nrs-detail')?' — '+g('ord-nrs-detail'):''),ordered_by:g('doc-doctor-name')||currentProfile?.full_name,ordered_at:new Date().toISOString(),status:'Pending',created_by:currentProfile?.id});
@@ -8285,6 +8333,10 @@ async function submitNursingOrder() {
 
 async function submitDietOrder() {
   if(!sb||!_docPt){toast('Select patient','err');return;}
+  if(!isPaymentCleared(_docPt)){checkPaymentGate(_docPt,'Diet Order',()=>_submitDietOrder());return;}
+  _submitDietOrder();
+}
+async function _submitDietOrder() {
   const g=id=>document.getElementById(id)?.value||'';
   try {
     await sb.from('doctor_orders').insert({patient_id:_docPt.id,order_type:'Diet',order_detail:g('ord-diet-type')+(g('ord-diet-kcal')?' — '+g('ord-diet-kcal'):'')+( g('ord-diet-notes')?' | '+g('ord-diet-notes'):''),ordered_by:g('doc-doctor-name')||currentProfile?.full_name,ordered_at:new Date().toISOString(),status:'Pending',created_by:currentProfile?.id});
@@ -8294,6 +8346,10 @@ async function submitDietOrder() {
 
 async function submitPhysioOrder() {
   if(!sb||!_docPt){toast('Select patient','err');return;}
+  if(!isPaymentCleared(_docPt)){checkPaymentGate(_docPt,'Physio Referral',()=>_submitPhysioOrder());return;}
+  _submitPhysioOrder();
+}
+async function _submitPhysioOrder() {
   const g=id=>document.getElementById(id)?.value||'';
   try {
     await sb.from('doctor_orders').insert({patient_id:_docPt.id,order_type:'Physio',order_detail:g('ord-physio-reason')+' | '+g('ord-physio-area')+' | '+g('ord-physio-freq')+(g('ord-physio-goal')?' | '+g('ord-physio-goal'):''),ordered_by:g('doc-doctor-name')||currentProfile?.full_name,ordered_at:new Date().toISOString(),status:'Pending',created_by:currentProfile?.id});
@@ -8303,8 +8359,13 @@ async function submitPhysioOrder() {
 
 async function submitOtherOrder() {
   if(!sb||!_docPt){toast('Select patient','err');return;}
+  const g0=id=>document.getElementById(id)?.value||'';
+  if(!g0('ord-other-detail')){toast('Enter order detail','err');return;}
+  if(!isPaymentCleared(_docPt)){checkPaymentGate(_docPt,'Order',()=>_submitOtherOrder());return;}
+  _submitOtherOrder();
+}
+async function _submitOtherOrder() {
   const g=id=>document.getElementById(id)?.value||'';
-  if(!g('ord-other-detail')){toast('Enter order detail','err');return;}
   try {
     await sb.from('doctor_orders').insert({patient_id:_docPt.id,order_type:'Other',order_detail:g('ord-other-detail'),ordered_by:g('doc-doctor-name')||currentProfile?.full_name,ordered_at:new Date().toISOString(),status:'Pending',created_by:currentProfile?.id});
     toast('\u2705 Order saved','ok'); document.getElementById('ord-other-detail').value=''; loadActiveOrders();
@@ -8321,6 +8382,7 @@ async function loadActiveOrders() {
     el.innerHTML=data.map(o=>'<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)">'+
       '<span style="background:'+(tc[o.order_type]||'#f3f4f6')+';padding:2px 8px;border-radius:20px;font-size:.68rem;font-weight:700;white-space:nowrap">'+o.order_type+'</span>'+
       '<span style="flex:1;font-size:.78rem">'+o.order_detail+'</span>'+
+      (o.payment_deferred?'<span class="bdg" style="background:#fef2f2;color:#b91c1c;border:1.5px solid #fca5a5;white-space:nowrap" title="Granted by '+escapeHtml(o.payment_deferred_by_name||'')+' at '+fmtDT(o.payment_deferred_at)+'">\u26a0 Payment Deferred \u2014 STAT</span>':'')+
       '<span style="font-size:.68rem;color:var(--slate);white-space:nowrap">'+fmtDT(o.ordered_at)+'</span>'+
       statusBadge(o.status)+
       '<button class="btn btn-r btn-xs" onclick="cancelOrder(\x27'+o.id+'\x27)">\u2715</button></div>').join('');
@@ -9349,6 +9411,11 @@ async function releaseResults(dept) {
     await sb.from(map.table).update({is_released:true, released_at:new Date().toISOString(), released_by:currentProfile?.id}).eq('patient_id',ptId);
     await updateSampleStatus(ptId,'Released');
     toast('📤 '+meta.label.replace(/^\S+\s/,'')+' results released','ok');
+    // sample_records.status just became 'Released' — if this order was a
+    // STAT payment deferral, it now qualifies for the notification bell's
+    // "Deferred Payments Now Due" category. Refresh immediately rather than
+    // waiting for the bell's own periodic poll.
+    refreshNotifications();
   } catch(e){ toast(e.message,'err'); }
 }
 
@@ -10197,7 +10264,16 @@ async function markPaid(id) {
 // ══════════════════════════════════════════════════════════════
 // PAYMENT GATE — called before any clinical action
 // ══════════════════════════════════════════════════════════════
-function checkPaymentGate(pt, actionName, onProceed) {
+// opts.isStat + opts.onDeferred together enable STAT PAYMENT DEFERRAL — a
+// DEFERRAL, not a bypass: for an unpaid/insurance_pending patient, a STAT
+// order can still proceed immediately with the ordering doctor's explicit,
+// logged permission. The invoice/patient.payment_status is never touched
+// by this; opts.onDeferred() is responsible for stamping the created
+// record with buildPaymentDeferralFields() so it (a) shows a visible
+// "⚠ Payment Deferred — STAT" flag wherever it appears and (b) resurfaces
+// as an active payment-due alert once the result is verified/released —
+// see refreshNotifications()'s deferredDue category.
+function checkPaymentGate(pt, actionName, onProceed, opts) {
   if(!pt) { onProceed(); return; } // no patient object = skip check
   const s = pt.payment_status||'unpaid';
   if(s==='paid'||s==='waived') { onProceed(); return; }
@@ -10205,11 +10281,28 @@ function checkPaymentGate(pt, actionName, onProceed) {
     if(confirm('⚠️ Outstanding balance for '+( pt.name||'this patient')+'.\nProceed anyway?')) onProceed();
     return;
   }
-  // unpaid or insurance_pending — hard block
+  // unpaid or insurance_pending
   const reason = s==='insurance_pending' ?
     'Insurance pre-authorisation is still pending.' :
     'Payment has not been received.';
+  if(opts?.isStat && opts?.onDeferred){
+    const granted=confirm('⚡ STAT order for '+(pt.name||'this patient')+' — '+reason+
+      '\n\nGrant payment deferral for this urgent order?\nThe order will proceed now, but the payment stays outstanding and billing will be actively alerted once the result is ready.');
+    if(granted){ opts.onDeferred(); return; }
+    toast('STAT order not submitted — deferral declined','warn');
+    return;
+  }
+  // hard block — no deferral offered (not STAT, or the caller has no deferral path)
   toast('🚫 '+actionName+' blocked — '+reason+' Please contact billing.','err');
+}
+// Shared stamp applied to any order record proceeding under a STAT payment
+// deferral (or explicitly cleared when NOT deferred, so placing a later,
+// already-paid order for the same patient doesn't leave a stale deferral
+// flag behind on a shared one-row-per-patient table like sample_records).
+function buildPaymentDeferralFields(deferred){
+  return deferred
+    ? { payment_deferred:true, payment_deferred_by:currentProfile?.id||null, payment_deferred_by_name:currentProfile?.full_name||'', payment_deferred_at:new Date().toISOString() }
+    : { payment_deferred:false, payment_deferred_by:null, payment_deferred_by_name:null, payment_deferred_at:null };
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -13897,13 +13990,18 @@ async function submitRadRequest() {
     toast('\u26a0\ufe0f Pregnancy status must be confirmed before submitting this request','err'); return;
   }
   // Check payment
-  if(_radPt && !isPaymentCleared(_radPt)){checkPaymentGate(_radPt,'Radiology Request',()=>_doSubmitRadRequest());return;}
-  _doSubmitRadRequest();
+  const isStat=document.getElementById('rad-urgency')?.value==='STAT';
+  if(_radPt && !isPaymentCleared(_radPt)){
+    checkPaymentGate(_radPt,'Radiology Request',()=>_doSubmitRadRequest(false),{isStat,onDeferred:()=>_doSubmitRadRequest(true)});
+    return;
+  }
+  _doSubmitRadRequest(false);
 }
-async function _doSubmitRadRequest() {
+async function _doSubmitRadRequest(deferred) {
   const ptId=document.getElementById('rad-pt-id')?.value;
   const g=id=>document.getElementById(id)?.value||'';
   const pregWrapShown=document.getElementById('rad-pregnancy-wrap')?.style.display!=='none';
+  const deferralFields=buildPaymentDeferralFields(deferred);
   try {
     await sb.from('radiology_requests').insert({
       patient_id:ptId, imaging_type:g('rad-type'), urgency:g('rad-urgency'),
@@ -13912,9 +14010,10 @@ async function _doSubmitRadRequest() {
       pregnancy_status:pregWrapShown?(g('rad-pregnancy-status')||null):'not_applicable',
       egfr_value:g('rad-egfr')?parseFloat(g('rad-egfr')):null,
       creatinine_value:g('rad-creatinine')?parseFloat(g('rad-creatinine')):null,
-      status:'Requested', created_by:currentProfile?.id
+      status:'Requested', created_by:currentProfile?.id,
+      ...deferralFields
     });
-    toast('\u2705 Radiology request submitted','ok');
+    toast(deferred?'\u26a1 \u2705 Radiology request submitted (\u26a0 Payment Deferred \u2014 STAT)':'\u2705 Radiology request submitted','ok');
     ['rad-indication','rad-contraindications','rad-egfr','rad-creatinine'].forEach(id=>{const el=document.getElementById(id);if(el) el.value='';});
     const pregSel=document.getElementById('rad-pregnancy-status'); if(pregSel) pregSel.value='';
     loadRadRequests();
@@ -13928,8 +14027,22 @@ async function loadRadRequests() {
   try {
     let q=sb.from('radiology_requests').select('*,patients(name,mrn,lab_no,age,age_unit,sex,ward,payment_status)').order('created_at',{ascending:false}).limit(80);
     if(sf) q=q.eq('status',sf);
-    const {data}=await q;
-    if(!data?.length){body.innerHTML='<div class="empty-state"><div class="empty-icon">\ud83e\ude7b</div><div class="empty-title">No radiology requests</div></div>';return;}
+    const {data:all}=await q;
+    // Same queue-side payment enforcement as loadSampleQueue(): an unpaid/
+    // insurance_pending request is hidden here entirely unless it carries an
+    // explicit STAT payment deferral. See migration_v2.18_payment_deferral.sql.
+    const data=(all||[]).filter(r=>{
+      const pt=r.patients||{};
+      const unpaid=pt.payment_status==='unpaid'||pt.payment_status==='insurance_pending';
+      return !unpaid || r.payment_deferred;
+    });
+    const hiddenCount=(all?.length||0)-data.length;
+    if(!data.length){
+      body.innerHTML=hiddenCount
+        ? '<div class="empty-state"><div class="empty-icon">\ud83d\udcb0</div><div class="empty-title">'+hiddenCount+' request(s) awaiting payment</div><div style="font-size:.8rem;color:var(--slate);margin-top:4px">Hidden from this queue until payment clears — see Billing.</div></div>'
+        : '<div class="empty-state"><div class="empty-icon">\ud83e\ude7b</div><div class="empty-title">No radiology requests</div></div>';
+      return;
+    }
     const urgColor={STAT:'#fff1f2',Urgent:'#fffbeb',Routine:''};
     body.innerHTML='<div style="overflow-x:auto"><table class="tbl"><thead><tr>'+
       '<th>Date</th><th>Patient</th><th>Study</th><th>Urgency</th><th>Requesting Dr</th><th>Payment</th><th>Status</th><th>Actions</th></tr></thead><tbody>'+
@@ -13943,14 +14056,14 @@ async function loadRadRequests() {
           '<td style="font-size:.78rem;font-weight:600">'+(r.imaging_type||'—')+(r.is_critical?' <span class="bdg" style="background:#b91c1c;color:#fff">🚨 CRITICAL</span>':'')+'</td>'+
           '<td>'+(r.urgency==='STAT'?'<span class="bdg" style="background:#fef2f2;color:#b91c1c;border:1.5px solid #fca5a5">\u26a1 STAT</span>':statusBadge(r.urgency))+'</td>'+
           '<td style="font-size:.75rem">'+(r.requesting_doctor||'—')+'</td>'+
-          '<td>'+paymentTag(pt.payment_status)+'</td>'+
+          '<td>'+paymentTag(pt.payment_status)+(r.payment_deferred?' <span class="bdg" style="background:#fef2f2;color:#b91c1c;border:1.5px solid #fca5a5">\u26a0 Payment Deferred \u2014 STAT</span>':'')+'</td>'+
           '<td>'+statusBadge(r.status)+'</td>'+
           '<td><div class="acts">'+
             '<button class="btn btn-p btn-xs" onclick="openRadReport(\''+r.id+'\')">📝 Report</button>'+
             '<button class="btn btn-s btn-xs" onclick="updateRadStatus(\''+r.id+'\',\'In Progress\')">▶ Start</button>'+
             ((r.status==='Reported'||r.status==='Verified')?'<button class="btn btn-s btn-xs" onclick="openDicomViewer(\''+r.id+'\')">👁️ View DICOM</button>':'')+
           '</div></td></tr>';
-      }).join('')+'</tbody></table></div>';
+      }).join('')+(hiddenCount?'<tr><td colspan="8" style="text-align:center;padding:8px;font-size:.72rem;color:var(--slate)">'+hiddenCount+' more request(s) hidden pending payment</td></tr>':'')+'</tbody></table></div>';
   } catch(e){body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+e.message+'</div>';}
 }
 
@@ -14045,6 +14158,11 @@ async function saveRadReport() {
     toast('\u2705 Report saved','ok');
     if(isCritical) toast('\ud83d\udea8 Critical finding — notify requesting doctor immediately!','err');
     loadPendingForReport();
+    // status just became 'Reported' — if this study was a STAT payment
+    // deferral, it now qualifies for the notification bell's "Deferred
+    // Payments Now Due" category. Refresh immediately rather than waiting
+    // for the bell's own periodic poll.
+    refreshNotifications();
   } catch(e){toast(e.message,'err');}
 }
 
@@ -14562,11 +14680,29 @@ async function loadSampleQueue(){
   body.innerHTML='<div class="spin-center"><div class="spinner"></div></div>';
   try{
     const{data}=await sb.from('sample_records').select('*,patients(name,mrn,lab_no,priority,tests_requested,payment_status)').eq('status','Pending').order('created_at',{ascending:false}).limit(40);
-    if(!data?.length){body.innerHTML='<div class="empty-state">Queue empty</div>';return;}
+    // An unpaid/insurance_pending order does not appear in the actionable
+    // Sample Collection queue at all — UNLESS a doctor explicitly granted a
+    // STAT payment deferral at order time (payment_deferred=true), in which
+    // case it still shows, flagged. This is queue-side enforcement on top of
+    // the submission-time gate (checkPaymentGate in submitLabOrder), so an
+    // unpaid order can never silently surface here regardless of how it was
+    // created. See migration_v2.18_payment_deferral.sql.
+    const visible=(data||[]).filter(s=>{
+      const pt=s.patients||{};
+      const up=pt.payment_status==='unpaid'||pt.payment_status==='insurance_pending';
+      return !up || s.payment_deferred;
+    });
+    const hiddenCount=(data?.length||0)-visible.length;
+    if(!visible.length){
+      body.innerHTML=hiddenCount
+        ? '<div class="empty-state"><div class="empty-icon">\ud83d\udcb0</div><div class="empty-title">'+hiddenCount+' order(s) awaiting payment</div><div style="font-size:.8rem;color:var(--slate);margin-top:4px">Hidden from this queue until payment clears — see Billing.</div></div>'
+        : '<div class="empty-state">Queue empty</div>';
+      return;
+    }
     body.innerHTML='<div style="overflow-x:auto"><table class="tbl" style="font-size:.74rem"><thead><tr><th>Lab No</th><th>Name</th><th>Priority</th><th>Payment</th><th>Status</th></tr></thead><tbody>'+
-      data.map(s=>{const pt=s.patients||{};const up=pt.payment_status==='unpaid'||pt.payment_status==='insurance_pending';
-        return '<tr class="'+(up?'pay-unpaid':'')+'" style="cursor:pointer" onclick="selectScPt(\x27'+s.patient_id+'\x27)">'+'<td style="font-family:DM Mono,monospace;color:var(--teal)">'+(pt.lab_no||pt.mrn||'—')+'</td><td style="font-weight:600">'+(pt.name||'—')+'</td><td>'+statusBadge(pt.priority||'Routine')+'</td><td>'+paymentTag(pt.payment_status)+'</td><td>'+statusBadge(s.status)+'</td></tr>';
-      }).join('')+'</tbody></table></div>';
+      visible.map(s=>{const pt=s.patients||{};const up=pt.payment_status==='unpaid'||pt.payment_status==='insurance_pending';
+        return '<tr class="'+(up?'pay-unpaid':'')+'" style="cursor:pointer" onclick="selectScPt(\x27'+s.patient_id+'\x27)">'+'<td style="font-family:DM Mono,monospace;color:var(--teal)">'+(pt.lab_no||pt.mrn||'—')+'</td><td style="font-weight:600">'+(pt.name||'—')+'</td><td>'+statusBadge(pt.priority||'Routine')+'</td><td>'+paymentTag(pt.payment_status)+(s.payment_deferred?' <span class="bdg" style="background:#fef2f2;color:#b91c1c;border:1.5px solid #fca5a5">\u26a0 Payment Deferred \u2014 STAT</span>':'')+'</td><td>'+statusBadge(s.status)+'</td></tr>';
+      }).join('')+(hiddenCount?'<tr><td colspan="5" style="text-align:center;padding:8px;font-size:.72rem;color:var(--slate)">'+hiddenCount+' more order(s) hidden pending payment</td></tr>':'')+'</tbody></table></div>';
   }catch(e){}
 }
 async function selectScPt(ptId){
