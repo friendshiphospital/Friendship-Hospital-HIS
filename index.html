@@ -939,6 +939,10 @@ html[dir="rtl"] body{direction:rtl;}
             </div>
           </div>
         </div>
+        <div id="vs-transfusion-tag-banner" style="display:none;background:var(--red-lt);border:1.5px solid var(--red);border-radius:9px;padding:8px 12px;margin-top:8px;font-size:.78rem">
+          🩸 This reading will be saved as <strong id="vs-transfusion-tag-stage">—</strong>-transfusion vitals for Blood Bank.
+          <button class="btn btn-s btn-xs" onclick="clearTransfusionVitalsTag()" style="margin-left:8px">✕ Clear tag</button>
+        </div>
       </div>
     </div>
 
@@ -5876,6 +5880,74 @@ html[dir="rtl"] body{direction:rtl;}
   </div>
 </div>
 
+<div class="ov" id="bb-transfusion-ov">
+  <div class="mo mo-lg">
+    <div class="mo-hd"><h3>🩺 Transfusion Record</h3><button class="mo-x" onclick="closeOv('bb-transfusion-ov')">✕</button></div>
+    <div class="mo-b">
+      <input type="hidden" id="bb-tx-unit-id">
+      <div id="bb-tx-summary" style="background:var(--teal-lt);border:1.5px solid var(--teal2);border-radius:8px;padding:12px;margin-bottom:14px;font-size:.82rem"></div>
+      <div id="bb-tx-controls" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px"></div>
+      <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:var(--slate);margin-bottom:6px">Vitals — Before / During / After (recorded via the existing Nursing Vitals form)</div>
+      <div id="bb-tx-vitals-body"><div style="font-size:.75rem;color:var(--slate)">No transfusion started yet</div></div>
+      <div style="margin-top:16px">
+        <button class="btn btn-r btn-sm" id="bb-tx-reaction-btn" onclick="openReactionReport()" style="display:none">🚨 Report Adverse Reaction</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="ov" id="bb-reaction-ov">
+  <div class="mo mo-sm">
+    <div class="mo-hd"><h3>🚨 Report Adverse Transfusion Reaction</h3><button class="mo-x" onclick="closeOv('bb-reaction-ov')">✕</button></div>
+    <div class="mo-b">
+      <div style="background:var(--red-lt);border:1px solid var(--red);border-radius:8px;padding:10px 12px;font-size:.76rem;margin-bottom:12px">This immediately alerts the ordering doctor and Blood Bank staff through the same Critical Values pathway used for critical lab results.</div>
+      <div class="fg"><label class="fl">Reaction Type</label>
+        <select class="fc" id="bb-reaction-type">
+          <option>Febrile Non-Haemolytic</option>
+          <option>Allergic / Urticarial</option>
+          <option>Acute Haemolytic</option>
+          <option>Anaphylactic</option>
+          <option>TRALI (Transfusion-Related Acute Lung Injury)</option>
+          <option>TACO (Transfusion-Associated Circulatory Overload)</option>
+          <option>Other</option>
+        </select>
+      </div>
+      <div class="fg"><label class="fl">Severity</label>
+        <select class="fc" id="bb-reaction-severity"><option>Mild</option><option>Moderate</option><option>Severe</option></select>
+      </div>
+      <div class="fg"><label class="fl">Description / Action Taken</label><textarea class="fc" id="bb-reaction-desc" rows="3"></textarea></div>
+    </div>
+    <div class="mo-ft">
+      <button class="btn btn-s" onclick="closeOv('bb-reaction-ov')">Cancel</button>
+      <button class="btn btn-r" onclick="submitTransfusionReaction()">🚨 Report Now</button>
+    </div>
+  </div>
+</div>
+
+<div class="ov" id="bb-discard-ov">
+  <div class="mo mo-sm">
+    <div class="mo-hd"><h3>🗑 Discard Blood Unit</h3><button class="mo-x" onclick="closeOv('bb-discard-ov')">✕</button></div>
+    <div class="mo-b">
+      <input type="hidden" id="bb-discard-unit-id">
+      <div id="bb-discard-summary" style="font-size:.82rem;margin-bottom:12px"></div>
+      <div class="fg"><label class="fl">Reason Code *</label>
+        <select class="fc" id="bb-discard-reason-code">
+          <option value="">Select…</option>
+          <option value="Expired">Expired</option>
+          <option value="Reaction-Related">Reaction-Related</option>
+          <option value="Damaged">Damaged</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+      <div class="fg"><label class="fl">Details</label><textarea class="fc" id="bb-discard-notes" rows="2" placeholder="Required detail — no silent discards"></textarea></div>
+    </div>
+    <div class="mo-ft">
+      <button class="btn btn-s" onclick="closeOv('bb-discard-ov')">Cancel</button>
+      <button class="btn btn-r" onclick="submitDiscardUnit()">🗑 Discard Unit</button>
+    </div>
+  </div>
+</div>
+
 <div class="ov" id="ins-claim-ov">
   <div class="mo mo-lg">
     <div class="mo-hd"><h3>🏦 Insurance Claim Form</h3><button class="mo-x" onclick="closeOv('ins-claim-ov')">✕</button></div>
@@ -6335,11 +6407,11 @@ const CFG = {
 const BLOOD_SHELF_LIFE_CFG_KEY={'Whole Blood':'bloodShelfWholeBlood','Packed RBC':'bloodShelfPrbc',Platelets:'bloodShelfPlatelets',FFP:'bloodShelfFfp',Cryoprecipitate:'bloodShelfCryo'};
 
 const ROLE_PAGES = {
-  admin:['dashboard','admission','theatre','consultation','nursing','fluid-chart','appointments','infection','handover','register','worklist','samples','set-printer','hem-entry','chem-entry','sero-entry','immuno-entry','micro-entry','pcr-entry','histo-entry','cyto-entry','unified-entry','allresults','criticals','reports','print-reports-hub','rad-print','billing','prices','pt-history','labhistory','tat','inventory','qc','staff','doctors','radiology','analyzer','delivery','settings','statistics'],
-  doctor:['dashboard','admission','theatre','consultation','nursing','fluid-chart','allresults','criticals','radiology','pt-history'],
-  nurse:['dashboard','nursing','fluid-chart','admission','criticals','pt-history','inventory'],
-  lab_tech:['dashboard','worklist','samples','set-printer','hem-entry','chem-entry','sero-entry','immuno-entry','micro-entry','pcr-entry','histo-entry','cyto-entry','unified-entry','allresults','criticals','reports','tat','inventory','delivery','qc','labhistory','pt-history'],
-  lab_supervisor:['register','worklist','samples','set-printer','hem-entry','chem-entry','sero-entry','immuno-entry','micro-entry','unified-entry','allresults','criticals','reports','qc','labhistory','tat','inventory','delivery','staff','pt-history'],
+  admin:['dashboard','admission','theatre','consultation','nursing','fluid-chart','appointments','infection','handover','register','worklist','samples','set-printer','hem-entry','chem-entry','sero-entry','immuno-entry','micro-entry','pcr-entry','histo-entry','cyto-entry','unified-entry','allresults','criticals','reports','print-reports-hub','rad-print','billing','prices','pt-history','labhistory','tat','inventory','bloodbank','qc','staff','doctors','radiology','analyzer','delivery','settings','statistics'],
+  doctor:['dashboard','admission','theatre','consultation','nursing','fluid-chart','allresults','criticals','radiology','bloodbank','pt-history'],
+  nurse:['dashboard','nursing','fluid-chart','admission','criticals','bloodbank','pt-history','inventory'],
+  lab_tech:['dashboard','worklist','samples','set-printer','hem-entry','chem-entry','sero-entry','immuno-entry','micro-entry','pcr-entry','histo-entry','cyto-entry','unified-entry','allresults','criticals','reports','tat','inventory','delivery','qc','labhistory','bloodbank','pt-history'],
+  lab_supervisor:['register','worklist','samples','set-printer','hem-entry','chem-entry','sero-entry','immuno-entry','micro-entry','unified-entry','allresults','criticals','reports','qc','labhistory','tat','inventory','delivery','staff','bloodbank','pt-history'],
   receptionist:['register','appointments','billing','prices','worklist','dashboard','infection','print-reports-hub','reports','rad-print'],
   cashier:['billing','prices'],
   theatre_nurse:['theatre','nursing','fluid-chart','criticals','pt-history','inventory'],
@@ -8615,11 +8687,26 @@ async function saveVitals() {
       recorded_by:g('vs-by')||currentProfile?.full_name||'',
       recorded_by_name:g('vs-by')||currentProfile?.full_name||'',
       recorded_at:new Date().toISOString(),
-      notes:g('vs-notes'), created_by:currentProfile?.id
+      notes:g('vs-notes'), created_by:currentProfile?.id,
+      // Blood Bank Phase 5 — set only when this reading was taken via the
+      // "Record Vitals" deep-link from a specific transfusion's Before/
+      // During/After stage; null for every ordinary vitals reading.
+      ...(window._transfusionTag?{transfusion_id:window._transfusionTag.id,transfusion_stage:window._transfusionTag.stage}:{}),
     });
     toast(result.queued ? '📥 Offline — vitals saved on this device, will sync later' : '✅ Vital signs saved', result.queued?'warn':'ok');
-    if(!result.queued) loadVitalsHistory();
+    if(!result.queued){ loadVitalsHistory(); if(window._transfusionTag) clearTransfusionVitalsTag(); }
   } catch(e){ toast(e.message,'err'); }
+}
+// Blood Bank Phase 5 — tag/clear helpers for the transfusion-vitals
+// deep-link (reuses this exact vitals form, doesn't rebuild it).
+function clearTransfusionVitalsTag() {
+  window._transfusionTag=null;
+  const b=document.getElementById('vs-transfusion-tag-banner'); if(b) b.style.display='none';
+}
+function renderTransfusionVitalsTagBanner() {
+  const b=document.getElementById('vs-transfusion-tag-banner'); if(!b) return;
+  if(window._transfusionTag){ b.style.display='block'; const s=document.getElementById('vs-transfusion-tag-stage'); if(s) s.textContent=window._transfusionTag.stage; }
+  else b.style.display='none';
 }
 async function loadVitalsHistory() {
   const body=document.getElementById('vs-history-body'); if(!body||!_vsPt?.id||!sb) return;
@@ -13066,7 +13153,7 @@ function switchNurseTab(tab, btn) {
     const by=document.getElementById('ho-from'); if(by&&!by.value&&currentProfile) by.value=currentProfile.full_name||'';
     loadRecentHandovers();
   }
-  if(tab==='vitals') startVitalsClock();
+  if(tab==='vitals'){ startVitalsClock(); renderTransfusionVitalsTagBanner(); }
 }
 
 async function loadRecentHandovers() {
@@ -15872,6 +15959,8 @@ function renderBloodUnitTable(units) {
         '<td>'+statusBadge(u.status)+'</td>'+
         '<td><div class="acts"><button class="btn btn-s btn-xs" onclick="printBloodUnitLabel(\x27'+u.id+'\x27)">🏷 Label</button>'+
           (u.status==='Crossmatched'?'<button class="btn btn-p btn-xs" onclick="openIssueUnit(\x27'+u.id+'\x27)">🩸 Issue</button>':'')+
+          (u.status==='Issued'?'<button class="btn btn-p btn-xs" onclick="openTransfusionRecord(\x27'+u.id+'\x27)">🩺 Transfusion</button>':'')+
+          (u.status!=='Issued'&&u.status!=='Discarded'?'<button class="btn btn-r btn-xs" onclick="openDiscardUnit(\x27'+u.id+'\x27)">🗑 Discard</button>':'')+
         '</div></td>'+
       '</tr>';
     }).join('')+
@@ -16197,7 +16286,10 @@ async function renderBloodRequestCard(r) {
     '</div>';
   }
   try {
-    const {data:candidates}=await sb.from('blood_units').select('*').eq('component_type',r.component_type).eq('status','Available').order('expiry_date',{ascending:true});
+    // Auto-excludes expired units from availability (Phase 1 requirement)
+    // regardless of their stored status — a unit's status field alone is
+    // never trusted for this, expiry_date is checked directly every time.
+    const {data:candidates}=await sb.from('blood_units').select('*').eq('component_type',r.component_type).eq('status','Available').gte('expiry_date',today()).order('expiry_date',{ascending:true});
     const compatible=(candidates||[]).filter(u=>isBloodCompatible(patientType,u.blood_group,u.rh_factor));
     const list=compatible.length
       ? compatible.slice(0,5).map(u=>'<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 8px;border:1px solid var(--border);border-radius:6px;margin-top:4px;font-size:.75rem"><span>'+escapeHtml(u.unit_no)+' · '+escapeHtml(u.blood_group)+(u.rh_factor==='Positive'?'+':'−')+' · exp '+fmtDate(u.expiry_date)+'</span><button class="btn btn-p btn-xs" onclick="crossmatchUnit(\''+u.id+'\',\''+r.id+'\')">🧬 Crossmatch</button></div>').join('')
@@ -16351,6 +16443,151 @@ function printBloodIssueSlip(u) {
     '</div>'+
     '</div>'+printFooter();
   openPrintWin(html,'Blood Issue Slip');
+}
+
+// ── BLOOD BANK Phase 5: transfusion administration & reaction reporting ──
+let _bbTxCtx=null;
+async function openTransfusionRecord(unitId) {
+  if(!sb) return;
+  try {
+    const {data:unit,error}=await sb.from('blood_units').select('*,blood_requests(patient_id)').eq('id',unitId).single();
+    if(error) throw error;
+    const patientId=unit.blood_requests?.patient_id;
+    let patient=null;
+    if(patientId){ const {data}=await sb.from('patients').select('id,name,first_name,last_name,mrn').eq('id',patientId).maybeSingle(); patient=data; }
+    const {data:tx}=await sb.from('blood_transfusions').select('*').eq('unit_id',unitId).order('created_at',{ascending:false}).limit(1).maybeSingle();
+    _bbTxCtx={unit,patient,tx:tx||null};
+    document.getElementById('bb-tx-unit-id').value=unitId;
+    const summary=document.getElementById('bb-tx-summary');
+    if(summary) summary.innerHTML='<div><strong>Patient:</strong> '+escapeHtml(patient?.name||fullName(patient)||'—')+' ('+escapeHtml(patient?.mrn||'—')+')</div><div><strong>Unit:</strong> '+escapeHtml(unit.unit_no)+' — '+escapeHtml(unit.blood_group)+(unit.rh_factor==='Positive'?'+':'−')+' '+escapeHtml(unit.component_type)+'</div>';
+    renderTransfusionControls();
+    await renderTransfusionVitalsSummary();
+    openOv('bb-transfusion-ov');
+  } catch(e){ toast(e.message,'err'); }
+}
+function renderTransfusionControls() {
+  const el=document.getElementById('bb-tx-controls'); if(!el||!_bbTxCtx) return;
+  const tx=_bbTxCtx.tx;
+  const reactionBtn=document.getElementById('bb-tx-reaction-btn');
+  if(!tx){
+    el.innerHTML='<button class="btn btn-p btn-sm" onclick="startTransfusion()">▶ Start Transfusion</button>';
+    if(reactionBtn) reactionBtn.style.display='none';
+    return;
+  }
+  let html='<div style="font-size:.78rem;color:var(--slate)">Started: '+fmtDT(tx.start_time)+(tx.started_by_name?' by '+escapeHtml(tx.started_by_name):'')+'</div>';
+  if(tx.status==='In Progress'){
+    html+='<button class="btn btn-r btn-sm" onclick="stopTransfusion()">⏹ Stop Transfusion</button>';
+    if(reactionBtn) reactionBtn.style.display='';
+  } else {
+    html+='<div style="font-size:.78rem;color:var(--slate)">Stopped: '+fmtDT(tx.stop_time)+(tx.stopped_by_name?' by '+escapeHtml(tx.stopped_by_name):'')+' — '+statusBadge(tx.status)+'</div>';
+    if(reactionBtn) reactionBtn.style.display=tx.status==='Reaction Reported'?'none':'';
+  }
+  el.innerHTML=html;
+}
+async function startTransfusion() {
+  if(!sb||!_bbTxCtx) return;
+  try {
+    const {data,error}=await sb.from('blood_transfusions').insert({unit_id:_bbTxCtx.unit.id,request_id:_bbTxCtx.unit.request_id||null,patient_id:_bbTxCtx.patient?.id,started_by:currentProfile?.id,started_by_name:currentProfile?.full_name,start_time:new Date().toISOString(),status:'In Progress'}).select().single();
+    if(error) throw error;
+    _bbTxCtx.tx=data;
+    toast('✅ Transfusion started','ok');
+    renderTransfusionControls();
+  } catch(e){ toast(e.message,'err'); }
+}
+async function stopTransfusion() {
+  if(!sb||!_bbTxCtx?.tx) return;
+  try {
+    await sb.from('blood_transfusions').update({stopped_by:currentProfile?.id,stopped_by_name:currentProfile?.full_name,stop_time:new Date().toISOString(),status:'Completed'}).eq('id',_bbTxCtx.tx.id);
+    _bbTxCtx.tx={..._bbTxCtx.tx,status:'Completed',stop_time:new Date().toISOString(),stopped_by_name:currentProfile?.full_name};
+    toast('✅ Transfusion stopped','ok');
+    renderTransfusionControls();
+  } catch(e){ toast(e.message,'err'); }
+}
+async function renderTransfusionVitalsSummary() {
+  const body=document.getElementById('bb-tx-vitals-body'); if(!body) return;
+  if(!_bbTxCtx?.tx){ body.innerHTML='<div style="font-size:.75rem;color:var(--slate)">No transfusion started yet</div>'; return; }
+  const txId=_bbTxCtx.tx.id;
+  let rows=[];
+  try { const {data}=await sb.from('vital_signs').select('*').eq('transfusion_id',txId).order('recorded_at',{ascending:true}); rows=data||[]; } catch(e){}
+  const byStage={}; rows.forEach(r=>{ byStage[r.transfusion_stage]=r; });
+  body.innerHTML='<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Stage</th><th>Time</th><th>BP</th><th>HR</th><th>Temp</th><th>SpO2</th><th></th></tr></thead><tbody>'+
+    ['Before','During','After'].map(stage=>{
+      const v=byStage[stage];
+      return '<tr><td>'+stage+'</td>'+
+        (v?('<td style="font-size:.72rem">'+fmtDT(v.recorded_at)+'</td><td>'+(v.bp_systolic||'?')+'/'+(v.bp_diastolic||'?')+'</td><td>'+(v.heart_rate||'—')+'</td><td>'+(v.temperature||'—')+'°</td><td>'+(v.spo2||'—')+'%</td><td>✅</td>')
+          :('<td colspan="5" style="font-size:.72rem;color:var(--slate)">Not recorded</td><td><button class="btn btn-s btn-xs" onclick="tagAndGoToVitals(\x27'+stage+'\x27)">📈 Record</button></td>'))+
+      '</tr>';
+    }).join('')+
+    '</tbody></table></div>';
+}
+// Deep-links into the EXISTING Nursing Vitals form (loadVitalsForPatient()
+// + the standard saveVitals() flow) rather than building a second vitals
+// form — the only addition is the tag that saveVitals() picks up so this
+// specific reading is attributed back to the transfusion + stage.
+function tagAndGoToVitals(stage) {
+  if(!_bbTxCtx?.tx||!_bbTxCtx.patient) return;
+  window._transfusionTag={id:_bbTxCtx.tx.id,stage};
+  closeOv('bb-transfusion-ov');
+  goPage('nursing');
+  loadVitalsForPatient(_bbTxCtx.patient.id,null,_bbTxCtx.patient.name||fullName(_bbTxCtx.patient),'—','—','—');
+  renderTransfusionVitalsTagBanner();
+  toast('Recording '+stage+'-transfusion vitals for '+(_bbTxCtx.patient.name||'this patient'),'ok');
+}
+// Reaction reporting — reuses the EXISTING Critical Values alert pathway
+// (critical_values table -> checkCriticals()/refreshNotifications()/the
+// Criticals page) rather than a second alerting system, per spec.
+function openReactionReport() {
+  if(!_bbTxCtx?.tx) return;
+  document.getElementById('bb-reaction-type').value='Febrile Non-Haemolytic';
+  document.getElementById('bb-reaction-severity').value='Mild';
+  document.getElementById('bb-reaction-desc').value='';
+  openOv('bb-reaction-ov');
+}
+async function submitTransfusionReaction() {
+  if(!sb||!_bbTxCtx?.tx) return;
+  const type=document.getElementById('bb-reaction-type')?.value;
+  const severity=document.getElementById('bb-reaction-severity')?.value;
+  const desc=document.getElementById('bb-reaction-desc')?.value?.trim();
+  if(!desc){ toast('Enter a description / action taken','err'); return; }
+  try {
+    await sb.from('critical_values').insert({
+      patient_id:_bbTxCtx.patient?.id, department:'Blood Bank', parameter:'Transfusion Reaction — '+type,
+      value:severity, unit:'', reference:'N/A',
+      is_acknowledged:false, notified_by:currentProfile?.full_name||'Blood Bank', created_by:currentProfile?.id,
+    });
+    await sb.from('blood_transfusions').update({status:'Reaction Reported'}).eq('id',_bbTxCtx.tx.id);
+    _bbTxCtx.tx={..._bbTxCtx.tx,status:'Reaction Reported'};
+    toast('🚨 Reaction reported — ordering doctor and Blood Bank staff alerted via Critical Values','ok');
+    closeOv('bb-reaction-ov');
+    renderTransfusionControls();
+    if(typeof refreshNotifications==='function') refreshNotifications();
+  } catch(e){ toast(e.message,'err'); }
+}
+// Wastage/discard — mandatory reason code, no silent removals from
+// inventory. Available from any status except Issued (already left
+// inventory) and Discarded (already discarded).
+function openDiscardUnit(unitId) {
+  const u=_bbUnits.find(x=>x.id===unitId); if(!u) return;
+  document.getElementById('bb-discard-unit-id').value=unitId;
+  const summary=document.getElementById('bb-discard-summary');
+  if(summary) summary.innerHTML='<strong>'+escapeHtml(u.unit_no)+'</strong> — '+escapeHtml(u.blood_group)+(u.rh_factor==='Positive'?'+':'−')+' '+escapeHtml(u.component_type)+' · currently '+u.status;
+  document.getElementById('bb-discard-reason-code').value='';
+  document.getElementById('bb-discard-notes').value='';
+  openOv('bb-discard-ov');
+}
+async function submitDiscardUnit() {
+  if(!sb) return;
+  const unitId=document.getElementById('bb-discard-unit-id')?.value;
+  const reasonCode=document.getElementById('bb-discard-reason-code')?.value;
+  const notes=document.getElementById('bb-discard-notes')?.value?.trim();
+  if(!reasonCode){ toast('Select a reason code','err'); return; }
+  if(!notes){ toast('Enter discard details','err'); return; }
+  try {
+    await sb.from('blood_units').update({status:'Discarded',discard_reason_code:reasonCode,discard_reason:notes,discarded_by:currentProfile?.id,discarded_by_name:currentProfile?.full_name,discarded_at:new Date().toISOString()}).eq('id',unitId);
+    toast('✅ Unit discarded — reason recorded','ok');
+    closeOv('bb-discard-ov');
+    loadBloodUnits();
+  } catch(e){ toast(e.message,'err'); }
 }
 
 function editInventoryItem(id){
