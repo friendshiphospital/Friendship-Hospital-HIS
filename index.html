@@ -3726,34 +3726,131 @@ html[dir="rtl"] body{direction:rtl;}
 </div>
 
 <div class="page" id="page-bloodbank">
-  <div class="card" style="margin-bottom:14px">
-    <div class="card-hd">
-      <span class="card-title">🩸 Blood Unit Inventory</span>
-      <span style="font-size:.68rem;color:var(--slate)">FEFO — earliest-expiring compatible units are always used/offered first</span>
+  <div class="tabs" id="bb-main-tabs" style="margin-bottom:12px">
+    <button class="tab active" onclick="switchBbTab('inventory',this)">🩸 Unit Inventory</button>
+    <button class="tab" onclick="switchBbTab('intake',this)">📥 New Intake</button>
+    <button class="tab" onclick="switchBbTab('pending',this)">⏳ Pending Actions</button>
+  </div>
+
+  <!-- ── TAB: UNIT INVENTORY ── -->
+  <div id="bb-tab-inventory">
+    <div class="card" style="margin-bottom:14px">
+      <div class="card-hd">
+        <span class="card-title">🩸 Blood Unit Inventory</span>
+        <span style="font-size:.68rem;color:var(--slate)">FEFO — earliest-expiring compatible units are always used/offered first</span>
+      </div>
+      <div class="card-body">
+        <div class="tabs" id="bb-status-tabs" style="margin-bottom:10px">
+          <button class="tab active" onclick="setBbStatusFilter('',this)">All</button>
+          <button class="tab" onclick="setBbStatusFilter('Quarantined',this)">Quarantined</button>
+          <button class="tab" onclick="setBbStatusFilter('Available',this)">Available</button>
+          <button class="tab" onclick="setBbStatusFilter('Crossmatched',this)">Crossmatched</button>
+          <button class="tab" onclick="setBbStatusFilter('Issued',this)">Issued</button>
+          <button class="tab" onclick="setBbStatusFilter('Expired',this)">Expired</button>
+          <button class="tab" onclick="setBbStatusFilter('Discarded',this)">Discarded</button>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
+          <select class="fc" id="bb-component-filter" onchange="loadBloodUnits()" style="width:170px;padding:5px 8px;font-size:.78rem">
+            <option value="">All Components</option>
+            <option>Whole Blood</option><option>Packed RBC</option><option>FFP</option><option>Platelets</option><option>Cryoprecipitate</option>
+          </select>
+          <select class="fc" id="bb-group-filter" onchange="loadBloodUnits()" style="width:110px;padding:5px 8px;font-size:.78rem">
+            <option value="">All Groups</option>
+            <option>A</option><option>B</option><option>AB</option><option>O</option>
+          </select>
+          <div class="srch" style="min-width:0;flex:1;max-width:260px"><span>🔍</span><input id="bb-search" placeholder="Unit No…" oninput="filterBloodUnitList(this.value)"></div>
+          <button class="btn btn-s btn-sm" onclick="loadBloodUnits()">↻ Refresh</button>
+        </div>
+        <div id="bb-units-body"><div class="spin-center"><div class="spinner"></div>Loading…</div></div>
+      </div>
     </div>
-    <div class="card-body">
-      <div class="tabs" id="bb-status-tabs" style="margin-bottom:10px">
-        <button class="tab active" onclick="setBbStatusFilter('',this)">All</button>
-        <button class="tab" onclick="setBbStatusFilter('Quarantined',this)">Quarantined</button>
-        <button class="tab" onclick="setBbStatusFilter('Available',this)">Available</button>
-        <button class="tab" onclick="setBbStatusFilter('Crossmatched',this)">Crossmatched</button>
-        <button class="tab" onclick="setBbStatusFilter('Issued',this)">Issued</button>
-        <button class="tab" onclick="setBbStatusFilter('Expired',this)">Expired</button>
-        <button class="tab" onclick="setBbStatusFilter('Discarded',this)">Discarded</button>
+  </div>
+
+  <!-- ── TAB: NEW INTAKE ── -->
+  <div id="bb-tab-intake" style="display:none">
+    <div class="split2">
+      <div class="card"><div class="card-hd"><span class="card-title">📥 New Unit Intake</span></div><div class="card-body">
+        <div class="fg"><label class="fl">Source</label>
+          <select class="fc" id="bb-intake-source" onchange="switchBbIntakeSource()">
+            <option value="In-House Donation">In-House Donation</option>
+            <option value="Received - External Supply">Received — External Supply</option>
+          </select>
+        </div>
+
+        <!-- Path A: In-House Donation -->
+        <div id="bb-intake-donation">
+          <div class="fg"><label class="fl">Donor</label>
+            <div class="srch"><span>🔍</span><input id="bb-donor-search" placeholder="Search donor by name/phone…" oninput="searchBloodDonors(this.value)"></div>
+            <div id="bb-donor-search-results" style="display:none;border:1.5px solid var(--teal);border-radius:7px;background:#fff;max-height:160px;overflow-y:auto;margin-top:4px;position:relative;z-index:50;"></div>
+          </div>
+          <div id="bb-donor-banner" style="display:none;background:var(--teal-lt);border:1.5px solid var(--teal2);border-radius:9px;padding:10px 14px;margin-bottom:12px">
+            <div style="font-weight:700" id="bb-donor-name-disp">—</div>
+            <div style="font-size:.72rem;color:var(--slate);margin-top:3px" id="bb-donor-meta-disp">—</div>
+          </div>
+          <button class="btn btn-s btn-sm" onclick="showNewDonorForm()" style="margin-bottom:10px">+ Register New Donor</button>
+          <div id="bb-new-donor-form" style="display:none;border:1px solid var(--border);border-radius:9px;padding:12px;margin-bottom:12px">
+            <div class="g2">
+              <div class="fg"><label class="fl">Full Name *</label><input class="fc" id="bbd-name"></div>
+              <div class="fg"><label class="fl">Phone</label><input class="fc" id="bbd-phone"></div>
+            </div>
+            <div class="g3">
+              <div class="fg"><label class="fl">Age</label><input class="fc" type="number" id="bbd-age"></div>
+              <div class="fg"><label class="fl">Sex</label><select class="fc" id="bbd-sex"><option>Male</option><option>Female</option></select></div>
+              <div class="fg"><label class="fl">Group</label><select class="fc" id="bbd-group"><option value="">?</option><option>A</option><option>B</option><option>AB</option><option>O</option></select></div>
+            </div>
+            <div class="fg"><label class="fl">Rh Factor</label><select class="fc" id="bbd-rh"><option value="">?</option><option value="Positive">Positive (+)</option><option value="Negative">Negative (−)</option></select></div>
+            <button class="btn btn-p btn-sm" onclick="registerBloodDonor()">💾 Register Donor</button>
+          </div>
+          <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:var(--slate);margin:10px 0 6px">Eligibility Screening Questionnaire</div>
+          <label class="tgl-wrap" style="margin-bottom:6px"><input type="checkbox" id="bbd-recent-illness"><span class="tgl-track"></span><span style="font-size:.78rem">Recent illness (last 2 weeks)</span></label>
+          <label class="tgl-wrap" style="margin-bottom:6px"><input type="checkbox" id="bbd-on-medication"><span class="tgl-track"></span><span style="font-size:.78rem">Currently on medication</span></label>
+          <label class="tgl-wrap" style="margin-bottom:6px"><input type="checkbox" id="bbd-recent-travel"><span class="tgl-track"></span><span style="font-size:.78rem">Recent travel to a malaria-endemic area</span></label>
+          <label class="tgl-wrap" style="margin-bottom:6px"><input type="checkbox" id="bbd-prior-deferral"><span class="tgl-track"></span><span style="font-size:.78rem">Previously deferred as a donor</span></label>
+          <div class="fg"><label class="fl">Deferral / Screening Notes</label><textarea class="fc" id="bbd-deferral-notes" rows="2"></textarea></div>
+          <div class="fg"><label class="fl">Collection Date</label><input class="fc" type="date" id="bbd-collection-date"></div>
+        </div>
+
+        <!-- Path B: External Receipt -->
+        <div id="bb-intake-external" style="display:none">
+          <div class="fg"><label class="fl">Supplying Blood Bank / Organisation *</label><input class="fc" id="bbe-org"></div>
+          <div class="fg"><label class="fl">Their Unit ID / Reference *</label><input class="fc" id="bbe-ref"></div>
+          <div class="fg"><label class="fl">Their Screening Certification (as attested)</label><textarea class="fc" id="bbe-attested" rows="2" placeholder="What the supplier attests about their own screening — recorded as their claim, not re-verified here"></textarea></div>
+          <div class="g2">
+            <div class="fg"><label class="fl">Receipt Date</label><input class="fc" type="date" id="bbe-receipt-date"></div>
+            <div class="fg"><label class="fl">Receiving Staff</label><input class="fc" id="bbe-received-by"></div>
+          </div>
+        </div>
+
+        <!-- Shared unit fields -->
+        <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:var(--slate);margin:14px 0 6px">Unit Details</div>
+        <div class="g3">
+          <div class="fg"><label class="fl">Blood Group *</label><select class="fc" id="bb-unit-group"><option value="">Select…</option><option>A</option><option>B</option><option>AB</option><option>O</option></select></div>
+          <div class="fg"><label class="fl">Rh Factor *</label><select class="fc" id="bb-unit-rh"><option value="">Select…</option><option value="Positive">Positive (+)</option><option value="Negative">Negative (−)</option></select></div>
+          <div class="fg"><label class="fl">Component *</label><select class="fc" id="bb-unit-component" onchange="prefillBloodExpiry()"><option>Whole Blood</option><option>Packed RBC</option><option>FFP</option><option>Platelets</option><option>Cryoprecipitate</option></select></div>
+        </div>
+        <div class="g3">
+          <div class="fg"><label class="fl">Volume (mL)</label><input class="fc" type="number" id="bb-unit-volume" placeholder="350"></div>
+          <div class="fg"><label class="fl">Expiry Date *</label><input class="fc" type="date" id="bb-unit-expiry"></div>
+          <div class="fg"><label class="fl">No. of Units</label><input class="fc" type="number" id="bb-unit-count" value="1" min="1"></div>
+        </div>
+        <button class="btn btn-p" onclick="submitBloodIntake()" style="width:100%;justify-content:center">✅ Save Unit Intake — Enters Quarantined</button>
+        <div id="bb-intake-msg" style="margin-top:8px;font-size:.78rem"></div>
+      </div></div>
+      <div class="card"><div class="card-hd"><span class="card-title">🩺 Donor Registry</span></div>
+        <div id="bb-donor-registry-body"><div class="spin-center"><div class="spinner"></div>Loading…</div></div>
       </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
-        <select class="fc" id="bb-component-filter" onchange="loadBloodUnits()" style="width:170px;padding:5px 8px;font-size:.78rem">
-          <option value="">All Components</option>
-          <option>Whole Blood</option><option>Packed RBC</option><option>FFP</option><option>Platelets</option><option>Cryoprecipitate</option>
-        </select>
-        <select class="fc" id="bb-group-filter" onchange="loadBloodUnits()" style="width:110px;padding:5px 8px;font-size:.78rem">
-          <option value="">All Groups</option>
-          <option>A</option><option>B</option><option>AB</option><option>O</option>
-        </select>
-        <div class="srch" style="min-width:0;flex:1;max-width:260px"><span>🔍</span><input id="bb-search" placeholder="Unit No…" oninput="filterBloodUnitList(this.value)"></div>
-        <button class="btn btn-s btn-sm" onclick="loadBloodUnits()">↻ Refresh</button>
+    </div>
+  </div>
+
+  <!-- ── TAB: PENDING ACTIONS ── -->
+  <div id="bb-tab-pending" style="display:none">
+    <div class="split2">
+      <div class="card"><div class="card-hd"><span class="card-title">🔬 Donations Awaiting Screening Clearance</span></div>
+        <div id="bb-pending-donations-body"><div class="spin-center"><div class="spinner"></div>Loading…</div></div>
       </div>
-      <div id="bb-units-body"><div class="spin-center"><div class="spinner"></div>Loading…</div></div>
+      <div class="card"><div class="card-hd"><span class="card-title">✅ External Units Awaiting Receipt Verification</span></div>
+        <div id="bb-pending-external-body"><div class="spin-center"><div class="spinner"></div>Loading…</div></div>
+      </div>
     </div>
   </div>
 </div>
@@ -15697,6 +15794,253 @@ function scanBloodUnit(onFound) {
     if(!u){ toast('No blood unit matches scanned code: '+code,'err'); return; }
     if(onFound) onFound(u); else toast('📷 Found unit '+u.unit_no,'ok');
   }, {title:'📷 Scan Unit Barcode'});
+}
+
+// ── BLOOD BANK Phase 2: dual-source unit intake ────────────────────────
+// Both paths converge on the same blood_units row/status lifecycle from
+// Phase 1 (migration_v2.25) — this is provenance tracking, not a fork in
+// downstream behaviour, per spec.
+function switchBbTab(tab,btn) {
+  ['inventory','intake','pending'].forEach(t=>{ const el=document.getElementById('bb-tab-'+t); if(el) el.style.display=t===tab?'':'none'; });
+  document.querySelectorAll('#bb-main-tabs .tab').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  if(tab==='inventory') loadBloodUnits();
+  else if(tab==='intake') { applyBloodDonorToggle(); loadDonorRegistry(); setD('bbd-collection-date',today()); setD('bbe-receipt-date',today()); }
+  else if(tab==='pending') { loadPendingDonations(); loadPendingExternalUnits(); }
+}
+// Settings -> "Enable In-House Donor Collection" hides Path A's UI
+// entirely when off — the source field and Path B stay available either way.
+function applyBloodDonorToggle() {
+  const sel=document.getElementById('bb-intake-source'); if(!sel) return;
+  const donationOpt=sel.querySelector('option[value="In-House Donation"]');
+  if(!CFG.bloodDonorCollectionEnabled){
+    if(donationOpt) donationOpt.style.display='none';
+    sel.value='Received - External Supply';
+  } else if(donationOpt){ donationOpt.style.display=''; }
+  switchBbIntakeSource();
+}
+function switchBbIntakeSource() {
+  const src=document.getElementById('bb-intake-source')?.value;
+  const donationDiv=document.getElementById('bb-intake-donation');
+  const externalDiv=document.getElementById('bb-intake-external');
+  if(donationDiv) donationDiv.style.display = src==='In-House Donation' ? '' : 'none';
+  if(externalDiv) externalDiv.style.display = src==='Received - External Supply' ? '' : 'none';
+}
+async function generateUnitNo() {
+  try { const {count}=await sb.from('blood_units').select('id',{count:'exact'}); const yr=new Date().getFullYear().toString().slice(2); return 'BB-'+yr+'-'+String((count||0)+1).padStart(4,'0'); }
+  catch(e){ return 'BB-'+Date.now().toString().slice(-6); }
+}
+async function generateDonorNo() {
+  try { const {count}=await sb.from('blood_donors').select('id',{count:'exact'}); const yr=new Date().getFullYear().toString().slice(2); return 'DNR-'+yr+'-'+String((count||0)+1).padStart(4,'0'); }
+  catch(e){ return 'DNR-'+Date.now().toString().slice(-6); }
+}
+let _bbSelectedDonor=null;
+async function searchBloodDonors(q) {
+  const res=document.getElementById('bb-donor-search-results'); if(!res) return;
+  if(!q||q.length<2){ res.style.display='none'; return; }
+  if(!sb) return;
+  try {
+    const {data}=await sb.from('blood_donors').select('*').or('full_name.ilike.%'+q+'%,phone.ilike.%'+q+'%').limit(8);
+    if(!data?.length){ res.style.display='none'; return; }
+    res.style.display='block';
+    res.innerHTML=data.map(d=>'<div onclick="selectBloodDonor('+JSON.stringify(d).replace(/"/g,'&quot;')+')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:.81rem"><strong>'+escapeHtml(d.full_name)+'</strong> <span style="color:var(--slate);font-size:.72rem">'+(d.donor_no||'')+' · '+(d.blood_group||'?')+(d.rh_factor==='Positive'?'+':d.rh_factor==='Negative'?'−':'')+'</span></div>').join('');
+  } catch(e){}
+}
+function selectBloodDonor(d) {
+  _bbSelectedDonor=d;
+  const res=document.getElementById('bb-donor-search-results'); if(res) res.style.display='none';
+  const inp=document.getElementById('bb-donor-search'); if(inp) inp.value=d.full_name;
+  const banner=document.getElementById('bb-donor-banner');
+  if(banner){ banner.style.display='block'; document.getElementById('bb-donor-name-disp').textContent=d.full_name; document.getElementById('bb-donor-meta-disp').textContent=(d.donor_no||'')+' · '+(d.blood_group||'?')+(d.rh_factor==='Positive'?'+':d.rh_factor==='Negative'?'−':'')+' · '+(d.phone||''); }
+  // Auto-fill the unit's blood group/Rh from the donor's on-file type —
+  // staff can still override if this specific unit was independently typed.
+  const gSel=document.getElementById('bb-unit-group'); if(gSel&&d.blood_group) gSel.value=d.blood_group;
+  const rhSel=document.getElementById('bb-unit-rh'); if(rhSel&&d.rh_factor) rhSel.value=d.rh_factor;
+}
+function showNewDonorForm() {
+  const f=document.getElementById('bb-new-donor-form'); if(f) f.style.display=f.style.display==='none'?'':'none';
+}
+async function registerBloodDonor() {
+  if(!sb){ toast('Not connected','err'); return; }
+  const name=document.getElementById('bbd-name')?.value?.trim();
+  if(!name){ toast('Donor name required','err'); return; }
+  try {
+    const donorNo=await generateDonorNo();
+    const payload={
+      donor_no:donorNo, full_name:name,
+      age:parseInt(document.getElementById('bbd-age')?.value,10)||null,
+      sex:document.getElementById('bbd-sex')?.value||null,
+      phone:document.getElementById('bbd-phone')?.value||null,
+      blood_group:document.getElementById('bbd-group')?.value||null,
+      rh_factor:document.getElementById('bbd-rh')?.value||null,
+      created_by:currentProfile?.id, created_by_name:currentProfile?.full_name,
+    };
+    const {data,error}=await sb.from('blood_donors').insert(payload).select().single();
+    if(error) throw error;
+    toast('✅ Donor registered: '+donorNo,'ok');
+    const f=document.getElementById('bb-new-donor-form'); if(f) f.style.display='none';
+    selectBloodDonor(data);
+    loadDonorRegistry();
+  } catch(e){ toast(e.message,'err'); }
+}
+function prefillBloodExpiry() {
+  const comp=document.getElementById('bb-unit-component')?.value;
+  const cfgKey=BLOOD_SHELF_LIFE_CFG_KEY[comp];
+  const days=cfgKey?CFG[cfgKey]:42;
+  const base=document.getElementById('bb-intake-source')?.value==='In-House Donation'
+    ? (document.getElementById('bbd-collection-date')?.value||today())
+    : (document.getElementById('bbe-receipt-date')?.value||today());
+  const exp=new Date(base+'T00:00:00'); exp.setDate(exp.getDate()+days);
+  const expEl=document.getElementById('bb-unit-expiry'); if(expEl) expEl.value=exp.toISOString().slice(0,10);
+}
+async function submitBloodIntake() {
+  if(!sb){ toast('Not connected','err'); return; }
+  const source=document.getElementById('bb-intake-source')?.value;
+  const group=document.getElementById('bb-unit-group')?.value;
+  const rh=document.getElementById('bb-unit-rh')?.value;
+  const component=document.getElementById('bb-unit-component')?.value;
+  const volume=parseFloat(document.getElementById('bb-unit-volume')?.value)||null;
+  const expiry=document.getElementById('bb-unit-expiry')?.value;
+  const count=Math.max(1,parseInt(document.getElementById('bb-unit-count')?.value,10)||1);
+  if(!group||!rh||!component||!expiry){ toast('Blood group, Rh, component and expiry are required','err'); return; }
+  let org='',ref='';
+  if(source==='In-House Donation'){
+    if(!_bbSelectedDonor){ toast('Search and select (or register) a donor first','err'); return; }
+  } else {
+    org=document.getElementById('bbe-org')?.value?.trim();
+    ref=document.getElementById('bbe-ref')?.value?.trim();
+    if(!org||!ref){ toast('Supplying organisation and their unit reference are required','err'); return; }
+  }
+  try {
+    let donationId=null;
+    if(source==='In-House Donation'){
+      const {data:donation,error:donErr}=await sb.from('blood_donations').insert({
+        donor_id:_bbSelectedDonor.id,
+        collection_date:document.getElementById('bbd-collection-date')?.value||today(),
+        recent_illness:!!document.getElementById('bbd-recent-illness')?.checked,
+        on_medication:!!document.getElementById('bbd-on-medication')?.checked,
+        recent_travel:!!document.getElementById('bbd-recent-travel')?.checked,
+        prior_deferral:!!document.getElementById('bbd-prior-deferral')?.checked,
+        deferral_notes:document.getElementById('bbd-deferral-notes')?.value||null,
+        created_by:currentProfile?.id, created_by_name:currentProfile?.full_name,
+      }).select().single();
+      if(donErr) throw donErr;
+      donationId=donation.id;
+    }
+    const unitsToInsert=[];
+    for(let i=0;i<count;i++){
+      const unitNo=await generateUnitNo();
+      const base={
+        unit_no:unitNo, blood_group:group, rh_factor:rh, component_type:component,
+        collection_date:source==='In-House Donation'?(document.getElementById('bbd-collection-date')?.value||today()):null,
+        expiry_date:expiry, volume_ml:volume, source, status:'Quarantined',
+        created_by:currentProfile?.id, created_by_name:currentProfile?.full_name,
+      };
+      if(source==='In-House Donation'){ base.donation_id=donationId; }
+      else {
+        base.external_source_org=org;
+        base.external_unit_ref=ref;
+        base.external_screening_attested=document.getElementById('bbe-attested')?.value||null;
+        base.receipt_date=document.getElementById('bbe-receipt-date')?.value||today();
+        base.received_by=document.getElementById('bbe-received-by')?.value||currentProfile?.full_name;
+      }
+      unitsToInsert.push(base);
+    }
+    const {error:unitErr}=await sb.from('blood_units').insert(unitsToInsert);
+    if(unitErr) throw unitErr;
+    toast('✅ '+count+' unit(s) intaken — Quarantined until '+(source==='In-House Donation'?'screening is cleared':'verified on receipt'),'ok');
+    const msg=document.getElementById('bb-intake-msg'); if(msg){ msg.style.color='var(--green)'; msg.textContent='✅ Saved'; setTimeout(()=>msg.textContent='',4000); }
+    clearBloodIntakeForm();
+    loadPendingDonations(); loadPendingExternalUnits();
+  } catch(e){ toast(e.message,'err'); }
+}
+function clearBloodIntakeForm() {
+  _bbSelectedDonor=null;
+  const banner=document.getElementById('bb-donor-banner'); if(banner) banner.style.display='none';
+  const search=document.getElementById('bb-donor-search'); if(search) search.value='';
+  const newDonorForm=document.getElementById('bb-new-donor-form'); if(newDonorForm) newDonorForm.style.display='none';
+  ['bbd-name','bbd-phone','bbd-age','bbe-org','bbe-ref','bbe-attested','bbe-received-by','bb-unit-volume','bb-unit-expiry'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  ['bbd-recent-illness','bbd-on-medication','bbd-recent-travel','bbd-prior-deferral'].forEach(id=>{ const el=document.getElementById(id); if(el) el.checked=false; });
+  const notes=document.getElementById('bbd-deferral-notes'); if(notes) notes.value='';
+  const countEl=document.getElementById('bb-unit-count'); if(countEl) countEl.value='1';
+}
+async function loadDonorRegistry() {
+  const body=document.getElementById('bb-donor-registry-body'); if(!body||!sb) return;
+  body.innerHTML='<div class="spin-center"><div class="spinner"></div>Loading…</div>';
+  try {
+    const {data}=await sb.from('blood_donors').select('*').order('created_at',{ascending:false}).limit(50);
+    if(!data?.length){ body.innerHTML='<div class="empty-state"><div class="empty-icon">🩺</div><div class="empty-title">No donors registered yet</div></div>'; return; }
+    body.innerHTML='<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Donor No</th><th>Name</th><th>Group</th><th>Phone</th></tr></thead><tbody>'+
+      data.map(d=>'<tr><td style="font-family:DM Mono,monospace;font-weight:700;color:var(--teal)">'+escapeHtml(d.donor_no)+'</td><td>'+escapeHtml(d.full_name)+'</td><td>'+(d.blood_group||'?')+(d.rh_factor==='Positive'?'+':d.rh_factor==='Negative'?'−':'')+'</td><td style="font-size:.75rem">'+(d.phone||'—')+'</td></tr>').join('')+
+      '</tbody></table></div>';
+  } catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.78rem">'+e.message+'</div>'; }
+}
+// Mandatory infectious-disease screening (Path A) — a donation is only
+// `cleared` once every one of these five is Negative; clearDonationScreening()
+// is the only path that can move that donation's linked units out of
+// Quarantined, matching the spec's "before the unit can leave Quarantined".
+const BLOOD_SCREENING_TESTS=['hiv','hbv','hcv','syphilis','malaria'];
+async function loadPendingDonations() {
+  const body=document.getElementById('bb-pending-donations-body'); if(!body||!sb) return;
+  body.innerHTML='<div class="spin-center"><div class="spinner"></div>Loading…</div>';
+  try {
+    const {data}=await sb.from('blood_donations').select('*,blood_donors(full_name,donor_no)').eq('cleared',false).order('created_at',{ascending:false});
+    if(!data?.length){ body.innerHTML='<div class="empty-state"><div class="empty-icon">🔬</div><div class="empty-title">No donations awaiting screening</div></div>'; return; }
+    body.innerHTML=data.map(d=>{
+      const flags=[d.recent_illness&&'Recent illness',d.on_medication&&'On medication',d.recent_travel&&'Recent travel',d.prior_deferral&&'Prior deferral'].filter(Boolean);
+      return '<div style="border:1px solid var(--border);border-radius:9px;padding:10px 12px;margin-bottom:10px">'+
+        '<div style="font-weight:700">'+escapeHtml(d.blood_donors?.full_name||'—')+' <span style="font-size:.72rem;color:var(--slate);font-weight:400">'+(d.blood_donors?.donor_no||'')+' · '+fmtDate(d.collection_date)+'</span></div>'+
+        (flags.length?'<div style="font-size:.7rem;color:var(--amber);margin-top:4px">⚠️ '+flags.join(', ')+'</div>':'')+
+        '<div class="g3" style="margin-top:8px">'+
+          BLOOD_SCREENING_TESTS.map(x=>'<div class="fg" style="margin-bottom:4px"><label class="fl" style="text-transform:uppercase">'+x+'</label><select class="fc" id="bb-screen-'+d.id+'-'+x+'" style="padding:4px 6px;font-size:.75rem"><option value="Pending">Pending</option><option value="Negative">Negative</option><option value="Positive">Positive</option></select></div>').join('')+
+        '</div>'+
+        '<button class="btn btn-p btn-xs" onclick="clearDonationScreening(\''+d.id+'\')" style="margin-top:6px">✅ Record Results &amp; Clear if Negative</button>'+
+      '</div>';
+    }).join('');
+  } catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.78rem">'+e.message+'</div>'; }
+}
+async function clearDonationScreening(donationId) {
+  if(!sb) return;
+  const results={};
+  BLOOD_SCREENING_TESTS.forEach(x=>{ results[x+'_result']=document.getElementById('bb-screen-'+donationId+'-'+x)?.value||'Pending'; });
+  const allNegative=BLOOD_SCREENING_TESTS.every(x=>results[x+'_result']==='Negative');
+  try {
+    await sb.from('blood_donations').update({...results, cleared:allNegative, screened_by:currentProfile?.full_name, screened_at:new Date().toISOString()}).eq('id',donationId);
+    if(allNegative){
+      await sb.from('blood_units').update({status:'Available'}).eq('donation_id',donationId).eq('status','Quarantined');
+      toast('✅ Donation cleared — linked units moved to Available','ok');
+    } else {
+      toast('Screening results recorded — donation not yet cleared (all 5 tests must be Negative)','warn');
+    }
+    loadPendingDonations(); loadBloodUnits();
+  } catch(e){ toast(e.message,'err'); }
+}
+// External Receipt (Path B) — lighter than Path A's full screening, but
+// still not skippable: the unit's own label must be confirmed against
+// what was recorded before it can leave Quarantined.
+async function loadPendingExternalUnits() {
+  const body=document.getElementById('bb-pending-external-body'); if(!body||!sb) return;
+  body.innerHTML='<div class="spin-center"><div class="spinner"></div>Loading…</div>';
+  try {
+    const {data}=await sb.from('blood_units').select('*').eq('source','Received - External Supply').eq('verified_on_receipt',false).order('created_at',{ascending:false});
+    if(!data?.length){ body.innerHTML='<div class="empty-state"><div class="empty-icon">✅</div><div class="empty-title">No external units awaiting verification</div></div>'; return; }
+    body.innerHTML=data.map(u=>
+      '<div style="border:1px solid var(--border);border-radius:9px;padding:10px 12px;margin-bottom:10px">'+
+        '<div style="font-weight:700">'+escapeHtml(u.unit_no)+' <span style="font-size:.72rem;color:var(--slate);font-weight:400">'+escapeHtml(u.blood_group)+(u.rh_factor==='Positive'?'+':'−')+' · '+escapeHtml(u.component_type)+'</span></div>'+
+        '<div style="font-size:.75rem;color:var(--slate);margin-top:3px">From '+escapeHtml(u.external_source_org||'—')+' · Their ref: '+escapeHtml(u.external_unit_ref||'—')+'</div>'+
+        '<button class="btn btn-p btn-xs" onclick="verifyUnitOnReceipt(\''+u.id+'\')" style="margin-top:6px">✅ Confirm Label Matches — Verify</button>'+
+      '</div>'
+    ).join('');
+  } catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.78rem">'+e.message+'</div>'; }
+}
+async function verifyUnitOnReceipt(unitId) {
+  if(!sb) return;
+  if(!confirm('Confirm the physical unit label matches what was recorded at intake?')) return;
+  try {
+    await sb.from('blood_units').update({verified_on_receipt:true,verified_by:currentProfile?.full_name,verified_at:new Date().toISOString(),status:'Available'}).eq('id',unitId);
+    toast('✅ Unit verified — now Available','ok');
+    loadPendingExternalUnits(); loadBloodUnits();
+  } catch(e){ toast(e.message,'err'); }
 }
 
 function editInventoryItem(id){
