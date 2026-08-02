@@ -1662,6 +1662,7 @@ html[dir="rtl"] body{direction:rtl;}
           <div class="tabs">
             <button class="tab active" onclick="switchOrderType('lab',this)">🔬 Lab</button>
             <button class="tab" onclick="switchOrderType('radiology',this)">🩻 Radiology</button>
+            <button class="tab" onclick="switchOrderType('bloodbank',this)">🩸 Blood Bank</button>
             <button class="tab" onclick="switchOrderType('nursing',this)">💉 Nursing</button>
             <button class="tab" onclick="switchOrderType('diet',this)">🥗 Diet</button>
             <button class="tab" onclick="switchOrderType('physio',this)">🏃 Physio</button>
@@ -1733,6 +1734,28 @@ html[dir="rtl"] body{direction:rtl;}
               <input class="fc" id="ord-rad-history" placeholder="Pregnancy, renal function, contrast allergy, pacemaker…">
             </div>
             <button class="btn btn-p btn-sm" onclick="submitRadOrder()" style="margin-top:8px">🩻 Submit Radiology Request</button>
+          </div>
+          <!-- Blood Bank -->
+          <div id="order-tab-bloodbank" style="display:none">
+            <div class="g2" style="margin-top:8px">
+              <div class="fg"><label class="fl">Component</label>
+                <select class="fc" id="ord-bb-component">
+                  <option>Whole Blood</option><option>Packed RBC</option><option>FFP</option><option>Platelets</option><option>Cryoprecipitate</option>
+                </select>
+              </div>
+              <div class="fg"><label class="fl">Units Requested</label>
+                <input class="fc" type="number" id="ord-bb-units" value="1" min="1">
+              </div>
+            </div>
+            <div class="fg"><label class="fl">Urgency</label>
+              <select class="fc" id="ord-bb-urgency">
+                <option>Routine</option><option>Urgent</option><option>STAT</option>
+              </select>
+            </div>
+            <div class="fg"><label class="fl">Clinical Indication</label>
+              <textarea class="fc" id="ord-bb-indication" rows="2" placeholder="Reason for transfusion — e.g. Hb 5.2 g/dL, active GI bleed…"></textarea>
+            </div>
+            <button class="btn btn-p btn-sm" onclick="submitBloodRequest()" style="margin-top:8px">🩸 Submit Blood Request</button>
           </div>
           <!-- Nursing Orders -->
           <div id="order-tab-nursing" style="display:none">
@@ -3729,6 +3752,7 @@ html[dir="rtl"] body{direction:rtl;}
   <div class="tabs" id="bb-main-tabs" style="margin-bottom:12px">
     <button class="tab active" onclick="switchBbTab('inventory',this)">🩸 Unit Inventory</button>
     <button class="tab" onclick="switchBbTab('intake',this)">📥 New Intake</button>
+    <button class="tab" onclick="switchBbTab('requests',this)">🧬 Requests &amp; Crossmatch</button>
     <button class="tab" onclick="switchBbTab('pending',this)">⏳ Pending Actions</button>
   </div>
 
@@ -3839,6 +3863,15 @@ html[dir="rtl"] body{direction:rtl;}
       <div class="card"><div class="card-hd"><span class="card-title">🩺 Donor Registry</span></div>
         <div id="bb-donor-registry-body"><div class="spin-center"><div class="spinner"></div>Loading…</div></div>
       </div>
+    </div>
+  </div>
+
+  <!-- ── TAB: REQUESTS & CROSSMATCH ── -->
+  <div id="bb-tab-requests" style="display:none">
+    <div class="card"><div class="card-hd"><span class="card-title">🧬 Blood Requests — Crossmatch</span>
+      <span style="font-size:.68rem;color:var(--slate)">A patient with no on-file blood type is blocked from crossmatch — type them in Haematology first</span>
+    </div>
+      <div id="bb-requests-body"><div class="spin-center"><div class="spinner"></div>Loading…</div></div>
     </div>
   </div>
 
@@ -9078,7 +9111,7 @@ function switchDocTab(tab,btn) {
 }
 
 function switchOrderType(t,btn) {
-  ['lab','radiology','nursing','diet','physio','other'].forEach(x=>{
+  ['lab','radiology','bloodbank','nursing','diet','physio','other'].forEach(x=>{
     const el=document.getElementById('order-tab-'+x); if(el) el.style.display=x===t?'':'none';
   });
   document.querySelectorAll('#doc-tab-orders .tabs .tab').forEach(b=>b.classList.remove('active'));
@@ -9170,6 +9203,32 @@ async function _submitRadOrder(deferred) {
     await sb.from('doctor_orders').insert({patient_id:_docPt.id,order_type:'Radiology',order_detail:g('ord-rad-type'),priority:g('ord-rad-urgency'),notes:g('ord-rad-indication'),ordered_by:g('doc-doctor-name')||currentProfile?.full_name,ordered_at:new Date().toISOString(),status:'Pending',created_by:currentProfile?.id,...deferralFields});
     advanceVisitStatus(_docPt.id,'Orders Pending');
     toast((deferred?'\u26a1 \u2705 Radiology request submitted (\u26a0 Payment Deferred \u2014 STAT) \u2014 No. ':'\u2705 Radiology request submitted \u2014 No. ')+radiologyNo,'ok'); loadActiveOrders();
+  } catch(e){toast(e.message,'err');}
+}
+
+// Blood Bank request (Phase 3) \u2014 same shape/payment-gate convention as
+// submitRadOrder()/_submitRadOrder() above: a dedicated blood_requests
+// row plus a mirrored doctor_orders row so it shows in Active Orders too.
+async function submitBloodRequest() {
+  if(!sb||!_docPt){toast('Select patient','err');return;}
+  const isStat=document.getElementById('ord-bb-urgency')?.value==='STAT';
+  if(!isPaymentCleared(_docPt)){
+    checkPaymentGate(_docPt,'Blood Request',()=>_submitBloodRequest(false),{isStat,onDeferred:()=>_submitBloodRequest(true)});
+    return;
+  }
+  _submitBloodRequest(false);
+}
+async function _submitBloodRequest(deferred) {
+  const g=id=>document.getElementById(id)?.value||'';
+  const units=Math.max(1,parseInt(g('ord-bb-units'),10)||1);
+  const deferralFields=buildPaymentDeferralFields(deferred);
+  try {
+    const requestNo=await generateBloodRequestNo();
+    const {error:reqErr}=await sb.from('blood_requests').insert({patient_id:_docPt.id,request_no:requestNo,component_type:g('ord-bb-component'),units_requested:units,urgency:g('ord-bb-urgency'),clinical_indication:g('ord-bb-indication'),requesting_doctor:g('doc-doctor-name')||currentProfile?.full_name,status:'Requested',created_by:currentProfile?.id,...deferralFields});
+    if(reqErr) throw reqErr;
+    await sb.from('doctor_orders').insert({patient_id:_docPt.id,order_type:'Blood Bank',order_detail:units+'x '+g('ord-bb-component'),priority:g('ord-bb-urgency'),notes:g('ord-bb-indication'),ordered_by:g('doc-doctor-name')||currentProfile?.full_name,ordered_at:new Date().toISOString(),status:'Pending',created_by:currentProfile?.id,...deferralFields});
+    advanceVisitStatus(_docPt.id,'Orders Pending');
+    toast((deferred?'\u26a1 \u2705 Blood request submitted (\u26a0 Payment Deferred \u2014 STAT) \u2014 No. ':'\u2705 Blood request submitted \u2014 No. ')+requestNo,'ok'); loadActiveOrders();
   } catch(e){toast(e.message,'err');}
 }
 
@@ -15801,11 +15860,12 @@ function scanBloodUnit(onFound) {
 // Phase 1 (migration_v2.25) — this is provenance tracking, not a fork in
 // downstream behaviour, per spec.
 function switchBbTab(tab,btn) {
-  ['inventory','intake','pending'].forEach(t=>{ const el=document.getElementById('bb-tab-'+t); if(el) el.style.display=t===tab?'':'none'; });
+  ['inventory','intake','requests','pending'].forEach(t=>{ const el=document.getElementById('bb-tab-'+t); if(el) el.style.display=t===tab?'':'none'; });
   document.querySelectorAll('#bb-main-tabs .tab').forEach(b=>b.classList.remove('active'));
   if(btn) btn.classList.add('active');
   if(tab==='inventory') loadBloodUnits();
   else if(tab==='intake') { applyBloodDonorToggle(); loadDonorRegistry(); setD('bbd-collection-date',today()); setD('bbe-receipt-date',today()); }
+  else if(tab==='requests') loadBloodRequests();
   else if(tab==='pending') { loadPendingDonations(); loadPendingExternalUnits(); }
 }
 // Settings -> "Enable In-House Donor Collection" hides Path A's UI
@@ -15833,6 +15893,10 @@ async function generateUnitNo() {
 async function generateDonorNo() {
   try { const {count}=await sb.from('blood_donors').select('id',{count:'exact'}); const yr=new Date().getFullYear().toString().slice(2); return 'DNR-'+yr+'-'+String((count||0)+1).padStart(4,'0'); }
   catch(e){ return 'DNR-'+Date.now().toString().slice(-6); }
+}
+async function generateBloodRequestNo() {
+  try { const {count}=await sb.from('blood_requests').select('id',{count:'exact'}); const yr=new Date().getFullYear().toString().slice(2); return 'BBR-'+yr+'-'+String((count||0)+1).padStart(4,'0'); }
+  catch(e){ return 'BBR-'+Date.now().toString().slice(-6); }
 }
 let _bbSelectedDonor=null;
 async function searchBloodDonors(q) {
@@ -16040,6 +16104,77 @@ async function verifyUnitOnReceipt(unitId) {
     await sb.from('blood_units').update({verified_on_receipt:true,verified_by:currentProfile?.full_name,verified_at:new Date().toISOString(),status:'Available'}).eq('id',unitId);
     toast('✅ Unit verified — now Available','ok');
     loadPendingExternalUnits(); loadBloodUnits();
+  } catch(e){ toast(e.message,'err'); }
+}
+
+// ── BLOOD BANK Phase 3: request workflow + crossmatch ──────────────────
+// Standard ABO/Rh RBC compatibility (who a patient of type X can safely
+// receive from) — a deliberately simple MVP compatibility check, not a
+// full transfusion-medicine engine (FFP/platelets have their own,
+// different compatibility rules in real practice; this applies the same
+// ABO/Rh matrix across all components for now).
+const BLOOD_COMPATIBILITY={
+  'O-':['O-'], 'O+':['O-','O+'],
+  'A-':['O-','A-'], 'A+':['O-','O+','A-','A+'],
+  'B-':['O-','B-'], 'B+':['O-','O+','B-','B+'],
+  'AB-':['O-','A-','B-','AB-'], 'AB+':['O-','O+','A-','A+','B-','B+','AB-','AB+'],
+};
+function isBloodCompatible(patientType,unitGroup,unitRh) {
+  const unitType=unitGroup+(unitRh==='Positive'?'+':'-');
+  return (BLOOD_COMPATIBILITY[patientType]||[]).includes(unitType);
+}
+// Reuses the exact same on-file-blood-group lookup pattern as
+// loadDocStickyHeader() (results_hematology.blood_group/rh_factor,
+// .maybeSingle() since there's only ever one row per patient) — never a
+// second, potentially conflicting source of truth for a patient's type.
+async function getPatientBloodType(patientId) {
+  if(!sb) return null;
+  try {
+    const {data}=await sb.from('results_hematology').select('blood_group,rh_factor').eq('patient_id',patientId).maybeSingle();
+    if(!data?.blood_group||!data?.rh_factor) return null;
+    return data.blood_group+(data.rh_factor==='Positive'?'+':'-');
+  } catch(e){ return null; }
+}
+async function loadBloodRequests() {
+  const body=document.getElementById('bb-requests-body'); if(!body||!sb) return;
+  body.innerHTML='<div class="spin-center"><div class="spinner"></div>Loading…</div>';
+  try {
+    const {data}=await sb.from('blood_requests').select('*,patients(name,mrn)').in('status',['Requested','Crossmatched']).order('created_at',{ascending:false});
+    if(!data?.length){ body.innerHTML='<div class="empty-state"><div class="empty-icon">🧬</div><div class="empty-title">No open blood requests</div></div>'; return; }
+    const rows=await Promise.all(data.map(r=>renderBloodRequestCard(r)));
+    body.innerHTML=rows.join('');
+  } catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.78rem">'+e.message+'</div>'; }
+}
+async function renderBloodRequestCard(r) {
+  const ptName=r.patients?.name||fullName(r.patients)||'—', ptMrn=r.patients?.mrn||'—';
+  const head='<div style="font-weight:700">'+escapeHtml(ptName)+' <span style="font-size:.72rem;color:var(--slate);font-weight:400">'+escapeHtml(ptMrn)+' · '+escapeHtml(r.request_no)+' · '+statusBadge(r.urgency)+'</span></div>'+
+    '<div style="font-size:.75rem;color:var(--slate);margin:3px 0">'+escapeHtml(r.units_requested+'x '+r.component_type)+' — '+escapeHtml(r.clinical_indication||'—')+'</div>';
+  const patientType=await getPatientBloodType(r.patient_id);
+  if(!patientType){
+    return '<div style="border:1px solid var(--red);border-radius:9px;padding:10px 12px;margin-bottom:10px">'+head+
+      '<div style="font-size:.78rem;color:var(--red);font-weight:700;margin-top:6px">🚫 Patient has no on-file blood type — crossmatch blocked. Type the patient in Haematology first.</div>'+
+    '</div>';
+  }
+  try {
+    const {data:candidates}=await sb.from('blood_units').select('*').eq('component_type',r.component_type).eq('status','Available').order('expiry_date',{ascending:true});
+    const compatible=(candidates||[]).filter(u=>isBloodCompatible(patientType,u.blood_group,u.rh_factor));
+    const list=compatible.length
+      ? compatible.slice(0,5).map(u=>'<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 8px;border:1px solid var(--border);border-radius:6px;margin-top:4px;font-size:.75rem"><span>'+escapeHtml(u.unit_no)+' · '+escapeHtml(u.blood_group)+(u.rh_factor==='Positive'?'+':'−')+' · exp '+fmtDate(u.expiry_date)+'</span><button class="btn btn-p btn-xs" onclick="crossmatchUnit(\''+u.id+'\',\''+r.id+'\')">🧬 Crossmatch</button></div>').join('')
+      : '<div style="font-size:.75rem;color:var(--amber);margin-top:6px">⚠️ No compatible '+escapeHtml(r.component_type)+' units currently Available</div>';
+    return '<div style="border:1px solid var(--border);border-radius:9px;padding:10px 12px;margin-bottom:10px">'+head+
+      '<div style="font-size:.72rem;color:var(--teal);font-weight:700">Patient type (on file): '+patientType+'</div>'+list+
+    '</div>';
+  } catch(e){
+    return '<div style="border:1px solid var(--border);border-radius:9px;padding:10px 12px;margin-bottom:10px">'+head+'<div style="color:var(--red);font-size:.75rem">'+e.message+'</div></div>';
+  }
+}
+async function crossmatchUnit(unitId,requestId) {
+  if(!sb) return;
+  try {
+    await sb.from('blood_units').update({status:'Crossmatched',request_id:requestId}).eq('id',unitId).eq('status','Available');
+    await sb.from('blood_requests').update({status:'Crossmatched'}).eq('id',requestId);
+    toast('✅ Unit crossmatched and reserved','ok');
+    loadBloodRequests(); loadBloodUnits();
   } catch(e){ toast(e.message,'err'); }
 }
 
