@@ -3725,6 +3725,39 @@ html[dir="rtl"] body{direction:rtl;}
   </div>
 </div>
 
+<div class="page" id="page-bloodbank">
+  <div class="card" style="margin-bottom:14px">
+    <div class="card-hd">
+      <span class="card-title">🩸 Blood Unit Inventory</span>
+      <span style="font-size:.68rem;color:var(--slate)">FEFO — earliest-expiring compatible units are always used/offered first</span>
+    </div>
+    <div class="card-body">
+      <div class="tabs" id="bb-status-tabs" style="margin-bottom:10px">
+        <button class="tab active" onclick="setBbStatusFilter('',this)">All</button>
+        <button class="tab" onclick="setBbStatusFilter('Quarantined',this)">Quarantined</button>
+        <button class="tab" onclick="setBbStatusFilter('Available',this)">Available</button>
+        <button class="tab" onclick="setBbStatusFilter('Crossmatched',this)">Crossmatched</button>
+        <button class="tab" onclick="setBbStatusFilter('Issued',this)">Issued</button>
+        <button class="tab" onclick="setBbStatusFilter('Expired',this)">Expired</button>
+        <button class="tab" onclick="setBbStatusFilter('Discarded',this)">Discarded</button>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
+        <select class="fc" id="bb-component-filter" onchange="loadBloodUnits()" style="width:170px;padding:5px 8px;font-size:.78rem">
+          <option value="">All Components</option>
+          <option>Whole Blood</option><option>Packed RBC</option><option>FFP</option><option>Platelets</option><option>Cryoprecipitate</option>
+        </select>
+        <select class="fc" id="bb-group-filter" onchange="loadBloodUnits()" style="width:110px;padding:5px 8px;font-size:.78rem">
+          <option value="">All Groups</option>
+          <option>A</option><option>B</option><option>AB</option><option>O</option>
+        </select>
+        <div class="srch" style="min-width:0;flex:1;max-width:260px"><span>🔍</span><input id="bb-search" placeholder="Unit No…" oninput="filterBloodUnitList(this.value)"></div>
+        <button class="btn btn-s btn-sm" onclick="loadBloodUnits()">↻ Refresh</button>
+      </div>
+      <div id="bb-units-body"><div class="spin-center"><div class="spinner"></div>Loading…</div></div>
+    </div>
+  </div>
+</div>
+
 <div class="page" id="page-staff">
   <div class="tabs" id="staff-tabs">
     <button class="tab active" onclick="switchStaffTab('list',this)">👥 Staff List</button>
@@ -4287,6 +4320,23 @@ html[dir="rtl"] body{direction:rtl;}
         <div class="fg"><label class="fl">LOS margin over ward average (%)</label><input class="fc" type="number" min="1" id="cfg-discharge-readiness-margin" placeholder="50"></div>
         <button class="btn btn-p btn-sm" onclick="saveDischargeReadinessSettings()">💾 Save</button>
         <div id="cfg-discharge-readiness-status" style="margin-top:7px;font-size:.78rem;color:var(--green)"></div>
+      </div></div>
+      <div class="card"><div class="card-hd"><span class="card-title">🩸 Blood Bank — Component Shelf-Life</span></div><div class="card-body">
+        <div style="font-size:.72rem;color:var(--slate);margin-bottom:8px">Standard AABB shelf-life defaults (days), used only to pre-fill the expiry date when a unit is intaken — staff can always override it, the stored expiry date is never silently computed.</div>
+        <div class="g2">
+          <div class="fg"><label class="fl">Whole Blood</label><input class="fc" type="number" min="1" id="cfg-bb-shelf-wb" placeholder="35"></div>
+          <div class="fg"><label class="fl">Packed RBC</label><input class="fc" type="number" min="1" id="cfg-bb-shelf-prbc" placeholder="42"></div>
+          <div class="fg"><label class="fl">Platelets</label><input class="fc" type="number" min="1" id="cfg-bb-shelf-plt" placeholder="5"></div>
+          <div class="fg"><label class="fl">FFP (frozen)</label><input class="fc" type="number" min="1" id="cfg-bb-shelf-ffp" placeholder="365"></div>
+          <div class="fg"><label class="fl">Cryoprecipitate (frozen)</label><input class="fc" type="number" min="1" id="cfg-bb-shelf-cryo" placeholder="365"></div>
+        </div>
+        <label class="tgl-wrap" style="margin:6px 0 10px">
+          <input type="checkbox" id="cfg-bb-donor-collection">
+          <span class="tgl-track"></span>
+          <span style="font-size:.8rem;font-weight:700">Enable In-House Donor Collection</span>
+        </label>
+        <button class="btn btn-p btn-sm" onclick="saveBloodBankSettings()">💾 Save</button>
+        <div id="cfg-bb-status" style="margin-top:7px;font-size:.78rem;color:var(--green)"></div>
       </div></div>
       <div class="card"><div class="card-hd"><span class="card-title">🔢 ID Counters</span></div><div class="card-body">
         <div style="font-size:.74rem;color:var(--slate);margin-bottom:8px">These counters generate every File Number, Lab No., and Radiology No. Correcting one only changes what the <em>next</em> number will be — it does not renumber existing records. Only use this to fix a genuine mistake.</div>
@@ -6092,7 +6142,28 @@ const CFG = {
   // dischargeReadinessFlag() for the exact two conditions.
   get dischargeReadinessLosMarginPct(){ return parseInt(localStorage.getItem('cfg_discharge_readiness_los_margin_pct'),10)||50; },
   set dischargeReadinessLosMarginPct(v){ localStorage.setItem('cfg_discharge_readiness_los_margin_pct', v); },
+  // Blood Bank component shelf-life defaults (days) — standard AABB
+  // figures, used only to PRE-FILL the expiry date field at intake
+  // (Phase 2); the actual stored expiry_date is always an explicit,
+  // staff-entered value, never silently computed and hidden.
+  get bloodShelfWholeBlood(){ return parseInt(localStorage.getItem('cfg_blood_shelf_whole_blood'),10)||35; },
+  set bloodShelfWholeBlood(v){ localStorage.setItem('cfg_blood_shelf_whole_blood', v); },
+  get bloodShelfPrbc(){ return parseInt(localStorage.getItem('cfg_blood_shelf_prbc'),10)||42; },
+  set bloodShelfPrbc(v){ localStorage.setItem('cfg_blood_shelf_prbc', v); },
+  get bloodShelfPlatelets(){ return parseInt(localStorage.getItem('cfg_blood_shelf_platelets'),10)||5; },
+  set bloodShelfPlatelets(v){ localStorage.setItem('cfg_blood_shelf_platelets', v); },
+  get bloodShelfFfp(){ return parseInt(localStorage.getItem('cfg_blood_shelf_ffp'),10)||365; },
+  set bloodShelfFfp(v){ localStorage.setItem('cfg_blood_shelf_ffp', v); },
+  get bloodShelfCryo(){ return parseInt(localStorage.getItem('cfg_blood_shelf_cryo'),10)||365; },
+  set bloodShelfCryo(v){ localStorage.setItem('cfg_blood_shelf_cryo', v); },
+  // Blood Bank Phase 2 — hides the In-House Donation intake path (donor
+  // registration etc.) for hospitals that are external-supply-only. The
+  // source field and external-receipt path are always available
+  // regardless of this toggle.
+  get bloodDonorCollectionEnabled(){ return localStorage.getItem('cfg_blood_donor_collection_enabled')!=='false'; }, // on by default
+  set bloodDonorCollectionEnabled(v){ localStorage.setItem('cfg_blood_donor_collection_enabled', v?'true':'false'); },
 };
+const BLOOD_SHELF_LIFE_CFG_KEY={'Whole Blood':'bloodShelfWholeBlood','Packed RBC':'bloodShelfPrbc',Platelets:'bloodShelfPlatelets',FFP:'bloodShelfFfp',Cryoprecipitate:'bloodShelfCryo'};
 
 const ROLE_PAGES = {
   admin:['dashboard','admission','theatre','consultation','nursing','fluid-chart','appointments','infection','handover','register','worklist','samples','set-printer','hem-entry','chem-entry','sero-entry','immuno-entry','micro-entry','pcr-entry','histo-entry','cyto-entry','unified-entry','allresults','criticals','reports','print-reports-hub','rad-print','billing','prices','pt-history','labhistory','tat','inventory','qc','staff','doctors','radiology','analyzer','delivery','settings','statistics'],
@@ -6117,7 +6188,7 @@ const PAGE_TITLES = {
   allresults:'All Results',criticals:'Critical Values',reports:'Print Reports',
   billing:'Billing & Invoices',prices:'Price List',
   'pt-history':'Patient History Timeline',labhistory:'Lab History',
-  tat:'TAT Tracker',inventory:'Inventory',qc:'QC Module',
+  tat:'TAT Tracker',inventory:'Inventory',bloodbank:'Blood Bank',qc:'QC Module',
   staff:'Staff Management',doctors:'Doctors',radiology:'Radiology',
   delivery:'Result Delivery',settings:'Settings',
 };
@@ -6154,10 +6225,13 @@ const MODULE_PAGES = {
   theatre:        { label:'Theatre / OT',      icon:'🔪', pages:['theatre'] },
   billing:        { label:'Billing',         icon:'💰', pages:['billing','prices'] },
   inventory:      { label:'Inventory',       icon:'📦', pages:['inventory'] },
+  // 🩸 reused from Haematology's own icon elsewhere in the sidebar — the
+  // launcher context (a standalone top-level tile) makes it unambiguous.
+  bloodbank:      { label:'Blood Bank',      icon:'🩸', pages:['bloodbank'] },
   statistics:     { label:'Statistics',      icon:'📊', pages:['statistics'] },
   administration: { label:'Administration',  icon:'⚙️', pages:['staff','doctors','analyzer','delivery','settings','dashboard'] },
 };
-const MODULE_ORDER = ['reception','phlebotomy','laboratory','radiology','doctor','nursing','admissions','theatre','billing','inventory','statistics','administration'];
+const MODULE_ORDER = ['reception','phlebotomy','laboratory','radiology','doctor','nursing','admissions','theatre','billing','inventory','bloodbank','statistics','administration'];
 // Which module is currently entered (null = at the launcher/Home screen).
 // Distinct from ROLE_PAGES/currentProfile.role — this is pure navigation
 // state, reset to null by goHome() and set by enterModule() or by goPage()
@@ -6791,6 +6865,7 @@ function goPage(p) {
   else if(p==='labhistory'){ setD('lh-from',new Date(Date.now()-7*864e5).toISOString().slice(0,10)); setD('lh-to',td); }
   else if(p==='tat'){ setD('tat-filter-date',td); run(loadTat); }
   else if(p==='inventory') run(loadInventory);
+  else if(p==='bloodbank') run(loadBloodUnits);
   else if(p==='delivery') run(loadDeliveryLog);
   else if(p==='staff') run(loadStaff);
   else if(p==='doctors') run(loadDoctors);
@@ -6814,7 +6889,9 @@ function fullName(p){ if(!p) return '—'; return [p.first_name,p.middle_name,p.
 function statusBadge(s){
   const m={Active:'bdg-b',Discharged:'bdg-g',Scheduled:'bdg-b',Completed:'bdg-g','In Progress':'bdg-a',Cancelled:'bdg-r',Postponed:'bdg-sl',paid:'bdg-g',unpaid:'bdg-r',partial:'bdg-a',Pending:'bdg-sl',Routine:'bdg-sl',Urgent:'bdg-a',STAT:'bdg-r',Critical:'bdg-r',
     // Visit-level status (Phase 4) — same badge classes, no second colour scheme.
-    Registered:'bdg-sl','Payment Pending':'bdg-a','With Doctor':'bdg-b','Orders Pending':'bdg-a','Results Ready':'bdg-g','Visit Complete':'bdg-g'};
+    Registered:'bdg-sl','Payment Pending':'bdg-a','With Doctor':'bdg-b','Orders Pending':'bdg-a','Results Ready':'bdg-g','Visit Complete':'bdg-g',
+    // Blood unit status (Blood Bank module) — same badge classes again.
+    Quarantined:'bdg-a',Available:'bdg-g',Crossmatched:'bdg-b',Issued:'bdg-t',Expired:'bdg-r',Discarded:'bdg-sl'};
   return '<span class="bdg '+(m[s]||'bdg-sl')+'">'+(s||'—')+'</span>';
 }
 // ── VISIT STATUS (distinct from sample_records.status, which tracks one
@@ -6903,8 +6980,25 @@ function loadSettings() {
   const bsa=document.getElementById('cfg-bed-sla-amber'); if(bsa) bsa.value=CFG.bedTurnaroundAmberMin;
   const bsr=document.getElementById('cfg-bed-sla-red'); if(bsr) bsr.value=CFG.bedTurnaroundRedMin;
   const drm=document.getElementById('cfg-discharge-readiness-margin'); if(drm) drm.value=CFG.dischargeReadinessLosMarginPct;
+  const bbwb=document.getElementById('cfg-bb-shelf-wb'); if(bbwb) bbwb.value=CFG.bloodShelfWholeBlood;
+  const bbprbc=document.getElementById('cfg-bb-shelf-prbc'); if(bbprbc) bbprbc.value=CFG.bloodShelfPrbc;
+  const bbplt=document.getElementById('cfg-bb-shelf-plt'); if(bbplt) bbplt.value=CFG.bloodShelfPlatelets;
+  const bbffp=document.getElementById('cfg-bb-shelf-ffp'); if(bbffp) bbffp.value=CFG.bloodShelfFfp;
+  const bbcryo=document.getElementById('cfg-bb-shelf-cryo'); if(bbcryo) bbcryo.value=CFG.bloodShelfCryo;
+  const bbdonor=document.getElementById('cfg-bb-donor-collection'); if(bbdonor) bbdonor.checked=CFG.bloodDonorCollectionEnabled;
   loadBedConfig();
   loadIdCounters();
+}
+function saveBloodBankSettings(){
+  const g=(id,fallback)=>{ const v=parseInt(document.getElementById(id)?.value,10); return (isNaN(v)||v<=0)?fallback:v; };
+  CFG.bloodShelfWholeBlood=g('cfg-bb-shelf-wb',35);
+  CFG.bloodShelfPrbc=g('cfg-bb-shelf-prbc',42);
+  CFG.bloodShelfPlatelets=g('cfg-bb-shelf-plt',5);
+  CFG.bloodShelfFfp=g('cfg-bb-shelf-ffp',365);
+  CFG.bloodShelfCryo=g('cfg-bb-shelf-cryo',365);
+  CFG.bloodDonorCollectionEnabled=!!document.getElementById('cfg-bb-donor-collection')?.checked;
+  const el=document.getElementById('cfg-bb-status');
+  if(el){ el.textContent='✅ Saved'; setTimeout(()=>el.textContent='',3000); }
 }
 function updateFollowupPricingValueVisibility(){
   const rule=document.getElementById('cfg-followup-pricing-rule')?.value||'free';
@@ -7212,6 +7306,13 @@ function openPrintWin(html, title='Print') {
   const w=window.open('','_blank','width=900,height=750'); if(!w){ toast('Allow popups','warn'); return; }
   w.document.write('<!DOCTYPE html><html><head><title>'+title+'</title><link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"><style>@page{size:A4;margin:15mm}*{box-sizing:border-box}body{font-family:DM Sans,sans-serif;font-size:10.5pt;color:#0e1928;background:#fff;padding:5mm}table{width:100%;border-collapse:collapse}th{background:#f8fafd;padding:5px 9px;font-size:9pt;text-align:left;border-bottom:1px solid #e2e8f3}td{padding:5px 9px;font-size:9.5pt;border-bottom:1px solid #f1f5fb}.no-print{display:flex;background:#0e1928;color:#fff;padding:8px 14px;justify-content:space-between;align-items:center;gap:10px}@media print{.no-print{display:none!important}}</style></head><body><div class="no-print"><span style="font-size:.82rem"><strong>🏥 Friendship Hospital — Al Damazin</strong></span><button onclick="window.print()" style="background:#0b7a75;color:#fff;border:none;padding:8px 18px;border-radius:6px;font-size:.82rem;font-weight:700;cursor:pointer">🖨️ Print</button></div><div style="padding:5mm">'+html+'</div></body></html>');
   w.document.close();
+  // Callers that need to draw into the print window afterward (e.g.
+  // JsBarcode against an <svg> inside it, as printInventoryBarcodeLabel()/
+  // printBloodUnitLabel() both do) need the window reference back — without
+  // this, `const w = openPrintWin(...)` was always undefined and the
+  // barcode graphic silently never rendered (swallowed by the caller's own
+  // try/catch around the JsBarcode call).
+  return w;
 }
 // Dedicated thermal-width print window (80mm roll paper) — separate from
 // openPrintWin() rather than a parameter on it, since every other document
@@ -15519,6 +15620,83 @@ function printInventoryBarcodeLabel(itemId){
     '</div>'+printFooter();
   const w=openPrintWin(html,'Item Label');
   try{ JsBarcode(w.document.getElementById('lbl-inv-barcode'), it.barcode, {format:'CODE128',width:1.4,height:40,fontSize:11,margin:4}); }catch(e){ /* label still prints without the barcode graphic if the value has invalid characters for CODE128 */ }
+}
+
+// ── BLOOD BANK / TRANSFUSION SERVICES (Phase 1: unit inventory) ───────
+// blood_units (migration_v2.24) is a dedicated table, NOT a reuse of
+// reagent_inventory/inventory_batches — a blood unit is a specific,
+// non-fungible bag with its own individual status/lifecycle, unlike
+// interchangeable reagent stock. It deliberately mirrors that engine's
+// SHAPE though, and reuses computeExpiryStatus() directly (same
+// Healthy/Expiring Soon/Expired colour thresholds) so units and reagents
+// read the same way in the UI. Label printing follows the exact same
+// printHeader()+JsBarcode()+openPrintWin() pattern as
+// printInventoryBarcodeLabel() above; scanBloodUnit() reuses
+// openBarcodeScanner()'s callback convention rather than a new scanner.
+let _bbUnits=[];
+let _bbStatusFilter='';
+async function loadBloodUnits() {
+  const body=document.getElementById('bb-units-body'); if(!body||!sb) return;
+  body.innerHTML='<div class="spin-center"><div class="spinner"></div>Loading…</div>';
+  try {
+    let q=sb.from('blood_units').select('*').order('expiry_date',{ascending:true});
+    if(_bbStatusFilter) q=q.eq('status',_bbStatusFilter);
+    const comp=document.getElementById('bb-component-filter')?.value; if(comp) q=q.eq('component_type',comp);
+    const grp=document.getElementById('bb-group-filter')?.value; if(grp) q=q.eq('blood_group',grp);
+    const {data,error}=await q; if(error) throw error;
+    _bbUnits=data||[];
+    renderBloodUnitTable(_bbUnits);
+  } catch(e){ body.innerHTML='<div style="padding:14px;color:var(--red);font-size:.78rem">'+e.message+'</div>'; }
+}
+function setBbStatusFilter(status,btn) {
+  _bbStatusFilter=status;
+  document.querySelectorAll('#bb-status-tabs .tab').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  loadBloodUnits();
+}
+function filterBloodUnitList(q) {
+  if(!q){ renderBloodUnitTable(_bbUnits); return; }
+  const l=q.toLowerCase();
+  renderBloodUnitTable(_bbUnits.filter(u=>(u.unit_no||'').toLowerCase().includes(l)));
+}
+// Units already come back sorted expiry-ascending from loadBloodUnits()'s
+// query (the FEFO order) — rendering preserves that order as-is.
+function renderBloodUnitTable(units) {
+  const body=document.getElementById('bb-units-body'); if(!body) return;
+  if(!units.length){ body.innerHTML='<div class="empty-state"><div class="empty-icon">🩸</div><div class="empty-title">No blood units found</div></div>'; return; }
+  body.innerHTML='<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Unit No</th><th>Group</th><th>Component</th><th>Volume</th><th>Source</th><th>Collected</th><th>Expiry (FEFO)</th><th>Status</th><th>Actions</th></tr></thead><tbody>'+
+    units.map(u=>{
+      const exp=computeExpiryStatus(u.expiry_date);
+      return '<tr><td style="font-family:DM Mono,monospace;font-weight:700;color:var(--teal)">'+escapeHtml(u.unit_no)+'</td>'+
+        '<td>'+escapeHtml(u.blood_group)+(u.rh_factor==='Positive'?'+':'−')+'</td>'+
+        '<td>'+escapeHtml(u.component_type)+'</td>'+
+        '<td>'+(u.volume_ml?u.volume_ml+' mL':'—')+'</td>'+
+        '<td style="font-size:.72rem">'+escapeHtml(u.source)+'</td>'+
+        '<td style="font-size:.75rem">'+fmtDate(u.collection_date)+'</td>'+
+        '<td style="font-size:.75rem;color:'+exp.color+'">'+exp.emoji+' '+fmtDate(u.expiry_date)+(exp.days!=null?' — '+exp.label:'')+'</td>'+
+        '<td>'+statusBadge(u.status)+'</td>'+
+        '<td><div class="acts"><button class="btn btn-s btn-xs" onclick="printBloodUnitLabel(\x27'+u.id+'\x27)">🏷 Label</button></div></td>'+
+      '</tr>';
+    }).join('')+
+    '</tbody></table></div>';
+}
+function printBloodUnitLabel(unitId) {
+  const u=_bbUnits.find(x=>x.id===unitId); if(!u) return;
+  const html=printHeader('Blood Unit Label')+
+    '<div style="text-align:center;padding:20px">'+
+    '<div style="font-weight:800;font-size:14pt;margin-bottom:4px">'+escapeHtml(u.blood_group)+(u.rh_factor==='Positive'?'+':'−')+' · '+escapeHtml(u.component_type)+'</div>'+
+    '<svg id="lbl-bb-barcode"></svg>'+
+    '<div style="font-size:9pt;color:#64748b;margin-top:6px">Unit '+escapeHtml(u.unit_no)+' · Exp '+fmtDate(u.expiry_date)+'</div>'+
+    '</div>'+printFooter();
+  const w=openPrintWin(html,'Blood Unit Label');
+  try{ JsBarcode(w.document.getElementById('lbl-bb-barcode'), u.unit_no, {format:'CODE128',width:1.6,height:45,fontSize:12,margin:4}); }catch(e){ /* label still prints without the barcode graphic if the value has invalid characters for CODE128 */ }
+}
+function scanBloodUnit(onFound) {
+  openBarcodeScanner(code=>{
+    const u=_bbUnits.find(x=>x.unit_no===code);
+    if(!u){ toast('No blood unit matches scanned code: '+code,'err'); return; }
+    if(onFound) onFound(u); else toast('📷 Found unit '+u.unit_no,'ok');
+  }, {title:'📷 Scan Unit Barcode'});
 }
 
 function editInventoryItem(id){
