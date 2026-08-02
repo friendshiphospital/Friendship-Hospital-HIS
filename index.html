@@ -6666,6 +6666,7 @@ function filterSidebar() {
   });
 }
 async function doLogout() {
+  unsubscribeBedGridRealtime();
   if(sb) await sb.auth.signOut().catch(()=>{});
   currentUser=null; currentProfile=null;
   document.getElementById('app').classList.remove('visible');
@@ -6684,6 +6685,10 @@ function goPage(p) {
     const role=currentProfile.role||'receptionist', allowed=ROLE_PAGES[role]||[];
     if(!allowed.includes(p)&&role!=='admin'){ toast('Access denied','err'); return; }
   }
+  // The bed-grid Realtime subscription (Phase 5a) is scoped to this one
+  // page — tear it down the moment we navigate away so it never keeps
+  // running (or stacks a second channel) in the background on other pages.
+  if(p!=='admission' && document.querySelector('.page.active')?.id==='page-admission') unsubscribeBedGridRealtime();
   // Module auto-detection — handles every call site that reaches goPage()
   // directly rather than through a launcher tile (global search results,
   // the notification bell, "Continue" shortcuts, printInvoice-adjacent
@@ -6723,7 +6728,7 @@ function goPage(p) {
   const run = fn => { try{ const r=fn(); if(r&&r.catch) r.catch(e=>console.warn(e)); }catch(e){console.warn(e);} };
   const td=new Date().toISOString().slice(0,10), td16=new Date().toISOString().slice(0,16);
   if(p==='dashboard') run(loadDashboard);
-  else if(p==='admission'){ run(loadAdmissions); run(loadAdmissionStats); run(loadDoctorDropdowns); run(loadBedsForWard); run(loadBedGrid); generateAdmNo(); setD('adm-date',td16); }
+  else if(p==='admission'){ run(loadAdmissions); run(loadAdmissionStats); run(loadDoctorDropdowns); run(loadBedsForWard); run(loadBedGrid); run(subscribeBedGridRealtime); generateAdmNo(); setD('adm-date',td16); }
   else if(p==='theatre'){ run(loadOTSchedule); run(loadSurgeonDropdown); setD('ot-date',td); setD('ot-sched-date',td); }
   else if(p==='nursing'){ run(loadNursingQueue); setD('ho-date',td); setEl('vs-by',currentProfile?.full_name||''); }
   else if(p==='fluid-chart'){ setD('fc-date',td); run(loadFluidChart); }
@@ -7561,6 +7566,28 @@ async function loadBedGrid() {
     _bedGridData=(beds||[]).map(b=>({...b,_admission:b.current_admission_id?admById[b.current_admission_id]:null}));
     renderBedGridWardTabs(); renderBedGrid();
   } catch(e){ grid.innerHTML='<div style="padding:14px;color:var(--red);font-size:.78rem">'+e.message+'</div>'; }
+}
+// ── BED GRID LIVE SYNC (Phase 5a) ──────────────────────────────────────
+// First use of Supabase Realtime anywhere in this codebase. Deliberately
+// narrow: one channel, one table (beds), only while the Bed Management
+// page is actually open (subscribed in goPage()'s 'admission' branch,
+// torn down the moment goPage() navigates anywhere else) — not a general
+// realtime layer for the app. On any beds change from ANY device, simply
+// re-runs loadBedGrid() rather than trying to patch _bedGridData in
+// place, since a full reload is already fast and this avoids a second,
+// subtler place bed state could drift from the database.
+let _bedGridChannel=null;
+function subscribeBedGridRealtime() {
+  if(!sb||_bedGridChannel||typeof sb.channel!=='function') return;
+  try {
+    _bedGridChannel=sb.channel('beds-grid-realtime')
+      .on('postgres_changes',{event:'*',schema:'public',table:'beds'},()=>{ loadBedGrid(); })
+      .subscribe();
+  } catch(e){ console.warn('Bed grid realtime unavailable',e); }
+}
+function unsubscribeBedGridRealtime() {
+  if(_bedGridChannel&&sb){ try{ sb.removeChannel(_bedGridChannel); }catch(e){} }
+  _bedGridChannel=null;
 }
 function renderBedGridWardTabs() {
   const tabs=document.getElementById('bed-grid-ward-tabs'); if(!tabs) return;
