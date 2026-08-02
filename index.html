@@ -184,6 +184,11 @@ html[dir="rtl"] body{direction:rtl;}
 .bed-dot.bed-oc{background:var(--red);}
 .bed-dot.bed-cl{background:var(--amber);}
 .bed-dot.bed-dp{background:var(--blue);}
+/* Bed turnaround SLA escalation (Phase 5b) — layered on top of .bed-cl,
+   never replaces the status colour, since a bed is still Cleaning/
+   Maintenance either way; this just flags it's overdue. */
+.bed-tile.bed-sla-amber{border-color:var(--amber);box-shadow:inset 0 0 0 2px rgba(217,119,6,.35);}
+.bed-tile.bed-sla-red{background:var(--red-lt);color:var(--red);border-color:var(--red);box-shadow:inset 0 0 0 2px rgba(185,28,28,.4);}
 /* TOGGLE SWITCH */
 .tgl-wrap{display:inline-flex;align-items:center;gap:9px;cursor:pointer;user-select:none;}
 .tgl-wrap input{display:none;}
@@ -4258,6 +4263,15 @@ html[dir="rtl"] body{direction:rtl;}
         </div>
         <div id="bed-cfg-body"><div class="spin-center"><div class="spinner"></div>Loading…</div></div>
       </div></div>
+      <div class="card"><div class="card-hd"><span class="card-title">⏱ Bed Turnaround SLA</span></div><div class="card-body">
+        <div style="font-size:.72rem;color:var(--slate);margin-bottom:8px">How long a bed may sit in Cleaning/Maintenance on the bed grid before its tile visually escalates — a prompt for housekeeping/charge nurse follow-up, not an automated action.</div>
+        <div class="g2">
+          <div class="fg"><label class="fl">Amber warning after (minutes)</label><input class="fc" type="number" min="1" id="cfg-bed-sla-amber" placeholder="30"></div>
+          <div class="fg"><label class="fl">Red escalation after (minutes)</label><input class="fc" type="number" min="1" id="cfg-bed-sla-red" placeholder="90"></div>
+        </div>
+        <button class="btn btn-p btn-sm" onclick="saveBedSlaSettings()">💾 Save Turnaround SLA</button>
+        <div id="cfg-bed-sla-status" style="margin-top:7px;font-size:.78rem;color:var(--green)"></div>
+      </div></div>
       <div class="card"><div class="card-hd"><span class="card-title">🔢 ID Counters</span></div><div class="card-body">
         <div style="font-size:.74rem;color:var(--slate);margin-bottom:8px">These counters generate every File Number, Lab No., and Radiology No. Correcting one only changes what the <em>next</em> number will be — it does not renumber existing records. Only use this to fix a genuine mistake.</div>
         <div id="cfg-counters-body"><div class="spin-center"><div class="spinner"></div>Loading…</div></div>
@@ -6048,6 +6062,14 @@ const CFG = {
   // actually gates.
   get autoVerifyEnabled(){ return localStorage.getItem('cfg_auto_verify_enabled')==='true'; },
   set autoVerifyEnabled(v){ localStorage.setItem('cfg_auto_verify_enabled', v?'true':'false'); },
+  // Bed-turnaround SLA (Bed Management / IPD overhaul, Phase 5b) — how long
+  // a bed may sit in Cleaning/Maintenance before the grid tile escalates.
+  // Two thresholds, same amber-then-red escalation as everywhere else in
+  // this app that has a soft and a hard threshold (e.g. discountOverrideThreshold).
+  get bedTurnaroundAmberMin(){ return parseInt(localStorage.getItem('cfg_bed_turnaround_amber_min'),10)||30; },
+  set bedTurnaroundAmberMin(v){ localStorage.setItem('cfg_bed_turnaround_amber_min', v); },
+  get bedTurnaroundRedMin(){ return parseInt(localStorage.getItem('cfg_bed_turnaround_red_min'),10)||90; },
+  set bedTurnaroundRedMin(v){ localStorage.setItem('cfg_bed_turnaround_red_min', v); },
 };
 
 const ROLE_PAGES = {
@@ -6856,6 +6878,8 @@ function loadSettings() {
   const fpr=document.getElementById('cfg-followup-pricing-rule'); if(fpr) fpr.value=CFG.followupPricingRule;
   const fpv=document.getElementById('cfg-followup-pricing-value'); if(fpv) fpv.value=CFG.followupPricingValue;
   updateFollowupPricingValueVisibility();
+  const bsa=document.getElementById('cfg-bed-sla-amber'); if(bsa) bsa.value=CFG.bedTurnaroundAmberMin;
+  const bsr=document.getElementById('cfg-bed-sla-red'); if(bsr) bsr.value=CFG.bedTurnaroundRedMin;
   loadBedConfig();
   loadIdCounters();
 }
@@ -6874,6 +6898,15 @@ function saveFollowupPolicySettings(){
   CFG.followupPricingValue=isNaN(val)?0:val;
   const el=document.getElementById('cfg-followup-policy-status');
   if(el){ el.textContent='✅ Saved'; setTimeout(()=>el.textContent='',3000); }
+}
+function saveBedSlaSettings(){
+  const amber=parseInt(document.getElementById('cfg-bed-sla-amber')?.value,10);
+  const red=parseInt(document.getElementById('cfg-bed-sla-red')?.value,10);
+  CFG.bedTurnaroundAmberMin=(isNaN(amber)||amber<=0)?30:amber;
+  CFG.bedTurnaroundRedMin=(isNaN(red)||red<=0)?90:red;
+  const el=document.getElementById('cfg-bed-sla-status');
+  if(el){ el.textContent='✅ Saved'; setTimeout(()=>el.textContent='',3000); }
+  if(document.getElementById('page-admission')?.classList.contains('active')) renderBedGrid();
 }
 // Settings is already admin-only (see ROLE_PAGES), so no extra role check is
 // needed here — but the destructive-ish correction itself still requires
@@ -6989,7 +7022,7 @@ async function addBedConfig() {
   const room=document.getElementById('bed-cfg-room')?.value?.trim();
   const bed=document.getElementById('bed-cfg-bed')?.value?.trim();
   if(!room||!bed){ toast('Enter room and bed number','err'); return; }
-  try { await sb.from('beds').insert({ward,room,bed_number:bed,status:'Available'}); toast('Bed added','ok'); loadBedConfig(); document.getElementById('bed-cfg-room').value=''; document.getElementById('bed-cfg-bed').value=''; }
+  try { await sb.from('beds').insert({ward,room,bed_number:bed,status:'Available',status_changed_at:new Date().toISOString()}); toast('Bed added','ok'); loadBedConfig(); document.getElementById('bed-cfg-room').value=''; document.getElementById('bed-cfg-bed').value=''; }
   catch(e){ toast(e.message,'err'); }
 }
 async function deleteBed(id) {
@@ -7577,7 +7610,13 @@ async function loadBedGrid() {
 // place, since a full reload is already fast and this avoids a second,
 // subtler place bed state could drift from the database.
 let _bedGridChannel=null;
+// Re-renders (not re-fetches) the grid every 30s so a Cleaning/Maintenance
+// tile's elapsed-time display and SLA escalation stay current even when
+// nothing in the database has actually changed. Same lifecycle as the
+// Realtime channel — started/stopped together, both scoped to this page.
+let _bedGridSlaTimer=null;
 function subscribeBedGridRealtime() {
+  if(!_bedGridSlaTimer) _bedGridSlaTimer=setInterval(renderBedGrid,30000);
   if(!sb||_bedGridChannel||typeof sb.channel!=='function') return;
   try {
     _bedGridChannel=sb.channel('beds-grid-realtime')
@@ -7588,6 +7627,7 @@ function subscribeBedGridRealtime() {
 function unsubscribeBedGridRealtime() {
   if(_bedGridChannel&&sb){ try{ sb.removeChannel(_bedGridChannel); }catch(e){} }
   _bedGridChannel=null;
+  if(_bedGridSlaTimer){ clearInterval(_bedGridSlaTimer); _bedGridSlaTimer=null; }
 }
 function renderBedGridWardTabs() {
   const tabs=document.getElementById('bed-grid-ward-tabs'); if(!tabs) return;
@@ -7603,18 +7643,42 @@ function setBedGridWard(w,btn) {
   if(btn) btn.classList.add('active');
   renderBedGrid();
 }
+// Bed-turnaround SLA (Phase 5b) — Cleaning/Maintenance beds show elapsed
+// time since status_changed_at (set by every status-changing write:
+// submitAdmission()/saveDischarge()/submitBedTransfer()/setBedStatus()/
+// addBedConfig()) and the tile escalates past the admin-configured
+// thresholds. Purely visual — never blocks or auto-changes anything.
+function bedTurnaroundMinutes(b) {
+  if(!b.status_changed_at) return null;
+  return Math.max(0,Math.floor((Date.now()-new Date(b.status_changed_at).getTime())/60000));
+}
+function bedTurnaroundEscalationClass(b) {
+  if(b.status!=='Cleaning'&&b.status!=='Maintenance') return '';
+  const mins=bedTurnaroundMinutes(b); if(mins==null) return '';
+  if(mins>=CFG.bedTurnaroundRedMin) return ' bed-sla-red';
+  if(mins>=CFG.bedTurnaroundAmberMin) return ' bed-sla-amber';
+  return '';
+}
+function fmtMinutesElapsed(mins) {
+  if(mins<60) return mins+'m';
+  return Math.floor(mins/60)+'h '+(mins%60)+'m';
+}
 function renderBedGrid() {
   const grid=document.getElementById('bed-grid-container'); if(!grid) return;
   const beds=_bedGridWard==='all'?_bedGridData:_bedGridData.filter(b=>b.ward===_bedGridWard);
   if(!beds.length){ grid.innerHTML='<div class="empty-state"><div class="empty-icon">🛏</div><div class="empty-title">No beds configured'+(_bedGridWard==='all'?'':' for '+_bedGridWard)+'</div></div>'; return; }
   grid.innerHTML=beds.map(b=>{
     const cls=BED_STATUS_CLASS[b.status]||'bed-av';
+    const slaCls=bedTurnaroundEscalationClass(b);
     const adm=b._admission;
     let info;
     if(b.status==='Occupied'||b.status==='Discharge Pending'){
       info=adm?('<strong>'+(adm.patients?.name||'—')+'</strong><br>'+(adm.patients?.mrn||'')+' · '+(adm.admitting_doctor||'—')+'<br>'+fmtDate(adm.admission_date)):'<span style="opacity:.7">Chart unavailable</span>';
+    } else if(b.status==='Cleaning'||b.status==='Maintenance') {
+      const mins=bedTurnaroundMinutes(b);
+      info=b.status+(mins!=null?'<br><span style="font-weight:700">⏱ '+fmtMinutesElapsed(mins)+'</span>':'');
     } else { info=b.status; }
-    return '<div class="bed-tile '+cls+'" onclick="bedTileClick(\x27'+b.id+'\x27)">'+
+    return '<div class="bed-tile '+cls+slaCls+'" onclick="bedTileClick(\x27'+b.id+'\x27)">'+
       '<div class="bed-tile-menu" onclick="event.stopPropagation();openBedStatusMenu(event,\x27'+b.id+'\x27)">⋮</div>'+
       '<div class="bed-tile-loc">'+b.ward+' · '+b.room+'</div>'+
       '<div class="bed-tile-num">Bed '+b.bed_number+'</div>'+
@@ -7668,7 +7732,7 @@ async function setBedStatus(bedId,newStatus) {
   closeBedStatusMenu();
   if(!sb){ toast('Not connected','err'); return; }
   try {
-    await sb.from('beds').update({status:newStatus}).eq('id',bedId);
+    await sb.from('beds').update({status:newStatus,status_changed_at:new Date().toISOString()}).eq('id',bedId);
     toast('Bed status updated to '+newStatus,'ok');
     loadBedGrid(); loadAdmissionStats();
   } catch(e){ toast(e.message,'err'); }
@@ -7777,7 +7841,7 @@ async function submitAdmission() {
     }
     const {data:adm,error}=await sb.from('admissions').insert({patient_id:_admPt.id,admission_no:admNo,ip_no:newIpNo,ward,room,bed,admitting_doctor:doc,primary_diagnosis:g('adm-diagnosis'),admission_type:g('adm-type'),admission_date:g('adm-date')||new Date().toISOString(),notes:admNotes,status:'Active',created_by:currentProfile?.id}).select().single();
     if(error) throw error;
-    if(bed&&bed!=='—'){ try{ await sb.from('beds').update({status:'Occupied',current_patient_id:_admPt.id,current_admission_id:adm.id}).eq('ward',ward).eq('room',room).eq('bed_number',bed); }catch(e){} }
+    if(bed&&bed!=='—'){ try{ await sb.from('beds').update({status:'Occupied',current_patient_id:_admPt.id,current_admission_id:adm.id,status_changed_at:new Date().toISOString()}).eq('ward',ward).eq('room',room).eq('bed_number',bed); }catch(e){} }
     toast('✅ Patient admitted: '+admNo+(newIpNo?' — New File No. '+newIpNo:''),'ok'); clearAdmForm(); loadAdmissions(); loadAdmissionStats();
     const msg=document.getElementById('adm-msg'); if(msg){ msg.style.color='var(--green)'; msg.textContent='✅ Admitted: '+admNo; setTimeout(()=>msg.textContent='',4000); }
   } catch(e){ toast(e.message,'err'); }
@@ -7921,8 +7985,8 @@ async function submitBedTransfer() {
     if(adm.ward===newWard && adm.room===newRoom && adm.bed===newBed){ toast('Destination is the same as the current bed','err'); return; }
     await sb.from('bed_transfers').insert({admission_id:_currentAdmId,patient_id:adm.patient_id,from_ward:adm.ward,from_room:adm.room,from_bed:adm.bed,to_ward:newWard,to_room:newRoom,to_bed:newBed,reason,transferred_by:currentProfile?.id,transferred_by_name:currentProfile?.full_name,transferred_at:new Date().toISOString()});
     await sb.from('admissions').update({ward:newWard,room:newRoom,bed:newBed}).eq('id',_currentAdmId);
-    if(adm.bed&&adm.bed!=='—'){ try{ await sb.from('beds').update({status:'Available',current_patient_id:null,current_admission_id:null}).eq('ward',adm.ward).eq('room',adm.room).eq('bed_number',adm.bed); }catch(e){} }
-    try{ await sb.from('beds').update({status:'Occupied',current_patient_id:adm.patient_id,current_admission_id:_currentAdmId}).eq('ward',newWard).eq('room',newRoom).eq('bed_number',newBed); }catch(e){}
+    if(adm.bed&&adm.bed!=='—'){ try{ await sb.from('beds').update({status:'Available',current_patient_id:null,current_admission_id:null,status_changed_at:new Date().toISOString()}).eq('ward',adm.ward).eq('room',adm.room).eq('bed_number',adm.bed); }catch(e){} }
+    try{ await sb.from('beds').update({status:'Occupied',current_patient_id:adm.patient_id,current_admission_id:_currentAdmId,status_changed_at:new Date().toISOString()}).eq('ward',newWard).eq('room',newRoom).eq('bed_number',newBed); }catch(e){}
     toast('✅ Patient transferred to '+newWard+' / '+newRoom+' / '+newBed,'ok');
     openAdmDetail(_currentAdmId);
     loadBedGrid(); loadAdmissions(); loadAdmissionStats();
@@ -7982,7 +8046,7 @@ async function saveDischarge() {
     const los=adm?Math.ceil((new Date()-new Date(adm.admission_date))/(864e5)):0;
     await sb.from('discharge_summaries').insert({patient_id:adm.patient_id,admission_id:_currentAdmId,discharge_date:g('disch-date'),discharge_type:g('disch-type'),final_diagnosis:g('disch-dx'),procedures_done:g('disch-procedures'),discharge_condition:g('disch-condition'),follow_up_date:g('disch-fu-date')||null,follow_up_with:g('disch-fu-with'),discharge_instructions:g('disch-instructions'),los_days:los,prepared_by:g('disch-prepared-by'),created_by:currentProfile?.id});
     await sb.from('admissions').update({status:'Discharged',discharge_date:new Date().toISOString()}).eq('id',_currentAdmId);
-    if(adm.ward&&adm.bed&&adm.bed!=='—'){ try{ await sb.from('beds').update({status:'Available',current_patient_id:null,current_admission_id:null}).eq('ward',adm.ward).eq('room',adm.room).eq('bed_number',adm.bed); }catch(e){} }
+    if(adm.ward&&adm.bed&&adm.bed!=='—'){ try{ await sb.from('beds').update({status:'Available',current_patient_id:null,current_admission_id:null,status_changed_at:new Date().toISOString()}).eq('ward',adm.ward).eq('room',adm.room).eq('bed_number',adm.bed); }catch(e){} }
     toast('✅ Patient discharged','ok'); closeOv('discharge-ov'); loadAdmissions(); loadAdmissionStats();
   } catch(e){ toast(e.message,'err'); }
 }
@@ -9869,7 +9933,7 @@ async function deletePatientRecord(){
     for(const t of dependentTables){
       try{ await sb.from(t).delete().in('patient_id',ptIds); }catch(e){ /* table may not have patient_id, or may not exist in this deployment — skip */ }
     }
-    try{ await sb.from('beds').update({status:'Available',current_patient_id:null,current_admission_id:null}).in('current_patient_id',ptIds); }catch(e){}
+    try{ await sb.from('beds').update({status:'Available',current_patient_id:null,current_admission_id:null,status_changed_at:new Date().toISOString()}).in('current_patient_id',ptIds); }catch(e){}
     const {error:pErr} = await sb.from('patients').delete().in('id',ptIds);
     if(pErr) throw pErr;
     await sb.from('patients_master').delete().eq('mrn',mrn);
