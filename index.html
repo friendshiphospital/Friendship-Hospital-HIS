@@ -525,6 +525,7 @@ html[dir="rtl"] body{direction:rtl;}
       <div class="sb-item" data-p="labhistory" onclick="goPage('labhistory')"><span class="ic">📈</span><span data-i18n="nav_labhistory">Lab History</span></div>
       <div class="sb-item" data-p="tat" onclick="goPage('tat')"><span class="ic">⏱️</span><span data-i18n="nav_tat">TAT Tracker</span></div>
       <div class="sb-item" data-p="qc" onclick="goPage('qc')"><span class="ic">🔬</span><span data-i18n="nav_qc">QC Module</span></div>
+      <div class="sb-item" data-p="analyzer" onclick="goPage('analyzer')"><span class="ic">🔌</span><span data-i18n="nav_analyzer">Analyzer Interface</span></div>
       <div class="sb-item" data-p="pt-history" onclick="goPage('pt-history')"><span class="ic">🕐</span><span data-i18n="nav_pt_history">Patient Timeline</span></div>
     </div>
     <div class="sb-group" data-module="radiology">
@@ -567,7 +568,6 @@ html[dir="rtl"] body{direction:rtl;}
       <div class="sb-item" data-p="dashboard" onclick="goPage('dashboard')"><span class="ic">📊</span><span data-i18n="nav_dashboard">Dashboard</span></div>
       <div class="sb-item" data-p="staff" onclick="goPage('staff')"><span class="ic">👥</span><span data-i18n="nav_staff">Staff</span></div>
       <div class="sb-item" data-p="doctors" onclick="goPage('doctors')"><span class="ic">🩺</span><span data-i18n="nav_doctors">Doctors</span></div>
-      <div class="sb-item" data-p="analyzer" onclick="goPage('analyzer')"><span class="ic">🔌</span><span data-i18n="nav_analyzer">Analyzer Interface</span></div>
       <div class="sb-item" data-p="delivery" onclick="goPage('delivery')"><span class="ic">📲</span><span data-i18n="nav_delivery">Result Delivery</span></div>
       <div class="sb-item" data-p="settings" onclick="goPage('settings')"><span class="ic">⚙️</span><span data-i18n="nav_settings">Settings</span></div>
     </div>
@@ -6717,7 +6717,7 @@ const PAGE_TITLES = {
 const MODULE_PAGES = {
   reception:      { label:'Reception',      icon:'🏥', pages:['register','appointments','print-reports-hub'] },
   phlebotomy:     { label:'Phlebotomy',      icon:'💉', pages:['samples','set-printer'] },
-  laboratory:     { label:'Laboratory',      icon:'🔬', pages:['worklist','unified-entry','hem-entry','chem-entry','sero-entry','immuno-entry','micro-entry','pcr-entry','histo-entry','cyto-entry','reports','allresults','labhistory','criticals','qc','tat','pt-history'] },
+  laboratory:     { label:'Laboratory',      icon:'🔬', pages:['worklist','unified-entry','hem-entry','chem-entry','sero-entry','immuno-entry','micro-entry','pcr-entry','histo-entry','cyto-entry','reports','allresults','labhistory','criticals','qc','analyzer','tat','pt-history'] },
   radiology:      { label:'Radiology',       icon:'🩻', pages:['radiology','rad-print'] },
   doctor:         { label:'Doctor',          icon:'🩺', pages:['consultation','pt-history'] },
   nursing:        { label:'Nursing',         icon:'🧑‍⚕️', pages:['nursing','fluid-chart','infection','handover','pt-history'] },
@@ -6736,7 +6736,7 @@ const MODULE_PAGES = {
   // launcher context (a standalone top-level tile) makes it unambiguous.
   bloodbank:      { label:'Blood Bank',      icon:'🩸', pages:['bloodbank'] },
   statistics:     { label:'Statistics',      icon:'📊', pages:['statistics'] },
-  administration: { label:'Administration',  icon:'⚙️', pages:['staff','doctors','analyzer','delivery','settings','dashboard'] },
+  administration: { label:'Administration',  icon:'⚙️', pages:['staff','doctors','delivery','settings','dashboard'] },
 };
 const MODULE_ORDER = ['reception','phlebotomy','laboratory','radiology','doctor','nursing','admissions','theatre','billing','inventory','bloodbank','statistics','administration'];
 // Which module is currently entered (null = at the launcher/Home screen).
@@ -15847,10 +15847,10 @@ function renderPermissionsMatrix() {
     {label:'💰 Billing',pages:['billing','prices']},
     {label:'🛏 Inpatient',pages:['admission','theatre','nursing','fluid-chart','handover','infection']},
     {label:'🩺 Doctor',pages:['consultation']},
-    {label:'🔬 Laboratory',pages:['worklist','samples','hem-entry','chem-entry','sero-entry','micro-entry','pcr-entry','histo-entry','cyto-entry','allresults','criticals','reports','qc','labhistory','tat','inventory','delivery']},
+    {label:'🔬 Laboratory',pages:['worklist','samples','hem-entry','chem-entry','sero-entry','micro-entry','pcr-entry','histo-entry','cyto-entry','allresults','criticals','reports','qc','analyzer','labhistory','tat','inventory','delivery']},
     {label:'🩻 Radiology',pages:['radiology']},
     {label:'📊 Reports',pages:['pt-history']},
-    {label:'⚙️ Admin',pages:['staff','doctors','settings','analyzer']},
+    {label:'⚙️ Admin',pages:['staff','doctors','settings']},
   ];
   const roles=['admin','doctor','nurse','lab_tech','lab_supervisor','receptionist','cashier','theatre_nurse','radiologist'];
   const pageLabels={register:'Register Patient',appointments:'Appointments',billing:'Billing',prices:'Price List',admission:'Admissions',theatre:'Theatre',nursing:'Nursing/Vitals','fluid-chart':'Fluid Chart',handover:'Handover',infection:'Infection Flags',consultation:'Consultation','hem-entry':'Haematology','chem-entry':'Chemistry','sero-entry':'Serology','micro-entry':'Microbiology','pcr-entry':'PCR','histo-entry':'Histopathology','cyto-entry':'Cytology',worklist:'Worklist',samples:'Sample Collection',allresults:'All Results',criticals:'Critical Values',reports:'Reports/Print',qc:'QC Module',labhistory:'Lab History',tat:'TAT Tracker',inventory:'Inventory',delivery:'Delivery',radiology:'Radiology','pt-history':'Patient History',staff:'Staff Mgmt',doctors:'Doctors',settings:'Settings',analyzer:'Analyzer'};
