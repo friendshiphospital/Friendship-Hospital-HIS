@@ -3767,7 +3767,10 @@ html[dir="rtl"] body{direction:rtl;}
   </div>
   <div id="qc-tab-chart" style="display:none">
     <div class="card"><div class="card-hd"><span class="card-title">📈 Levey-Jennings Chart</span>
-      <select class="fc" id="qc-chart-lot" onchange="renderQcChart()" style="width:200px;padding:5px 9px;font-size:.78rem"><option value="">Select lot…</option></select>
+      <div style="display:flex;gap:8px;align-items:center">
+        <select class="fc" id="qc-chart-lot" onchange="renderQcChart()" style="width:200px;padding:5px 9px;font-size:.78rem"><option value="">Select lot…</option></select>
+        <button class="btn btn-s btn-sm" onclick="printQcReport()">🖨 Print QC Report</button>
+      </div>
     </div><div class="card-body"><canvas id="qc-chart-canvas" height="220" style="width:100%"></canvas><div id="qc-violations" style="margin-top:12px"></div><div id="qc-sigma-panel" style="margin-top:12px"></div></div></div>
   </div>
 </div>
@@ -18920,6 +18923,48 @@ async function renderQcChart(){
       }
     }
   }catch(e){ ctx.fillStyle='#b91c1c'; ctx.font='12px sans-serif'; ctx.textAlign='center'; ctx.fillText('Error: '+e.message,W/2,H/2); }
+}
+// Prints the currently-selected lot's Levey-Jennings chart (as a snapshot
+// image, since it's a <canvas>) alongside its Westgard/Six Sigma summary
+// and the full results table — a monthly QC report a lab can file/sign,
+// not just an on-screen chart.
+async function printQcReport(){
+  const lotId=document.getElementById('qc-chart-lot')?.value;
+  if(!lotId){ toast('Select a lot first','err'); return; }
+  if(!sb) return;
+  try{
+    await renderQcChart(); // ensure the canvas/violations/sigma panel reflect this lot before snapshotting
+    const {data:lot}=await sb.from('qc_lots').select('*').eq('id',lotId).single();
+    const {data:results}=await sb.from('qc_results').select('*').eq('lot_id',lotId).order('result_date',{ascending:false}).limit(30);
+    const canvas=document.getElementById('qc-chart-canvas');
+    const chartImg=canvas?canvas.toDataURL('image/png'):null;
+    const violHtml=document.getElementById('qc-violations')?.innerHTML||'';
+    const sigmaHtml=document.getElementById('qc-sigma-panel')?.innerHTML||'';
+    const rows=(results||[]).map(r=>{
+      const z=r.z_score;
+      const zColor=z==null?'':Math.abs(z)>=3?'#b91c1c':Math.abs(z)>=2?'#f59e0b':'#166534';
+      return '<tr><td>'+escapeHtml(r.result_date||'—')+'</td><td>'+(r.result_value??'—')+'</td>'+
+        '<td style="color:'+zColor+';font-weight:700">'+(z!=null?z.toFixed(2):'—')+'</td>'+
+        '<td>'+(r.accepted?'Accepted':'Rejected')+'</td>'+
+        '<td>'+escapeHtml(r.comment||r.rule_violation||'—')+'</td></tr>';
+    }).join('');
+    const html=printHeader('Quality Control Report')+
+      '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px;font-size:9pt">'+
+      '<div><div style="color:#64748b;font-size:8pt">Lot No</div><div style="font-weight:700">'+escapeHtml(lot?.lot_no||'—')+'</div></div>'+
+      '<div><div style="color:#64748b;font-size:8pt">Control</div><div style="font-weight:700">'+escapeHtml(lot?.control_name||'—')+'</div></div>'+
+      '<div><div style="color:#64748b;font-size:8pt">Section / Level</div><div>'+escapeHtml(lot?.section||'—')+' · '+escapeHtml(lot?.level||'—')+'</div></div>'+
+      '<div><div style="color:#64748b;font-size:8pt">Target Mean / SD</div><div>'+(lot?.target_mean??'—')+' / '+(lot?.target_sd??'—')+'</div></div>'+
+      '</div>'+
+      (chartImg?'<img src="'+chartImg+'" style="width:100%;max-width:700px;border:1px solid #e2e8f3;border-radius:6px;margin-bottom:12px">':'')+
+      violHtml+sigmaHtml+
+      '<div style="margin-top:16px;font-weight:700;font-size:10pt">Results ('+(results||[]).length+')</div>'+
+      '<table style="width:100%;border-collapse:collapse;margin-top:6px"><thead><tr><th>Date</th><th>Value</th><th>Z-score</th><th>Status</th><th>Comment</th></tr></thead><tbody>'+rows+'</tbody></table>'+
+      '<div style="margin-top:24px;display:grid;grid-template-columns:1fr 1fr;gap:20px;text-align:center">'+
+      '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">Reviewed By</div>'+
+      '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">Date</div></div>'+
+      printFooter();
+    openPrintWin(html,'QC Report — '+(lot?.control_name||'')+' ('+(lot?.lot_no||'')+')');
+  }catch(e){ toast(e.message,'err'); }
 }
 
 </script>
