@@ -3107,7 +3107,7 @@ html[dir="rtl"] body{direction:rtl;}
   </div>
 
   <!-- STAT alert banner -->
-  <div id="wl-stat-banner" style="display:none;background:#fee2e2;border:2px solid #fca5a5;border-radius:10px;padding:10px 14px;margin-bottom:10px;font-size:.82rem;color:#b91c1c;display:flex;align-items:center;gap:10px">
+  <div id="wl-stat-banner" style="display:none;background:#fee2e2;border:2px solid #fca5a5;border-radius:10px;padding:10px 14px;margin-bottom:10px;font-size:.82rem;color:#b91c1c;align-items:center;gap:10px">
     ⚡ <strong>STAT orders pending — results required immediately</strong>
   </div>
 
@@ -10745,7 +10745,16 @@ async function loadWorklist() {
     else if(mode==='date'){ const d=document.getElementById('wl-date')?.value; if(d) q=q.gte('created_at',d+'T00:00:00').lte('created_at',d+'T23:59:59'); }
     if(prio) q=q.eq('priority',prio);
     const {data:pts}=await q;
-    if(!pts?.length){ body.innerHTML='<div class="empty-state"><div class="empty-icon">🔬</div><div class="empty-title">No patients found</div></div>'; updateWlStats([]); return; }
+    if(!pts?.length){
+      body.innerHTML='<div class="empty-state"><div class="empty-icon">🔬</div><div class="empty-title">No patients found</div></div>';
+      updateWlStats([]);
+      // Previously left whatever banner state a prior render (or the page's
+      // initial markup) happened to be in — an empty result for the current
+      // filter must never leave a stale STAT/unpaid banner visible.
+      const stale=document.getElementById('wl-stat-banner'); if(stale) stale.style.display='none';
+      const staleU=document.getElementById('wl-unpaid-banner'); if(staleU) staleU.style.display='none';
+      return;
+    }
     const ids=pts.map(p=>p.id);
     const {data:samples}=await sb.from('sample_records').select('patient_id,status,sample_source').in('patient_id',ids);
     // Keyed by patient_id -> {status, source} rather than a bare status string,
@@ -10780,7 +10789,11 @@ async function loadWorklist() {
     const sb2=document.getElementById('wl-stat-banner'); if(sb2) sb2.style.display=hasStat?'flex':'none';
     const ub=document.getElementById('wl-unpaid-banner'); if(ub) ub.style.display=hasUnpaid?'block':'none';
     if(!filtered.length){
-      const unreceivedCount = pts.filter(p=>sampleMap[p.id]?.status==='Pending'||sampleMap[p.id]?.status==='Collected').length;
+      // Also counts patients with NO sample_records row at all (not just
+      // Pending/Collected) as "awaiting receipt" — previously these vanished
+      // into neither bucket, silently excluded with no explanation at all
+      // (e.g. a record predating sample tracking, or a failed insert).
+      const unreceivedCount = pts.filter(p=>{ const s=sampleMap[p.id]?.status; return !s||s==='Pending'||s==='Collected'; }).length;
       body.innerHTML = unreceivedCount
         ? '<div class="empty-state"><div class="empty-icon">📥</div><div class="empty-title">'+unreceivedCount+' sample(s) awaiting receipt</div><div style="font-size:.8rem;color:var(--slate);margin-top:4px">Samples must be received in the lab (Sample Collection → Receive in Lab) before they appear here.</div></div>'
         : '<div class="empty-state">No results for selected filters</div>';
@@ -10814,6 +10827,7 @@ async function loadWorklist() {
             '<button class="btn btn-s btn-xs" onclick="openPatientHistoryTimeline(\x27'+p.id+'\x27)" title="View this patient\x27s full history">\ud83d\udd50 History</button>'+
           '</div></td></tr>';
       }).join('')+'</tbody></table></div>';
+    if(window._wlSearchQuery) applyWlRowFilter(window._wlSearchQuery);
   } catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red)">'+escapeHtml(e.message)+'</div>'; }
 }
 function toggleWlSourceSort(){
@@ -10836,6 +10850,16 @@ function setWlMode(mode,btn) {
   loadWorklist();
 }
 function filterWorklist(q) {
+  window._wlSearchQuery=q;
+  // A search must be able to find a patient regardless of which date window
+  // the worklist happens to be showing. Previously this only filtered rows
+  // already rendered under the current Today/Week/date mode, so searching
+  // for a real, existing patient registered outside that window silently
+  // returned nothing — indistinguishable from the patient not existing.
+  if(q && window._wlMode!=='all'){ setWlMode('all',document.getElementById('wl-btn-all')); return; }
+  applyWlRowFilter(q);
+}
+function applyWlRowFilter(q) {
   document.querySelectorAll('#wl-table tbody tr').forEach(r=>{
     r.style.display=!q||r.textContent.toLowerCase().includes(q.toLowerCase())?'':'none';
   });
@@ -11252,7 +11276,17 @@ async function updateSampleStatus(patientId, status, extra={}){
   // Cyto) already calls this with 'Completed' on verify and 'Released' on
   // release — hooking the visit-status check here covers all of them from
   // one place instead of duplicating the check in each save function.
-  if(status==='Completed'||status==='Released') checkAndAdvanceToResultsReady(patientId);
+  if(status==='Completed'||status==='Released') {
+    checkAndAdvanceToResultsReady(patientId);
+    // doctor_orders.status was only ever written once at order placement
+    // ('Pending') and on cancellation — nothing advanced it when the
+    // actual results were verified/released, so a Lab order stayed stuck
+    // showing "Pending" forever in both Doctor Consultation's Active
+    // Orders list and the per-admission Orders tab, even once results
+    // were long since released. Fixed at this shared choke point rather
+    // than patching each status-display call site individually.
+    try{ await sb.from('doctor_orders').update({status:'Completed'}).eq('patient_id',patientId).eq('order_type','Lab').eq('status','Pending'); }catch(e){}
+  }
 }
 
 // ── BARCODE SCANNING (camera, via html5-qrcode) ──────────────────────
