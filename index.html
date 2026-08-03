@@ -802,6 +802,42 @@ html[dir="rtl"] body{direction:rtl;}
       <div id="adm-table-body"><div class="spin-center"><div class="spinner"></div>Loading…</div></div>
     </div>
   </div>
+
+  <!-- Bed Transfer Register (Bed Management Phase 6) — surfaces
+       bed_transfers as its own hospital-wide/ward-wide log with date
+       filtering and export, rather than only the per-admission inline
+       history that already existed inside the bed detail drawer. -->
+  <div class="card" style="margin-top:14px">
+    <div class="card-hd">
+      <span class="card-title">📋 Bed Transfer Register</span>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <select class="fc" id="xferreg-ward" onchange="loadTransferRegister()" style="width:130px;padding:5px 8px;font-size:.76rem">
+          <option value="">All Wards</option>
+          <option>Medical</option><option>Surgical</option><option>ICU</option><option>Maternity</option><option>Paediatric</option><option>Private</option>
+        </select>
+        <input type="date" class="fc" id="xferreg-from" onchange="loadTransferRegister()" style="width:140px;padding:5px 8px;font-size:.76rem">
+        <span style="color:var(--slate);font-size:.75rem">to</span>
+        <input type="date" class="fc" id="xferreg-to" onchange="loadTransferRegister()" style="width:140px;padding:5px 8px;font-size:.76rem">
+        <button class="btn btn-s btn-sm" onclick="exportTransferRegisterCSV()">⬇ Export CSV</button>
+        <button class="btn btn-s btn-sm" onclick="printTransferRegister()">🖨 Print</button>
+      </div>
+    </div>
+    <div id="transfer-register-body"><div class="empty-state">Select a date range to load the register</div></div>
+  </div>
+
+  <!-- Daily Bed Census (Bed Management Phase 6) — a point-in-time
+       occupancy snapshot by ward, distinct from the live "right now"
+       counters computeBedOccupancyStats() already provides. -->
+  <div class="card" style="margin-top:14px">
+    <div class="card-hd">
+      <span class="card-title">📊 Daily Bed Census</span>
+      <div style="display:flex;gap:6px;align-items:center">
+        <input type="date" class="fc" id="census-date" onchange="loadBedCensus()" style="width:150px;padding:5px 8px;font-size:.76rem">
+        <button class="btn btn-s btn-sm" onclick="printBedCensus()">🖨 Print</button>
+      </div>
+    </div>
+    <div id="bed-census-body"><div class="empty-state">Select a date</div></div>
+  </div>
 </div>
 
 <div class="page" id="page-theatre">
@@ -6014,6 +6050,37 @@ html[dir="rtl"] body{direction:rtl;}
   </div>
 </div>
 
+<!-- WHO Surgical Safety Checklist (Bed Management / Theatre Phase 6) —
+     three mandatory sequential stages tied to a theatre booking, each
+     requiring every item checked plus a signing staff name before the
+     next stage unlocks. Genuinely new — the existing pre-op checklist is
+     a single flat form completed once before the OT day; this is the
+     intra-operative three-phase team check. -->
+<div class="ov" id="who-checklist-ov">
+  <div class="mo mo-lg">
+    <div class="mo-hd"><h3>☑ WHO Surgical Safety Checklist</h3><button class="mo-x" onclick="closeOv('who-checklist-ov')">✕</button></div>
+    <div class="mo-b">
+      <div id="who-checklist-info" style="background:var(--teal-lt);border:1.5px solid var(--teal2);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:.82rem"></div>
+      <div id="who-stage-signin" class="card" style="margin-bottom:10px">
+        <div class="card-hd"><span class="card-title">1️⃣ Sign In — before induction of anaesthesia</span><span id="who-signin-badge"></span></div>
+        <div class="card-body" id="who-signin-items"></div>
+      </div>
+      <div id="who-stage-timeout" class="card" style="margin-bottom:10px">
+        <div class="card-hd"><span class="card-title">2️⃣ Time Out — before skin incision</span><span id="who-timeout-badge"></span></div>
+        <div class="card-body" id="who-timeout-items"></div>
+      </div>
+      <div id="who-stage-signout" class="card">
+        <div class="card-hd"><span class="card-title">3️⃣ Sign Out — before patient leaves OR</span><span id="who-signout-badge"></span></div>
+        <div class="card-body" id="who-signout-items"></div>
+      </div>
+    </div>
+    <div class="mo-ft">
+      <button class="btn btn-s" onclick="closeOv('who-checklist-ov')">Close</button>
+      <button class="btn btn-s" onclick="printWhoChecklist()">🖨 Print</button>
+    </div>
+  </div>
+</div>
+
 <div class="ov" id="bb-issue-ov">
   <div class="mo mo-lg">
     <div class="mo-hd"><h3>🩸 Issue Blood Unit — Two-Person Verification</h3><button class="mo-x" onclick="closeOv('bb-issue-ov')">✕</button></div>
@@ -7287,7 +7354,12 @@ function goPage(p) {
   const run = fn => { try{ const r=fn(); if(r&&r.catch) r.catch(e=>console.warn(e)); }catch(e){console.warn(e);} };
   const td=new Date().toISOString().slice(0,10), td16=new Date().toISOString().slice(0,16);
   if(p==='dashboard') run(loadDashboard);
-  else if(p==='admission'){ run(loadAdmissions); run(loadAdmissionStats); run(loadDoctorDropdowns); run(loadBedsForWard); run(loadBedGrid); run(subscribeBedGridRealtime); generateAdmNo(); setD('adm-date',td16); }
+  else if(p==='admission'){ run(loadAdmissions); run(loadAdmissionStats); run(loadDoctorDropdowns); run(loadBedsForWard); run(loadBedGrid); run(subscribeBedGridRealtime); generateAdmNo(); setD('adm-date',td16);
+    const xf=document.getElementById('xferreg-from'); if(xf&&!xf.value) xf.value=new Date(Date.now()-7*864e5).toISOString().slice(0,10);
+    const xt=document.getElementById('xferreg-to'); if(xt&&!xt.value) xt.value=td;
+    if(xf&&xt) run(loadTransferRegister);
+    const cd=document.getElementById('census-date'); if(cd&&!cd.value){ cd.value=td; run(loadBedCensus); }
+  }
   else if(p==='theatre'){ run(loadOTSchedule); run(loadSurgeonDropdown); setD('ot-date',td); setD('ot-sched-date',td); }
   else if(p==='nursing'){ run(loadNursingQueue); setD('ho-date',td); setEl('vs-by',currentProfile?.full_name||''); }
   else if(p==='fluid-chart'){ setD('fc-date',td); run(loadFluidChart); }
@@ -8103,6 +8175,118 @@ async function loadDashboard() {
 }
 
 // ── ADMISSIONS ────────────────────────────────────────
+// ── Bed Management Phase 6: Bed Transfer Register ───────────────────────
+// bed_transfers (migration_v2.21) already existed and already had a
+// working insert-on-transfer path, but was only ever queried per-
+// admission and shown inline in the per-bed drawer — no hospital-wide/
+// ward-wide register view, no date filtering, no export. This is purely
+// a reporting layer over data that already exists.
+let _transferRegisterRows=[];
+async function loadTransferRegister(){
+  const body=document.getElementById('transfer-register-body'); if(!body||!sb) return;
+  const ward=document.getElementById('xferreg-ward')?.value;
+  const from=document.getElementById('xferreg-from')?.value;
+  const to=document.getElementById('xferreg-to')?.value;
+  body.innerHTML='<div class="spin-center"><div class="spinner"></div>Loading…</div>';
+  try{
+    let q=sb.from('bed_transfers').select('*,patients(name,mrn)').order('transferred_at',{ascending:false}).limit(200);
+    if(ward) q=q.or('from_ward.eq.'+ward+',to_ward.eq.'+ward);
+    if(from) q=q.gte('transferred_at',from+'T00:00:00');
+    if(to) q=q.lte('transferred_at',to+'T23:59:59');
+    const {data}=await q;
+    _transferRegisterRows=data||[];
+    renderTransferRegister();
+  }catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+e.message+'</div>'; }
+}
+function renderTransferRegister(){
+  const body=document.getElementById('transfer-register-body'); if(!body) return;
+  if(!_transferRegisterRows.length){ body.innerHTML='<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-title">No transfers found for this filter</div></div>'; return; }
+  body.innerHTML='<div style="overflow-x:auto"><table class="tbl" style="font-size:.78rem"><thead><tr><th>Date/Time</th><th>Patient</th><th>From</th><th>To</th><th>Reason</th><th>Transferred By</th></tr></thead><tbody>'+
+    _transferRegisterRows.map(x=>{
+      const pt=x.patients||{};
+      return '<tr><td style="font-size:.72rem">'+fmtDT(x.transferred_at)+'</td>'+
+        '<td>'+escapeHtml(pt.name||'—')+' <span style="color:var(--slate);font-size:.7rem">'+escapeHtml(pt.mrn||'')+'</span></td>'+
+        '<td>'+escapeHtml(x.from_ward||'—')+' / '+escapeHtml(x.from_room||'—')+' / '+escapeHtml(x.from_bed||'—')+'</td>'+
+        '<td>'+escapeHtml(x.to_ward||'—')+' / '+escapeHtml(x.to_room||'—')+' / '+escapeHtml(x.to_bed||'—')+'</td>'+
+        '<td>'+escapeHtml(x.reason||'—')+'</td>'+
+        '<td style="font-size:.72rem">'+escapeHtml(x.transferred_by_name||'—')+'</td></tr>';
+    }).join('')+'</tbody></table></div>';
+}
+function exportTransferRegisterCSV(){
+  if(!_transferRegisterRows.length){ toast('No data to export','err'); return; }
+  const headers=['Date/Time','Patient','MRN','From Ward','From Room','From Bed','To Ward','To Room','To Bed','Reason','Transferred By'];
+  const esc=v=>{ const s=String(v??''); return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s; };
+  const rows=_transferRegisterRows.map(x=>{ const pt=x.patients||{};
+    return [fmtDT(x.transferred_at),pt.name||'',pt.mrn||'',x.from_ward||'',x.from_room||'',x.from_bed||'',x.to_ward||'',x.to_room||'',x.to_bed||'',x.reason||'',x.transferred_by_name||'']; });
+  const csv=[headers.map(esc).join(','), ...rows.map(r=>r.map(esc).join(','))].join('\r\n');
+  const blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download='Bed Transfer Register — '+today()+'.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
+function printTransferRegister(){
+  const rows=_transferRegisterRows;
+  const table=rows.length
+    ? '<table><thead><tr><th>Date/Time</th><th>Patient</th><th>From</th><th>To</th><th>Reason</th><th>By</th></tr></thead><tbody>'+
+      rows.map(x=>{ const pt=x.patients||{};
+        return '<tr><td>'+fmtDT(x.transferred_at)+'</td><td>'+escapeHtml(pt.name||'—')+'</td><td>'+escapeHtml(x.from_ward||'—')+'</td><td>'+escapeHtml(x.to_ward||'—')+'</td><td>'+escapeHtml(x.reason||'—')+'</td><td>'+escapeHtml(x.transferred_by_name||'—')+'</td></tr>'; }).join('')
+      +'</tbody></table>'
+    : '<div style="color:#64748b;font-size:.85rem">No transfers recorded for this filter.</div>';
+  const html=printHeader('Bed Transfer Register')+table+printFooter();
+  openPrintWin(html,'Bed Transfer Register');
+}
+
+// ── Bed Management Phase 6: Daily Bed Census ────────────────────────────
+// Confirmed genuinely missing by the Phase 0 audit — only live/current-
+// state occupancy counters (computeBedOccupancyStats()) existed, no
+// point-in-time historical snapshot capability. This reconstructs
+// occupancy for a past date from admissions still open on that date.
+// Honest limitation: it groups each admission by its CURRENT ward field,
+// not the ward it was actually in on the census date — a patient
+// transferred between wards after the census date will be counted under
+// their present ward, not their historical one, since reconstructing
+// full ward-transfer history per point in time is out of scope here.
+async function loadBedCensus(){
+  const date=document.getElementById('census-date')?.value; if(!date||!sb) return;
+  const body=document.getElementById('bed-census-body'); if(!body) return;
+  body.innerHTML='<div class="spin-center"><div class="spinner"></div>Loading…</div>';
+  try{
+    const dayEnd=date+'T23:59:59';
+    const [{data:adms},{data:beds}]=await Promise.all([
+      sb.from('admissions').select('ward').lte('admission_date',dayEnd).or('discharge_date.is.null,discharge_date.gt.'+dayEnd),
+      sb.from('beds').select('ward'),
+    ]);
+    const wards=['Medical','Surgical','ICU','Maternity','Paediatric','Private'];
+    const occ={}, total={};
+    wards.forEach(w=>{ occ[w]=0; total[w]=0; });
+    (beds||[]).forEach(b=>{ if(total[b.ward]!==undefined) total[b.ward]++; });
+    (adms||[]).forEach(a=>{ if(occ[a.ward]!==undefined) occ[a.ward]++; });
+    window._bedCensusRows=wards.map(w=>({ward:w,occupied:occ[w],total:total[w]}));
+    renderBedCensus(date);
+  }catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+e.message+'</div>'; }
+}
+function renderBedCensus(date){
+  const body=document.getElementById('bed-census-body'); if(!body) return;
+  const rows=window._bedCensusRows||[];
+  let totOcc=0, totBeds=0;
+  body.innerHTML='<div style="font-size:.72rem;color:var(--slate);margin-bottom:8px">Census as of '+fmtDate(date)+' — reconstructed from admissions still open on that date</div>'+
+    '<div style="overflow-x:auto"><table class="tbl" style="font-size:.8rem"><thead><tr><th>Ward</th><th>Occupied</th><th>Total Beds</th><th>Occupancy %</th></tr></thead><tbody>'+
+    rows.map(r=>{ totOcc+=r.occupied; totBeds+=r.total; const pct=r.total>0?Math.round(r.occupied/r.total*100):0;
+      return '<tr><td style="font-weight:600">'+r.ward+'</td><td style="text-align:center">'+r.occupied+'</td><td style="text-align:center">'+r.total+'</td><td style="text-align:center">'+pct+'%</td></tr>'; }).join('')+
+    '<tr style="font-weight:700;background:var(--bg)"><td>Total</td><td style="text-align:center">'+totOcc+'</td><td style="text-align:center">'+totBeds+'</td><td style="text-align:center">'+(totBeds>0?Math.round(totOcc/totBeds*100):0)+'%</td></tr>'+
+    '</tbody></table></div>';
+}
+function printBedCensus(){
+  const date=document.getElementById('census-date')?.value||today();
+  const rows=window._bedCensusRows||[];
+  const table=rows.length
+    ? '<table><thead><tr><th>Ward</th><th>Occupied</th><th>Total Beds</th><th>Occupancy %</th></tr></thead><tbody>'+
+      rows.map(r=>{ const pct=r.total>0?Math.round(r.occupied/r.total*100):0; return '<tr><td>'+r.ward+'</td><td>'+r.occupied+'</td><td>'+r.total+'</td><td>'+pct+'%</td></tr>'; }).join('')+'</tbody></table>'
+    : '<div style="color:#64748b;font-size:.85rem">No census data loaded.</div>';
+  const html=printHeader('Daily Bed Census — '+fmtDate(date))+table+printFooter();
+  openPrintWin(html,'Daily Bed Census');
+}
+
 function setAdmFilter(f,btn) {
   _admFilter=f;
   document.querySelectorAll('[onclick*="setAdmFilter"]').forEach(b=>b.classList.remove('active'));
@@ -8744,12 +8928,131 @@ async function loadOTSchedule() {
     setText('ots-inprog',all.filter(a=>a.status==='In Progress').length); setText('ots-emerg',all.filter(a=>a.operation_type==='Emergency').length);
     if(!all.length){ body.innerHTML='<div class="empty-state"><div class="empty-icon">🔪</div><div class="empty-title">No operations scheduled</div></div>'; return; }
     body.innerHTML=all.map(b=>'<div class="ot-time-card"><div class="ot-time-slot">'+(b.start_time||'—')+'</div><div class="ot-info"><div class="ot-op">'+(b.operation_name||'—')+'</div><div class="ot-meta">'+(b.patients?.name||fullName(b.patients)||'—')+' · '+(b.surgeon||'—')+' · '+(b.theatre_room||'—')+'</div><div class="ot-meta">Anaest: '+(b.anaesthetist||'—')+' · '+(b.anaesthesia_type||'—')+' · ASA '+(b.asa_class||'—')+'</div></div><div>'+statusBadge(b.status)+'</div><div class="ot-acts">'+
+      '<button class="btn btn-s btn-xs" onclick="openWhoChecklist(\''+b.id+'\')">☑ WHO Checklist</button>'+
       (b.status==='Scheduled'?'<button class="btn btn-p btn-xs" onclick="startOperation(\''+b.id+'\')">▶ Start</button>':'')+
       (b.status==='In Progress'?'<button class="btn btn-p btn-xs" style="background:var(--green)" onclick="openPostop(\''+b.id+'\')">✅ Done</button>':'')+
       '<button class="btn btn-s btn-xs" onclick="openPostop(\''+b.id+'\')">📝</button>'+
       (b.status==='Scheduled'?'<button class="btn btn-r btn-xs" onclick="cancelOperation(\''+b.id+'\')">✕</button>':'')+
       '</div></div>').join('');
   } catch(e){ body.innerHTML='<div style="padding:14px;color:var(--red);font-size:.78rem">'+e.message+'</div>'; }
+}
+// ── Theatre Phase 6: WHO Surgical Safety Checklist ──────────────────────
+// Standard WHO Surgical Safety Checklist items, per stage. Each stage
+// requires every item checked AND a "Completed By" name before it can be
+// confirmed; confirming a stage stamps who/when and unlocks the next
+// stage — Time Out is disabled until Sign In is complete, Sign Out until
+// Time Out is complete. This is a real sequential gate, not just three
+// independent forms.
+const WHO_CHECKLIST_ITEMS={
+  signin:[
+    'Patient has confirmed identity, site, procedure, and consent',
+    'Site marked / not applicable',
+    'Anaesthesia safety check completed',
+    'Pulse oximeter on patient and functioning',
+    'Does patient have a known allergy?',
+    'Difficult airway or aspiration risk?',
+    'Risk of >500ml blood loss (7ml/kg in children)?',
+  ],
+  timeout:[
+    'All team members have introduced themselves by name and role',
+    'Surgeon, anaesthesia professional and nurse verbally confirm patient, site, and procedure',
+    'Anticipated critical events reviewed by surgeon/anaesthetist/nursing team',
+    'Antibiotic prophylaxis given within the last 60 minutes (or not applicable)',
+    'Essential imaging displayed (or not applicable)',
+  ],
+  signout:[
+    'Nurse verbally confirms the name of the procedure recorded',
+    'Instrument, sponge, and needle counts are correct (or not applicable)',
+    'Specimen is labelled correctly, including patient name',
+    'Whether there are equipment problems to be addressed',
+    'Key concerns for recovery and management reviewed by surgeon/anaesthetist/nurse',
+  ],
+};
+let _whoCtx=null;
+async function openWhoChecklist(bookingId){
+  if(!sb) return;
+  try{
+    const {data:b}=await sb.from('theatre_bookings').select('*,patients(name,mrn)').eq('id',bookingId).single();
+    if(!b){ toast('Booking not found','err'); return; }
+    let {data:cl}=await sb.from('who_safety_checklist').select('*').eq('booking_id',bookingId).maybeSingle();
+    if(!cl){
+      const {data:created}=await sb.from('who_safety_checklist').insert({booking_id:bookingId}).select().single();
+      cl=created;
+    }
+    _whoCtx={booking:b,checklist:cl};
+    const pt=b.patients||{};
+    const info=document.getElementById('who-checklist-info');
+    if(info) info.innerHTML='<strong>'+escapeHtml(pt.name||'—')+'</strong> ('+escapeHtml(pt.mrn||'—')+') — '+escapeHtml(b.operation_name||'—')+' · '+escapeHtml(b.theatre_room||'—');
+    ['signin','timeout','signout'].forEach(renderWhoStage);
+    openOv('who-checklist-ov');
+  }catch(e){ toast(e.message,'err'); }
+}
+const WHO_STAGE_ORDER=['signin','timeout','signout'];
+function renderWhoStage(stage){
+  const cl=_whoCtx?.checklist||{};
+  const doneField=stage+'_completed_at', byField=stage+'_completed_by_name';
+  const isDone=!!cl[doneField];
+  const idx=WHO_STAGE_ORDER.indexOf(stage);
+  const priorStage=idx>0?WHO_STAGE_ORDER[idx-1]:null;
+  const priorDone=!priorStage||!!cl[priorStage+'_completed_at'];
+  const itemsEl=document.getElementById('who-'+stage+'-items');
+  const badge=document.getElementById('who-'+stage+'-badge');
+  if(badge) badge.innerHTML=isDone?'<span class="bdg bdg-g">✓ '+escapeHtml(cl[byField]||'')+' · '+fmtDT(cl[doneField])+'</span>':(priorDone?'<span class="bdg bdg-a">Pending</span>':'<span class="bdg bdg-sl">🔒 Locked</span>');
+  if(!itemsEl) return;
+  if(isDone){
+    itemsEl.innerHTML='<div style="font-size:.8rem;color:var(--green)">✅ Completed by '+escapeHtml(cl[byField]||'—')+' at '+fmtDT(cl[doneField])+'</div>';
+    return;
+  }
+  if(!priorDone){
+    itemsEl.innerHTML='<div style="font-size:.8rem;color:var(--slate)">🔒 Complete the previous stage first</div>';
+    return;
+  }
+  const items=WHO_CHECKLIST_ITEMS[stage];
+  itemsEl.innerHTML=items.map((label,i)=>'<label class="chk-item" style="display:block;margin-bottom:6px"><input type="checkbox" id="who-'+stage+'-chk-'+i+'" onchange="updateWhoStageButton(\''+stage+'\')"> '+escapeHtml(label)+'</label>').join('')+
+    '<div class="fg" style="margin-top:8px"><label class="fl">Completed By</label><input class="fc" id="who-'+stage+'-by" value="'+escapeHtml(currentProfile?.full_name||'')+'"></div>'+
+    '<button class="btn btn-p btn-sm" id="who-'+stage+'-confirm-btn" disabled onclick="completeWhoStage(\''+stage+'\')" style="margin-top:6px">✅ Confirm '+({signin:'Sign In',timeout:'Time Out',signout:'Sign Out'}[stage])+'</button>';
+}
+function updateWhoStageButton(stage){
+  const items=WHO_CHECKLIST_ITEMS[stage];
+  const allChecked=items.every((_,i)=>document.getElementById('who-'+stage+'-chk-'+i)?.checked);
+  const btn=document.getElementById('who-'+stage+'-confirm-btn'); if(btn) btn.disabled=!allChecked;
+}
+async function completeWhoStage(stage){
+  if(!sb||!_whoCtx) return;
+  const items=WHO_CHECKLIST_ITEMS[stage];
+  const allChecked=items.every((_,i)=>document.getElementById('who-'+stage+'-chk-'+i)?.checked);
+  const by=document.getElementById('who-'+stage+'-by')?.value?.trim();
+  if(!allChecked||!by){ toast('All items must be checked and a Completed By name entered','err'); return; }
+  try{
+    const payload={};
+    payload[stage+'_completed_by']=currentProfile?.id;
+    payload[stage+'_completed_by_name']=by;
+    payload[stage+'_completed_at']=new Date().toISOString();
+    payload[stage+'_items']=items.map((label,i)=>({label,checked:true}));
+    await sb.from('who_safety_checklist').update(payload).eq('id',_whoCtx.checklist.id);
+    Object.assign(_whoCtx.checklist,payload);
+    toast('✅ '+({signin:'Sign In',timeout:'Time Out',signout:'Sign Out'}[stage])+' confirmed','ok');
+    const idx=WHO_STAGE_ORDER.indexOf(stage);
+    WHO_STAGE_ORDER.slice(idx).forEach(renderWhoStage);
+  }catch(e){ toast(e.message,'err'); }
+}
+function printWhoChecklist(){
+  if(!_whoCtx) return;
+  const pt=_whoCtx.booking.patients||{};
+  const cl=_whoCtx.checklist;
+  const sec=(stage,title)=>{
+    const done=!!cl[stage+'_completed_at'];
+    return '<div style="margin-bottom:14px"><div style="font-size:10pt;font-weight:700;color:#1e3a5a;margin-bottom:4px">'+title+'</div>'+
+      (done?'<div style="font-size:9pt;color:#166534">✅ Completed by '+escapeHtml(cl[stage+'_completed_by_name']||'—')+' at '+fmtDT(cl[stage+'_completed_at'])+'</div>'
+           :'<div style="font-size:9pt;color:#b91c1c">Not yet completed</div>')+'</div>';
+  };
+  const html=printHeader('WHO Surgical Safety Checklist')+
+    '<div style="background:#f1f5f9;padding:10px 14px;border-radius:8px;margin-bottom:14px;font-size:9pt"><strong>Patient:</strong> '+escapeHtml(pt.name||'—')+' ('+escapeHtml(pt.mrn||'—')+') · <strong>Procedure:</strong> '+escapeHtml(_whoCtx.booking.operation_name||'—')+'</div>'+
+    sec('signin','1. Sign In — before induction of anaesthesia')+
+    sec('timeout','2. Time Out — before skin incision')+
+    sec('signout','3. Sign Out — before patient leaves OR')+
+    printFooter();
+  openPrintWin(html,'WHO Surgical Safety Checklist');
 }
 async function startOperation(id) {
   if(!sb) return;
