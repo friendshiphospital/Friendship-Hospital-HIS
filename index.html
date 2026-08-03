@@ -6326,6 +6326,27 @@ async function queueWrite(table, op, payload, opts={}) {
 // ── Generic safe write: try network, queue on connectivity failure ──
 // Returns {ok, data, queued}. Throws only for real (non-network) errors so
 // existing validation/toast logic in callers keeps working unchanged.
+// Cross-cutting (Documentation/Logbook) — the existing audit_logs table
+// (a DB trigger, migration_v2.8) only covers 8 lab/consultation tables;
+// billing_audit_logs (an app-level table, same insert-and-forget pattern)
+// only covers billing. Neither reaches Nursing, Radiology, Bed
+// Management, Theatre, or Blood Bank. app_audit_logs follows the exact
+// same billing_audit_logs shape/insert pattern, generalized with a
+// `module` column, for those modules' safety-relevant actions that don't
+// already have an equally strong audit trail of their own (many already
+// do, via performed_by/verified_at columns directly on their own rows —
+// this is for the ones that didn't). A logging failure here must never
+// block the action itself, same discipline as the billing call sites.
+async function logAppAudit(module, action, recordId, details) {
+  if(!sb) return;
+  try {
+    await dbWrite('app_audit_logs','insert',{
+      module, action, record_id:recordId||null,
+      performed_by:currentProfile?.id, performed_by_name:currentProfile?.full_name||'',
+      details: details!=null ? String(details) : null,
+    });
+  } catch(e){ /* audit log failure must never block the underlying action */ }
+}
 async function dbWrite(table, op, payload, opts={}) {
   if (navigator.onLine && sb) {
     try {
@@ -8538,6 +8559,7 @@ async function setBedStatus(bedId,newStatus) {
   try {
     await sb.from('beds').update({status:newStatus,status_changed_at:new Date().toISOString()}).eq('id',bedId);
     toast('Bed status updated to '+newStatus,'ok');
+    logAppAudit('Bed Management','Manual bed status change',bedId,'New status: '+newStatus);
     loadBedGrid(); loadAdmissionStats();
   } catch(e){ toast(e.message,'err'); }
 }
@@ -9032,6 +9054,7 @@ async function completeWhoStage(stage){
     await sb.from('who_safety_checklist').update(payload).eq('id',_whoCtx.checklist.id);
     Object.assign(_whoCtx.checklist,payload);
     toast('✅ '+({signin:'Sign In',timeout:'Time Out',signout:'Sign Out'}[stage])+' confirmed','ok');
+    logAppAudit('Theatre','WHO Checklist — '+({signin:'Sign In',timeout:'Time Out',signout:'Sign Out'}[stage]),_whoCtx.booking.id,'Completed by '+by);
     const idx=WHO_STAGE_ORDER.indexOf(stage);
     WHO_STAGE_ORDER.slice(idx).forEach(renderWhoStage);
   }catch(e){ toast(e.message,'err'); }
@@ -13633,6 +13656,7 @@ async function confirmMarVerify(){
     closeOv('mar-verify-ov');
     updateMarRowUI(i);
     toast('✅ Second-staff verification confirmed','ok');
+    logAppAudit('Nursing','High-alert MAR second-staff verification',document.getElementById('vs-pt-id')?.value,'Verified by '+staff.full_name);
   }catch(e){ if(status){ status.style.color='var(--red)'; status.textContent=e.message; } }
 }
 
@@ -16261,10 +16285,23 @@ async function openRadReport(requestId) {
   } catch(e){toast(e.message,'err');}
 }
 
+// Cross-cutting (Documentation/Logbook) — the "✓ Verified" badge pattern
+// used throughout Lab (is_verified/verified_at) had no radiology
+// equivalent: the Verify action only ever flipped the status string,
+// capturing no verifier identity or timestamp at all (confirmed gap from
+// the Phase 0 audit). This brings radiology's Verify step in line with
+// that same pattern.
 async function updateRadStatus(id,status) {
   if(!sb) return;
   try {
-    await sb.from('radiology_requests').update({status}).eq('id',id);
+    const payload={status};
+    if(status==='Verified'){
+      payload.verified_by=currentProfile?.id;
+      payload.verified_by_name=currentProfile?.full_name||'';
+      payload.verified_at=new Date().toISOString();
+    }
+    await sb.from('radiology_requests').update(payload).eq('id',id);
+    if(status==='Verified') logAppAudit('Radiology','Verify',id,'Report verified');
     toast('Status updated to '+status,'ok'); loadRadRequests();
   } catch(e){toast(e.message,'err');}
 }
@@ -16382,7 +16419,7 @@ async function loadReportedStudies() {
         '<td style="font-size:.78rem;font-weight:600">'+(r.imaging_type||'—')+(r.is_critical?' <span class="bdg" style="background:#b91c1c;color:#fff">🚨 CRITICAL</span>':'')+'</td>'+
         '<td style="font-size:.75rem">'+(r.radiologist||'—')+'</td>'+
         '<td style="font-size:.75rem;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(r.impression||'—')+'</td>'+
-        '<td>'+statusBadge(r.status)+'</td>'+
+        '<td>'+statusBadge(r.status)+(r.status==='Verified'&&r.verified_by_name?'<div style="font-size:.65rem;color:var(--slate);margin-top:2px">by '+r.verified_by_name+' · '+fmtDT(r.verified_at)+'</div>':'')+'</td>'+
         '<td><div class="acts">'+
           '<button class="btn btn-s btn-xs" onclick="openRadReport(\''+r.id+'\')">📝</button>'+
           '<button class="btn btn-s btn-xs" onclick="printRadReportById(\''+r.id+'\')">🖨</button>'+
@@ -17656,6 +17693,7 @@ async function submitDiscardUnit() {
   try {
     await sb.from('blood_units').update({status:'Discarded',discard_reason_code:reasonCode,discard_reason:notes,discarded_by:currentProfile?.id,discarded_by_name:currentProfile?.full_name,discarded_at:new Date().toISOString()}).eq('id',unitId);
     toast('✅ Unit discarded — reason recorded','ok');
+    logAppAudit('Blood Bank','Unit discarded',unitId,reasonCode+': '+notes);
     closeOv('bb-discard-ov');
     loadBloodUnits();
   } catch(e){ toast(e.message,'err'); }
