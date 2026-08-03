@@ -6455,7 +6455,7 @@ async function renderSyncPanel() {
       </div>`).join('') +
       `<button class="btn btn-p btn-sm" style="width:100%;justify-content:center;margin-top:8px" onclick="flushOfflineQueue()">🔄 Sync Now</button>`;
   } catch (e) {
-    body.innerHTML = '<div style="color:var(--red);font-size:.78rem">' + e.message + '</div>';
+    body.innerHTML = '<div style="color:var(--red);font-size:.78rem">' + escapeHtml(e.message) + '</div>';
   }
 }
 
@@ -7586,7 +7586,7 @@ async function loadIdCounters(){
     body.innerHTML='<table class="tbl" style="width:100%;font-size:.78rem"><thead><tr><th>Counter</th><th>Current Value</th><th>Next Number</th><th></th></tr></thead><tbody>'
       +data.map(c=>'<tr><td>'+(COUNTER_LABELS[c.counter_name]||c.counter_name)+'</td><td style="font-family:DM Mono,monospace">'+c.current_value+'</td><td style="font-family:DM Mono,monospace;font-weight:700;color:var(--teal)">'+(c.current_value+1)+'</td><td><button class="btn btn-s btn-xs" onclick="correctIdCounter(\''+c.counter_name+'\','+c.current_value+')">Correct…</button></td></tr>').join('')
       +'</tbody></table>';
-  }catch(e){ body.innerHTML='<div style="font-size:.78rem;color:var(--red)">'+e.message+'</div>'; }
+  }catch(e){ body.innerHTML='<div style="font-size:.78rem;color:var(--red)">'+escapeHtml(e.message)+'</div>'; }
 }
 async function correctIdCounter(counterName,currentValue){
   if(!sb) return;
@@ -7672,7 +7672,7 @@ async function loadBedConfig() {
     body.innerHTML='<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Ward</th><th>Room</th><th>Bed</th><th>Status</th><th></th></tr></thead><tbody>'+
       data.map(b=>'<tr><td>'+b.ward+'</td><td>'+b.room+'</td><td>'+b.bed_number+'</td><td>'+statusBadge(b.status)+'</td><td><button class="btn btn-r btn-xs" onclick="deleteBed(\x27'+b.id+'\x27)">✕</button></td></tr>').join('')+
       '</tbody></table></div>';
-  } catch(e){ body.innerHTML='<div style="padding:10px;color:var(--red);font-size:.78rem">'+e.message+'</div>'; }
+  } catch(e){ body.innerHTML='<div style="padding:10px;color:var(--red);font-size:.78rem">'+escapeHtml(e.message)+'</div>'; }
 }
 async function addBedConfig() {
   if(!sb){ toast('Not connected','err'); return; }
@@ -7716,7 +7716,7 @@ async function loadStatistics(){
     else if(_statsTab==='lab') await renderStatsLab(from,to);
     else if(_statsTab==='nursing') await renderStatsNursing(from,to);
     else if(_statsTab==='billing') await renderStatsBilling(from,to);
-  }catch(e){ body.innerHTML='<div class="empty-state">'+e.message+'</div>'; }
+  }catch(e){ body.innerHTML='<div class="empty-state">'+escapeHtml(e.message)+'</div>'; }
 }
 async function renderStatsOverview(from,to){
   const [{count:regs},{count:cons},{count:labOrders},{count:adms},{data:invs}]=await Promise.all([
@@ -8117,7 +8117,7 @@ async function loadDeliveryLog(){
         '<td>'+(m.status==='sent'?'<span class="bdg" style="background:#dcfce7;color:#166534">✅ Sent</span>':'<span class="bdg" style="background:#fee2e2;color:#b91c1c" title="'+(m.error||'').replace(/"/g,'&quot;')+'">❌ Failed</span>')+'</td>'+
         '<td style="font-size:.72rem">'+(m.sent_by_name||'—')+'</td>'+
       '</tr>').join('')+'</tbody></table></div>';
-  }catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+e.message+'</div>'; }
+  }catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>'; }
 }
 document.addEventListener('click', (e)=>{
   const wrap=document.getElementById('notif-bell-wrap'), panel=document.getElementById('notif-panel');
@@ -8217,7 +8217,7 @@ async function loadTransferRegister(){
     const {data}=await q;
     _transferRegisterRows=data||[];
     renderTransferRegister();
-  }catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+e.message+'</div>'; }
+  }catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>'; }
 }
 function renderTransferRegister(){
   const body=document.getElementById('transfer-register-body'); if(!body) return;
@@ -8284,7 +8284,7 @@ async function loadBedCensus(){
     (adms||[]).forEach(a=>{ if(occ[a.ward]!==undefined) occ[a.ward]++; });
     window._bedCensusRows=wards.map(w=>({ward:w,occupied:occ[w],total:total[w]}));
     renderBedCensus(date);
-  }catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+e.message+'</div>'; }
+  }catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>'; }
 }
 function renderBedCensus(date){
   const body=document.getElementById('bed-census-body'); if(!body) return;
@@ -8323,7 +8323,7 @@ async function loadAdmissions() {
     const wf=document.getElementById('adm-ward-filter')?.value; if(wf) q=q.eq('ward',wf);
     const {data,error}=await q; if(error) throw error;
     _allAdmissions=data||[]; renderAdmTable(_allAdmissions); loadAdmissionStats();
-  } catch(e){ body.innerHTML='<div style="padding:14px;color:var(--red);font-size:.78rem">'+e.message+'</div>'; }
+  } catch(e){ body.innerHTML='<div style="padding:14px;color:var(--red);font-size:.78rem">'+escapeHtml(e.message)+'</div>'; }
 }
 function renderAdmTable(data) {
   const body=document.getElementById('adm-table-body'); if(!body) return;
@@ -8383,7 +8383,7 @@ async function loadBedGrid() {
       return {...b,_admission:adm,_isolation:adm?isolationByPatient[adm.patient_id]||null:null};
     });
     renderBedGridWardTabs(); renderBedGrid();
-  } catch(e){ grid.innerHTML='<div style="padding:14px;color:var(--red);font-size:.78rem">'+e.message+'</div>'; }
+  } catch(e){ grid.innerHTML='<div style="padding:14px;color:var(--red);font-size:.78rem">'+escapeHtml(e.message)+'</div>'; }
 }
 // ── BED GRID LIVE SYNC (Phase 5a) ──────────────────────────────────────
 // First use of Supabase Realtime anywhere in this codebase. Deliberately
@@ -8731,7 +8731,7 @@ async function loadAdmDetailMeds(admId,patId) {
       rows.slice(0,8).map(m=>'<tr><td>'+(m.drug||'—')+'</td><td>'+(m.dose||'—')+'</td><td>'+(m.route||'—')+'</td><td>'+statusBadge(m.status||'—')+'</td><td>'+fmtDT(m._recorded_at)+'</td></tr>').join('')+
       '</tbody></table></div>'):'<div style="padding:10px 0;font-size:.78rem;color:var(--slate)">No MAR entries recorded yet for this admission</div>';
     el.innerHTML=list+'<button class="btn btn-p" style="margin-top:10px" onclick="openMarForAdmPatient()">💊 Open Full MAR in Nursing</button>';
-  } catch(e){ el.innerHTML='<div style="padding:10px;color:var(--red);font-size:.78rem">'+e.message+'</div>'; }
+  } catch(e){ el.innerHTML='<div style="padding:10px;color:var(--red);font-size:.78rem">'+escapeHtml(e.message)+'</div>'; }
 }
 function openMarForAdmPatient() {
   const c=_admDetailCtx; if(!c) return;
@@ -8795,7 +8795,7 @@ async function loadTransferHistory(admId) {
     el.innerHTML='<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>From</th><th>To</th><th>Reason</th><th>By</th><th>Time</th></tr></thead><tbody>'+
       data.map(x=>'<tr><td>'+x.from_ward+' / '+x.from_room+' / '+x.from_bed+'</td><td>'+x.to_ward+' / '+x.to_room+' / '+x.to_bed+'</td><td style="font-size:.75rem">'+(x.reason||'—')+'</td><td>'+(x.transferred_by_name||'—')+'</td><td>'+fmtDT(x.transferred_at)+'</td></tr>').join('')+
       '</tbody></table></div>';
-  } catch(e){ el.innerHTML='<div style="font-size:.75rem;color:var(--red)">'+e.message+'</div>'; }
+  } catch(e){ el.innerHTML='<div style="font-size:.75rem;color:var(--red)">'+escapeHtml(e.message)+'</div>'; }
 }
 async function submitBedTransfer() {
   if(!sb||!_currentAdmId){ toast('Not connected','err'); return; }
@@ -8956,7 +8956,7 @@ async function loadOTSchedule() {
       '<button class="btn btn-s btn-xs" onclick="openPostop(\''+b.id+'\')">📝</button>'+
       (b.status==='Scheduled'?'<button class="btn btn-r btn-xs" onclick="cancelOperation(\''+b.id+'\')">✕</button>':'')+
       '</div></div>').join('');
-  } catch(e){ body.innerHTML='<div style="padding:14px;color:var(--red);font-size:.78rem">'+e.message+'</div>'; }
+  } catch(e){ body.innerHTML='<div style="padding:14px;color:var(--red);font-size:.78rem">'+escapeHtml(e.message)+'</div>'; }
 }
 // ── Theatre Phase 6: WHO Surgical Safety Checklist ──────────────────────
 // Standard WHO Surgical Safety Checklist items, per stage. Each stage
@@ -9333,7 +9333,7 @@ async function loadFluidChart() {
     setText('fc-total-iv',totIv||'—'); setText('fc-total-urine',totUrine||'—');
     const ne=document.getElementById('fc-total-net'); if(ne){ ne.textContent=(totNet>0?'+':'')+totNet; ne.style.color=totNet>500?'var(--blue)':totNet<-500?'var(--red)':'var(--green)'; }
     drawFluidTrend(data);
-  } catch(e){ body.innerHTML='<tr><td colspan="10" style="padding:14px;color:var(--red);font-size:.78rem">'+e.message+'</td></tr>'; }
+  } catch(e){ body.innerHTML='<tr><td colspan="10" style="padding:14px;color:var(--red);font-size:.78rem">'+escapeHtml(e.message)+'</td></tr>'; }
 }
 function drawFluidTrend(data) {
   const canvas=document.getElementById('fc-canvas'); if(!canvas||!data.length) return;
@@ -9409,7 +9409,7 @@ async function loadDoctorQueue() {
         '<div style="font-size:.68rem;margin-top:2px;color:var(--teal);font-weight:600">'+(p.visit_destination?'\u2192 '+p.visit_destination:'')+' '+(p.priority&&p.priority!=='Routine'?'· '+p.priority:'')+'</div>'+
         '<div style="margin-top:4px">'+visitStatusBadge(p)+'</div></div>';
     }).join('');
-  } catch(e){ body.innerHTML='<div style="padding:10px;color:var(--red);font-size:.78rem">'+e.message+'</div>'; }
+  } catch(e){ body.innerHTML='<div style="padding:10px;color:var(--red);font-size:.78rem">'+escapeHtml(e.message)+'</div>'; }
 }
 
 function setDocFilter(filter,btn) {
@@ -9729,7 +9729,7 @@ async function loadDocVitals(ptId) {
       '<div><span style="color:var(--slate)">GCS:</span> <strong>'+( ((data.gcs_eye||0)+(data.gcs_verbal||0)+(data.gcs_motor||0))||'—')+'</strong></div>'+
       '<div><span style="color:var(--slate)">Weight:</span> <strong>'+(data.weight||'—')+' kg</strong></div>'+
       '<div><span style="color:var(--slate)">MAP:</span> <strong>'+(data.map_pressure||'—')+' mmHg</strong></div></div>';
-  } catch(e){el.innerHTML='<div style="padding:10px;color:var(--red);font-size:.78rem">'+e.message+'</div>';}
+  } catch(e){el.innerHTML='<div style="padding:10px;color:var(--red);font-size:.78rem">'+escapeHtml(e.message)+'</div>';}
 }
 
 // ── VITALS/LABS TREND SPARKLINES (Consultation → Last Vitals) ──
@@ -10485,7 +10485,7 @@ async function loadAppointments() {
     const waiting=(todayA||[]).filter(a=>a.status!=='Cancelled');
     waitBody.innerHTML=waiting.length?'<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Time</th><th>Patient</th><th>Type</th><th>Doctor</th><th>Status</th><th></th></tr></thead><tbody>'+waiting.map(rr).join('')+'</tbody></table></div>':'<div class="empty-state"><div class="empty-icon">🚶</div><div class="empty-title">No patients waiting today</div></div>';
     listBody.innerHTML=allA?.length?'<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Time</th><th>Patient</th><th>Type</th><th>Doctor</th><th>Status</th><th></th></tr></thead><tbody>'+allA.map(rr).join('')+'</tbody></table></div>':'<div class="empty-state"><div class="empty-icon">📅</div><div class="empty-title">No appointments on this date</div></div>';
-  } catch(e){ waitBody.innerHTML='<div style="padding:10px;color:var(--red);font-size:.78rem">'+e.message+'</div>'; }
+  } catch(e){ waitBody.innerHTML='<div style="padding:10px;color:var(--red);font-size:.78rem">'+escapeHtml(e.message)+'</div>'; }
 }
 async function loadApptDoctors() {
   if(!sb) return; const el=document.getElementById('appt-doctor'); if(!el) return;
@@ -10809,7 +10809,7 @@ async function loadWorklist() {
             '<button class="btn btn-s btn-xs" onclick="openPatientHistoryTimeline(\x27'+p.id+'\x27)" title="View this patient\x27s full history">\ud83d\udd50 History</button>'+
           '</div></td></tr>';
       }).join('')+'</tbody></table></div>';
-  } catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red)">'+e.message+'</div>'; }
+  } catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red)">'+escapeHtml(e.message)+'</div>'; }
 }
 function toggleWlSourceSort(){
   window._wlSourceSort = window._wlSourceSort==='asc' ? 'desc' : window._wlSourceSort==='desc' ? null : 'asc';
@@ -10900,7 +10900,7 @@ async function loadAllResults() {
             (r.is_verified&&pt.phone?'<button class="btn btn-s btn-xs" onclick="sendResultReadySms(\x27'+r.patient_id+'\x27,\x27'+pt.phone+'\x27,\x27'+((pt.name||fullName(pt)||'').replace(/\x27/g,''))+'\x27)" title="Send SMS: results ready">\ud83d\udcf2</button>':'')+
           '</div></td></tr>';
       }).join('')+'</tbody></table></div>';
-  } catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red)">'+e.message+'</div>'; }
+  } catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red)">'+escapeHtml(e.message)+'</div>'; }
 }
 function filterAllResults(q) {
   document.querySelectorAll('#ar-body tbody tr').forEach(r=>{ r.style.display=!q||r.textContent.toLowerCase().includes(q.toLowerCase())?'':'none'; });
@@ -10947,7 +10947,7 @@ async function loadCriticals() {
           '<button class="btn btn-s btn-xs" onclick="printCriticalNotice(\x27'+c.id+'\x27)">\ud83d\udda8</button>'+
         '</div></td></tr>';
     }).join('');
-  } catch(e){ body.innerHTML='<tr><td colspan="8" style="padding:12px;color:var(--red)">'+e.message+'</td></tr>'; }
+  } catch(e){ body.innerHTML='<tr><td colspan="8" style="padding:12px;color:var(--red)">'+escapeHtml(e.message)+'</td></tr>'; }
 }
 // Replaces the old acknowledgeCritical() bare-prompt() flow \u2014 that only
 // ever captured a free-text clinician name, with placeholder text
@@ -12278,7 +12278,7 @@ async function loadRecentPatients() {
           '<td style="font-size:.72rem">'+fmtDT(p.created_at)+'</td></tr>';
       }).join('')+
       '</tbody></table></div>';
-  } catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+e.message+'</div>'; }
+  } catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>'; }
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -12682,7 +12682,7 @@ async function loadInfectionFlags() {
         (f.active?'<button class="btn btn-s btn-xs" onclick="resolveInfectionFlag(\''+f.id+'\')">✓ Resolve</button>':'')+
         '</td></tr>';
     }).join('');
-  } catch(e){ tbody.innerHTML='<tr><td colspan="9" style="padding:12px;color:var(--red);font-size:.8rem">'+e.message+'</td></tr>'; }
+  } catch(e){ tbody.innerHTML='<tr><td colspan="9" style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</td></tr>'; }
 }
 async function resolveInfectionFlag(id) {
   if(!confirm('Mark this flag as resolved?')) return;
@@ -12740,7 +12740,7 @@ async function loadHandoverNotes() {
           ${h.notes?'<div style="background:var(--bg);border-radius:7px;padding:10px 12px;font-size:.82rem;line-height:1.6;white-space:pre-wrap">'+h.notes+'</div>':'<div style="color:var(--slate);font-size:.8rem">No notes recorded.</div>'}
         </div>
       </div>`).join('');
-  } catch(e){ container.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+e.message+'</div>'; }
+  } catch(e){ container.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>'; }
 }
 function openHandoverModal() {
   toast('Create new handover notes via Nursing & Vitals → Handover Notes tab','ok');
@@ -13003,7 +13003,7 @@ async function loadVitals() {
     // Trigger chart
     _vitalsData = data;
     renderVitalsChart();
-  } catch(e) { body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+e.message+'</div>'; }
+  } catch(e) { body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>'; }
 }
 
 let _vitalsData = [];
@@ -13315,7 +13315,7 @@ async function loadConsentForms(ptId){
       '<div style="font-size:.72rem;color:var(--slate)">'+fmtDate(c.consent_date||c.created_at)+' · '+escapeHtml(c.performed_by_name||'—')+' · Signed by '+escapeHtml(c.signee_name||'—')+'</div></div>'+
       '<button class="btn btn-s btn-xs" onclick="printConsentForm(\''+c.id+'\')">🖨 Print</button></div>'
     ).join('');
-  }catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+e.message+'</div>'; }
+  }catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>'; }
 }
 async function printConsentForm(id){
   if(!sb) return;
@@ -13837,7 +13837,7 @@ async function loadReceiveQueue(){
         '<div style="text-align:right">'+statusBadge(pt.priority||'Routine')+(waitMins!=null?'<div style="font-size:.68rem;color:'+(waitMins>30?'var(--red)':'var(--slate)')+';margin-top:2px">'+waitMins+'m waiting</div>':'')+'</div>'+
         '</div>';
     }).join('');
-  }catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.78rem">'+e.message+'</div>'; }
+  }catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.78rem">'+escapeHtml(e.message)+'</div>'; }
 }
 
 async function loadSampleQueueFull() {
@@ -13862,7 +13862,7 @@ async function loadSampleQueueFull() {
         <td style="font-size:.72rem">${fmtDT(s.received_at)}</td>
         <td><button class="btn btn-s btn-xs" onclick="selectScPt('${s.patient_id}')">📋 Open</button></td>
       </tr>`).join('')+'</tbody></table></div>';
-  }catch(e){body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+e.message+'</div>';}
+  }catch(e){body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>';}
 }
 
 async function openRejectModal() { toast('Log rejection via Sample Condition — mark as rejected condition, then save','ok'); }
@@ -14015,7 +14015,7 @@ async function loadNursingQueue() {
             '<button class="btn btn-s btn-xs" onclick="goPage(\x27fluid-chart\x27);event.stopPropagation()">\ud83d\udca7 Fluid</button>'+
           '</div></td></tr>';
       }).join('')+'</tbody></table></div>';
-  }catch(e){body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+e.message+'</div>';}
+  }catch(e){body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>';}
 }
 
 function filterNursingQueue(q) {
@@ -14111,7 +14111,7 @@ async function loadBilling() {
     _allBillInvoices = data||[];
     updateBillStats(_allBillInvoices);
     renderBillTable(_allBillInvoices);
-  } catch(e) { body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+e.message+'</div>'; }
+  } catch(e) { body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>'; }
 }
 
 function updateBillStats(invoices) {
@@ -15168,7 +15168,7 @@ async function loadPriceList() {
     _priceList = data||[];
     _allPrices = data||[];
     renderPriceTable(_allPrices);
-  } catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+e.message+'</div>'; }
+  } catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>'; }
 }
 
 function renderPriceTable(prices) {
@@ -15698,7 +15698,7 @@ async function loadStaff() {
           '<button class="btn btn-r btn-xs" onclick="deleteStaff(\''+s.id+'\')">✕</button>'+
         '</div></td></tr>'
       ).join('')+'</tbody></table></div>';
-  } catch(e){body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+e.message+'</div>';}
+  } catch(e){body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>';}
 }
 
 function filterStaff(q) {
@@ -15847,7 +15847,7 @@ async function loadStaffActivity() {
     body.innerHTML='<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Staff Member</th><th>Consultations</th><th>Vitals Recorded</th><th>Lab Results</th><th>Last Activity</th></tr></thead><tbody>'+
       arr.map(a=>'<tr><td style="font-weight:600">'+a.name+'</td><td style="text-align:center">'+a.consultations+'</td><td style="text-align:center">'+a.vitals+'</td><td style="text-align:center">'+a.results+'</td><td style="font-size:.75rem;color:var(--slate)">'+fmtDT(a.last)+'</td></tr>').join('')+
       '</tbody></table></div>';
-  } catch(e){body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+e.message+'</div>';}
+  } catch(e){body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>';}
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -15871,7 +15871,7 @@ async function loadDoctors() {
           '<button class="btn btn-r btn-xs" onclick="deleteDoctor(\''+d.id+'\')">✕</button>'+
         '</div></td></tr>'
       ).join('')+'</tbody></table></div>';
-  } catch(e){body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+e.message+'</div>';}
+  } catch(e){body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>';}
 }
 
 function filterDoctors(q) {
@@ -16228,7 +16228,7 @@ async function loadRadRequests() {
             ((r.status==='Reported'||r.status==='Verified')?'<button class="btn btn-s btn-xs" onclick="openDicomViewer(\''+r.id+'\')">👁️ View DICOM</button>':'')+
           '</div></td></tr>';
       }).join('')+(hiddenCount?'<tr><td colspan="8" style="text-align:center;padding:8px;font-size:.72rem;color:var(--slate)">'+hiddenCount+' more request(s) hidden pending payment</td></tr>':'')+'</tbody></table></div>';
-  } catch(e){body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+e.message+'</div>';}
+  } catch(e){body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>';}
 }
 
 async function loadPendingForReport() {
@@ -16427,7 +16427,7 @@ async function loadReportedStudies() {
           (r.status==='Reported'?'<button class="btn btn-p btn-xs" onclick="updateRadStatus(\''+r.id+'\',\'Verified\')">✅ Verify</button>':'')+
         '</div></td></tr>'
       ).join('')+'</tbody></table></div>';
-  } catch(e){body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+e.message+'</div>';}
+  } catch(e){body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>';}
 }
 
 function filterRadReported(q) {
@@ -16465,7 +16465,7 @@ async function loadRadPrintStudies(ptId, ptName){
         '<div><div style="font-weight:700;font-size:.85rem">'+r.imaging_type+'</div><div style="font-size:.72rem;color:var(--slate)">'+(r.radiologist?'Dr. '+r.radiologist+' · ':'')+fmtDate(r.reported_at)+'</div></div>'+
         '<button class="btn btn-p btn-sm" onclick="printRadReportById(\''+r.id+'\')">🖨 Print</button>'+
         '</div>').join('');
-  }catch(e){ body.innerHTML='<div style="padding:16px;color:var(--red);font-size:.82rem">'+e.message+'</div>'; }
+  }catch(e){ body.innerHTML='<div style="padding:16px;color:var(--red);font-size:.82rem">'+escapeHtml(e.message)+'</div>'; }
 }
 
 async function printRadReportById(id) {
@@ -16678,7 +16678,7 @@ async function loadQcLots(){
     const opts='<option value="">Select lot…</option>'+lots.map(l=>'<option value="'+l.id+'">'+(l.lot_no||'')+' — '+(l.control_name||'')+' ('+(l.level||'')+')</option>').join('');
     if(selLot) selLot.innerHTML=opts;
     if(chartLot) chartLot.innerHTML=opts;
-  }catch(e){ if(body) body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+e.message+'</div>'; }
+  }catch(e){ if(body) body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>'; }
 }
 
 async function deactivateQcLot(id){
@@ -16706,7 +16706,7 @@ async function loadQcResults(){
           '<td>'+(r.accepted?'<span class="bdg" style="background:#dcfce7;color:#166534">✅ Accepted</span>':'<span class="bdg" style="background:#fee2e2;color:#b91c1c">⛔ Rejected</span>')+'</td>'+
           '<td style="font-size:.72rem;color:var(--slate)">'+(r.comment||r.rule_violation||'—')+'</td></tr>';
       }).join('')+'</tbody></table></div>';
-  }catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+e.message+'</div>'; }
+  }catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>'; }
 }
 
 async function loadQcPage(){ await loadQcLots(); await loadQcResults(); }
@@ -16785,7 +16785,7 @@ async function loadLotRegister(){
     const itemMap={}; (items||[]).forEach(i=>itemMap[i.id]=i);
     _lotRegisterRows=(batches||[]).map(b=>({batch:b,item:itemMap[b.item_id]||{}}));
     renderLotRegister();
-  }catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+e.message+'</div>'; }
+  }catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>'; }
 }
 function renderLotRegister(){
   const body=document.getElementById('lot-register-body'); if(!body) return;
@@ -16842,7 +16842,7 @@ async function loadInventory(){
     window._invBatches=batchesRes.data||[];
     if(!window._invItems.length){ body.innerHTML='<div class="empty-state">No inventory items yet</div>'; return; }
     renderInventoryTable();
-  }catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+e.message+'</div>'; }
+  }catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>'; }
 }
 function renderInventoryTable(){
   const body=document.getElementById('inv-table-body'); if(!body) return;
@@ -17036,7 +17036,7 @@ async function loadBloodUnits() {
     const {data,error}=await q; if(error) throw error;
     _bbUnits=data||[];
     renderBloodUnitTable(_bbUnits);
-  } catch(e){ body.innerHTML='<div style="padding:14px;color:var(--red);font-size:.78rem">'+e.message+'</div>'; }
+  } catch(e){ body.innerHTML='<div style="padding:14px;color:var(--red);font-size:.78rem">'+escapeHtml(e.message)+'</div>'; }
 }
 function setBbStatusFilter(status,btn) {
   _bbStatusFilter=status;
@@ -17275,7 +17275,7 @@ async function loadDonorRegistry() {
     body.innerHTML='<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Donor No</th><th>Name</th><th>Group</th><th>Phone</th></tr></thead><tbody>'+
       data.map(d=>'<tr><td style="font-family:DM Mono,monospace;font-weight:700;color:var(--teal)">'+escapeHtml(d.donor_no)+'</td><td>'+escapeHtml(d.full_name)+'</td><td>'+(d.blood_group||'?')+(d.rh_factor==='Positive'?'+':d.rh_factor==='Negative'?'−':'')+'</td><td style="font-size:.75rem">'+(d.phone||'—')+'</td></tr>').join('')+
       '</tbody></table></div>';
-  } catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.78rem">'+e.message+'</div>'; }
+  } catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.78rem">'+escapeHtml(e.message)+'</div>'; }
 }
 // Mandatory infectious-disease screening (Path A) — a donation is only
 // `cleared` once every one of these five is Negative; clearDonationScreening()
@@ -17299,7 +17299,7 @@ async function loadPendingDonations() {
         '<button class="btn btn-p btn-xs" onclick="clearDonationScreening(\''+d.id+'\')" style="margin-top:6px">✅ Record Results &amp; Clear if Negative</button>'+
       '</div>';
     }).join('');
-  } catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.78rem">'+e.message+'</div>'; }
+  } catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.78rem">'+escapeHtml(e.message)+'</div>'; }
 }
 async function clearDonationScreening(donationId) {
   if(!sb) return;
@@ -17333,7 +17333,7 @@ async function loadPendingExternalUnits() {
         '<button class="btn btn-p btn-xs" onclick="verifyUnitOnReceipt(\''+u.id+'\')" style="margin-top:6px">✅ Confirm Label Matches — Verify</button>'+
       '</div>'
     ).join('');
-  } catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.78rem">'+e.message+'</div>'; }
+  } catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.78rem">'+escapeHtml(e.message)+'</div>'; }
 }
 async function verifyUnitOnReceipt(unitId) {
   if(!sb) return;
@@ -17381,7 +17381,7 @@ async function loadBloodRequests() {
     if(!data?.length){ body.innerHTML='<div class="empty-state"><div class="empty-icon">🧬</div><div class="empty-title">No open blood requests</div></div>'; return; }
     const rows=await Promise.all(data.map(r=>renderBloodRequestCard(r)));
     body.innerHTML=rows.join('');
-  } catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.78rem">'+e.message+'</div>'; }
+  } catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.78rem">'+escapeHtml(e.message)+'</div>'; }
 }
 async function renderBloodRequestCard(r) {
   const ptName=r.patients?.name||fullName(r.patients)||'—', ptMrn=r.patients?.mrn||'—';
@@ -17406,7 +17406,7 @@ async function renderBloodRequestCard(r) {
       '<div style="font-size:.72rem;color:var(--teal);font-weight:700">Patient type (on file): '+patientType+'</div>'+list+
     '</div>';
   } catch(e){
-    return '<div style="border:1px solid var(--border);border-radius:9px;padding:10px 12px;margin-bottom:10px">'+head+'<div style="color:var(--red);font-size:.75rem">'+e.message+'</div></div>';
+    return '<div style="border:1px solid var(--border);border-radius:9px;padding:10px 12px;margin-bottom:10px">'+head+'<div style="color:var(--red);font-size:.75rem">'+escapeHtml(e.message)+'</div></div>';
   }
 }
 async function crossmatchUnit(unitId,requestId) {
@@ -17736,7 +17736,7 @@ async function loadTat(){
       data.map(s=>{const pt=s.patients||{};const cT=s.collected_at?new Date(s.collected_at).getTime():null;const tM=cT?Math.floor((now-cT)/60000):null;const tH=tM!=null?Math.floor(tM/60)+'h '+(tM%60)+'m':'—';const tc=tM==null?'':tM>240?'#b91c1c':tM>120?'#f59e0b':'#166534';
       return '<tr><td style="font-family:DM Mono,monospace;font-size:.7rem;color:var(--teal)">'+(pt.lab_no||pt.mrn||'—')+'</td><td style="font-weight:600">'+(pt.name||'—')+'</td><td>'+statusBadge(pt.priority||'Routine')+'</td><td style="font-size:.72rem">'+fmtDT(s.collected_at)+'</td><td style="font-weight:700;color:'+tc+'">'+tH+'</td><td>'+statusBadge(s.status)+'</td></tr>';}).join('')+
       '</tbody></table></div>';
-  }catch(e){body.innerHTML='<div style="color:var(--red);padding:12px;font-size:.8rem">'+e.message+'</div>';}
+  }catch(e){body.innerHTML='<div style="color:var(--red);padding:12px;font-size:.8rem">'+escapeHtml(e.message)+'</div>';}
 }
 function filterInventory(q){
   document.querySelectorAll('#inv-table tbody tr').forEach(r=>{
@@ -18691,7 +18691,7 @@ async function loadPurchaseOrders(){
           '</tr>';
       }).join('')+'</tbody></table></div>';
     window._poLookup={}; pos.forEach(po=>{ window._poLookup[po.id]=po; });
-  }catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+e.message+'</div>'; }
+  }catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>'; }
 }
 function printPurchaseOrder(poId,poMeta,items){
   const po=poMeta||window._poLookup?.[poId]||{po_no:'PO-'+poId,status:'draft'};
@@ -18757,7 +18757,7 @@ async function loadStockRequisitions(){
           '<td><div class="acts">'+actions+'</div></td>'+
           '</tr>';
       }).join('')+'</tbody></table></div>';
-  }catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+e.message+'</div>'; }
+  }catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>'; }
 }
 async function decideRequisition(id,decision){
   if(!sb) return;
@@ -18843,7 +18843,7 @@ async function loadLabHistory(){
       Object.entries(counts).map(([dept,cnt])=>'<div class="stat-box" style="--ac:'+colors[dept]+'"><div class="stat-n">'+cnt+'</div><div class="stat-l">'+deptDisplay[dept]+'</div></div>').join('')+
       '</div>'+
       '<div style="text-align:center;padding:20px;font-size:1.1rem;font-weight:700;color:var(--teal)">Total Results: '+total+' &nbsp;\u00b7&nbsp; Verified: '+totalVerified+'</div>';
-  }catch(e){body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+e.message+'</div>';}
+  }catch(e){body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>';}
 }
 
 async function renderQcChart(){
