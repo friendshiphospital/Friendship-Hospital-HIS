@@ -12063,10 +12063,10 @@ function regShowSuccess(pt, mrn, labNo, testCount, payStatus, destinations, tota
     '<div style="font-size:.78rem;color:var(--slate)">Invoice created automatically</div></div>'+
     '<div style="background:var(--bg);border-radius:10px;padding:14px;margin-bottom:14px;display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:.82rem">'+
     '<div><div style="color:var(--slate);font-size:.7rem">Patient</div><div style="font-weight:700">'+escapeHtml(pt.name||'')+'</div></div>'+
-    '<div><div style="color:var(--slate);font-size:.7rem">MRN</div><div style="font-weight:700;color:var(--teal)">'+mrn+'</div></div>'+
+    '<div><div style="color:var(--slate);font-size:.7rem">MRN</div><div style="font-weight:700;color:var(--teal)">'+escapeHtml(mrn)+'</div></div>'+
     '<div><div style="color:var(--slate);font-size:.7rem">Destination</div><div style="font-weight:600">'+(destList.map(d=>destLabels[d]||d).join(' + ')||'—')+'</div></div>'+
     '<div><div style="color:var(--slate);font-size:.7rem">Payment</div><div>'+payBadge+'</div></div>'+
-    '<div><div style="color:var(--slate);font-size:.7rem">Invoice</div><div style="font-family:DM Mono,monospace;font-size:.75rem;color:var(--teal)">'+invNo+'</div></div>'+
+    '<div><div style="color:var(--slate);font-size:.7rem">Invoice</div><div style="font-family:DM Mono,monospace;font-size:.75rem;color:var(--teal)">'+escapeHtml(invNo)+'</div></div>'+
     '<div><div style="color:var(--slate);font-size:.7rem">Total</div><div style="font-weight:700">'+total.toFixed(2)+' SDG</div></div>'+
     '</div>'+
     (payStatus==='unpaid'||payStatus==='insurance_pending' ?
@@ -13120,11 +13120,11 @@ function openSampleLabelWindow(data, settings) {
     hr{border:none;border-top:1px solid #000;margin:1mm 0}
     svg{display:block;max-width:100%}
   </style></head><body>
-    <div class="name">${data.name}</div>
-    <div class="meta">${data.meta}</div>
+    <div class="name">${escapeHtml(data.name)}</div>
+    <div class="meta">${escapeHtml(data.meta)}</div>
     <hr>
-    <div class="spec">${data.specimen}</div>
-    <div class="bar">Coll: ${data.time} | By: ${data.collector}</div>
+    <div class="spec">${escapeHtml(data.specimen)}</div>
+    <div class="bar">Coll: ${escapeHtml(data.time)} | By: ${escapeHtml(data.collector)}</div>
     <div class="bar">Date: ${today()}</div>
     <svg id="lbl-barcode"></svg>
   </body></html>`;
