@@ -8571,7 +8571,7 @@ async function loadDoctorDropdowns() {
     const {data}=await sb.from('doctors').select('id,name,specialty').order('name');
     ['adm-doctor','ot-surgeon','appt-doctor'].forEach(id=>{
       const el=document.getElementById(id); if(!el||!data?.length) return;
-      el.innerHTML='<option value="">Select…</option>'+data.map(d=>'<option value="'+d.name+'">'+d.name+(d.specialty?' — '+d.specialty:'')+'</option>').join('');
+      el.innerHTML='<option value="">Select…</option>'+data.map(d=>'<option value="'+escapeHtml(d.name)+'">'+escapeHtml(d.name)+(d.specialty?' — '+escapeHtml(d.specialty):'')+'</option>').join('');
     });
   } catch(e){}
 }
@@ -8925,7 +8925,7 @@ async function loadSurgeonDropdown() {
   try {
     const {data}=await sb.from('doctors').select('name,specialty').order('name');
     const el=document.getElementById('ot-surgeon'); if(!el) return;
-    el.innerHTML='<option value="">Select surgeon…</option>'+(data||[]).map(d=>'<option>'+d.name+'</option>').join('');
+    el.innerHTML='<option value="">Select surgeon…</option>'+(data||[]).map(d=>'<option>'+escapeHtml(d.name)+'</option>').join('');
   } catch(e){}
 }
 function otNavDate(dir) {
@@ -10492,7 +10492,7 @@ async function loadAppointments() {
 async function loadApptDoctors() {
   if(!sb) return; const el=document.getElementById('appt-doctor'); if(!el) return;
   const {data}=await sb.from('doctors').select('name').order('name').catch(()=>({data:null}));
-  if(data) el.innerHTML='<option value="">Select…</option>'+data.map(d=>'<option>'+d.name+'</option>').join('');
+  if(data) el.innerHTML='<option value="">Select…</option>'+data.map(d=>'<option>'+escapeHtml(d.name)+'</option>').join('');
 }
 async function saveAppointment() {
   if(!sb){ toast('Not connected','err'); return; }
@@ -10717,7 +10717,7 @@ function onDoctorSelect(val) { const ext=document.getElementById('r-doc-ext'); i
 // clearRegForm and loadRecentPatients moved to receptionist section above
 async function populateDoctorDropdown() {
   const grp=document.getElementById('r-doc-clinic-group'); if(!grp) return;
-  const render = (data) => { if(data?.length) grp.innerHTML=data.map(d=>'<option value="'+d.name+'">'+d.name+(d.specialty?' — '+d.specialty:'')+'</option>').join(''); };
+  const render = (data) => { if(data?.length) grp.innerHTML=data.map(d=>'<option value="'+escapeHtml(d.name)+'">'+escapeHtml(d.name)+(d.specialty?' — '+escapeHtml(d.specialty):'')+'</option>').join(''); };
   if(sb && navigator.onLine) {
     try {
       const {data}=await sb.from('doctors').select('id,name,specialty').order('name');
@@ -10938,7 +10938,7 @@ async function loadCriticals() {
       const tc=elapsed!=null&&elapsed>30&&!c.is_acknowledged?'color:#b91c1c;font-weight:700':'';
       return '<tr style="'+(c.is_acknowledged?'':'background:#fff1f2')+'">'+
         '<td style="font-size:.72rem;'+tc+'">'+fmtDT(c.created_at)+(elapsed!=null&&!c.is_acknowledged?'<div style="font-size:.65rem;color:#b91c1c">'+elapsed+' min ago</div>':'')+'</td>'+
-        '<td style="font-weight:600">'+(pt.name||'—')+'<div style="font-size:.68rem;color:var(--slate)">'+(pt.mrn||pt.lab_no||'')+(pt.ward?' \u00b7 '+pt.ward:'')+'</div></td>'+
+        '<td style="font-weight:600">'+escapeHtml(pt.name||'—')+'<div style="font-size:.68rem;color:var(--slate)">'+(pt.mrn||pt.lab_no||'')+(pt.ward?' \u00b7 '+pt.ward:'')+'</div></td>'+
         '<td style="font-size:.78rem">'+(c.department||'—')+'</td>'+
         '<td style="font-weight:700;color:#b91c1c">'+(c.parameter||'—')+': <span style="font-size:.9rem">'+(c.value||'—')+'</span> '+(c.unit||'')+'<div style="font-size:.68rem;color:#92400e">Ref: '+(c.reference||'—')+'</div></td>'+
         '<td style="font-size:.72rem">'+(c.notified_by||'—')+'</td>'+
@@ -10989,7 +10989,7 @@ async function printCriticalNotice(id) {
       '<div style="background:#fee2e2;border:2px solid #fca5a5;border-radius:8px;padding:14px;margin-bottom:16px;text-align:center">'+
       '<div style="font-size:13pt;font-weight:900;color:#b91c1c">\ud83d\udea8 CRITICAL VALUE</div></div>'+
       '<table style="width:100%;border-collapse:collapse;margin-bottom:14px">'+
-      '<tr style="border-bottom:1px solid #e2e8f0"><td style="width:40%;padding:8px;font-size:9pt;font-weight:600;color:#64748b">Patient</td><td style="padding:8px;font-size:10pt;font-weight:700">'+(pt.name||'—')+'</td></tr>'+
+      '<tr style="border-bottom:1px solid #e2e8f0"><td style="width:40%;padding:8px;font-size:9pt;font-weight:600;color:#64748b">Patient</td><td style="padding:8px;font-size:10pt;font-weight:700">'+escapeHtml(pt.name||'—')+'</td></tr>'+
       '<tr style="border-bottom:1px solid #e2e8f0;background:#f8fafd"><td style="padding:8px;font-size:9pt;font-weight:600;color:#64748b">MRN</td><td style="padding:8px">'+(pt.mrn||pt.lab_no||'—')+'</td></tr>'+
       '<tr style="border-bottom:1px solid #e2e8f0"><td style="padding:8px;font-size:9pt;font-weight:600;color:#64748b">Critical Value</td><td style="padding:8px;font-size:13pt;font-weight:900;color:#b91c1c">'+(c.parameter||'—')+': '+(c.value||'—')+' '+(c.unit||'')+'</td></tr>'+
       '<tr style="border-bottom:1px solid #e2e8f0;background:#f8fafd"><td style="padding:8px;font-size:9pt;font-weight:600;color:#64748b">Reference</td><td style="padding:8px;font-size:9pt">'+(c.reference||'—')+'</td></tr>'+
@@ -11609,7 +11609,7 @@ async function printHemReport() {
       sect('Peripheral Blood Film',[(wanted('Blood Film')&&r.film_result)?'<tr><td style="padding:4px 8px">Blood Film</td><td colspan="3" style="padding:4px 8px">'+r.film_result+'</td><td></td></tr>':'']);
     if(!body){ toast('⚠️ No saved results match this patient\'s requested tests — click Save Results first','err'); return; }
     const html=printHeader('Haematology Report — CBC')+ptB+'<table style="width:100%;border-collapse:collapse"><thead><tr style="background:#1e3a5a;color:#fff"><th style="padding:6px 8px;font-size:8.5pt;text-align:left">Parameter</th><th style="padding:6px 8px;font-size:8.5pt;text-align:left">Result</th><th style="padding:6px 8px;font-size:8.5pt;text-align:left">Unit</th><th style="padding:6px 8px;font-size:8.5pt;text-align:left">Reference</th><th style="padding:6px 8px;font-size:8.5pt;text-align:left">Flag</th></tr></thead><tbody>'+body+
-      '</tbody></table>'+(r.notes?'<div style="background:#f8fafd;border-left:3px solid #0b7a75;padding:10px 12px;margin-top:12px;font-size:9pt"><strong>Comments:</strong> '+r.notes+'</div>':'')+
+      '</tbody></table>'+(r.notes?'<div style="background:#f8fafd;border-left:3px solid #0b7a75;padding:10px 12px;margin-top:12px;font-size:9pt"><strong>Comments:</strong> '+escapeHtml(r.notes)+'</div>':'')+
       '<div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:20px"><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Medical Laboratory Technologist</div><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Laboratory Supervisor</div></div>'+printFooter();
     openPrintWin(html,'CBC Report');
   } catch(e){ toast(e.message,'err'); }
@@ -11641,7 +11641,7 @@ async function printChemReport() {
       (col1?'<table style="width:100%;border-collapse:collapse">'+thead+'<tbody>'+col1+'</tbody></table>':'<div></div>')+
       (col2?'<table style="width:100%;border-collapse:collapse">'+thead+'<tbody>'+col2+'</tbody></table>':'<div></div>')+
       '</div>'+
-      (r.notes?'<div style="background:#f8fafd;border-left:3px solid #0369a1;padding:10px 12px;margin-top:12px;font-size:9pt"><strong>Comments:</strong> '+r.notes+'</div>':'')+
+      (r.notes?'<div style="background:#f8fafd;border-left:3px solid #0369a1;padding:10px 12px;margin-top:12px;font-size:9pt"><strong>Comments:</strong> '+escapeHtml(r.notes)+'</div>':'')+
       '<div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:20px"><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Medical Laboratory Technologist</div><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Laboratory Supervisor</div></div>'+printFooter();
     openPrintWin(html,'Chemistry Report');
   } catch(e){ toast(e.message,'err'); }
@@ -12376,7 +12376,7 @@ async function printPcrReport() {
       '<th style="padding:6px 8px;font-size:8.5pt;text-align:left">Ct Value</th>'+
       '<th style="padding:6px 8px;font-size:8.5pt;text-align:left">Interpretation</th></tr></thead>'+
       '<tbody>'+rows+'</tbody></table>'+
-      (r.notes?'<div style="background:#f8fafd;border-left:3px solid #7c3aed;padding:10px 12px;margin-top:12px;font-size:9pt"><strong>Comments:</strong> '+r.notes+'</div>':'')+
+      (r.notes?'<div style="background:#f8fafd;border-left:3px solid #7c3aed;padding:10px 12px;margin-top:12px;font-size:9pt"><strong>Comments:</strong> '+escapeHtml(r.notes)+'</div>':'')+
       '<div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:20px">'+
       '<div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Medical Laboratory Technologist</div>'+
       '<div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Laboratory Supervisor</div></div>'+printFooter();
@@ -12467,7 +12467,7 @@ async function printHistoReport() {
       '<th style="padding:5px 8px;font-size:8.5pt;text-align:left">Marker</th><th style="padding:5px 8px;font-size:8.5pt;text-align:left">Result</th>'+
       '<th style="padding:5px 8px;font-size:8.5pt;text-align:left">Intensity</th><th style="padding:5px 8px;font-size:8.5pt;text-align:left">% Positive</th></tr></thead>'+
       '<tbody>'+ihcRows+'</tbody></table></div>':'')+
-      (r.notes?'<div style="background:#f8fafd;border-left:3px solid #b45309;padding:10px 12px;margin-top:8px;font-size:9pt"><strong>Comments:</strong> '+r.notes+'</div>':'')+
+      (r.notes?'<div style="background:#f8fafd;border-left:3px solid #b45309;padding:10px 12px;margin-top:8px;font-size:9pt"><strong>Comments:</strong> '+escapeHtml(r.notes)+'</div>':'')+
       '<div style="margin-top:16px;display:grid;grid-template-columns:1fr 1fr;gap:20px">'+
       '<div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Histopathologist</div>'+
       '<div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Date Reported</div></div>'+printFooter();
@@ -12525,7 +12525,7 @@ async function printCytoReport() {
       '<div style="font-size:8pt;color:#0369a1;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Cytological Diagnosis</div>'+
       '<div style="font-size:10.5pt;font-weight:700;line-height:1.5">'+(r.diagnosis||'—')+'</div></div>'+
       (r.recommendation?'<div style="background:#f0fdf4;border-left:4px solid #166534;padding:10px 12px;border-radius:0 8px 8px 0;margin-bottom:10px;font-size:9.5pt"><strong>Recommendation:</strong> '+r.recommendation+'</div>':'')+
-      (r.notes?'<div style="background:#f8fafd;border-left:3px solid #0369a1;padding:10px 12px;font-size:9pt"><strong>Comments:</strong> '+r.notes+'</div>':'')+
+      (r.notes?'<div style="background:#f8fafd;border-left:3px solid #0369a1;padding:10px 12px;font-size:9pt"><strong>Comments:</strong> '+escapeHtml(r.notes)+'</div>':'')+
       '<div style="margin-top:16px;display:grid;grid-template-columns:1fr 1fr;gap:20px">'+
       '<div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Cytologist / Pathologist</div>'+
       '<div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Date Reported</div></div>'+printFooter();
@@ -12559,7 +12559,7 @@ async function printSeroReportFull() {
     const html=printHeader('Serology Report')+ptB+
       '<table style="width:100%;border-collapse:collapse"><thead><tr style="background:#1e3a5a;color:#fff"><th style="padding:5px 8px;font-size:8.5pt;text-align:left">Test</th><th style="padding:5px 8px;font-size:8.5pt;text-align:left">Result</th></tr></thead><tbody>'+body+
       '</tbody></table>'+
-      (r.notes?'<div style="background:#f8fafd;border-left:3px solid #7c3aed;padding:10px 12px;margin-top:12px;font-size:9pt"><strong>Comments:</strong> '+r.notes+'</div>':'')+
+      (r.notes?'<div style="background:#f8fafd;border-left:3px solid #7c3aed;padding:10px 12px;margin-top:12px;font-size:9pt"><strong>Comments:</strong> '+escapeHtml(r.notes)+'</div>':'')+
       '<div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:20px"><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Medical Laboratory Technologist</div><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Laboratory Supervisor</div></div>'+printFooter();
     openPrintWin(html,'Serology Report');
   } catch(e){ toast(e.message,'err'); }
@@ -12593,7 +12593,7 @@ async function printImmunoReportFull() {
       (col1?'<table style="width:100%;border-collapse:collapse"><thead><tr style="background:#1e3a5a;color:#fff"><th style="padding:5px 8px;font-size:8.5pt;text-align:left">Test</th><th style="padding:5px 8px;font-size:8.5pt;text-align:left">Result</th><th style="padding:5px 8px;font-size:8.5pt;text-align:left">Unit</th><th>F</th></tr></thead><tbody>'+col1+'</tbody></table>':'<div></div>')+
       (col2?'<table style="width:100%;border-collapse:collapse"><thead><tr style="background:#1e3a5a;color:#fff"><th style="padding:5px 8px;font-size:8.5pt;text-align:left">Test</th><th style="padding:5px 8px;font-size:8.5pt;text-align:left">Result</th></tr></thead><tbody>'+col2+'</tbody></table>':'<div></div>')+
       '</div>'+
-      (r.notes?'<div style="background:#f8fafd;border-left:3px solid #7c3aed;padding:10px 12px;margin-top:12px;font-size:9pt"><strong>Comments:</strong> '+r.notes+'</div>':'')+
+      (r.notes?'<div style="background:#f8fafd;border-left:3px solid #7c3aed;padding:10px 12px;margin-top:12px;font-size:9pt"><strong>Comments:</strong> '+escapeHtml(r.notes)+'</div>':'')+
       '<div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:20px"><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Medical Laboratory Technologist</div><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Laboratory Supervisor</div></div>'+printFooter();
     openPrintWin(html,'Immunology Report');
   } catch(e){ toast(e.message,'err'); }
@@ -12637,7 +12637,7 @@ async function printMicroReportFull() {
       '<div>'+(leftCol?'<table style="width:100%;border-collapse:collapse">'+tableHead+'<tbody>'+leftCol+'</tbody></table>':'')+'</div>'+
       '<div>'+(rightCol?'<table style="width:100%;border-collapse:collapse">'+tableHead+'<tbody>'+rightCol+'</tbody></table>':'')+'</div>'+
       '</div>'+
-      (r.notes?'<div style="background:#f8fafd;border-left:3px solid #15803d;padding:10px 12px;margin-top:12px;font-size:9pt"><strong>Comments:</strong> '+r.notes+'</div>':'')+
+      (r.notes?'<div style="background:#f8fafd;border-left:3px solid #15803d;padding:10px 12px;margin-top:12px;font-size:9pt"><strong>Comments:</strong> '+escapeHtml(r.notes)+'</div>':'')+
       '<div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:20px"><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Medical Laboratory Technologist</div><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Laboratory Supervisor</div></div>'+printFooter();
     openPrintWin(html,'Microbiology Report');
   } catch(e){ toast(e.message,'err'); }
@@ -13835,7 +13835,7 @@ async function loadReceiveQueue(){
       const pt=s.patients||{};
       const waitMins=s.collected_at?Math.round((Date.now()-new Date(s.collected_at).getTime())/60000):null;
       return '<div onclick="selectReceivePt(\''+s.patient_id+'\')" style="display:flex;align-items:center;justify-content:space-between;padding:9px 10px;border-radius:8px;cursor:pointer;margin-bottom:4px;background:var(--bg)" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'var(--bg)\'">'+
-        '<div><div style="font-weight:700;font-size:.8rem">'+(pt.name||'—')+'</div><div style="font-size:.7rem;color:var(--slate)">'+(pt.lab_no||pt.mrn||'—')+' · '+(s.specimen_type||'')+'</div></div>'+
+        '<div><div style="font-weight:700;font-size:.8rem">'+escapeHtml(pt.name||'—')+'</div><div style="font-size:.7rem;color:var(--slate)">'+(pt.lab_no||pt.mrn||'—')+' · '+(s.specimen_type||'')+'</div></div>'+
         '<div style="text-align:right">'+statusBadge(pt.priority||'Routine')+(waitMins!=null?'<div style="font-size:.68rem;color:'+(waitMins>30?'var(--red)':'var(--slate)')+';margin-top:2px">'+waitMins+'m waiting</div>':'')+'</div>'+
         '</div>';
     }).join('');
@@ -15847,7 +15847,7 @@ async function loadStaffActivity() {
     const arr=Object.values(activity).sort((a,b)=>new Date(b.last)-new Date(a.last));
     if(!arr.length){body.innerHTML='<div class="empty-state">No activity recorded yet</div>';return;}
     body.innerHTML='<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Staff Member</th><th>Consultations</th><th>Vitals Recorded</th><th>Lab Results</th><th>Last Activity</th></tr></thead><tbody>'+
-      arr.map(a=>'<tr><td style="font-weight:600">'+a.name+'</td><td style="text-align:center">'+a.consultations+'</td><td style="text-align:center">'+a.vitals+'</td><td style="text-align:center">'+a.results+'</td><td style="font-size:.75rem;color:var(--slate)">'+fmtDT(a.last)+'</td></tr>').join('')+
+      arr.map(a=>'<tr><td style="font-weight:600">'+escapeHtml(a.name)+'</td><td style="text-align:center">'+a.consultations+'</td><td style="text-align:center">'+a.vitals+'</td><td style="text-align:center">'+a.results+'</td><td style="font-size:.75rem;color:var(--slate)">'+fmtDT(a.last)+'</td></tr>').join('')+
       '</tbody></table></div>';
   } catch(e){body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>';}
 }
@@ -16216,7 +16216,7 @@ async function loadRadRequests() {
         const unpaid=pt.payment_status==='unpaid'||pt.payment_status==='insurance_pending';
         return '<tr class="'+(unpaid?'pay-unpaid':'')+'" style="background:'+(urgColor[r.urgency]||'')+'">' +
           '<td style="font-size:.72rem;color:var(--slate)">'+fmtDate(r.created_at)+'</td>'+
-          '<td><div style="font-weight:600;font-size:.82rem">'+(pt.name||'—')+'</div>'+
+          '<td><div style="font-weight:600;font-size:.82rem">'+escapeHtml(pt.name||'—')+'</div>'+
           '<div style="font-size:.68rem;color:var(--slate)">'+(pt.mrn||pt.lab_no||'')+' \u00b7 '+(pt.age||'?')+(pt.age_unit||'y')+' / '+(pt.sex||'')+' '+(pt.ward?'\u00b7 '+pt.ward:'')+'</div></td>'+
           '<td style="font-size:.78rem;font-weight:600">'+(r.imaging_type||'—')+(r.is_critical?' <span class="bdg" style="background:#b91c1c;color:#fff">🚨 CRITICAL</span>':'')+'</td>'+
           '<td>'+(r.urgency==='STAT'?'<span class="bdg" style="background:#fef2f2;color:#b91c1c;border:1.5px solid #fca5a5">\u26a1 STAT</span>':statusBadge(r.urgency))+'</td>'+
@@ -16381,7 +16381,7 @@ async function printRadReport() {
     const sec=(label,val,col)=>val?'<div style="margin-bottom:12px"><div style="font-size:8pt;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:'+(col||'#64748b')+';margin-bottom:3px">'+label+'</div><div style="font-size:9.5pt;line-height:1.6;white-space:pre-wrap">'+val+'</div></div>':'';
     const html=printHeader('Radiology Report')+
       '<div style="background:#f1f5f9;padding:10px 14px;border-radius:8px;margin-bottom:14px;display:grid;grid-template-columns:repeat(4,1fr);gap:8px;font-size:9pt">'+
-      '<div><div style="font-size:8pt;color:#64748b">Patient</div><div style="font-weight:700">'+(pt.name||'—')+'</div></div>'+
+      '<div><div style="font-size:8pt;color:#64748b">Patient</div><div style="font-weight:700">'+escapeHtml(pt.name||'—')+'</div></div>'+
       '<div><div style="font-size:8pt;color:#64748b">MRN</div><div style="font-family:DM Mono,monospace">'+(pt.mrn||pt.lab_no||'—')+'</div></div>'+
       '<div><div style="font-size:8pt;color:#64748b">Age/Sex</div><div>'+(pt.age||'?')+(pt.age_unit||'y')+' / '+(pt.sex||'')+'</div></div>'+
       '<div><div style="font-size:8pt;color:#64748b">Ward</div><div>'+(pt.ward||'OPD')+'</div></div>'+
@@ -17736,7 +17736,7 @@ async function loadTat(){
     const now=Date.now();
     body.innerHTML='<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Lab No</th><th>Patient</th><th>Priority</th><th>Collected</th><th>TAT</th><th>Status</th></tr></thead><tbody>'+
       data.map(s=>{const pt=s.patients||{};const cT=s.collected_at?new Date(s.collected_at).getTime():null;const tM=cT?Math.floor((now-cT)/60000):null;const tH=tM!=null?Math.floor(tM/60)+'h '+(tM%60)+'m':'—';const tc=tM==null?'':tM>240?'#b91c1c':tM>120?'#f59e0b':'#166534';
-      return '<tr><td style="font-family:DM Mono,monospace;font-size:.7rem;color:var(--teal)">'+(pt.lab_no||pt.mrn||'—')+'</td><td style="font-weight:600">'+(pt.name||'—')+'</td><td>'+statusBadge(pt.priority||'Routine')+'</td><td style="font-size:.72rem">'+fmtDT(s.collected_at)+'</td><td style="font-weight:700;color:'+tc+'">'+tH+'</td><td>'+statusBadge(s.status)+'</td></tr>';}).join('')+
+      return '<tr><td style="font-family:DM Mono,monospace;font-size:.7rem;color:var(--teal)">'+(pt.lab_no||pt.mrn||'—')+'</td><td style="font-weight:600">'+escapeHtml(pt.name||'—')+'</td><td>'+statusBadge(pt.priority||'Routine')+'</td><td style="font-size:.72rem">'+fmtDT(s.collected_at)+'</td><td style="font-weight:700;color:'+tc+'">'+tH+'</td><td>'+statusBadge(s.status)+'</td></tr>';}).join('')+
       '</tbody></table></div>';
   }catch(e){body.innerHTML='<div style="color:var(--red);padding:12px;font-size:.8rem">'+escapeHtml(e.message)+'</div>';}
 }
@@ -17772,7 +17772,7 @@ async function loadSampleQueue(){
     }
     body.innerHTML='<div style="overflow-x:auto"><table class="tbl" style="font-size:.74rem"><thead><tr><th>Lab No</th><th>Name</th><th>Priority</th><th>Payment</th><th>Status</th></tr></thead><tbody>'+
       visible.map(s=>{const pt=s.patients||{};const up=pt.payment_status==='unpaid'||pt.payment_status==='insurance_pending';
-        return '<tr class="'+(up?'pay-unpaid':'')+'" style="cursor:pointer" onclick="selectScPt(\x27'+s.patient_id+'\x27)">'+'<td style="font-family:DM Mono,monospace;color:var(--teal)">'+(pt.lab_no||pt.mrn||'—')+'</td><td style="font-weight:600">'+(pt.name||'—')+'</td><td>'+statusBadge(pt.priority||'Routine')+'</td><td>'+paymentTag(pt.payment_status)+(s.payment_deferred?' <span class="bdg" style="background:#fef2f2;color:#b91c1c;border:1.5px solid #fca5a5">\u26a0 Payment Deferred \u2014 STAT</span>':'')+'</td><td>'+statusBadge(s.status)+'</td></tr>';
+        return '<tr class="'+(up?'pay-unpaid':'')+'" style="cursor:pointer" onclick="selectScPt(\x27'+s.patient_id+'\x27)">'+'<td style="font-family:DM Mono,monospace;color:var(--teal)">'+(pt.lab_no||pt.mrn||'—')+'</td><td style="font-weight:600">'+escapeHtml(pt.name||'—')+'</td><td>'+statusBadge(pt.priority||'Routine')+'</td><td>'+paymentTag(pt.payment_status)+(s.payment_deferred?' <span class="bdg" style="background:#fef2f2;color:#b91c1c;border:1.5px solid #fca5a5">\u26a0 Payment Deferred \u2014 STAT</span>':'')+'</td><td>'+statusBadge(s.status)+'</td></tr>';
       }).join('')+(hiddenCount?'<tr><td colspan="5" style="text-align:center;padding:8px;font-size:.72rem;color:var(--slate)">'+hiddenCount+' more order(s) hidden pending payment</td></tr>':'')+'</tbody></table></div>';
   }catch(e){}
 }
