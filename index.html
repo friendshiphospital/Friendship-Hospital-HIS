@@ -6455,7 +6455,7 @@ async function renderSyncPanel() {
       </div>`).join('') +
       `<button class="btn btn-p btn-sm" style="width:100%;justify-content:center;margin-top:8px" onclick="flushOfflineQueue()">🔄 Sync Now</button>`;
   } catch (e) {
-    body.innerHTML = '<div style="color:var(--red);font-size:.78rem">' + e.message + '</div>';
+    body.innerHTML = '<div style="color:var(--red);font-size:.78rem">' + escapeHtml(e.message) + '</div>';
   }
 }
 
@@ -6468,7 +6468,9 @@ setInterval(() => { if (navigator.onLine) flushOfflineQueue(); }, 30000);
 function genOfflineId(prefix) {
   const d = new Date();
   const ymd = d.getFullYear().toString().slice(2) + String(d.getMonth()+1).padStart(2,'0') + String(d.getDate()).padStart(2,'0');
-  const rand = Math.random().toString(36).slice(2,6).toUpperCase();
+  const buf = new Uint32Array(1);
+  crypto.getRandomValues(buf);
+  const rand = buf[0].toString(36).toUpperCase().slice(-4).padStart(4,'0');
   return prefix + '-' + ymd + '-' + rand;
 }
 
@@ -7586,7 +7588,7 @@ async function loadIdCounters(){
     body.innerHTML='<table class="tbl" style="width:100%;font-size:.78rem"><thead><tr><th>Counter</th><th>Current Value</th><th>Next Number</th><th></th></tr></thead><tbody>'
       +data.map(c=>'<tr><td>'+(COUNTER_LABELS[c.counter_name]||c.counter_name)+'</td><td style="font-family:DM Mono,monospace">'+c.current_value+'</td><td style="font-family:DM Mono,monospace;font-weight:700;color:var(--teal)">'+(c.current_value+1)+'</td><td><button class="btn btn-s btn-xs" onclick="correctIdCounter(\''+c.counter_name+'\','+c.current_value+')">Correct…</button></td></tr>').join('')
       +'</tbody></table>';
-  }catch(e){ body.innerHTML='<div style="font-size:.78rem;color:var(--red)">'+e.message+'</div>'; }
+  }catch(e){ body.innerHTML='<div style="font-size:.78rem;color:var(--red)">'+escapeHtml(e.message)+'</div>'; }
 }
 async function correctIdCounter(counterName,currentValue){
   if(!sb) return;
@@ -7672,7 +7674,7 @@ async function loadBedConfig() {
     body.innerHTML='<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Ward</th><th>Room</th><th>Bed</th><th>Status</th><th></th></tr></thead><tbody>'+
       data.map(b=>'<tr><td>'+b.ward+'</td><td>'+b.room+'</td><td>'+b.bed_number+'</td><td>'+statusBadge(b.status)+'</td><td><button class="btn btn-r btn-xs" onclick="deleteBed(\x27'+b.id+'\x27)">✕</button></td></tr>').join('')+
       '</tbody></table></div>';
-  } catch(e){ body.innerHTML='<div style="padding:10px;color:var(--red);font-size:.78rem">'+e.message+'</div>'; }
+  } catch(e){ body.innerHTML='<div style="padding:10px;color:var(--red);font-size:.78rem">'+escapeHtml(e.message)+'</div>'; }
 }
 async function addBedConfig() {
   if(!sb){ toast('Not connected','err'); return; }
@@ -7692,7 +7694,7 @@ async function deleteBed(id) {
 // ── STATISTICS ────────────────────────────────────────
 let _statsTab='overview';
 let _statsExport={title:'',headers:[],rows:[]}; // populated by each tab's loader, consumed by the export buttons
-function statCard(label,value,color){ return '<div class="stat-box" style="--ac:'+(color||'var(--teal)')+'"><div class="stat-n">'+(value??'—')+'</div><div class="stat-l">'+label+'</div></div>'; }
+function statCard(label,value,color){ return '<div class="stat-box" style="--ac:'+(color||'var(--teal)')+'"><div class="stat-n">'+escapeHtml(value??'—')+'</div><div class="stat-l">'+escapeHtml(label)+'</div></div>'; }
 function statsDateRange(){
   const f=document.getElementById('stats-from'), t=document.getElementById('stats-to');
   if(f && !f.value){ const d=new Date(); d.setDate(d.getDate()-30); f.value=d.toISOString().slice(0,10); }
@@ -7716,7 +7718,7 @@ async function loadStatistics(){
     else if(_statsTab==='lab') await renderStatsLab(from,to);
     else if(_statsTab==='nursing') await renderStatsNursing(from,to);
     else if(_statsTab==='billing') await renderStatsBilling(from,to);
-  }catch(e){ body.innerHTML='<div class="empty-state">'+e.message+'</div>'; }
+  }catch(e){ body.innerHTML='<div class="empty-state">'+escapeHtml(e.message)+'</div>'; }
 }
 async function renderStatsOverview(from,to){
   const [{count:regs},{count:cons},{count:labOrders},{count:adms},{data:invs}]=await Promise.all([
@@ -7761,7 +7763,7 @@ async function renderStatsDoctor(from,to){
   const dxCount={}; rows.forEach(c=>{ if(c.primary_diagnosis){ dxCount[c.primary_diagnosis]=(dxCount[c.primary_diagnosis]||0)+1; } });
   const topDx=Object.entries(dxCount).sort((a,b)=>b[1]-a[1]).slice(0,5);
   let html='<div class="stat-grid">'+statCard('Consultations',rows.length,'var(--teal)')+statCard('Lab Orders Placed',labOrders,'#f59e0b')+statCard('Radiology Orders Placed',radOrders,'#8b5cf6')+statCard('Admissions Initiated',adms||0,'#3b82f6')+'</div>';
-  if(topDx.length) html+='<div class="card-title" style="font-size:.85rem;margin:12px 0 6px">Top Diagnoses</div><div style="font-size:.8rem">'+topDx.map(([dx,c])=>'<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--border)"><span>'+dx+'</span><strong>'+c+'</strong></div>').join('')+'</div>';
+  if(topDx.length) html+='<div class="card-title" style="font-size:.85rem;margin:12px 0 6px">Top Diagnoses</div><div style="font-size:.8rem">'+topDx.map(([dx,c])=>'<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--border)"><span>'+escapeHtml(dx)+'</span><strong>'+c+'</strong></div>').join('')+'</div>';
   html+=statsRawTable(['Date','Doctor','Diagnosis','Chief Complaint'], rows.map(c=>[fmtDate(c.consultation_date||c.created_at),c.consulting_doctor,c.primary_diagnosis,c.chief_complaint]));
   document.getElementById('stats-body').innerHTML=html;
   _statsExport={title:'Doctor', headers:['Date','Doctor','Diagnosis','Chief Complaint'], rows:rows.map(c=>[fmtDate(c.consultation_date||c.created_at),c.consulting_doctor,c.primary_diagnosis,c.chief_complaint])};
@@ -7805,8 +7807,8 @@ async function renderStatsBilling(from,to){
 function statsRawTable(headers,rows){
   if(!rows.length) return '<div class="empty-state" style="margin-top:10px">No records in this date range</div>';
   return '<div class="card-title" style="font-size:.85rem;margin:14px 0 6px">Records ('+rows.length+')</div>'
-    + '<div style="max-height:340px;overflow-y:auto"><table class="tbl" style="width:100%;font-size:.78rem"><thead><tr>'+headers.map(h=>'<th>'+h+'</th>').join('')+'</tr></thead><tbody>'
-    + rows.slice(0,500).map(r=>'<tr>'+r.map(c=>'<td>'+(c??'—')+'</td>').join('')+'</tr>').join('')
+    + '<div style="max-height:340px;overflow-y:auto"><table class="tbl" style="width:100%;font-size:.78rem"><thead><tr>'+headers.map(h=>'<th>'+escapeHtml(h)+'</th>').join('')+'</tr></thead><tbody>'
+    + rows.slice(0,500).map(r=>'<tr>'+r.map(c=>'<td>'+escapeHtml(c??'—')+'</td>').join('')+'</tr>').join('')
     + '</tbody></table></div>'+(rows.length>500?'<div style="font-size:.72rem;color:var(--slate);margin-top:4px">Showing first 500 of '+rows.length+' — use Excel export for the full set.</div>':'');
 }
 function exportStatsExcel(){
@@ -7838,7 +7840,7 @@ function printFooter() {
 }
 function openPrintWin(html, title='Print') {
   const w=window.open('','_blank','width=900,height=750'); if(!w){ toast('Allow popups','warn'); return; }
-  w.document.write('<!DOCTYPE html><html><head><title>'+title+'</title><link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"><style>@page{size:A4;margin:15mm}*{box-sizing:border-box}body{font-family:DM Sans,sans-serif;font-size:10.5pt;color:#0e1928;background:#fff;padding:5mm}table{width:100%;border-collapse:collapse}th{background:#f8fafd;padding:5px 9px;font-size:9pt;text-align:left;border-bottom:1px solid #e2e8f3}td{padding:5px 9px;font-size:9.5pt;border-bottom:1px solid #f1f5fb}.no-print{display:flex;background:#0e1928;color:#fff;padding:8px 14px;justify-content:space-between;align-items:center;gap:10px}@media print{.no-print{display:none!important}}</style></head><body><div class="no-print"><span style="font-size:.82rem"><strong>🏥 Friendship Hospital — Al Damazin</strong></span><button onclick="window.print()" style="background:#0b7a75;color:#fff;border:none;padding:8px 18px;border-radius:6px;font-size:.82rem;font-weight:700;cursor:pointer">🖨️ Print</button></div><div style="padding:5mm">'+html+'</div></body></html>');
+  w.document.write('<!DOCTYPE html><html><head><title>'+escapeHtml(title)+'</title><link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"><style>@page{size:A4;margin:15mm}*{box-sizing:border-box}body{font-family:DM Sans,sans-serif;font-size:10.5pt;color:#0e1928;background:#fff;padding:5mm}table{width:100%;border-collapse:collapse}th{background:#f8fafd;padding:5px 9px;font-size:9pt;text-align:left;border-bottom:1px solid #e2e8f3}td{padding:5px 9px;font-size:9.5pt;border-bottom:1px solid #f1f5fb}.no-print{display:flex;background:#0e1928;color:#fff;padding:8px 14px;justify-content:space-between;align-items:center;gap:10px}@media print{.no-print{display:none!important}}</style></head><body><div class="no-print"><span style="font-size:.82rem"><strong>🏥 Friendship Hospital — Al Damazin</strong></span><button onclick="window.print()" style="background:#0b7a75;color:#fff;border:none;padding:8px 18px;border-radius:6px;font-size:.82rem;font-weight:700;cursor:pointer">🖨️ Print</button></div><div style="padding:5mm">'+html+'</div></body></html>');
   w.document.close();
   // Callers that need to draw into the print window afterward (e.g.
   // JsBarcode against an <svg> inside it, as printInventoryBarcodeLabel()/
@@ -7855,7 +7857,7 @@ function openPrintWin(html, title='Print') {
 // Currently only printInvoiceThermal() uses this.
 function openPrintWinThermal(html, title='Receipt') {
   const w=window.open('','_blank','width=380,height=650'); if(!w){ toast('Allow popups','warn'); return; }
-  w.document.write('<!DOCTYPE html><html><head><title>'+title+'</title><style>@page{size:80mm auto;margin:3mm}*{box-sizing:border-box}body{font-family:"DM Mono",Consolas,monospace;font-size:8.5pt;color:#000;background:#fff;width:74mm;padding:0}table{width:100%;border-collapse:collapse}td,th{padding:2px 0;font-size:8pt}.no-print{display:flex;background:#0e1928;color:#fff;padding:6px 10px;justify-content:space-between;align-items:center;gap:8px}@media print{.no-print{display:none!important}}</style></head><body><div class="no-print"><span style="font-size:.72rem">🧾 Thermal Receipt</span><button onclick="window.print()" style="background:#0b7a75;color:#fff;border:none;padding:6px 12px;border-radius:5px;font-size:.72rem;font-weight:700;cursor:pointer">🖨️ Print</button></div><div style="padding:2mm">'+html+'</div></body></html>');
+  w.document.write('<!DOCTYPE html><html><head><title>'+escapeHtml(title)+'</title><style>@page{size:80mm auto;margin:3mm}*{box-sizing:border-box}body{font-family:"DM Mono",Consolas,monospace;font-size:8.5pt;color:#000;background:#fff;width:74mm;padding:0}table{width:100%;border-collapse:collapse}td,th{padding:2px 0;font-size:8pt}.no-print{display:flex;background:#0e1928;color:#fff;padding:6px 10px;justify-content:space-between;align-items:center;gap:8px}@media print{.no-print{display:none!important}}</style></head><body><div class="no-print"><span style="font-size:.72rem">🧾 Thermal Receipt</span><button onclick="window.print()" style="background:#0b7a75;color:#fff;border:none;padding:6px 12px;border-radius:5px;font-size:.72rem;font-weight:700;cursor:pointer">🖨️ Print</button></div><div style="padding:2mm">'+html+'</div></body></html>');
   w.document.close();
 }
 
@@ -7969,7 +7971,7 @@ function renderNotifList(){
   if(resultsReady&&resultsReady.length){
     html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;color:#166534;background:#f0fdf4">\ud83d\udd14 Results Ready ('+resultsReady.length+')</div>';
     html+=resultsReady.map(p=>'<div onclick="notifJumpToPatientResults(\''+p.id+'\')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'">'+
-      '<div style="font-weight:700;font-size:.8rem">'+(p.name||fullName(p))+' <span style="font-weight:400;color:var(--slate);font-size:.68rem">'+(p.mrn||p.lab_no||'')+'</span></div>'+
+      '<div style="font-weight:700;font-size:.8rem">'+escapeHtml(p.name||fullName(p))+' <span style="font-weight:400;color:var(--slate);font-size:.68rem">'+escapeHtml(p.mrn||p.lab_no||'')+'</span></div>'+
       '<div style="font-size:.72rem;color:#166534">Lab/Radiology result ready for review</div></div>').join('');
   }
   if(deferredDue&&deferredDue.length){
@@ -7977,8 +7979,8 @@ function renderNotifList(){
     html+=deferredDue.map(d=>{
       const pt=d.patients||{};
       return '<div onclick="notifJumpToDeferredPayment(\''+d.patient_id+'\')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'">'+
-        '<div style="font-weight:700;font-size:.8rem">'+(pt.name||'—')+' <span style="font-weight:400;color:var(--slate);font-size:.68rem">'+(pt.mrn||pt.lab_no||'')+'</span></div>'+
-        '<div style="font-size:.72rem;color:#b91c1c">'+d.kind+' \u2014 '+escapeHtml(d.label||'')+' ready \u00b7 payment was deferred (STAT) \u00b7 still '+(pt.payment_status==='insurance_pending'?'insurance pending':'unpaid')+'</div></div>';
+        '<div style="font-weight:700;font-size:.8rem">'+escapeHtml(pt.name||'—')+' <span style="font-weight:400;color:var(--slate);font-size:.68rem">'+escapeHtml(pt.mrn||pt.lab_no||'')+'</span></div>'+
+        '<div style="font-size:.72rem;color:#b91c1c">'+escapeHtml(d.kind)+' \u2014 '+escapeHtml(d.label||'')+' ready \u00b7 payment was deferred (STAT) \u00b7 still '+(pt.payment_status==='insurance_pending'?'insurance pending':'unpaid')+'</div></div>';
     }).join('');
   }
   if(crits.length){
@@ -7986,27 +7988,27 @@ function renderNotifList(){
     html+=crits.map(c=>{
       const pt=c.patients||{};
       return '<div onclick="notifJumpToCritical()" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'">'+
-        '<div style="font-weight:700;font-size:.8rem">'+(pt.name||'—')+' <span style="font-weight:400;color:var(--slate);font-size:.68rem">'+(pt.mrn||'')+'</span></div>'+
-        '<div style="font-size:.72rem;color:#b91c1c">'+(c.parameter||'')+' = '+(c.value||'')+' · '+fmtDT(c.created_at)+'</div></div>';
+        '<div style="font-weight:700;font-size:.8rem">'+escapeHtml(pt.name||'—')+' <span style="font-weight:400;color:var(--slate);font-size:.68rem">'+escapeHtml(pt.mrn||'')+'</span></div>'+
+        '<div style="font-size:.72rem;color:#b91c1c">'+escapeHtml(c.parameter||'')+' = '+escapeHtml(c.value||'')+' · '+fmtDT(c.created_at)+'</div></div>';
     }).join('');
   }
   if(unpaid.length){
     html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;color:#92400e;background:#fffbeb">💰 Unpaid Invoices ('+unpaid.length+')</div>';
     html+=unpaid.map(i=>'<div onclick="notifJumpToInvoice(\''+i.id+'\')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'">'+
-      '<div style="font-weight:700;font-size:.8rem">'+(i.invoice_no||'—')+' <span style="font-weight:400;color:var(--slate);font-size:.68rem">'+(i.patient_name||'')+'</span></div>'+
-      '<div style="font-size:.72rem;color:#92400e">'+((i.net_amount??i.total_amount??0).toFixed(2))+' '+(i.currency||CFG.currency)+' · overdue since '+fmtDT(i.created_at)+'</div></div>').join('');
+      '<div style="font-weight:700;font-size:.8rem">'+escapeHtml(i.invoice_no||'—')+' <span style="font-weight:400;color:var(--slate);font-size:.68rem">'+escapeHtml(i.patient_name||'')+'</span></div>'+
+      '<div style="font-size:.72rem;color:#92400e">'+((i.net_amount??i.total_amount??0).toFixed(2))+' '+escapeHtml(i.currency||CFG.currency)+' · overdue since '+fmtDT(i.created_at)+'</div></div>').join('');
   }
   if(pendingAdm.length){
     html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;color:#1d4ed8;background:#eff6ff">🛏 Pending Admissions ('+pendingAdm.length+')</div>';
     html+=pendingAdm.map(p=>'<div onclick="notifJumpToAdmission(\''+p.id+'\')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'">'+
-      '<div style="font-weight:700;font-size:.8rem">'+(p.name||fullName(p))+' <span style="font-weight:400;color:var(--slate);font-size:.68rem">'+(p.mrn||'')+'</span></div>'+
+      '<div style="font-weight:700;font-size:.8rem">'+escapeHtml(p.name||fullName(p))+' <span style="font-weight:400;color:var(--slate);font-size:.68rem">'+escapeHtml(p.mrn||'')+'</span></div>'+
       '<div style="font-size:.72rem;color:#1d4ed8">Routed to Admission · waiting since '+fmtDT(p.created_at)+'</div></div>').join('');
   }
   if(lowStock.length){
     html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;color:#6d28d9;background:#f5f3ff">📦 Low Stock ('+lowStock.length+')</div>';
     html+=lowStock.map(it=>'<div onclick="notifJumpToInventory()" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'">'+
-      '<div style="font-weight:700;font-size:.8rem">'+(it.item_name||'—')+'</div>'+
-      '<div style="font-size:.72rem;color:#6d28d9">'+(it.current_stock??0)+' '+(it.unit||'')+' left · reorder threshold '+(it.min_level??0)+'</div></div>').join('');
+      '<div style="font-weight:700;font-size:.8rem">'+escapeHtml(it.item_name||'—')+'</div>'+
+      '<div style="font-size:.72rem;color:#6d28d9">'+(it.current_stock??0)+' '+escapeHtml(it.unit||'')+' left · reorder threshold '+(it.min_level??0)+'</div></div>').join('');
   }
   list.innerHTML=html;
 }
@@ -8117,7 +8119,7 @@ async function loadDeliveryLog(){
         '<td>'+(m.status==='sent'?'<span class="bdg" style="background:#dcfce7;color:#166534">✅ Sent</span>':'<span class="bdg" style="background:#fee2e2;color:#b91c1c" title="'+(m.error||'').replace(/"/g,'&quot;')+'">❌ Failed</span>')+'</td>'+
         '<td style="font-size:.72rem">'+(m.sent_by_name||'—')+'</td>'+
       '</tr>').join('')+'</tbody></table></div>';
-  }catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+e.message+'</div>'; }
+  }catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>'; }
 }
 document.addEventListener('click', (e)=>{
   const wrap=document.getElementById('notif-bell-wrap'), panel=document.getElementById('notif-panel');
@@ -8217,7 +8219,7 @@ async function loadTransferRegister(){
     const {data}=await q;
     _transferRegisterRows=data||[];
     renderTransferRegister();
-  }catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+e.message+'</div>'; }
+  }catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>'; }
 }
 function renderTransferRegister(){
   const body=document.getElementById('transfer-register-body'); if(!body) return;
@@ -8284,7 +8286,7 @@ async function loadBedCensus(){
     (adms||[]).forEach(a=>{ if(occ[a.ward]!==undefined) occ[a.ward]++; });
     window._bedCensusRows=wards.map(w=>({ward:w,occupied:occ[w],total:total[w]}));
     renderBedCensus(date);
-  }catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+e.message+'</div>'; }
+  }catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>'; }
 }
 function renderBedCensus(date){
   const body=document.getElementById('bed-census-body'); if(!body) return;
@@ -8323,7 +8325,7 @@ async function loadAdmissions() {
     const wf=document.getElementById('adm-ward-filter')?.value; if(wf) q=q.eq('ward',wf);
     const {data,error}=await q; if(error) throw error;
     _allAdmissions=data||[]; renderAdmTable(_allAdmissions); loadAdmissionStats();
-  } catch(e){ body.innerHTML='<div style="padding:14px;color:var(--red);font-size:.78rem">'+e.message+'</div>'; }
+  } catch(e){ body.innerHTML='<div style="padding:14px;color:var(--red);font-size:.78rem">'+escapeHtml(e.message)+'</div>'; }
 }
 function renderAdmTable(data) {
   const body=document.getElementById('adm-table-body'); if(!body) return;
@@ -8383,7 +8385,7 @@ async function loadBedGrid() {
       return {...b,_admission:adm,_isolation:adm?isolationByPatient[adm.patient_id]||null:null};
     });
     renderBedGridWardTabs(); renderBedGrid();
-  } catch(e){ grid.innerHTML='<div style="padding:14px;color:var(--red);font-size:.78rem">'+e.message+'</div>'; }
+  } catch(e){ grid.innerHTML='<div style="padding:14px;color:var(--red);font-size:.78rem">'+escapeHtml(e.message)+'</div>'; }
 }
 // ── BED GRID LIVE SYNC (Phase 5a) ──────────────────────────────────────
 // First use of Supabase Realtime anywhere in this codebase. Deliberately
@@ -8569,7 +8571,7 @@ async function loadDoctorDropdowns() {
     const {data}=await sb.from('doctors').select('id,name,specialty').order('name');
     ['adm-doctor','ot-surgeon','appt-doctor'].forEach(id=>{
       const el=document.getElementById(id); if(!el||!data?.length) return;
-      el.innerHTML='<option value="">Select…</option>'+data.map(d=>'<option value="'+d.name+'">'+d.name+(d.specialty?' — '+d.specialty:'')+'</option>').join('');
+      el.innerHTML='<option value="">Select…</option>'+data.map(d=>'<option value="'+escapeHtml(d.name)+'">'+escapeHtml(d.name)+(d.specialty?' — '+escapeHtml(d.specialty):'')+'</option>').join('');
     });
   } catch(e){}
 }
@@ -8731,7 +8733,7 @@ async function loadAdmDetailMeds(admId,patId) {
       rows.slice(0,8).map(m=>'<tr><td>'+(m.drug||'—')+'</td><td>'+(m.dose||'—')+'</td><td>'+(m.route||'—')+'</td><td>'+statusBadge(m.status||'—')+'</td><td>'+fmtDT(m._recorded_at)+'</td></tr>').join('')+
       '</tbody></table></div>'):'<div style="padding:10px 0;font-size:.78rem;color:var(--slate)">No MAR entries recorded yet for this admission</div>';
     el.innerHTML=list+'<button class="btn btn-p" style="margin-top:10px" onclick="openMarForAdmPatient()">💊 Open Full MAR in Nursing</button>';
-  } catch(e){ el.innerHTML='<div style="padding:10px;color:var(--red);font-size:.78rem">'+e.message+'</div>'; }
+  } catch(e){ el.innerHTML='<div style="padding:10px;color:var(--red);font-size:.78rem">'+escapeHtml(e.message)+'</div>'; }
 }
 function openMarForAdmPatient() {
   const c=_admDetailCtx; if(!c) return;
@@ -8795,7 +8797,7 @@ async function loadTransferHistory(admId) {
     el.innerHTML='<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>From</th><th>To</th><th>Reason</th><th>By</th><th>Time</th></tr></thead><tbody>'+
       data.map(x=>'<tr><td>'+x.from_ward+' / '+x.from_room+' / '+x.from_bed+'</td><td>'+x.to_ward+' / '+x.to_room+' / '+x.to_bed+'</td><td style="font-size:.75rem">'+(x.reason||'—')+'</td><td>'+(x.transferred_by_name||'—')+'</td><td>'+fmtDT(x.transferred_at)+'</td></tr>').join('')+
       '</tbody></table></div>';
-  } catch(e){ el.innerHTML='<div style="font-size:.75rem;color:var(--red)">'+e.message+'</div>'; }
+  } catch(e){ el.innerHTML='<div style="font-size:.75rem;color:var(--red)">'+escapeHtml(e.message)+'</div>'; }
 }
 async function submitBedTransfer() {
   if(!sb||!_currentAdmId){ toast('Not connected','err'); return; }
@@ -8923,7 +8925,7 @@ async function loadSurgeonDropdown() {
   try {
     const {data}=await sb.from('doctors').select('name,specialty').order('name');
     const el=document.getElementById('ot-surgeon'); if(!el) return;
-    el.innerHTML='<option value="">Select surgeon…</option>'+(data||[]).map(d=>'<option>'+d.name+'</option>').join('');
+    el.innerHTML='<option value="">Select surgeon…</option>'+(data||[]).map(d=>'<option>'+escapeHtml(d.name)+'</option>').join('');
   } catch(e){}
 }
 function otNavDate(dir) {
@@ -8956,7 +8958,7 @@ async function loadOTSchedule() {
       '<button class="btn btn-s btn-xs" onclick="openPostop(\''+b.id+'\')">📝</button>'+
       (b.status==='Scheduled'?'<button class="btn btn-r btn-xs" onclick="cancelOperation(\''+b.id+'\')">✕</button>':'')+
       '</div></div>').join('');
-  } catch(e){ body.innerHTML='<div style="padding:14px;color:var(--red);font-size:.78rem">'+e.message+'</div>'; }
+  } catch(e){ body.innerHTML='<div style="padding:14px;color:var(--red);font-size:.78rem">'+escapeHtml(e.message)+'</div>'; }
 }
 // ── Theatre Phase 6: WHO Surgical Safety Checklist ──────────────────────
 // Standard WHO Surgical Safety Checklist items, per stage. Each stage
@@ -9333,7 +9335,7 @@ async function loadFluidChart() {
     setText('fc-total-iv',totIv||'—'); setText('fc-total-urine',totUrine||'—');
     const ne=document.getElementById('fc-total-net'); if(ne){ ne.textContent=(totNet>0?'+':'')+totNet; ne.style.color=totNet>500?'var(--blue)':totNet<-500?'var(--red)':'var(--green)'; }
     drawFluidTrend(data);
-  } catch(e){ body.innerHTML='<tr><td colspan="10" style="padding:14px;color:var(--red);font-size:.78rem">'+e.message+'</td></tr>'; }
+  } catch(e){ body.innerHTML='<tr><td colspan="10" style="padding:14px;color:var(--red);font-size:.78rem">'+escapeHtml(e.message)+'</td></tr>'; }
 }
 function drawFluidTrend(data) {
   const canvas=document.getElementById('fc-canvas'); if(!canvas||!data.length) return;
@@ -9409,7 +9411,7 @@ async function loadDoctorQueue() {
         '<div style="font-size:.68rem;margin-top:2px;color:var(--teal);font-weight:600">'+(p.visit_destination?'\u2192 '+p.visit_destination:'')+' '+(p.priority&&p.priority!=='Routine'?'· '+p.priority:'')+'</div>'+
         '<div style="margin-top:4px">'+visitStatusBadge(p)+'</div></div>';
     }).join('');
-  } catch(e){ body.innerHTML='<div style="padding:10px;color:var(--red);font-size:.78rem">'+e.message+'</div>'; }
+  } catch(e){ body.innerHTML='<div style="padding:10px;color:var(--red);font-size:.78rem">'+escapeHtml(e.message)+'</div>'; }
 }
 
 function setDocFilter(filter,btn) {
@@ -9729,7 +9731,7 @@ async function loadDocVitals(ptId) {
       '<div><span style="color:var(--slate)">GCS:</span> <strong>'+( ((data.gcs_eye||0)+(data.gcs_verbal||0)+(data.gcs_motor||0))||'—')+'</strong></div>'+
       '<div><span style="color:var(--slate)">Weight:</span> <strong>'+(data.weight||'—')+' kg</strong></div>'+
       '<div><span style="color:var(--slate)">MAP:</span> <strong>'+(data.map_pressure||'—')+' mmHg</strong></div></div>';
-  } catch(e){el.innerHTML='<div style="padding:10px;color:var(--red);font-size:.78rem">'+e.message+'</div>';}
+  } catch(e){el.innerHTML='<div style="padding:10px;color:var(--red);font-size:.78rem">'+escapeHtml(e.message)+'</div>';}
 }
 
 // ── VITALS/LABS TREND SPARKLINES (Consultation → Last Vitals) ──
@@ -10479,18 +10481,18 @@ async function loadAppointments() {
   try {
     const fd=document.getElementById('appt-filter-date')?.value||today();
     const [{data:todayA},{data:allA}]=await Promise.all([sb.from('appointments').select('*').eq('appointment_date',today()).order('appointment_time'),sb.from('appointments').select('*').eq('appointment_date',fd).order('appointment_time')]);
-    const rr=a=>'<tr><td>'+( a.appointment_time||'—')+'</td><td>'+(a.patient_name||'—')+'</td><td>'+statusBadge(a.appt_type)+'</td><td>'+(a.doctor||'—')+'</td><td>'+statusBadge(a.status)+'</td><td><div class="acts">'+
-      (a.phone?'<button class="btn btn-s btn-xs" onclick="sendAppointmentReminder(\''+a.id+'\',\''+a.phone+'\',\''+(a.patient_name||'').replace(/'/g,'')+'\',\''+a.appointment_date+'\',\''+(a.appointment_time||'')+'\')" title="Send SMS reminder">📲</button>':'')+
+    const rr=a=>'<tr><td>'+escapeHtml(a.appointment_time||'—')+'</td><td>'+escapeHtml(a.patient_name||'—')+'</td><td>'+statusBadge(a.appt_type)+'</td><td>'+escapeHtml(a.doctor||'—')+'</td><td>'+statusBadge(a.status)+'</td><td><div class="acts">'+
+      (a.phone?'<button class="btn btn-s btn-xs" onclick="sendAppointmentReminder(\''+a.id+'\',\''+escAttr(a.phone)+'\',\''+escAttr((a.patient_name||'').replace(/'/g,''))+'\',\''+a.appointment_date+'\',\''+escAttr(a.appointment_time||'')+'\')" title="Send SMS reminder">📲</button>':'')+
       '<button class="btn btn-s btn-xs" onclick="updateApptStatus(\''+a.id+'\',\'Arrived\')">✅</button><button class="btn btn-r btn-xs" onclick="updateApptStatus(\''+a.id+'\',\'Cancelled\')">✕</button></div></td></tr>';
     const waiting=(todayA||[]).filter(a=>a.status!=='Cancelled');
     waitBody.innerHTML=waiting.length?'<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Time</th><th>Patient</th><th>Type</th><th>Doctor</th><th>Status</th><th></th></tr></thead><tbody>'+waiting.map(rr).join('')+'</tbody></table></div>':'<div class="empty-state"><div class="empty-icon">🚶</div><div class="empty-title">No patients waiting today</div></div>';
     listBody.innerHTML=allA?.length?'<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Time</th><th>Patient</th><th>Type</th><th>Doctor</th><th>Status</th><th></th></tr></thead><tbody>'+allA.map(rr).join('')+'</tbody></table></div>':'<div class="empty-state"><div class="empty-icon">📅</div><div class="empty-title">No appointments on this date</div></div>';
-  } catch(e){ waitBody.innerHTML='<div style="padding:10px;color:var(--red);font-size:.78rem">'+e.message+'</div>'; }
+  } catch(e){ waitBody.innerHTML='<div style="padding:10px;color:var(--red);font-size:.78rem">'+escapeHtml(e.message)+'</div>'; }
 }
 async function loadApptDoctors() {
   if(!sb) return; const el=document.getElementById('appt-doctor'); if(!el) return;
   const {data}=await sb.from('doctors').select('name').order('name').catch(()=>({data:null}));
-  if(data) el.innerHTML='<option value="">Select…</option>'+data.map(d=>'<option>'+d.name+'</option>').join('');
+  if(data) el.innerHTML='<option value="">Select…</option>'+data.map(d=>'<option>'+escapeHtml(d.name)+'</option>').join('');
 }
 async function saveAppointment() {
   if(!sb){ toast('Not connected','err'); return; }
@@ -10715,7 +10717,7 @@ function onDoctorSelect(val) { const ext=document.getElementById('r-doc-ext'); i
 // clearRegForm and loadRecentPatients moved to receptionist section above
 async function populateDoctorDropdown() {
   const grp=document.getElementById('r-doc-clinic-group'); if(!grp) return;
-  const render = (data) => { if(data?.length) grp.innerHTML=data.map(d=>'<option value="'+d.name+'">'+d.name+(d.specialty?' — '+d.specialty:'')+'</option>').join(''); };
+  const render = (data) => { if(data?.length) grp.innerHTML=data.map(d=>'<option value="'+escapeHtml(d.name)+'">'+escapeHtml(d.name)+(d.specialty?' — '+escapeHtml(d.specialty):'')+'</option>').join(''); };
   if(sb && navigator.onLine) {
     try {
       const {data}=await sb.from('doctors').select('id,name,specialty').order('name');
@@ -10809,7 +10811,7 @@ async function loadWorklist() {
             '<button class="btn btn-s btn-xs" onclick="openPatientHistoryTimeline(\x27'+p.id+'\x27)" title="View this patient\x27s full history">\ud83d\udd50 History</button>'+
           '</div></td></tr>';
       }).join('')+'</tbody></table></div>';
-  } catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red)">'+e.message+'</div>'; }
+  } catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red)">'+escapeHtml(e.message)+'</div>'; }
 }
 function toggleWlSourceSort(){
   window._wlSourceSort = window._wlSourceSort==='asc' ? 'desc' : window._wlSourceSort==='desc' ? null : 'asc';
@@ -10900,7 +10902,7 @@ async function loadAllResults() {
             (r.is_verified&&pt.phone?'<button class="btn btn-s btn-xs" onclick="sendResultReadySms(\x27'+r.patient_id+'\x27,\x27'+pt.phone+'\x27,\x27'+((pt.name||fullName(pt)||'').replace(/\x27/g,''))+'\x27)" title="Send SMS: results ready">\ud83d\udcf2</button>':'')+
           '</div></td></tr>';
       }).join('')+'</tbody></table></div>';
-  } catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red)">'+e.message+'</div>'; }
+  } catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red)">'+escapeHtml(e.message)+'</div>'; }
 }
 function filterAllResults(q) {
   document.querySelectorAll('#ar-body tbody tr').forEach(r=>{ r.style.display=!q||r.textContent.toLowerCase().includes(q.toLowerCase())?'':'none'; });
@@ -10936,7 +10938,7 @@ async function loadCriticals() {
       const tc=elapsed!=null&&elapsed>30&&!c.is_acknowledged?'color:#b91c1c;font-weight:700':'';
       return '<tr style="'+(c.is_acknowledged?'':'background:#fff1f2')+'">'+
         '<td style="font-size:.72rem;'+tc+'">'+fmtDT(c.created_at)+(elapsed!=null&&!c.is_acknowledged?'<div style="font-size:.65rem;color:#b91c1c">'+elapsed+' min ago</div>':'')+'</td>'+
-        '<td style="font-weight:600">'+(pt.name||'—')+'<div style="font-size:.68rem;color:var(--slate)">'+(pt.mrn||pt.lab_no||'')+(pt.ward?' \u00b7 '+pt.ward:'')+'</div></td>'+
+        '<td style="font-weight:600">'+escapeHtml(pt.name||'—')+'<div style="font-size:.68rem;color:var(--slate)">'+(pt.mrn||pt.lab_no||'')+(pt.ward?' \u00b7 '+pt.ward:'')+'</div></td>'+
         '<td style="font-size:.78rem">'+(c.department||'—')+'</td>'+
         '<td style="font-weight:700;color:#b91c1c">'+(c.parameter||'—')+': <span style="font-size:.9rem">'+(c.value||'—')+'</span> '+(c.unit||'')+'<div style="font-size:.68rem;color:#92400e">Ref: '+(c.reference||'—')+'</div></td>'+
         '<td style="font-size:.72rem">'+(c.notified_by||'—')+'</td>'+
@@ -10947,7 +10949,7 @@ async function loadCriticals() {
           '<button class="btn btn-s btn-xs" onclick="printCriticalNotice(\x27'+c.id+'\x27)">\ud83d\udda8</button>'+
         '</div></td></tr>';
     }).join('');
-  } catch(e){ body.innerHTML='<tr><td colspan="8" style="padding:12px;color:var(--red)">'+e.message+'</td></tr>'; }
+  } catch(e){ body.innerHTML='<tr><td colspan="8" style="padding:12px;color:var(--red)">'+escapeHtml(e.message)+'</td></tr>'; }
 }
 // Replaces the old acknowledgeCritical() bare-prompt() flow \u2014 that only
 // ever captured a free-text clinician name, with placeholder text
@@ -10987,7 +10989,7 @@ async function printCriticalNotice(id) {
       '<div style="background:#fee2e2;border:2px solid #fca5a5;border-radius:8px;padding:14px;margin-bottom:16px;text-align:center">'+
       '<div style="font-size:13pt;font-weight:900;color:#b91c1c">\ud83d\udea8 CRITICAL VALUE</div></div>'+
       '<table style="width:100%;border-collapse:collapse;margin-bottom:14px">'+
-      '<tr style="border-bottom:1px solid #e2e8f0"><td style="width:40%;padding:8px;font-size:9pt;font-weight:600;color:#64748b">Patient</td><td style="padding:8px;font-size:10pt;font-weight:700">'+(pt.name||'—')+'</td></tr>'+
+      '<tr style="border-bottom:1px solid #e2e8f0"><td style="width:40%;padding:8px;font-size:9pt;font-weight:600;color:#64748b">Patient</td><td style="padding:8px;font-size:10pt;font-weight:700">'+escapeHtml(pt.name||'—')+'</td></tr>'+
       '<tr style="border-bottom:1px solid #e2e8f0;background:#f8fafd"><td style="padding:8px;font-size:9pt;font-weight:600;color:#64748b">MRN</td><td style="padding:8px">'+(pt.mrn||pt.lab_no||'—')+'</td></tr>'+
       '<tr style="border-bottom:1px solid #e2e8f0"><td style="padding:8px;font-size:9pt;font-weight:600;color:#64748b">Critical Value</td><td style="padding:8px;font-size:13pt;font-weight:900;color:#b91c1c">'+(c.parameter||'—')+': '+(c.value||'—')+' '+(c.unit||'')+'</td></tr>'+
       '<tr style="border-bottom:1px solid #e2e8f0;background:#f8fafd"><td style="padding:8px;font-size:9pt;font-weight:600;color:#64748b">Reference</td><td style="padding:8px;font-size:9pt">'+(c.reference||'—')+'</td></tr>'+
@@ -11091,8 +11093,8 @@ const PTH_RESULT_SKIP_FIELDS = new Set(['id','patient_id','created_at','performe
 function pthFormatResultRow(r){
   const parts=Object.entries(r)
     .filter(([k,v])=>!PTH_RESULT_SKIP_FIELDS.has(k) && v!==null && v!=='')
-    .map(([k,v])=>k.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase())+': '+v);
-  return (parts.length?parts.join(' · '):'No values recorded')+(r.notes?' | Note: '+r.notes:'');
+    .map(([k,v])=>k.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase())+': '+escapeHtml(v));
+  return (parts.length?parts.join(' · '):'No values recorded')+(r.notes?' | Note: '+escapeHtml(r.notes):'');
 }
 async function loadPthTimeline() {
   if(!sb||!_pthPt) return;
@@ -11124,12 +11126,12 @@ async function loadPthTimeline() {
     _pthChemHistory=chemHist.data||[];
     const events=[];
     const pt=labPt.data;
-    if(pt) events.push({t:new Date(pt.created_at),type:'lab',icon:'📋',title:'Patient Registered',detail:'Tests: '+((pt.tests_requested||[]).join(', ')||'—'),color:'var(--teal)',data:pt});
-    (adms.data||[]).forEach(a=>events.push({t:new Date(a.admission_date),type:'admission',icon:'🛏',title:'Admitted — '+(a.ward||''),detail:(a.primary_diagnosis||'—')+' | Dr. '+(a.admitting_doctor||'—')+' | '+a.status,color:'var(--blue)',data:a}));
-    (crits.data||[]).forEach(c=>events.push({t:new Date(c.created_at),type:'lab',icon:'🚨',title:'Critical: '+c.parameter,detail:'Value: '+c.value+' | '+(c.is_acknowledged?'Acknowledged':'⚠️ Unacknowledged'),color:'var(--red)',data:c}));
-    (rads.data||[]).forEach(r=>events.push({t:new Date(r.created_at),type:'radiology',icon:'🩻',title:r.imaging_type||'Radiology',detail:(r.urgency||'')+' | '+(r.status||'Requested'),color:'var(--sero)',data:r}));
-    (invs.data||[]).forEach(i=>events.push({t:new Date(i.created_at),type:'billing',icon:'💰',title:'Invoice '+(i.invoice_no||''),detail:((i.net_amount||0).toFixed(2))+' '+(i.currency||CFG.currency)+' | '+i.payment_status,color:'var(--amber)',data:i}));
-    (consults.data||[]).forEach(c=>events.push({t:new Date(c.consultation_date||c.created_at),type:'consultation',icon:'🩺',title:'Doctor Visit'+(c.visit_type?' — '+c.visit_type:''),detail:(c.primary_diagnosis?'Dx: '+c.primary_diagnosis+' — ':'')+(c.chief_complaint||'—')+(c.consulting_doctor?' | Dr. '+c.consulting_doctor:''),color:'#7c3aed',data:c}));
+    if(pt) events.push({t:new Date(pt.created_at),type:'lab',icon:'📋',title:'Patient Registered',detail:'Tests: '+escapeHtml((pt.tests_requested||[]).join(', ')||'—'),color:'var(--teal)',data:pt});
+    (adms.data||[]).forEach(a=>events.push({t:new Date(a.admission_date),type:'admission',icon:'🛏',title:'Admitted — '+escapeHtml(a.ward||''),detail:escapeHtml(a.primary_diagnosis||'—')+' | Dr. '+escapeHtml(a.admitting_doctor||'—')+' | '+escapeHtml(a.status),color:'var(--blue)',data:a}));
+    (crits.data||[]).forEach(c=>events.push({t:new Date(c.created_at),type:'lab',icon:'🚨',title:'Critical: '+escapeHtml(c.parameter),detail:'Value: '+escapeHtml(c.value)+' | '+(c.is_acknowledged?'Acknowledged':'⚠️ Unacknowledged'),color:'var(--red)',data:c}));
+    (rads.data||[]).forEach(r=>events.push({t:new Date(r.created_at),type:'radiology',icon:'🩻',title:escapeHtml(r.imaging_type||'Radiology'),detail:escapeHtml(r.urgency||'')+' | '+escapeHtml(r.status||'Requested'),color:'var(--sero)',data:r}));
+    (invs.data||[]).forEach(i=>events.push({t:new Date(i.created_at),type:'billing',icon:'💰',title:'Invoice '+escapeHtml(i.invoice_no||''),detail:((i.net_amount||0).toFixed(2))+' '+escapeHtml(i.currency||CFG.currency)+' | '+escapeHtml(i.payment_status),color:'var(--amber)',data:i}));
+    (consults.data||[]).forEach(c=>events.push({t:new Date(c.consultation_date||c.created_at),type:'consultation',icon:'🩺',title:'Doctor Visit'+(c.visit_type?' — '+escapeHtml(c.visit_type):''),detail:(c.primary_diagnosis?'Dx: '+escapeHtml(c.primary_diagnosis)+' — ':'')+escapeHtml(c.chief_complaint||'—')+(c.consulting_doctor?' | Dr. '+escapeHtml(c.consulting_doctor):''),color:'#7c3aed',data:c}));
     resultTableNames.forEach((tname,i)=>{
       const meta=PTH_RESULT_TABLES[tname];
       (resultRows[i]?.data||[]).forEach(r=>events.push({t:new Date(r.analysis_date||r.created_at||pt?.created_at||Date.now()),type:'lab',icon:meta.icon,title:meta.label+' Result'+(r.is_verified?' ✓ Verified':' (unverified)'),detail:pthFormatResultRow(r),color:'var(--teal)',data:r}));
@@ -11154,9 +11156,9 @@ function showPthDetail(idx) {
   const e=_pthAllEvents[idx]; if(!e) return;
   const el=document.getElementById('pth-detail'); if(!el) return;
   const d=e.data; let html='<div style="border-left:4px solid '+e.color+';padding-left:12px;margin-bottom:12px"><div style="font-size:1.1rem">'+e.icon+' <strong>'+e.title+'</strong></div><div style="font-size:.75rem;color:var(--slate);margin-top:3px">'+fmtDT(e.t)+'</div></div>';
-  if(e.type==='admission'){ html+='<table style="width:100%;border-collapse:collapse">'+[['Admission No',d.admission_no],['Ward/Bed',(d.ward||'—')+' / '+(d.bed||'—')],['Doctor',d.admitting_doctor],['Diagnosis',d.primary_diagnosis],['Status',d.status],['Admitted',fmtDT(d.admission_date)],['Discharged',d.discharge_date?fmtDT(d.discharge_date):'Still admitted']].map(([k,v])=>'<tr style="border-bottom:1px solid var(--border)"><td style="padding:5px 8px;font-size:.75rem;color:var(--slate);width:40%">'+k+'</td><td style="padding:5px 8px;font-size:.8rem;font-weight:600">'+(v||'—')+'</td></tr>').join('')+'</table>'; }
-  else if(e.type==='consultation'){ html+='<table style="width:100%;border-collapse:collapse">'+[['Chief Complaint',d.chief_complaint],['Primary Diagnosis',d.primary_diagnosis],['Secondary Diagnosis',d.secondary_diagnosis],['Management Plan',d.management_plan],['Disposition',d.disposition],['Follow-up',d.followup],['Doctor',d.consulting_doctor]].filter(([k,v])=>v).map(([k,v])=>'<tr style="border-bottom:1px solid var(--border)"><td style="padding:5px 8px;font-size:.75rem;color:var(--slate);width:40%">'+k+'</td><td style="padding:5px 8px;font-size:.8rem;font-weight:600">'+v+'</td></tr>').join('')+'</table>'; }
-  else if(e.type==='billing'){ html+='<div style="margin-bottom:8px;display:flex;justify-content:space-between;font-size:.82rem"><span>Invoice: <strong>'+(d.invoice_no||'—')+'</strong></span><span>'+(d.payment_status?.toUpperCase())+'</span></div>'; const items=d.line_items||[]; html+=items.length?'<table style="width:100%;border-collapse:collapse">'+items.slice(0,8).map(i=>'<tr style="border-bottom:1px solid var(--border)"><td style="padding:4px 8px;font-size:.78rem">'+i.name+'</td><td style="padding:4px 8px;text-align:right;font-size:.78rem;font-weight:600">'+((i.total_price||0).toFixed(2))+'</td></tr>').join('')+'<tr style="background:var(--teal-lt)"><td style="padding:5px 8px;font-weight:700">Total</td><td style="padding:5px 8px;text-align:right;font-weight:800;color:var(--teal)">'+((d.net_amount||0).toFixed(2))+' '+(d.currency||CFG.currency)+'</td></tr></table>':'<div style="font-size:.78rem;color:var(--slate)">No line items</div>'; }
+  if(e.type==='admission'){ html+='<table style="width:100%;border-collapse:collapse">'+[['Admission No',d.admission_no],['Ward/Bed',(d.ward||'—')+' / '+(d.bed||'—')],['Doctor',d.admitting_doctor],['Diagnosis',d.primary_diagnosis],['Status',d.status],['Admitted',fmtDT(d.admission_date)],['Discharged',d.discharge_date?fmtDT(d.discharge_date):'Still admitted']].map(([k,v])=>'<tr style="border-bottom:1px solid var(--border)"><td style="padding:5px 8px;font-size:.75rem;color:var(--slate);width:40%">'+k+'</td><td style="padding:5px 8px;font-size:.8rem;font-weight:600">'+escapeHtml(v||'—')+'</td></tr>').join('')+'</table>'; }
+  else if(e.type==='consultation'){ html+='<table style="width:100%;border-collapse:collapse">'+[['Chief Complaint',d.chief_complaint],['Primary Diagnosis',d.primary_diagnosis],['Secondary Diagnosis',d.secondary_diagnosis],['Management Plan',d.management_plan],['Disposition',d.disposition],['Follow-up',d.followup],['Doctor',d.consulting_doctor]].filter(([k,v])=>v).map(([k,v])=>'<tr style="border-bottom:1px solid var(--border)"><td style="padding:5px 8px;font-size:.75rem;color:var(--slate);width:40%">'+k+'</td><td style="padding:5px 8px;font-size:.8rem;font-weight:600">'+escapeHtml(v)+'</td></tr>').join('')+'</table>'; }
+  else if(e.type==='billing'){ html+='<div style="margin-bottom:8px;display:flex;justify-content:space-between;font-size:.82rem"><span>Invoice: <strong>'+escapeHtml(d.invoice_no||'—')+'</strong></span><span>'+escapeHtml(d.payment_status?.toUpperCase()||'')+'</span></div>'; const items=d.line_items||[]; html+=items.length?'<table style="width:100%;border-collapse:collapse">'+items.slice(0,8).map(i=>'<tr style="border-bottom:1px solid var(--border)"><td style="padding:4px 8px;font-size:.78rem">'+escapeHtml(i.name)+'</td><td style="padding:4px 8px;text-align:right;font-size:.78rem;font-weight:600">'+((i.total_price||0).toFixed(2))+'</td></tr>').join('')+'<tr style="background:var(--teal-lt)"><td style="padding:5px 8px;font-weight:700">Total</td><td style="padding:5px 8px;text-align:right;font-weight:800;color:var(--teal)">'+((d.net_amount||0).toFixed(2))+' '+escapeHtml(d.currency||CFG.currency)+'</td></tr></table>':'<div style="font-size:.78rem;color:var(--slate)">No line items</div>'; }
   else { html+='<div style="font-size:.82rem;color:var(--ink);background:#f8fafd;padding:10px;border-radius:8px">'+e.detail+'</div>'; }
   el.innerHTML=html;
 }
@@ -11607,7 +11609,7 @@ async function printHemReport() {
       sect('Peripheral Blood Film',[(wanted('Blood Film')&&r.film_result)?'<tr><td style="padding:4px 8px">Blood Film</td><td colspan="3" style="padding:4px 8px">'+r.film_result+'</td><td></td></tr>':'']);
     if(!body){ toast('⚠️ No saved results match this patient\'s requested tests — click Save Results first','err'); return; }
     const html=printHeader('Haematology Report — CBC')+ptB+'<table style="width:100%;border-collapse:collapse"><thead><tr style="background:#1e3a5a;color:#fff"><th style="padding:6px 8px;font-size:8.5pt;text-align:left">Parameter</th><th style="padding:6px 8px;font-size:8.5pt;text-align:left">Result</th><th style="padding:6px 8px;font-size:8.5pt;text-align:left">Unit</th><th style="padding:6px 8px;font-size:8.5pt;text-align:left">Reference</th><th style="padding:6px 8px;font-size:8.5pt;text-align:left">Flag</th></tr></thead><tbody>'+body+
-      '</tbody></table>'+(r.notes?'<div style="background:#f8fafd;border-left:3px solid #0b7a75;padding:10px 12px;margin-top:12px;font-size:9pt"><strong>Comments:</strong> '+r.notes+'</div>':'')+
+      '</tbody></table>'+(r.notes?'<div style="background:#f8fafd;border-left:3px solid #0b7a75;padding:10px 12px;margin-top:12px;font-size:9pt"><strong>Comments:</strong> '+escapeHtml(r.notes)+'</div>':'')+
       '<div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:20px"><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Medical Laboratory Technologist</div><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Laboratory Supervisor</div></div>'+printFooter();
     openPrintWin(html,'CBC Report');
   } catch(e){ toast(e.message,'err'); }
@@ -11639,7 +11641,7 @@ async function printChemReport() {
       (col1?'<table style="width:100%;border-collapse:collapse">'+thead+'<tbody>'+col1+'</tbody></table>':'<div></div>')+
       (col2?'<table style="width:100%;border-collapse:collapse">'+thead+'<tbody>'+col2+'</tbody></table>':'<div></div>')+
       '</div>'+
-      (r.notes?'<div style="background:#f8fafd;border-left:3px solid #0369a1;padding:10px 12px;margin-top:12px;font-size:9pt"><strong>Comments:</strong> '+r.notes+'</div>':'')+
+      (r.notes?'<div style="background:#f8fafd;border-left:3px solid #0369a1;padding:10px 12px;margin-top:12px;font-size:9pt"><strong>Comments:</strong> '+escapeHtml(r.notes)+'</div>':'')+
       '<div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:20px"><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Medical Laboratory Technologist</div><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Laboratory Supervisor</div></div>'+printFooter();
     openPrintWin(html,'Chemistry Report');
   } catch(e){ toast(e.message,'err'); }
@@ -11758,7 +11760,7 @@ async function globalSearch(q){
       ]);
       const pts=ptRes.data||[], invs=invRes.data||[];
       if(!pts.length && !invs.length){
-        box.innerHTML='<div style="padding:10px 12px;font-size:.78rem;color:var(--slate)">No matches for "'+term+'"</div>';
+        box.innerHTML='<div style="padding:10px 12px;font-size:.78rem;color:var(--slate)">No matches for "'+escapeHtml(term)+'"</div>';
         box.style.display='block'; return;
       }
       let html='';
@@ -11767,15 +11769,15 @@ async function globalSearch(q){
         html+=pts.map(p=>{
           const labHit=p.lab_no && p.lab_no.toLowerCase().includes(term.toLowerCase());
           return '<div onclick="jumpToPatient(\''+p.id+'\')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'">'+
-            '<div style="font-weight:700;font-size:.82rem">'+(p.name||fullName(p))+(labHit?' <span style="font-weight:400;font-size:.68rem;color:var(--teal)">· Lab '+p.lab_no+'</span>':'')+'</div>'+
-            '<div style="font-size:.7rem;color:var(--slate)">'+(p.mrn||'—')+' · '+(p.visit_no||p.lab_no||'—')+' · '+(p.phone||'—')+'</div></div>';
+            '<div style="font-weight:700;font-size:.82rem">'+escapeHtml(p.name||fullName(p))+(labHit?' <span style="font-weight:400;font-size:.68rem;color:var(--teal)">· Lab '+escapeHtml(p.lab_no)+'</span>':'')+'</div>'+
+            '<div style="font-size:.7rem;color:var(--slate)">'+escapeHtml(p.mrn||'—')+' · '+escapeHtml(p.visit_no||p.lab_no||'—')+' · '+escapeHtml(p.phone||'—')+'</div></div>';
         }).join('');
       }
       if(invs.length){
         html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:var(--slate);background:var(--bg)">Invoices</div>';
         html+=invs.map(i=>'<div onclick="jumpToInvoice(\''+i.id+'\')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'">'+
-          '<div style="font-weight:700;font-size:.82rem">'+(i.invoice_no||'—')+'</div>'+
-          '<div style="font-size:.7rem;color:var(--slate)">'+(i.patient_name||'—')+' · '+((i.net_amount??i.total_amount??0).toFixed(2))+' '+(i.currency||CFG.currency)+' · '+(i.payment_status||'')+'</div></div>').join('');
+          '<div style="font-weight:700;font-size:.82rem">'+escapeHtml(i.invoice_no||'—')+'</div>'+
+          '<div style="font-size:.7rem;color:var(--slate)">'+escapeHtml(i.patient_name||'—')+' · '+((i.net_amount??i.total_amount??0).toFixed(2))+' '+escapeHtml(i.currency||CFG.currency)+' · '+escapeHtml(i.payment_status||'')+'</div></div>').join('');
       }
       box.innerHTML=html; box.style.display='block';
     }catch(e){ box.style.display='none'; }
@@ -12060,7 +12062,7 @@ function regShowSuccess(pt, mrn, labNo, testCount, payStatus, destinations, tota
     '<h2 style="font-family:DM Serif Display,serif;font-size:1.3rem;margin:6px 0 2px">Patient Registered!</h2>'+
     '<div style="font-size:.78rem;color:var(--slate)">Invoice created automatically</div></div>'+
     '<div style="background:var(--bg);border-radius:10px;padding:14px;margin-bottom:14px;display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:.82rem">'+
-    '<div><div style="color:var(--slate);font-size:.7rem">Patient</div><div style="font-weight:700">'+(pt.name||'')+'</div></div>'+
+    '<div><div style="color:var(--slate);font-size:.7rem">Patient</div><div style="font-weight:700">'+escapeHtml(pt.name||'')+'</div></div>'+
     '<div><div style="color:var(--slate);font-size:.7rem">MRN</div><div style="font-weight:700;color:var(--teal)">'+mrn+'</div></div>'+
     '<div><div style="color:var(--slate);font-size:.7rem">Destination</div><div style="font-weight:600">'+(destList.map(d=>destLabels[d]||d).join(' + ')||'—')+'</div></div>'+
     '<div><div style="color:var(--slate);font-size:.7rem">Payment</div><div>'+payBadge+'</div></div>'+
@@ -12154,19 +12156,19 @@ async function generateInsuranceClaim(invId) {
     if(!inv) { toast('Invoice not found','err'); return; }
     const html = printHeader('Insurance Claim Form')+
       '<div style="background:#dbeafe;border:2px solid #3b82f6;border-radius:8px;padding:12px 16px;margin-bottom:14px;font-size:9pt">'+
-      '<strong>INSURANCE CLAIM</strong> — '+inv.insurance_company+' | Policy: '+(inv.insurance_no||'—')+' | Pre-auth: '+(inv.pre_auth_no||'—')+'</div>'+
+      '<strong>INSURANCE CLAIM</strong> — '+escapeHtml(inv.insurance_company)+' | Policy: '+escapeHtml(inv.insurance_no||'—')+' | Pre-auth: '+escapeHtml(inv.pre_auth_no||'—')+'</div>'+
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">'+
       '<div style="border:1px solid var(--border);border-radius:6px;padding:10px">'+
       '<div style="font-size:8pt;font-weight:700;text-transform:uppercase;color:#64748b;margin-bottom:6px">Patient Details</div>'+
-      '<div style="font-size:9pt;line-height:1.8"><strong>Name:</strong> '+(inv.patient_name||'—')+'<br>'+
-      '<strong>Lab No:</strong> '+(inv.lab_no||'—')+'<br>'+
-      '<strong>Invoice:</strong> '+(inv.invoice_no||'—')+'<br>'+
+      '<div style="font-size:9pt;line-height:1.8"><strong>Name:</strong> '+escapeHtml(inv.patient_name||'—')+'<br>'+
+      '<strong>Lab No:</strong> '+escapeHtml(inv.lab_no||'—')+'<br>'+
+      '<strong>Invoice:</strong> '+escapeHtml(inv.invoice_no||'—')+'<br>'+
       '<strong>Date:</strong> '+fmtDate(inv.created_at)+'</div></div>'+
       '<div style="border:1px solid var(--border);border-radius:6px;padding:10px">'+
       '<div style="font-size:8pt;font-weight:700;text-transform:uppercase;color:#64748b;margin-bottom:6px">Insurer Details</div>'+
-      '<div style="font-size:9pt;line-height:1.8"><strong>Company:</strong> '+(inv.insurance_company||'—')+'<br>'+
-      '<strong>Policy No:</strong> '+(inv.insurance_no||'—')+'<br>'+
-      '<strong>Pre-auth No:</strong> '+(inv.pre_auth_no||'—')+'</div></div></div>'+
+      '<div style="font-size:9pt;line-height:1.8"><strong>Company:</strong> '+escapeHtml(inv.insurance_company||'—')+'<br>'+
+      '<strong>Policy No:</strong> '+escapeHtml(inv.insurance_no||'—')+'<br>'+
+      '<strong>Pre-auth No:</strong> '+escapeHtml(inv.pre_auth_no||'—')+'</div></div></div>'+
       '<table style="width:100%;border-collapse:collapse;margin-bottom:12px">'+
       '<thead><tr style="background:#1e3a5a;color:#fff">'+
       '<th style="padding:6px 8px;font-size:8.5pt;text-align:left">Service / Test</th>'+
@@ -12175,8 +12177,8 @@ async function generateInsuranceClaim(invId) {
       '<th style="padding:6px 8px;font-size:8.5pt;text-align:right">Total</th></tr></thead>'+
       '<tbody>'+(inv.line_items||[]).map(item=>
         '<tr style="border-bottom:1px solid #f1f5fb">'+
-        '<td style="padding:4px 8px;font-size:9pt">'+item.name+'</td>'+
-        '<td style="padding:4px 8px;font-size:8.5pt;color:#64748b">'+(item.category||'')+'</td>'+
+        '<td style="padding:4px 8px;font-size:9pt">'+escapeHtml(item.name)+'</td>'+
+        '<td style="padding:4px 8px;font-size:8.5pt;color:#64748b">'+escapeHtml(item.category||'')+'</td>'+
         '<td style="padding:4px 8px;text-align:right;font-size:9pt">'+((item.unit_price||0).toFixed(2))+'</td>'+
         '<td style="padding:4px 8px;text-align:right;font-size:9pt;font-weight:600">'+((item.total_price||0).toFixed(2))+'</td></tr>'
       ).join('')+
@@ -12278,7 +12280,7 @@ async function loadRecentPatients() {
           '<td style="font-size:.72rem">'+fmtDT(p.created_at)+'</td></tr>';
       }).join('')+
       '</tbody></table></div>';
-  } catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+e.message+'</div>'; }
+  } catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>'; }
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -12374,7 +12376,7 @@ async function printPcrReport() {
       '<th style="padding:6px 8px;font-size:8.5pt;text-align:left">Ct Value</th>'+
       '<th style="padding:6px 8px;font-size:8.5pt;text-align:left">Interpretation</th></tr></thead>'+
       '<tbody>'+rows+'</tbody></table>'+
-      (r.notes?'<div style="background:#f8fafd;border-left:3px solid #7c3aed;padding:10px 12px;margin-top:12px;font-size:9pt"><strong>Comments:</strong> '+r.notes+'</div>':'')+
+      (r.notes?'<div style="background:#f8fafd;border-left:3px solid #7c3aed;padding:10px 12px;margin-top:12px;font-size:9pt"><strong>Comments:</strong> '+escapeHtml(r.notes)+'</div>':'')+
       '<div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:20px">'+
       '<div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Medical Laboratory Technologist</div>'+
       '<div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Laboratory Supervisor</div></div>'+printFooter();
@@ -12465,7 +12467,7 @@ async function printHistoReport() {
       '<th style="padding:5px 8px;font-size:8.5pt;text-align:left">Marker</th><th style="padding:5px 8px;font-size:8.5pt;text-align:left">Result</th>'+
       '<th style="padding:5px 8px;font-size:8.5pt;text-align:left">Intensity</th><th style="padding:5px 8px;font-size:8.5pt;text-align:left">% Positive</th></tr></thead>'+
       '<tbody>'+ihcRows+'</tbody></table></div>':'')+
-      (r.notes?'<div style="background:#f8fafd;border-left:3px solid #b45309;padding:10px 12px;margin-top:8px;font-size:9pt"><strong>Comments:</strong> '+r.notes+'</div>':'')+
+      (r.notes?'<div style="background:#f8fafd;border-left:3px solid #b45309;padding:10px 12px;margin-top:8px;font-size:9pt"><strong>Comments:</strong> '+escapeHtml(r.notes)+'</div>':'')+
       '<div style="margin-top:16px;display:grid;grid-template-columns:1fr 1fr;gap:20px">'+
       '<div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Histopathologist</div>'+
       '<div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Date Reported</div></div>'+printFooter();
@@ -12523,7 +12525,7 @@ async function printCytoReport() {
       '<div style="font-size:8pt;color:#0369a1;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Cytological Diagnosis</div>'+
       '<div style="font-size:10.5pt;font-weight:700;line-height:1.5">'+(r.diagnosis||'—')+'</div></div>'+
       (r.recommendation?'<div style="background:#f0fdf4;border-left:4px solid #166534;padding:10px 12px;border-radius:0 8px 8px 0;margin-bottom:10px;font-size:9.5pt"><strong>Recommendation:</strong> '+r.recommendation+'</div>':'')+
-      (r.notes?'<div style="background:#f8fafd;border-left:3px solid #0369a1;padding:10px 12px;font-size:9pt"><strong>Comments:</strong> '+r.notes+'</div>':'')+
+      (r.notes?'<div style="background:#f8fafd;border-left:3px solid #0369a1;padding:10px 12px;font-size:9pt"><strong>Comments:</strong> '+escapeHtml(r.notes)+'</div>':'')+
       '<div style="margin-top:16px;display:grid;grid-template-columns:1fr 1fr;gap:20px">'+
       '<div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Cytologist / Pathologist</div>'+
       '<div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Date Reported</div></div>'+printFooter();
@@ -12557,7 +12559,7 @@ async function printSeroReportFull() {
     const html=printHeader('Serology Report')+ptB+
       '<table style="width:100%;border-collapse:collapse"><thead><tr style="background:#1e3a5a;color:#fff"><th style="padding:5px 8px;font-size:8.5pt;text-align:left">Test</th><th style="padding:5px 8px;font-size:8.5pt;text-align:left">Result</th></tr></thead><tbody>'+body+
       '</tbody></table>'+
-      (r.notes?'<div style="background:#f8fafd;border-left:3px solid #7c3aed;padding:10px 12px;margin-top:12px;font-size:9pt"><strong>Comments:</strong> '+r.notes+'</div>':'')+
+      (r.notes?'<div style="background:#f8fafd;border-left:3px solid #7c3aed;padding:10px 12px;margin-top:12px;font-size:9pt"><strong>Comments:</strong> '+escapeHtml(r.notes)+'</div>':'')+
       '<div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:20px"><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Medical Laboratory Technologist</div><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Laboratory Supervisor</div></div>'+printFooter();
     openPrintWin(html,'Serology Report');
   } catch(e){ toast(e.message,'err'); }
@@ -12591,7 +12593,7 @@ async function printImmunoReportFull() {
       (col1?'<table style="width:100%;border-collapse:collapse"><thead><tr style="background:#1e3a5a;color:#fff"><th style="padding:5px 8px;font-size:8.5pt;text-align:left">Test</th><th style="padding:5px 8px;font-size:8.5pt;text-align:left">Result</th><th style="padding:5px 8px;font-size:8.5pt;text-align:left">Unit</th><th>F</th></tr></thead><tbody>'+col1+'</tbody></table>':'<div></div>')+
       (col2?'<table style="width:100%;border-collapse:collapse"><thead><tr style="background:#1e3a5a;color:#fff"><th style="padding:5px 8px;font-size:8.5pt;text-align:left">Test</th><th style="padding:5px 8px;font-size:8.5pt;text-align:left">Result</th></tr></thead><tbody>'+col2+'</tbody></table>':'<div></div>')+
       '</div>'+
-      (r.notes?'<div style="background:#f8fafd;border-left:3px solid #7c3aed;padding:10px 12px;margin-top:12px;font-size:9pt"><strong>Comments:</strong> '+r.notes+'</div>':'')+
+      (r.notes?'<div style="background:#f8fafd;border-left:3px solid #7c3aed;padding:10px 12px;margin-top:12px;font-size:9pt"><strong>Comments:</strong> '+escapeHtml(r.notes)+'</div>':'')+
       '<div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:20px"><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Medical Laboratory Technologist</div><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Laboratory Supervisor</div></div>'+printFooter();
     openPrintWin(html,'Immunology Report');
   } catch(e){ toast(e.message,'err'); }
@@ -12635,7 +12637,7 @@ async function printMicroReportFull() {
       '<div>'+(leftCol?'<table style="width:100%;border-collapse:collapse">'+tableHead+'<tbody>'+leftCol+'</tbody></table>':'')+'</div>'+
       '<div>'+(rightCol?'<table style="width:100%;border-collapse:collapse">'+tableHead+'<tbody>'+rightCol+'</tbody></table>':'')+'</div>'+
       '</div>'+
-      (r.notes?'<div style="background:#f8fafd;border-left:3px solid #15803d;padding:10px 12px;margin-top:12px;font-size:9pt"><strong>Comments:</strong> '+r.notes+'</div>':'')+
+      (r.notes?'<div style="background:#f8fafd;border-left:3px solid #15803d;padding:10px 12px;margin-top:12px;font-size:9pt"><strong>Comments:</strong> '+escapeHtml(r.notes)+'</div>':'')+
       '<div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:20px"><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Medical Laboratory Technologist</div><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Laboratory Supervisor</div></div>'+printFooter();
     openPrintWin(html,'Microbiology Report');
   } catch(e){ toast(e.message,'err'); }
@@ -12682,7 +12684,7 @@ async function loadInfectionFlags() {
         (f.active?'<button class="btn btn-s btn-xs" onclick="resolveInfectionFlag(\''+f.id+'\')">✓ Resolve</button>':'')+
         '</td></tr>';
     }).join('');
-  } catch(e){ tbody.innerHTML='<tr><td colspan="9" style="padding:12px;color:var(--red);font-size:.8rem">'+e.message+'</td></tr>'; }
+  } catch(e){ tbody.innerHTML='<tr><td colspan="9" style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</td></tr>'; }
 }
 async function resolveInfectionFlag(id) {
   if(!confirm('Mark this flag as resolved?')) return;
@@ -12740,7 +12742,7 @@ async function loadHandoverNotes() {
           ${h.notes?'<div style="background:var(--bg);border-radius:7px;padding:10px 12px;font-size:.82rem;line-height:1.6;white-space:pre-wrap">'+h.notes+'</div>':'<div style="color:var(--slate);font-size:.8rem">No notes recorded.</div>'}
         </div>
       </div>`).join('');
-  } catch(e){ container.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+e.message+'</div>'; }
+  } catch(e){ container.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>'; }
 }
 function openHandoverModal() {
   toast('Create new handover notes via Nursing & Vitals → Handover Notes tab','ok');
@@ -13003,7 +13005,7 @@ async function loadVitals() {
     // Trigger chart
     _vitalsData = data;
     renderVitalsChart();
-  } catch(e) { body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+e.message+'</div>'; }
+  } catch(e) { body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>'; }
 }
 
 let _vitalsData = [];
@@ -13315,7 +13317,7 @@ async function loadConsentForms(ptId){
       '<div style="font-size:.72rem;color:var(--slate)">'+fmtDate(c.consent_date||c.created_at)+' · '+escapeHtml(c.performed_by_name||'—')+' · Signed by '+escapeHtml(c.signee_name||'—')+'</div></div>'+
       '<button class="btn btn-s btn-xs" onclick="printConsentForm(\''+c.id+'\')">🖨 Print</button></div>'
     ).join('');
-  }catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+e.message+'</div>'; }
+  }catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>'; }
 }
 async function printConsentForm(id){
   if(!sb) return;
@@ -13833,11 +13835,11 @@ async function loadReceiveQueue(){
       const pt=s.patients||{};
       const waitMins=s.collected_at?Math.round((Date.now()-new Date(s.collected_at).getTime())/60000):null;
       return '<div onclick="selectReceivePt(\''+s.patient_id+'\')" style="display:flex;align-items:center;justify-content:space-between;padding:9px 10px;border-radius:8px;cursor:pointer;margin-bottom:4px;background:var(--bg)" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'var(--bg)\'">'+
-        '<div><div style="font-weight:700;font-size:.8rem">'+(pt.name||'—')+'</div><div style="font-size:.7rem;color:var(--slate)">'+(pt.lab_no||pt.mrn||'—')+' · '+(s.specimen_type||'')+'</div></div>'+
+        '<div><div style="font-weight:700;font-size:.8rem">'+escapeHtml(pt.name||'—')+'</div><div style="font-size:.7rem;color:var(--slate)">'+(pt.lab_no||pt.mrn||'—')+' · '+(s.specimen_type||'')+'</div></div>'+
         '<div style="text-align:right">'+statusBadge(pt.priority||'Routine')+(waitMins!=null?'<div style="font-size:.68rem;color:'+(waitMins>30?'var(--red)':'var(--slate)')+';margin-top:2px">'+waitMins+'m waiting</div>':'')+'</div>'+
         '</div>';
     }).join('');
-  }catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.78rem">'+e.message+'</div>'; }
+  }catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.78rem">'+escapeHtml(e.message)+'</div>'; }
 }
 
 async function loadSampleQueueFull() {
@@ -13862,7 +13864,7 @@ async function loadSampleQueueFull() {
         <td style="font-size:.72rem">${fmtDT(s.received_at)}</td>
         <td><button class="btn btn-s btn-xs" onclick="selectScPt('${s.patient_id}')">📋 Open</button></td>
       </tr>`).join('')+'</tbody></table></div>';
-  }catch(e){body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+e.message+'</div>';}
+  }catch(e){body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>';}
 }
 
 async function openRejectModal() { toast('Log rejection via Sample Condition — mark as rejected condition, then save','ok'); }
@@ -14015,7 +14017,7 @@ async function loadNursingQueue() {
             '<button class="btn btn-s btn-xs" onclick="goPage(\x27fluid-chart\x27);event.stopPropagation()">\ud83d\udca7 Fluid</button>'+
           '</div></td></tr>';
       }).join('')+'</tbody></table></div>';
-  }catch(e){body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+e.message+'</div>';}
+  }catch(e){body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>';}
 }
 
 function filterNursingQueue(q) {
@@ -14111,7 +14113,7 @@ async function loadBilling() {
     _allBillInvoices = data||[];
     updateBillStats(_allBillInvoices);
     renderBillTable(_allBillInvoices);
-  } catch(e) { body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+e.message+'</div>'; }
+  } catch(e) { body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>'; }
 }
 
 function updateBillStats(invoices) {
@@ -14144,12 +14146,12 @@ function renderBillTable(invoices) {
     invoices.map(i=>{
       const unpaid=i.payment_status==='unpaid'||i.payment_status==='insurance_pending';
       return '<tr class="'+(unpaid?'pay-unpaid':'')+'" id="inv-row-'+i.id+'">'+
-        '<td style="font-family:DM Mono,monospace;font-size:.7rem;font-weight:700;color:var(--teal)">'+(i.invoice_no||'—')+(i.queue_token?'<div style="font-size:.62rem;color:var(--slate);font-weight:500">Token '+i.queue_token+'</div>':'')+'</td>'+
-        '<td style="font-weight:600;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(i.patient_name||'—')+'</td>'+
-        '<td><span class="bdg bdg-sl" style="font-size:.65rem">'+(i.invoice_type||'—')+'</span></td>'+
-        '<td style="font-weight:700;color:var(--teal);white-space:nowrap">'+((i.net_amount||i.total_amount||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}))+' '+(i.currency||'SDG')+'</td>'+
+        '<td style="font-family:DM Mono,monospace;font-size:.7rem;font-weight:700;color:var(--teal)">'+escapeHtml(i.invoice_no||'—')+(i.queue_token?'<div style="font-size:.62rem;color:var(--slate);font-weight:500">Token '+escapeHtml(i.queue_token)+'</div>':'')+'</td>'+
+        '<td style="font-weight:600;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escapeHtml(i.patient_name||'—')+'</td>'+
+        '<td><span class="bdg bdg-sl" style="font-size:.65rem">'+escapeHtml(i.invoice_type||'—')+'</span></td>'+
+        '<td style="font-weight:700;color:var(--teal);white-space:nowrap">'+((i.net_amount||i.total_amount||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}))+' '+escapeHtml(i.currency||'SDG')+'</td>'+
         '<td>'+(i.voided?'<span class="pay-tag-void">VOID</span>':paymentTag(i.payment_status))+'</td>'+
-        '<td style="font-size:.72rem">'+(i.payment_method||'—')+'</td>'+
+        '<td style="font-size:.72rem">'+escapeHtml(i.payment_method||'—')+'</td>'+
         '<td style="font-size:.72rem;color:var(--slate)">'+fmtDate(i.created_at)+'</td>'+
         '<td><div class="acts">'+
           '<button class="btn btn-s btn-xs" onclick="openBillDetail(\''+i.id+'\')">👁</button>'+
@@ -14954,7 +14956,7 @@ async function openBillDetail(id) {
     const items = inv.line_items||[];
     const itemRows = items.map(item=>
       '<tr style="border-bottom:1px solid #f1f5fb">'+
-      '<td style="padding:5px 8px;font-size:9pt">'+item.name+'</td>'+
+      '<td style="padding:5px 8px;font-size:9pt">'+escapeHtml(item.name)+'</td>'+
       '<td style="padding:5px 8px;font-size:9pt;text-align:center">'+(item.qty||1)+'</td>'+
       '<td style="padding:5px 8px;font-size:9pt;text-align:right">'+((item.unit_price||0).toLocaleString('en-US',{minimumFractionDigits:2}))+'</td>'+
       '<td style="padding:5px 8px;font-size:9pt;text-align:right;font-weight:600">'+((item.total_price||0).toLocaleString('en-US',{minimumFractionDigits:2}))+'</td></tr>'
@@ -14962,13 +14964,13 @@ async function openBillDetail(id) {
     const body = document.getElementById('bill-detail-body');
     if(body) body.innerHTML =
       '<div style="background:#f1f5f9;padding:10px 14px;border-radius:8px;margin-bottom:12px;display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:.82rem">'+
-      '<div><div style="font-size:.68rem;color:var(--slate)">Invoice No</div><div style="font-weight:700;color:var(--teal);font-family:DM Mono,monospace">'+(inv.invoice_no||'—')+'</div></div>'+
-      '<div><div style="font-size:.68rem;color:var(--slate)">Patient</div><div style="font-weight:700">'+(inv.patient_name||'—')+'</div></div>'+
+      '<div><div style="font-size:.68rem;color:var(--slate)">Invoice No</div><div style="font-weight:700;color:var(--teal);font-family:DM Mono,monospace">'+escapeHtml(inv.invoice_no||'—')+'</div></div>'+
+      '<div><div style="font-size:.68rem;color:var(--slate)">Patient</div><div style="font-weight:700">'+escapeHtml(inv.patient_name||'—')+'</div></div>'+
       '<div><div style="font-size:.68rem;color:var(--slate)">Date</div><div>'+fmtDate(inv.invoice_date||inv.created_at)+'</div></div>'+
       '<div><div style="font-size:.68rem;color:var(--slate)">Status</div><div>'+paymentTag(inv.payment_status)+'</div></div>'+
-      '<div><div style="font-size:.68rem;color:var(--slate)">Type</div><div>'+(inv.invoice_type||'—')+'</div></div>'+
-      '<div><div style="font-size:.68rem;color:var(--slate)">Method</div><div>'+(inv.payment_method||'—')+'</div></div>'+
-      (inv.insurance_company?'<div style="grid-column:1/3"><div style="font-size:.68rem;color:var(--slate)">Insurance</div><div>'+(inv.insurance_company||'—')+' / '+(inv.insurance_no||'—')+'</div></div>':'')+
+      '<div><div style="font-size:.68rem;color:var(--slate)">Type</div><div>'+escapeHtml(inv.invoice_type||'—')+'</div></div>'+
+      '<div><div style="font-size:.68rem;color:var(--slate)">Method</div><div>'+escapeHtml(inv.payment_method||'—')+'</div></div>'+
+      (inv.insurance_company?'<div style="grid-column:1/3"><div style="font-size:.68rem;color:var(--slate)">Insurance</div><div>'+escapeHtml(inv.insurance_company||'—')+' / '+escapeHtml(inv.insurance_no||'—')+'</div></div>':'')+
       '</div>'+
       '<table style="width:100%;border-collapse:collapse;margin-bottom:10px"><thead><tr style="background:#1e3a5a;color:#fff">'+
       '<th style="padding:5px 8px;font-size:8.5pt;text-align:left">Item</th><th style="padding:5px 8px;text-align:center">Qty</th>'+
@@ -15040,7 +15042,7 @@ async function printInvoice(id) {
     const items = inv.line_items||[];
     const itemRows = items.map((item,n)=>
       '<tr style="border-bottom:1px solid #f1f5fb;background:'+(n%2?'#f8fafd':'#fff')+'">'+
-      '<td style="padding:5px 8px;font-size:9pt">'+item.name+'</td>'+
+      '<td style="padding:5px 8px;font-size:9pt">'+escapeHtml(item.name)+'</td>'+
       '<td style="padding:5px 8px;font-size:9pt;text-align:center">'+(item.qty||1)+'</td>'+
       '<td style="padding:5px 8px;font-size:9pt;text-align:right">'+((item.unit_price||0).toLocaleString('en-US',{minimumFractionDigits:2}))+'</td>'+
       '<td style="padding:5px 8px;font-size:9pt;text-align:right;font-weight:600">'+((item.total_price||0).toLocaleString('en-US',{minimumFractionDigits:2}))+'</td></tr>'
@@ -15049,14 +15051,14 @@ async function printInvoice(id) {
       (newCount>1?'<div style="text-align:center"><span class="reprint-badge">⚠ DUPLICATE REPRINT — COPY #'+newCount+'</span></div>':'')+
       (inv.voided?'<div style="text-align:center"><span class="reprint-badge" style="background:#64748b">VOIDED INVOICE</span></div>':'')+
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">'+
-      '<div><div style="font-size:8pt;color:#64748b">Invoice No</div><div style="font-weight:800;font-size:11pt;color:#0b7a75;font-family:DM Mono,monospace">'+(inv.invoice_no||'—')+'</div>'+
+      '<div><div style="font-size:8pt;color:#64748b">Invoice No</div><div style="font-weight:800;font-size:11pt;color:#0b7a75;font-family:DM Mono,monospace">'+escapeHtml(inv.invoice_no||'—')+'</div>'+
       '<div style="font-size:8pt;color:#64748b;margin-top:6px">Date</div><div style="font-size:9pt">'+fmtDate(inv.invoice_date||inv.created_at)+'</div>'+
-      (inv.queue_token?'<div style="font-size:8pt;color:#64748b;margin-top:6px">Queue Token</div><div style="font-size:13pt;font-weight:900;color:#1e3a5a;font-family:DM Mono,monospace">'+inv.queue_token+'</div>':'')+
+      (inv.queue_token?'<div style="font-size:8pt;color:#64748b;margin-top:6px">Queue Token</div><div style="font-size:13pt;font-weight:900;color:#1e3a5a;font-family:DM Mono,monospace">'+escapeHtml(inv.queue_token)+'</div>':'')+
       '</div>'+
-      '<div><div style="font-size:8pt;color:#64748b">Patient</div><div style="font-weight:700;font-size:10pt">'+(inv.patient_name||'—')+'</div>'+
-      '<div style="font-size:8pt;color:#64748b;margin-top:6px">Lab No / MRN</div><div style="font-size:9pt;font-family:DM Mono,monospace">'+(inv.lab_no||'—')+'</div>'+
-      '<div style="font-size:8pt;color:#64748b;margin-top:6px">Cashier / Shift</div><div style="font-size:9pt">'+(currentProfile?.full_name||'—')+(_activeShift?' · '+_activeShift.shift_no:'')+'</div>'+
-      (inv.insurance_company?'<div style="font-size:8pt;color:#64748b;margin-top:6px">Insurance</div><div style="font-size:9pt">'+inv.insurance_company+' / '+(inv.insurance_no||'—')+(inv.pre_auth_no?' · Pre-auth '+inv.pre_auth_no:'')+'</div>':'')+
+      '<div><div style="font-size:8pt;color:#64748b">Patient</div><div style="font-weight:700;font-size:10pt">'+escapeHtml(inv.patient_name||'—')+'</div>'+
+      '<div style="font-size:8pt;color:#64748b;margin-top:6px">Lab No / MRN</div><div style="font-size:9pt;font-family:DM Mono,monospace">'+escapeHtml(inv.lab_no||'—')+'</div>'+
+      '<div style="font-size:8pt;color:#64748b;margin-top:6px">Cashier / Shift</div><div style="font-size:9pt">'+escapeHtml(currentProfile?.full_name||'—')+(_activeShift?' · '+escapeHtml(_activeShift.shift_no):'')+'</div>'+
+      (inv.insurance_company?'<div style="font-size:8pt;color:#64748b;margin-top:6px">Insurance</div><div style="font-size:9pt">'+escapeHtml(inv.insurance_company)+' / '+escapeHtml(inv.insurance_no||'—')+(inv.pre_auth_no?' · Pre-auth '+escapeHtml(inv.pre_auth_no):'')+'</div>':'')+
       '</div></div>'+
       '<table style="width:100%;border-collapse:collapse;margin-bottom:12px"><thead><tr style="background:#1e3a5a;color:#fff">'+
       '<th style="padding:6px 8px;font-size:8.5pt;text-align:left">Description</th>'+
@@ -15072,7 +15074,7 @@ async function printInvoice(id) {
       '</tfoot></table>'+
       '<div style="display:flex;justify-content:space-between;align-items:center;background:#f1f5f9;padding:10px 14px;border-radius:8px;margin-bottom:16px">'+
       '<div><span style="font-size:9pt;color:#64748b">Payment Status: </span>'+(inv.voided?'<span class="pay-tag-void">VOID</span>':paymentTag(inv.payment_status))+'</div>'+
-      '<div style="font-size:9pt;color:#64748b">Method: <strong>'+(inv.payment_method||'—')+'</strong></div></div>'+
+      '<div style="font-size:9pt;color:#64748b">Method: <strong>'+escapeHtml(inv.payment_method||'—')+'</strong></div></div>'+
       '<div style="margin-top:30px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;text-align:center">'+
       '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">Cashier / Receptionist</div>'+
       '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">Patient / Guardian</div>'+
@@ -15093,7 +15095,7 @@ async function printInvoiceThermal(id) {
     const newCount = await trackInvoicePrint(inv);
     const items = inv.line_items||[];
     const itemLines = items.map(item=>
-      '<tr><td style="font-size:8pt">'+item.name+' x'+(item.qty||1)+'</td>'+
+      '<tr><td style="font-size:8pt">'+escapeHtml(item.name)+' x'+(item.qty||1)+'</td>'+
       '<td style="text-align:right;font-size:8pt">'+((item.total_price||0).toFixed(2))+'</td></tr>'
     ).join('');
     const html =
@@ -15101,11 +15103,11 @@ async function printInvoiceThermal(id) {
       (newCount>1?'<div style="text-align:center;font-weight:800;border:1px solid #000;padding:2px;margin-bottom:6px;font-size:8pt">DUPLICATE REPRINT — COPY #'+newCount+'</div>':'')+
       (inv.voided?'<div style="text-align:center;font-weight:800;border:1px solid #000;padding:2px;margin-bottom:6px;font-size:8pt">VOIDED INVOICE</div>':'')+
       '<div style="font-size:8pt;border-top:1px dashed #000;border-bottom:1px dashed #000;padding:4px 0;margin-bottom:6px">'+
-      'Invoice: '+(inv.invoice_no||'—')+'<br>'+
-      (inv.queue_token?('Token: <b style="font-size:11pt">'+inv.queue_token+'</b><br>'):'')+
+      'Invoice: '+escapeHtml(inv.invoice_no||'—')+'<br>'+
+      (inv.queue_token?('Token: <b style="font-size:11pt">'+escapeHtml(inv.queue_token)+'</b><br>'):'')+
       'Date: '+fmtDate(inv.invoice_date||inv.created_at)+'<br>'+
-      'Patient: '+(inv.patient_name||'—')+'<br>'+
-      'Cashier: '+(currentProfile?.full_name||'—')+(_activeShift?(' / '+_activeShift.shift_no):'')+
+      'Patient: '+escapeHtml(inv.patient_name||'—')+'<br>'+
+      'Cashier: '+escapeHtml(currentProfile?.full_name||'—')+(_activeShift?(' / '+escapeHtml(_activeShift.shift_no)):'')+
       '</div>'+
       '<table>'+itemLines+'</table>'+
       '<div style="border-top:1px dashed #000;margin-top:4px;padding-top:4px;display:flex;justify-content:space-between;font-weight:800;font-size:9.5pt">'+
@@ -15168,7 +15170,7 @@ async function loadPriceList() {
     _priceList = data||[];
     _allPrices = data||[];
     renderPriceTable(_allPrices);
-  } catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+e.message+'</div>'; }
+  } catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>'; }
 }
 
 function renderPriceTable(prices) {
@@ -15698,7 +15700,7 @@ async function loadStaff() {
           '<button class="btn btn-r btn-xs" onclick="deleteStaff(\''+s.id+'\')">✕</button>'+
         '</div></td></tr>'
       ).join('')+'</tbody></table></div>';
-  } catch(e){body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+e.message+'</div>';}
+  } catch(e){body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>';}
 }
 
 function filterStaff(q) {
@@ -15845,9 +15847,9 @@ async function loadStaffActivity() {
     const arr=Object.values(activity).sort((a,b)=>new Date(b.last)-new Date(a.last));
     if(!arr.length){body.innerHTML='<div class="empty-state">No activity recorded yet</div>';return;}
     body.innerHTML='<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Staff Member</th><th>Consultations</th><th>Vitals Recorded</th><th>Lab Results</th><th>Last Activity</th></tr></thead><tbody>'+
-      arr.map(a=>'<tr><td style="font-weight:600">'+a.name+'</td><td style="text-align:center">'+a.consultations+'</td><td style="text-align:center">'+a.vitals+'</td><td style="text-align:center">'+a.results+'</td><td style="font-size:.75rem;color:var(--slate)">'+fmtDT(a.last)+'</td></tr>').join('')+
+      arr.map(a=>'<tr><td style="font-weight:600">'+escapeHtml(a.name)+'</td><td style="text-align:center">'+a.consultations+'</td><td style="text-align:center">'+a.vitals+'</td><td style="text-align:center">'+a.results+'</td><td style="font-size:.75rem;color:var(--slate)">'+fmtDT(a.last)+'</td></tr>').join('')+
       '</tbody></table></div>';
-  } catch(e){body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+e.message+'</div>';}
+  } catch(e){body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>';}
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -15871,7 +15873,7 @@ async function loadDoctors() {
           '<button class="btn btn-r btn-xs" onclick="deleteDoctor(\''+d.id+'\')">✕</button>'+
         '</div></td></tr>'
       ).join('')+'</tbody></table></div>';
-  } catch(e){body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+e.message+'</div>';}
+  } catch(e){body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>';}
 }
 
 function filterDoctors(q) {
@@ -16214,7 +16216,7 @@ async function loadRadRequests() {
         const unpaid=pt.payment_status==='unpaid'||pt.payment_status==='insurance_pending';
         return '<tr class="'+(unpaid?'pay-unpaid':'')+'" style="background:'+(urgColor[r.urgency]||'')+'">' +
           '<td style="font-size:.72rem;color:var(--slate)">'+fmtDate(r.created_at)+'</td>'+
-          '<td><div style="font-weight:600;font-size:.82rem">'+(pt.name||'—')+'</div>'+
+          '<td><div style="font-weight:600;font-size:.82rem">'+escapeHtml(pt.name||'—')+'</div>'+
           '<div style="font-size:.68rem;color:var(--slate)">'+(pt.mrn||pt.lab_no||'')+' \u00b7 '+(pt.age||'?')+(pt.age_unit||'y')+' / '+(pt.sex||'')+' '+(pt.ward?'\u00b7 '+pt.ward:'')+'</div></td>'+
           '<td style="font-size:.78rem;font-weight:600">'+(r.imaging_type||'—')+(r.is_critical?' <span class="bdg" style="background:#b91c1c;color:#fff">🚨 CRITICAL</span>':'')+'</td>'+
           '<td>'+(r.urgency==='STAT'?'<span class="bdg" style="background:#fef2f2;color:#b91c1c;border:1.5px solid #fca5a5">\u26a1 STAT</span>':statusBadge(r.urgency))+'</td>'+
@@ -16228,7 +16230,7 @@ async function loadRadRequests() {
             ((r.status==='Reported'||r.status==='Verified')?'<button class="btn btn-s btn-xs" onclick="openDicomViewer(\''+r.id+'\')">👁️ View DICOM</button>':'')+
           '</div></td></tr>';
       }).join('')+(hiddenCount?'<tr><td colspan="8" style="text-align:center;padding:8px;font-size:.72rem;color:var(--slate)">'+hiddenCount+' more request(s) hidden pending payment</td></tr>':'')+'</tbody></table></div>';
-  } catch(e){body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+e.message+'</div>';}
+  } catch(e){body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>';}
 }
 
 async function loadPendingForReport() {
@@ -16379,7 +16381,7 @@ async function printRadReport() {
     const sec=(label,val,col)=>val?'<div style="margin-bottom:12px"><div style="font-size:8pt;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:'+(col||'#64748b')+';margin-bottom:3px">'+label+'</div><div style="font-size:9.5pt;line-height:1.6;white-space:pre-wrap">'+val+'</div></div>':'';
     const html=printHeader('Radiology Report')+
       '<div style="background:#f1f5f9;padding:10px 14px;border-radius:8px;margin-bottom:14px;display:grid;grid-template-columns:repeat(4,1fr);gap:8px;font-size:9pt">'+
-      '<div><div style="font-size:8pt;color:#64748b">Patient</div><div style="font-weight:700">'+(pt.name||'—')+'</div></div>'+
+      '<div><div style="font-size:8pt;color:#64748b">Patient</div><div style="font-weight:700">'+escapeHtml(pt.name||'—')+'</div></div>'+
       '<div><div style="font-size:8pt;color:#64748b">MRN</div><div style="font-family:DM Mono,monospace">'+(pt.mrn||pt.lab_no||'—')+'</div></div>'+
       '<div><div style="font-size:8pt;color:#64748b">Age/Sex</div><div>'+(pt.age||'?')+(pt.age_unit||'y')+' / '+(pt.sex||'')+'</div></div>'+
       '<div><div style="font-size:8pt;color:#64748b">Ward</div><div>'+(pt.ward||'OPD')+'</div></div>'+
@@ -16427,7 +16429,7 @@ async function loadReportedStudies() {
           (r.status==='Reported'?'<button class="btn btn-p btn-xs" onclick="updateRadStatus(\''+r.id+'\',\'Verified\')">✅ Verify</button>':'')+
         '</div></td></tr>'
       ).join('')+'</tbody></table></div>';
-  } catch(e){body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+e.message+'</div>';}
+  } catch(e){body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>';}
 }
 
 function filterRadReported(q) {
@@ -16465,7 +16467,7 @@ async function loadRadPrintStudies(ptId, ptName){
         '<div><div style="font-weight:700;font-size:.85rem">'+r.imaging_type+'</div><div style="font-size:.72rem;color:var(--slate)">'+(r.radiologist?'Dr. '+r.radiologist+' · ':'')+fmtDate(r.reported_at)+'</div></div>'+
         '<button class="btn btn-p btn-sm" onclick="printRadReportById(\''+r.id+'\')">🖨 Print</button>'+
         '</div>').join('');
-  }catch(e){ body.innerHTML='<div style="padding:16px;color:var(--red);font-size:.82rem">'+e.message+'</div>'; }
+  }catch(e){ body.innerHTML='<div style="padding:16px;color:var(--red);font-size:.82rem">'+escapeHtml(e.message)+'</div>'; }
 }
 
 async function printRadReportById(id) {
@@ -16678,7 +16680,7 @@ async function loadQcLots(){
     const opts='<option value="">Select lot…</option>'+lots.map(l=>'<option value="'+l.id+'">'+(l.lot_no||'')+' — '+(l.control_name||'')+' ('+(l.level||'')+')</option>').join('');
     if(selLot) selLot.innerHTML=opts;
     if(chartLot) chartLot.innerHTML=opts;
-  }catch(e){ if(body) body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+e.message+'</div>'; }
+  }catch(e){ if(body) body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>'; }
 }
 
 async function deactivateQcLot(id){
@@ -16706,7 +16708,7 @@ async function loadQcResults(){
           '<td>'+(r.accepted?'<span class="bdg" style="background:#dcfce7;color:#166534">✅ Accepted</span>':'<span class="bdg" style="background:#fee2e2;color:#b91c1c">⛔ Rejected</span>')+'</td>'+
           '<td style="font-size:.72rem;color:var(--slate)">'+(r.comment||r.rule_violation||'—')+'</td></tr>';
       }).join('')+'</tbody></table></div>';
-  }catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+e.message+'</div>'; }
+  }catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>'; }
 }
 
 async function loadQcPage(){ await loadQcLots(); await loadQcResults(); }
@@ -16785,7 +16787,7 @@ async function loadLotRegister(){
     const itemMap={}; (items||[]).forEach(i=>itemMap[i.id]=i);
     _lotRegisterRows=(batches||[]).map(b=>({batch:b,item:itemMap[b.item_id]||{}}));
     renderLotRegister();
-  }catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+e.message+'</div>'; }
+  }catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>'; }
 }
 function renderLotRegister(){
   const body=document.getElementById('lot-register-body'); if(!body) return;
@@ -16842,7 +16844,7 @@ async function loadInventory(){
     window._invBatches=batchesRes.data||[];
     if(!window._invItems.length){ body.innerHTML='<div class="empty-state">No inventory items yet</div>'; return; }
     renderInventoryTable();
-  }catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+e.message+'</div>'; }
+  }catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>'; }
 }
 function renderInventoryTable(){
   const body=document.getElementById('inv-table-body'); if(!body) return;
@@ -17036,7 +17038,7 @@ async function loadBloodUnits() {
     const {data,error}=await q; if(error) throw error;
     _bbUnits=data||[];
     renderBloodUnitTable(_bbUnits);
-  } catch(e){ body.innerHTML='<div style="padding:14px;color:var(--red);font-size:.78rem">'+e.message+'</div>'; }
+  } catch(e){ body.innerHTML='<div style="padding:14px;color:var(--red);font-size:.78rem">'+escapeHtml(e.message)+'</div>'; }
 }
 function setBbStatusFilter(status,btn) {
   _bbStatusFilter=status;
@@ -17275,7 +17277,7 @@ async function loadDonorRegistry() {
     body.innerHTML='<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Donor No</th><th>Name</th><th>Group</th><th>Phone</th></tr></thead><tbody>'+
       data.map(d=>'<tr><td style="font-family:DM Mono,monospace;font-weight:700;color:var(--teal)">'+escapeHtml(d.donor_no)+'</td><td>'+escapeHtml(d.full_name)+'</td><td>'+(d.blood_group||'?')+(d.rh_factor==='Positive'?'+':d.rh_factor==='Negative'?'−':'')+'</td><td style="font-size:.75rem">'+(d.phone||'—')+'</td></tr>').join('')+
       '</tbody></table></div>';
-  } catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.78rem">'+e.message+'</div>'; }
+  } catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.78rem">'+escapeHtml(e.message)+'</div>'; }
 }
 // Mandatory infectious-disease screening (Path A) — a donation is only
 // `cleared` once every one of these five is Negative; clearDonationScreening()
@@ -17299,7 +17301,7 @@ async function loadPendingDonations() {
         '<button class="btn btn-p btn-xs" onclick="clearDonationScreening(\''+d.id+'\')" style="margin-top:6px">✅ Record Results &amp; Clear if Negative</button>'+
       '</div>';
     }).join('');
-  } catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.78rem">'+e.message+'</div>'; }
+  } catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.78rem">'+escapeHtml(e.message)+'</div>'; }
 }
 async function clearDonationScreening(donationId) {
   if(!sb) return;
@@ -17333,7 +17335,7 @@ async function loadPendingExternalUnits() {
         '<button class="btn btn-p btn-xs" onclick="verifyUnitOnReceipt(\''+u.id+'\')" style="margin-top:6px">✅ Confirm Label Matches — Verify</button>'+
       '</div>'
     ).join('');
-  } catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.78rem">'+e.message+'</div>'; }
+  } catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.78rem">'+escapeHtml(e.message)+'</div>'; }
 }
 async function verifyUnitOnReceipt(unitId) {
   if(!sb) return;
@@ -17381,7 +17383,7 @@ async function loadBloodRequests() {
     if(!data?.length){ body.innerHTML='<div class="empty-state"><div class="empty-icon">🧬</div><div class="empty-title">No open blood requests</div></div>'; return; }
     const rows=await Promise.all(data.map(r=>renderBloodRequestCard(r)));
     body.innerHTML=rows.join('');
-  } catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.78rem">'+e.message+'</div>'; }
+  } catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.78rem">'+escapeHtml(e.message)+'</div>'; }
 }
 async function renderBloodRequestCard(r) {
   const ptName=r.patients?.name||fullName(r.patients)||'—', ptMrn=r.patients?.mrn||'—';
@@ -17406,7 +17408,7 @@ async function renderBloodRequestCard(r) {
       '<div style="font-size:.72rem;color:var(--teal);font-weight:700">Patient type (on file): '+patientType+'</div>'+list+
     '</div>';
   } catch(e){
-    return '<div style="border:1px solid var(--border);border-radius:9px;padding:10px 12px;margin-bottom:10px">'+head+'<div style="color:var(--red);font-size:.75rem">'+e.message+'</div></div>';
+    return '<div style="border:1px solid var(--border);border-radius:9px;padding:10px 12px;margin-bottom:10px">'+head+'<div style="color:var(--red);font-size:.75rem">'+escapeHtml(e.message)+'</div></div>';
   }
 }
 async function crossmatchUnit(unitId,requestId) {
@@ -17734,9 +17736,9 @@ async function loadTat(){
     const now=Date.now();
     body.innerHTML='<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Lab No</th><th>Patient</th><th>Priority</th><th>Collected</th><th>TAT</th><th>Status</th></tr></thead><tbody>'+
       data.map(s=>{const pt=s.patients||{};const cT=s.collected_at?new Date(s.collected_at).getTime():null;const tM=cT?Math.floor((now-cT)/60000):null;const tH=tM!=null?Math.floor(tM/60)+'h '+(tM%60)+'m':'—';const tc=tM==null?'':tM>240?'#b91c1c':tM>120?'#f59e0b':'#166534';
-      return '<tr><td style="font-family:DM Mono,monospace;font-size:.7rem;color:var(--teal)">'+(pt.lab_no||pt.mrn||'—')+'</td><td style="font-weight:600">'+(pt.name||'—')+'</td><td>'+statusBadge(pt.priority||'Routine')+'</td><td style="font-size:.72rem">'+fmtDT(s.collected_at)+'</td><td style="font-weight:700;color:'+tc+'">'+tH+'</td><td>'+statusBadge(s.status)+'</td></tr>';}).join('')+
+      return '<tr><td style="font-family:DM Mono,monospace;font-size:.7rem;color:var(--teal)">'+(pt.lab_no||pt.mrn||'—')+'</td><td style="font-weight:600">'+escapeHtml(pt.name||'—')+'</td><td>'+statusBadge(pt.priority||'Routine')+'</td><td style="font-size:.72rem">'+fmtDT(s.collected_at)+'</td><td style="font-weight:700;color:'+tc+'">'+tH+'</td><td>'+statusBadge(s.status)+'</td></tr>';}).join('')+
       '</tbody></table></div>';
-  }catch(e){body.innerHTML='<div style="color:var(--red);padding:12px;font-size:.8rem">'+e.message+'</div>';}
+  }catch(e){body.innerHTML='<div style="color:var(--red);padding:12px;font-size:.8rem">'+escapeHtml(e.message)+'</div>';}
 }
 function filterInventory(q){
   document.querySelectorAll('#inv-table tbody tr').forEach(r=>{
@@ -17770,7 +17772,7 @@ async function loadSampleQueue(){
     }
     body.innerHTML='<div style="overflow-x:auto"><table class="tbl" style="font-size:.74rem"><thead><tr><th>Lab No</th><th>Name</th><th>Priority</th><th>Payment</th><th>Status</th></tr></thead><tbody>'+
       visible.map(s=>{const pt=s.patients||{};const up=pt.payment_status==='unpaid'||pt.payment_status==='insurance_pending';
-        return '<tr class="'+(up?'pay-unpaid':'')+'" style="cursor:pointer" onclick="selectScPt(\x27'+s.patient_id+'\x27)">'+'<td style="font-family:DM Mono,monospace;color:var(--teal)">'+(pt.lab_no||pt.mrn||'—')+'</td><td style="font-weight:600">'+(pt.name||'—')+'</td><td>'+statusBadge(pt.priority||'Routine')+'</td><td>'+paymentTag(pt.payment_status)+(s.payment_deferred?' <span class="bdg" style="background:#fef2f2;color:#b91c1c;border:1.5px solid #fca5a5">\u26a0 Payment Deferred \u2014 STAT</span>':'')+'</td><td>'+statusBadge(s.status)+'</td></tr>';
+        return '<tr class="'+(up?'pay-unpaid':'')+'" style="cursor:pointer" onclick="selectScPt(\x27'+s.patient_id+'\x27)">'+'<td style="font-family:DM Mono,monospace;color:var(--teal)">'+(pt.lab_no||pt.mrn||'—')+'</td><td style="font-weight:600">'+escapeHtml(pt.name||'—')+'</td><td>'+statusBadge(pt.priority||'Routine')+'</td><td>'+paymentTag(pt.payment_status)+(s.payment_deferred?' <span class="bdg" style="background:#fef2f2;color:#b91c1c;border:1.5px solid #fca5a5">\u26a0 Payment Deferred \u2014 STAT</span>':'')+'</td><td>'+statusBadge(s.status)+'</td></tr>';
       }).join('')+(hiddenCount?'<tr><td colspan="5" style="text-align:center;padding:8px;font-size:.72rem;color:var(--slate)">'+hiddenCount+' more order(s) hidden pending payment</td></tr>':'')+'</tbody></table></div>';
   }catch(e){}
 }
@@ -18691,7 +18693,7 @@ async function loadPurchaseOrders(){
           '</tr>';
       }).join('')+'</tbody></table></div>';
     window._poLookup={}; pos.forEach(po=>{ window._poLookup[po.id]=po; });
-  }catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+e.message+'</div>'; }
+  }catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>'; }
 }
 function printPurchaseOrder(poId,poMeta,items){
   const po=poMeta||window._poLookup?.[poId]||{po_no:'PO-'+poId,status:'draft'};
@@ -18757,7 +18759,7 @@ async function loadStockRequisitions(){
           '<td><div class="acts">'+actions+'</div></td>'+
           '</tr>';
       }).join('')+'</tbody></table></div>';
-  }catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+e.message+'</div>'; }
+  }catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>'; }
 }
 async function decideRequisition(id,decision){
   if(!sb) return;
@@ -18843,7 +18845,7 @@ async function loadLabHistory(){
       Object.entries(counts).map(([dept,cnt])=>'<div class="stat-box" style="--ac:'+colors[dept]+'"><div class="stat-n">'+cnt+'</div><div class="stat-l">'+deptDisplay[dept]+'</div></div>').join('')+
       '</div>'+
       '<div style="text-align:center;padding:20px;font-size:1.1rem;font-weight:700;color:var(--teal)">Total Results: '+total+' &nbsp;\u00b7&nbsp; Verified: '+totalVerified+'</div>';
-  }catch(e){body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+e.message+'</div>';}
+  }catch(e){body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>';}
 }
 
 async function renderQcChart(){
