@@ -7692,7 +7692,7 @@ async function deleteBed(id) {
 // ── STATISTICS ────────────────────────────────────────
 let _statsTab='overview';
 let _statsExport={title:'',headers:[],rows:[]}; // populated by each tab's loader, consumed by the export buttons
-function statCard(label,value,color){ return '<div class="stat-box" style="--ac:'+(color||'var(--teal)')+'"><div class="stat-n">'+(value??'—')+'</div><div class="stat-l">'+label+'</div></div>'; }
+function statCard(label,value,color){ return '<div class="stat-box" style="--ac:'+(color||'var(--teal)')+'"><div class="stat-n">'+escapeHtml(value??'—')+'</div><div class="stat-l">'+escapeHtml(label)+'</div></div>'; }
 function statsDateRange(){
   const f=document.getElementById('stats-from'), t=document.getElementById('stats-to');
   if(f && !f.value){ const d=new Date(); d.setDate(d.getDate()-30); f.value=d.toISOString().slice(0,10); }
@@ -7761,7 +7761,7 @@ async function renderStatsDoctor(from,to){
   const dxCount={}; rows.forEach(c=>{ if(c.primary_diagnosis){ dxCount[c.primary_diagnosis]=(dxCount[c.primary_diagnosis]||0)+1; } });
   const topDx=Object.entries(dxCount).sort((a,b)=>b[1]-a[1]).slice(0,5);
   let html='<div class="stat-grid">'+statCard('Consultations',rows.length,'var(--teal)')+statCard('Lab Orders Placed',labOrders,'#f59e0b')+statCard('Radiology Orders Placed',radOrders,'#8b5cf6')+statCard('Admissions Initiated',adms||0,'#3b82f6')+'</div>';
-  if(topDx.length) html+='<div class="card-title" style="font-size:.85rem;margin:12px 0 6px">Top Diagnoses</div><div style="font-size:.8rem">'+topDx.map(([dx,c])=>'<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--border)"><span>'+dx+'</span><strong>'+c+'</strong></div>').join('')+'</div>';
+  if(topDx.length) html+='<div class="card-title" style="font-size:.85rem;margin:12px 0 6px">Top Diagnoses</div><div style="font-size:.8rem">'+topDx.map(([dx,c])=>'<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--border)"><span>'+escapeHtml(dx)+'</span><strong>'+c+'</strong></div>').join('')+'</div>';
   html+=statsRawTable(['Date','Doctor','Diagnosis','Chief Complaint'], rows.map(c=>[fmtDate(c.consultation_date||c.created_at),c.consulting_doctor,c.primary_diagnosis,c.chief_complaint]));
   document.getElementById('stats-body').innerHTML=html;
   _statsExport={title:'Doctor', headers:['Date','Doctor','Diagnosis','Chief Complaint'], rows:rows.map(c=>[fmtDate(c.consultation_date||c.created_at),c.consulting_doctor,c.primary_diagnosis,c.chief_complaint])};
@@ -7805,8 +7805,8 @@ async function renderStatsBilling(from,to){
 function statsRawTable(headers,rows){
   if(!rows.length) return '<div class="empty-state" style="margin-top:10px">No records in this date range</div>';
   return '<div class="card-title" style="font-size:.85rem;margin:14px 0 6px">Records ('+rows.length+')</div>'
-    + '<div style="max-height:340px;overflow-y:auto"><table class="tbl" style="width:100%;font-size:.78rem"><thead><tr>'+headers.map(h=>'<th>'+h+'</th>').join('')+'</tr></thead><tbody>'
-    + rows.slice(0,500).map(r=>'<tr>'+r.map(c=>'<td>'+(c??'—')+'</td>').join('')+'</tr>').join('')
+    + '<div style="max-height:340px;overflow-y:auto"><table class="tbl" style="width:100%;font-size:.78rem"><thead><tr>'+headers.map(h=>'<th>'+escapeHtml(h)+'</th>').join('')+'</tr></thead><tbody>'
+    + rows.slice(0,500).map(r=>'<tr>'+r.map(c=>'<td>'+escapeHtml(c??'—')+'</td>').join('')+'</tr>').join('')
     + '</tbody></table></div>'+(rows.length>500?'<div style="font-size:.72rem;color:var(--slate);margin-top:4px">Showing first 500 of '+rows.length+' — use Excel export for the full set.</div>':'');
 }
 function exportStatsExcel(){
@@ -7838,7 +7838,7 @@ function printFooter() {
 }
 function openPrintWin(html, title='Print') {
   const w=window.open('','_blank','width=900,height=750'); if(!w){ toast('Allow popups','warn'); return; }
-  w.document.write('<!DOCTYPE html><html><head><title>'+title+'</title><link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"><style>@page{size:A4;margin:15mm}*{box-sizing:border-box}body{font-family:DM Sans,sans-serif;font-size:10.5pt;color:#0e1928;background:#fff;padding:5mm}table{width:100%;border-collapse:collapse}th{background:#f8fafd;padding:5px 9px;font-size:9pt;text-align:left;border-bottom:1px solid #e2e8f3}td{padding:5px 9px;font-size:9.5pt;border-bottom:1px solid #f1f5fb}.no-print{display:flex;background:#0e1928;color:#fff;padding:8px 14px;justify-content:space-between;align-items:center;gap:10px}@media print{.no-print{display:none!important}}</style></head><body><div class="no-print"><span style="font-size:.82rem"><strong>🏥 Friendship Hospital — Al Damazin</strong></span><button onclick="window.print()" style="background:#0b7a75;color:#fff;border:none;padding:8px 18px;border-radius:6px;font-size:.82rem;font-weight:700;cursor:pointer">🖨️ Print</button></div><div style="padding:5mm">'+html+'</div></body></html>');
+  w.document.write('<!DOCTYPE html><html><head><title>'+escapeHtml(title)+'</title><link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"><style>@page{size:A4;margin:15mm}*{box-sizing:border-box}body{font-family:DM Sans,sans-serif;font-size:10.5pt;color:#0e1928;background:#fff;padding:5mm}table{width:100%;border-collapse:collapse}th{background:#f8fafd;padding:5px 9px;font-size:9pt;text-align:left;border-bottom:1px solid #e2e8f3}td{padding:5px 9px;font-size:9.5pt;border-bottom:1px solid #f1f5fb}.no-print{display:flex;background:#0e1928;color:#fff;padding:8px 14px;justify-content:space-between;align-items:center;gap:10px}@media print{.no-print{display:none!important}}</style></head><body><div class="no-print"><span style="font-size:.82rem"><strong>🏥 Friendship Hospital — Al Damazin</strong></span><button onclick="window.print()" style="background:#0b7a75;color:#fff;border:none;padding:8px 18px;border-radius:6px;font-size:.82rem;font-weight:700;cursor:pointer">🖨️ Print</button></div><div style="padding:5mm">'+html+'</div></body></html>');
   w.document.close();
   // Callers that need to draw into the print window afterward (e.g.
   // JsBarcode against an <svg> inside it, as printInventoryBarcodeLabel()/
@@ -7855,7 +7855,7 @@ function openPrintWin(html, title='Print') {
 // Currently only printInvoiceThermal() uses this.
 function openPrintWinThermal(html, title='Receipt') {
   const w=window.open('','_blank','width=380,height=650'); if(!w){ toast('Allow popups','warn'); return; }
-  w.document.write('<!DOCTYPE html><html><head><title>'+title+'</title><style>@page{size:80mm auto;margin:3mm}*{box-sizing:border-box}body{font-family:"DM Mono",Consolas,monospace;font-size:8.5pt;color:#000;background:#fff;width:74mm;padding:0}table{width:100%;border-collapse:collapse}td,th{padding:2px 0;font-size:8pt}.no-print{display:flex;background:#0e1928;color:#fff;padding:6px 10px;justify-content:space-between;align-items:center;gap:8px}@media print{.no-print{display:none!important}}</style></head><body><div class="no-print"><span style="font-size:.72rem">🧾 Thermal Receipt</span><button onclick="window.print()" style="background:#0b7a75;color:#fff;border:none;padding:6px 12px;border-radius:5px;font-size:.72rem;font-weight:700;cursor:pointer">🖨️ Print</button></div><div style="padding:2mm">'+html+'</div></body></html>');
+  w.document.write('<!DOCTYPE html><html><head><title>'+escapeHtml(title)+'</title><style>@page{size:80mm auto;margin:3mm}*{box-sizing:border-box}body{font-family:"DM Mono",Consolas,monospace;font-size:8.5pt;color:#000;background:#fff;width:74mm;padding:0}table{width:100%;border-collapse:collapse}td,th{padding:2px 0;font-size:8pt}.no-print{display:flex;background:#0e1928;color:#fff;padding:6px 10px;justify-content:space-between;align-items:center;gap:8px}@media print{.no-print{display:none!important}}</style></head><body><div class="no-print"><span style="font-size:.72rem">🧾 Thermal Receipt</span><button onclick="window.print()" style="background:#0b7a75;color:#fff;border:none;padding:6px 12px;border-radius:5px;font-size:.72rem;font-weight:700;cursor:pointer">🖨️ Print</button></div><div style="padding:2mm">'+html+'</div></body></html>');
   w.document.close();
 }
 
@@ -7969,7 +7969,7 @@ function renderNotifList(){
   if(resultsReady&&resultsReady.length){
     html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;color:#166534;background:#f0fdf4">\ud83d\udd14 Results Ready ('+resultsReady.length+')</div>';
     html+=resultsReady.map(p=>'<div onclick="notifJumpToPatientResults(\''+p.id+'\')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'">'+
-      '<div style="font-weight:700;font-size:.8rem">'+(p.name||fullName(p))+' <span style="font-weight:400;color:var(--slate);font-size:.68rem">'+(p.mrn||p.lab_no||'')+'</span></div>'+
+      '<div style="font-weight:700;font-size:.8rem">'+escapeHtml(p.name||fullName(p))+' <span style="font-weight:400;color:var(--slate);font-size:.68rem">'+escapeHtml(p.mrn||p.lab_no||'')+'</span></div>'+
       '<div style="font-size:.72rem;color:#166534">Lab/Radiology result ready for review</div></div>').join('');
   }
   if(deferredDue&&deferredDue.length){
@@ -7977,8 +7977,8 @@ function renderNotifList(){
     html+=deferredDue.map(d=>{
       const pt=d.patients||{};
       return '<div onclick="notifJumpToDeferredPayment(\''+d.patient_id+'\')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'">'+
-        '<div style="font-weight:700;font-size:.8rem">'+(pt.name||'—')+' <span style="font-weight:400;color:var(--slate);font-size:.68rem">'+(pt.mrn||pt.lab_no||'')+'</span></div>'+
-        '<div style="font-size:.72rem;color:#b91c1c">'+d.kind+' \u2014 '+escapeHtml(d.label||'')+' ready \u00b7 payment was deferred (STAT) \u00b7 still '+(pt.payment_status==='insurance_pending'?'insurance pending':'unpaid')+'</div></div>';
+        '<div style="font-weight:700;font-size:.8rem">'+escapeHtml(pt.name||'—')+' <span style="font-weight:400;color:var(--slate);font-size:.68rem">'+escapeHtml(pt.mrn||pt.lab_no||'')+'</span></div>'+
+        '<div style="font-size:.72rem;color:#b91c1c">'+escapeHtml(d.kind)+' \u2014 '+escapeHtml(d.label||'')+' ready \u00b7 payment was deferred (STAT) \u00b7 still '+(pt.payment_status==='insurance_pending'?'insurance pending':'unpaid')+'</div></div>';
     }).join('');
   }
   if(crits.length){
@@ -7986,27 +7986,27 @@ function renderNotifList(){
     html+=crits.map(c=>{
       const pt=c.patients||{};
       return '<div onclick="notifJumpToCritical()" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'">'+
-        '<div style="font-weight:700;font-size:.8rem">'+(pt.name||'—')+' <span style="font-weight:400;color:var(--slate);font-size:.68rem">'+(pt.mrn||'')+'</span></div>'+
-        '<div style="font-size:.72rem;color:#b91c1c">'+(c.parameter||'')+' = '+(c.value||'')+' · '+fmtDT(c.created_at)+'</div></div>';
+        '<div style="font-weight:700;font-size:.8rem">'+escapeHtml(pt.name||'—')+' <span style="font-weight:400;color:var(--slate);font-size:.68rem">'+escapeHtml(pt.mrn||'')+'</span></div>'+
+        '<div style="font-size:.72rem;color:#b91c1c">'+escapeHtml(c.parameter||'')+' = '+escapeHtml(c.value||'')+' · '+fmtDT(c.created_at)+'</div></div>';
     }).join('');
   }
   if(unpaid.length){
     html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;color:#92400e;background:#fffbeb">💰 Unpaid Invoices ('+unpaid.length+')</div>';
     html+=unpaid.map(i=>'<div onclick="notifJumpToInvoice(\''+i.id+'\')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'">'+
-      '<div style="font-weight:700;font-size:.8rem">'+(i.invoice_no||'—')+' <span style="font-weight:400;color:var(--slate);font-size:.68rem">'+(i.patient_name||'')+'</span></div>'+
-      '<div style="font-size:.72rem;color:#92400e">'+((i.net_amount??i.total_amount??0).toFixed(2))+' '+(i.currency||CFG.currency)+' · overdue since '+fmtDT(i.created_at)+'</div></div>').join('');
+      '<div style="font-weight:700;font-size:.8rem">'+escapeHtml(i.invoice_no||'—')+' <span style="font-weight:400;color:var(--slate);font-size:.68rem">'+escapeHtml(i.patient_name||'')+'</span></div>'+
+      '<div style="font-size:.72rem;color:#92400e">'+((i.net_amount??i.total_amount??0).toFixed(2))+' '+escapeHtml(i.currency||CFG.currency)+' · overdue since '+fmtDT(i.created_at)+'</div></div>').join('');
   }
   if(pendingAdm.length){
     html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;color:#1d4ed8;background:#eff6ff">🛏 Pending Admissions ('+pendingAdm.length+')</div>';
     html+=pendingAdm.map(p=>'<div onclick="notifJumpToAdmission(\''+p.id+'\')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'">'+
-      '<div style="font-weight:700;font-size:.8rem">'+(p.name||fullName(p))+' <span style="font-weight:400;color:var(--slate);font-size:.68rem">'+(p.mrn||'')+'</span></div>'+
+      '<div style="font-weight:700;font-size:.8rem">'+escapeHtml(p.name||fullName(p))+' <span style="font-weight:400;color:var(--slate);font-size:.68rem">'+escapeHtml(p.mrn||'')+'</span></div>'+
       '<div style="font-size:.72rem;color:#1d4ed8">Routed to Admission · waiting since '+fmtDT(p.created_at)+'</div></div>').join('');
   }
   if(lowStock.length){
     html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;color:#6d28d9;background:#f5f3ff">📦 Low Stock ('+lowStock.length+')</div>';
     html+=lowStock.map(it=>'<div onclick="notifJumpToInventory()" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'">'+
-      '<div style="font-weight:700;font-size:.8rem">'+(it.item_name||'—')+'</div>'+
-      '<div style="font-size:.72rem;color:#6d28d9">'+(it.current_stock??0)+' '+(it.unit||'')+' left · reorder threshold '+(it.min_level??0)+'</div></div>').join('');
+      '<div style="font-weight:700;font-size:.8rem">'+escapeHtml(it.item_name||'—')+'</div>'+
+      '<div style="font-size:.72rem;color:#6d28d9">'+(it.current_stock??0)+' '+escapeHtml(it.unit||'')+' left · reorder threshold '+(it.min_level??0)+'</div></div>').join('');
   }
   list.innerHTML=html;
 }
@@ -10479,8 +10479,8 @@ async function loadAppointments() {
   try {
     const fd=document.getElementById('appt-filter-date')?.value||today();
     const [{data:todayA},{data:allA}]=await Promise.all([sb.from('appointments').select('*').eq('appointment_date',today()).order('appointment_time'),sb.from('appointments').select('*').eq('appointment_date',fd).order('appointment_time')]);
-    const rr=a=>'<tr><td>'+( a.appointment_time||'—')+'</td><td>'+(a.patient_name||'—')+'</td><td>'+statusBadge(a.appt_type)+'</td><td>'+(a.doctor||'—')+'</td><td>'+statusBadge(a.status)+'</td><td><div class="acts">'+
-      (a.phone?'<button class="btn btn-s btn-xs" onclick="sendAppointmentReminder(\''+a.id+'\',\''+a.phone+'\',\''+(a.patient_name||'').replace(/'/g,'')+'\',\''+a.appointment_date+'\',\''+(a.appointment_time||'')+'\')" title="Send SMS reminder">📲</button>':'')+
+    const rr=a=>'<tr><td>'+escapeHtml(a.appointment_time||'—')+'</td><td>'+escapeHtml(a.patient_name||'—')+'</td><td>'+statusBadge(a.appt_type)+'</td><td>'+escapeHtml(a.doctor||'—')+'</td><td>'+statusBadge(a.status)+'</td><td><div class="acts">'+
+      (a.phone?'<button class="btn btn-s btn-xs" onclick="sendAppointmentReminder(\''+a.id+'\',\''+escAttr(a.phone)+'\',\''+escAttr((a.patient_name||'').replace(/'/g,''))+'\',\''+a.appointment_date+'\',\''+escAttr(a.appointment_time||'')+'\')" title="Send SMS reminder">📲</button>':'')+
       '<button class="btn btn-s btn-xs" onclick="updateApptStatus(\''+a.id+'\',\'Arrived\')">✅</button><button class="btn btn-r btn-xs" onclick="updateApptStatus(\''+a.id+'\',\'Cancelled\')">✕</button></div></td></tr>';
     const waiting=(todayA||[]).filter(a=>a.status!=='Cancelled');
     waitBody.innerHTML=waiting.length?'<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Time</th><th>Patient</th><th>Type</th><th>Doctor</th><th>Status</th><th></th></tr></thead><tbody>'+waiting.map(rr).join('')+'</tbody></table></div>':'<div class="empty-state"><div class="empty-icon">🚶</div><div class="empty-title">No patients waiting today</div></div>';
@@ -11091,8 +11091,8 @@ const PTH_RESULT_SKIP_FIELDS = new Set(['id','patient_id','created_at','performe
 function pthFormatResultRow(r){
   const parts=Object.entries(r)
     .filter(([k,v])=>!PTH_RESULT_SKIP_FIELDS.has(k) && v!==null && v!=='')
-    .map(([k,v])=>k.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase())+': '+v);
-  return (parts.length?parts.join(' · '):'No values recorded')+(r.notes?' | Note: '+r.notes:'');
+    .map(([k,v])=>k.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase())+': '+escapeHtml(v));
+  return (parts.length?parts.join(' · '):'No values recorded')+(r.notes?' | Note: '+escapeHtml(r.notes):'');
 }
 async function loadPthTimeline() {
   if(!sb||!_pthPt) return;
@@ -11124,12 +11124,12 @@ async function loadPthTimeline() {
     _pthChemHistory=chemHist.data||[];
     const events=[];
     const pt=labPt.data;
-    if(pt) events.push({t:new Date(pt.created_at),type:'lab',icon:'📋',title:'Patient Registered',detail:'Tests: '+((pt.tests_requested||[]).join(', ')||'—'),color:'var(--teal)',data:pt});
-    (adms.data||[]).forEach(a=>events.push({t:new Date(a.admission_date),type:'admission',icon:'🛏',title:'Admitted — '+(a.ward||''),detail:(a.primary_diagnosis||'—')+' | Dr. '+(a.admitting_doctor||'—')+' | '+a.status,color:'var(--blue)',data:a}));
-    (crits.data||[]).forEach(c=>events.push({t:new Date(c.created_at),type:'lab',icon:'🚨',title:'Critical: '+c.parameter,detail:'Value: '+c.value+' | '+(c.is_acknowledged?'Acknowledged':'⚠️ Unacknowledged'),color:'var(--red)',data:c}));
-    (rads.data||[]).forEach(r=>events.push({t:new Date(r.created_at),type:'radiology',icon:'🩻',title:r.imaging_type||'Radiology',detail:(r.urgency||'')+' | '+(r.status||'Requested'),color:'var(--sero)',data:r}));
-    (invs.data||[]).forEach(i=>events.push({t:new Date(i.created_at),type:'billing',icon:'💰',title:'Invoice '+(i.invoice_no||''),detail:((i.net_amount||0).toFixed(2))+' '+(i.currency||CFG.currency)+' | '+i.payment_status,color:'var(--amber)',data:i}));
-    (consults.data||[]).forEach(c=>events.push({t:new Date(c.consultation_date||c.created_at),type:'consultation',icon:'🩺',title:'Doctor Visit'+(c.visit_type?' — '+c.visit_type:''),detail:(c.primary_diagnosis?'Dx: '+c.primary_diagnosis+' — ':'')+(c.chief_complaint||'—')+(c.consulting_doctor?' | Dr. '+c.consulting_doctor:''),color:'#7c3aed',data:c}));
+    if(pt) events.push({t:new Date(pt.created_at),type:'lab',icon:'📋',title:'Patient Registered',detail:'Tests: '+escapeHtml((pt.tests_requested||[]).join(', ')||'—'),color:'var(--teal)',data:pt});
+    (adms.data||[]).forEach(a=>events.push({t:new Date(a.admission_date),type:'admission',icon:'🛏',title:'Admitted — '+escapeHtml(a.ward||''),detail:escapeHtml(a.primary_diagnosis||'—')+' | Dr. '+escapeHtml(a.admitting_doctor||'—')+' | '+escapeHtml(a.status),color:'var(--blue)',data:a}));
+    (crits.data||[]).forEach(c=>events.push({t:new Date(c.created_at),type:'lab',icon:'🚨',title:'Critical: '+escapeHtml(c.parameter),detail:'Value: '+escapeHtml(c.value)+' | '+(c.is_acknowledged?'Acknowledged':'⚠️ Unacknowledged'),color:'var(--red)',data:c}));
+    (rads.data||[]).forEach(r=>events.push({t:new Date(r.created_at),type:'radiology',icon:'🩻',title:escapeHtml(r.imaging_type||'Radiology'),detail:escapeHtml(r.urgency||'')+' | '+escapeHtml(r.status||'Requested'),color:'var(--sero)',data:r}));
+    (invs.data||[]).forEach(i=>events.push({t:new Date(i.created_at),type:'billing',icon:'💰',title:'Invoice '+escapeHtml(i.invoice_no||''),detail:((i.net_amount||0).toFixed(2))+' '+escapeHtml(i.currency||CFG.currency)+' | '+escapeHtml(i.payment_status),color:'var(--amber)',data:i}));
+    (consults.data||[]).forEach(c=>events.push({t:new Date(c.consultation_date||c.created_at),type:'consultation',icon:'🩺',title:'Doctor Visit'+(c.visit_type?' — '+escapeHtml(c.visit_type):''),detail:(c.primary_diagnosis?'Dx: '+escapeHtml(c.primary_diagnosis)+' — ':'')+escapeHtml(c.chief_complaint||'—')+(c.consulting_doctor?' | Dr. '+escapeHtml(c.consulting_doctor):''),color:'#7c3aed',data:c}));
     resultTableNames.forEach((tname,i)=>{
       const meta=PTH_RESULT_TABLES[tname];
       (resultRows[i]?.data||[]).forEach(r=>events.push({t:new Date(r.analysis_date||r.created_at||pt?.created_at||Date.now()),type:'lab',icon:meta.icon,title:meta.label+' Result'+(r.is_verified?' ✓ Verified':' (unverified)'),detail:pthFormatResultRow(r),color:'var(--teal)',data:r}));
@@ -11154,9 +11154,9 @@ function showPthDetail(idx) {
   const e=_pthAllEvents[idx]; if(!e) return;
   const el=document.getElementById('pth-detail'); if(!el) return;
   const d=e.data; let html='<div style="border-left:4px solid '+e.color+';padding-left:12px;margin-bottom:12px"><div style="font-size:1.1rem">'+e.icon+' <strong>'+e.title+'</strong></div><div style="font-size:.75rem;color:var(--slate);margin-top:3px">'+fmtDT(e.t)+'</div></div>';
-  if(e.type==='admission'){ html+='<table style="width:100%;border-collapse:collapse">'+[['Admission No',d.admission_no],['Ward/Bed',(d.ward||'—')+' / '+(d.bed||'—')],['Doctor',d.admitting_doctor],['Diagnosis',d.primary_diagnosis],['Status',d.status],['Admitted',fmtDT(d.admission_date)],['Discharged',d.discharge_date?fmtDT(d.discharge_date):'Still admitted']].map(([k,v])=>'<tr style="border-bottom:1px solid var(--border)"><td style="padding:5px 8px;font-size:.75rem;color:var(--slate);width:40%">'+k+'</td><td style="padding:5px 8px;font-size:.8rem;font-weight:600">'+(v||'—')+'</td></tr>').join('')+'</table>'; }
-  else if(e.type==='consultation'){ html+='<table style="width:100%;border-collapse:collapse">'+[['Chief Complaint',d.chief_complaint],['Primary Diagnosis',d.primary_diagnosis],['Secondary Diagnosis',d.secondary_diagnosis],['Management Plan',d.management_plan],['Disposition',d.disposition],['Follow-up',d.followup],['Doctor',d.consulting_doctor]].filter(([k,v])=>v).map(([k,v])=>'<tr style="border-bottom:1px solid var(--border)"><td style="padding:5px 8px;font-size:.75rem;color:var(--slate);width:40%">'+k+'</td><td style="padding:5px 8px;font-size:.8rem;font-weight:600">'+v+'</td></tr>').join('')+'</table>'; }
-  else if(e.type==='billing'){ html+='<div style="margin-bottom:8px;display:flex;justify-content:space-between;font-size:.82rem"><span>Invoice: <strong>'+(d.invoice_no||'—')+'</strong></span><span>'+(d.payment_status?.toUpperCase())+'</span></div>'; const items=d.line_items||[]; html+=items.length?'<table style="width:100%;border-collapse:collapse">'+items.slice(0,8).map(i=>'<tr style="border-bottom:1px solid var(--border)"><td style="padding:4px 8px;font-size:.78rem">'+i.name+'</td><td style="padding:4px 8px;text-align:right;font-size:.78rem;font-weight:600">'+((i.total_price||0).toFixed(2))+'</td></tr>').join('')+'<tr style="background:var(--teal-lt)"><td style="padding:5px 8px;font-weight:700">Total</td><td style="padding:5px 8px;text-align:right;font-weight:800;color:var(--teal)">'+((d.net_amount||0).toFixed(2))+' '+(d.currency||CFG.currency)+'</td></tr></table>':'<div style="font-size:.78rem;color:var(--slate)">No line items</div>'; }
+  if(e.type==='admission'){ html+='<table style="width:100%;border-collapse:collapse">'+[['Admission No',d.admission_no],['Ward/Bed',(d.ward||'—')+' / '+(d.bed||'—')],['Doctor',d.admitting_doctor],['Diagnosis',d.primary_diagnosis],['Status',d.status],['Admitted',fmtDT(d.admission_date)],['Discharged',d.discharge_date?fmtDT(d.discharge_date):'Still admitted']].map(([k,v])=>'<tr style="border-bottom:1px solid var(--border)"><td style="padding:5px 8px;font-size:.75rem;color:var(--slate);width:40%">'+k+'</td><td style="padding:5px 8px;font-size:.8rem;font-weight:600">'+escapeHtml(v||'—')+'</td></tr>').join('')+'</table>'; }
+  else if(e.type==='consultation'){ html+='<table style="width:100%;border-collapse:collapse">'+[['Chief Complaint',d.chief_complaint],['Primary Diagnosis',d.primary_diagnosis],['Secondary Diagnosis',d.secondary_diagnosis],['Management Plan',d.management_plan],['Disposition',d.disposition],['Follow-up',d.followup],['Doctor',d.consulting_doctor]].filter(([k,v])=>v).map(([k,v])=>'<tr style="border-bottom:1px solid var(--border)"><td style="padding:5px 8px;font-size:.75rem;color:var(--slate);width:40%">'+k+'</td><td style="padding:5px 8px;font-size:.8rem;font-weight:600">'+escapeHtml(v)+'</td></tr>').join('')+'</table>'; }
+  else if(e.type==='billing'){ html+='<div style="margin-bottom:8px;display:flex;justify-content:space-between;font-size:.82rem"><span>Invoice: <strong>'+escapeHtml(d.invoice_no||'—')+'</strong></span><span>'+escapeHtml(d.payment_status?.toUpperCase()||'')+'</span></div>'; const items=d.line_items||[]; html+=items.length?'<table style="width:100%;border-collapse:collapse">'+items.slice(0,8).map(i=>'<tr style="border-bottom:1px solid var(--border)"><td style="padding:4px 8px;font-size:.78rem">'+escapeHtml(i.name)+'</td><td style="padding:4px 8px;text-align:right;font-size:.78rem;font-weight:600">'+((i.total_price||0).toFixed(2))+'</td></tr>').join('')+'<tr style="background:var(--teal-lt)"><td style="padding:5px 8px;font-weight:700">Total</td><td style="padding:5px 8px;text-align:right;font-weight:800;color:var(--teal)">'+((d.net_amount||0).toFixed(2))+' '+escapeHtml(d.currency||CFG.currency)+'</td></tr></table>':'<div style="font-size:.78rem;color:var(--slate)">No line items</div>'; }
   else { html+='<div style="font-size:.82rem;color:var(--ink);background:#f8fafd;padding:10px;border-radius:8px">'+e.detail+'</div>'; }
   el.innerHTML=html;
 }
@@ -11758,7 +11758,7 @@ async function globalSearch(q){
       ]);
       const pts=ptRes.data||[], invs=invRes.data||[];
       if(!pts.length && !invs.length){
-        box.innerHTML='<div style="padding:10px 12px;font-size:.78rem;color:var(--slate)">No matches for "'+term+'"</div>';
+        box.innerHTML='<div style="padding:10px 12px;font-size:.78rem;color:var(--slate)">No matches for "'+escapeHtml(term)+'"</div>';
         box.style.display='block'; return;
       }
       let html='';
@@ -11767,15 +11767,15 @@ async function globalSearch(q){
         html+=pts.map(p=>{
           const labHit=p.lab_no && p.lab_no.toLowerCase().includes(term.toLowerCase());
           return '<div onclick="jumpToPatient(\''+p.id+'\')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'">'+
-            '<div style="font-weight:700;font-size:.82rem">'+(p.name||fullName(p))+(labHit?' <span style="font-weight:400;font-size:.68rem;color:var(--teal)">· Lab '+p.lab_no+'</span>':'')+'</div>'+
-            '<div style="font-size:.7rem;color:var(--slate)">'+(p.mrn||'—')+' · '+(p.visit_no||p.lab_no||'—')+' · '+(p.phone||'—')+'</div></div>';
+            '<div style="font-weight:700;font-size:.82rem">'+escapeHtml(p.name||fullName(p))+(labHit?' <span style="font-weight:400;font-size:.68rem;color:var(--teal)">· Lab '+escapeHtml(p.lab_no)+'</span>':'')+'</div>'+
+            '<div style="font-size:.7rem;color:var(--slate)">'+escapeHtml(p.mrn||'—')+' · '+escapeHtml(p.visit_no||p.lab_no||'—')+' · '+escapeHtml(p.phone||'—')+'</div></div>';
         }).join('');
       }
       if(invs.length){
         html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:var(--slate);background:var(--bg)">Invoices</div>';
         html+=invs.map(i=>'<div onclick="jumpToInvoice(\''+i.id+'\')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'">'+
-          '<div style="font-weight:700;font-size:.82rem">'+(i.invoice_no||'—')+'</div>'+
-          '<div style="font-size:.7rem;color:var(--slate)">'+(i.patient_name||'—')+' · '+((i.net_amount??i.total_amount??0).toFixed(2))+' '+(i.currency||CFG.currency)+' · '+(i.payment_status||'')+'</div></div>').join('');
+          '<div style="font-weight:700;font-size:.82rem">'+escapeHtml(i.invoice_no||'—')+'</div>'+
+          '<div style="font-size:.7rem;color:var(--slate)">'+escapeHtml(i.patient_name||'—')+' · '+((i.net_amount??i.total_amount??0).toFixed(2))+' '+escapeHtml(i.currency||CFG.currency)+' · '+escapeHtml(i.payment_status||'')+'</div></div>').join('');
       }
       box.innerHTML=html; box.style.display='block';
     }catch(e){ box.style.display='none'; }
@@ -12060,7 +12060,7 @@ function regShowSuccess(pt, mrn, labNo, testCount, payStatus, destinations, tota
     '<h2 style="font-family:DM Serif Display,serif;font-size:1.3rem;margin:6px 0 2px">Patient Registered!</h2>'+
     '<div style="font-size:.78rem;color:var(--slate)">Invoice created automatically</div></div>'+
     '<div style="background:var(--bg);border-radius:10px;padding:14px;margin-bottom:14px;display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:.82rem">'+
-    '<div><div style="color:var(--slate);font-size:.7rem">Patient</div><div style="font-weight:700">'+(pt.name||'')+'</div></div>'+
+    '<div><div style="color:var(--slate);font-size:.7rem">Patient</div><div style="font-weight:700">'+escapeHtml(pt.name||'')+'</div></div>'+
     '<div><div style="color:var(--slate);font-size:.7rem">MRN</div><div style="font-weight:700;color:var(--teal)">'+mrn+'</div></div>'+
     '<div><div style="color:var(--slate);font-size:.7rem">Destination</div><div style="font-weight:600">'+(destList.map(d=>destLabels[d]||d).join(' + ')||'—')+'</div></div>'+
     '<div><div style="color:var(--slate);font-size:.7rem">Payment</div><div>'+payBadge+'</div></div>'+
@@ -12154,19 +12154,19 @@ async function generateInsuranceClaim(invId) {
     if(!inv) { toast('Invoice not found','err'); return; }
     const html = printHeader('Insurance Claim Form')+
       '<div style="background:#dbeafe;border:2px solid #3b82f6;border-radius:8px;padding:12px 16px;margin-bottom:14px;font-size:9pt">'+
-      '<strong>INSURANCE CLAIM</strong> — '+inv.insurance_company+' | Policy: '+(inv.insurance_no||'—')+' | Pre-auth: '+(inv.pre_auth_no||'—')+'</div>'+
+      '<strong>INSURANCE CLAIM</strong> — '+escapeHtml(inv.insurance_company)+' | Policy: '+escapeHtml(inv.insurance_no||'—')+' | Pre-auth: '+escapeHtml(inv.pre_auth_no||'—')+'</div>'+
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">'+
       '<div style="border:1px solid var(--border);border-radius:6px;padding:10px">'+
       '<div style="font-size:8pt;font-weight:700;text-transform:uppercase;color:#64748b;margin-bottom:6px">Patient Details</div>'+
-      '<div style="font-size:9pt;line-height:1.8"><strong>Name:</strong> '+(inv.patient_name||'—')+'<br>'+
-      '<strong>Lab No:</strong> '+(inv.lab_no||'—')+'<br>'+
-      '<strong>Invoice:</strong> '+(inv.invoice_no||'—')+'<br>'+
+      '<div style="font-size:9pt;line-height:1.8"><strong>Name:</strong> '+escapeHtml(inv.patient_name||'—')+'<br>'+
+      '<strong>Lab No:</strong> '+escapeHtml(inv.lab_no||'—')+'<br>'+
+      '<strong>Invoice:</strong> '+escapeHtml(inv.invoice_no||'—')+'<br>'+
       '<strong>Date:</strong> '+fmtDate(inv.created_at)+'</div></div>'+
       '<div style="border:1px solid var(--border);border-radius:6px;padding:10px">'+
       '<div style="font-size:8pt;font-weight:700;text-transform:uppercase;color:#64748b;margin-bottom:6px">Insurer Details</div>'+
-      '<div style="font-size:9pt;line-height:1.8"><strong>Company:</strong> '+(inv.insurance_company||'—')+'<br>'+
-      '<strong>Policy No:</strong> '+(inv.insurance_no||'—')+'<br>'+
-      '<strong>Pre-auth No:</strong> '+(inv.pre_auth_no||'—')+'</div></div></div>'+
+      '<div style="font-size:9pt;line-height:1.8"><strong>Company:</strong> '+escapeHtml(inv.insurance_company||'—')+'<br>'+
+      '<strong>Policy No:</strong> '+escapeHtml(inv.insurance_no||'—')+'<br>'+
+      '<strong>Pre-auth No:</strong> '+escapeHtml(inv.pre_auth_no||'—')+'</div></div></div>'+
       '<table style="width:100%;border-collapse:collapse;margin-bottom:12px">'+
       '<thead><tr style="background:#1e3a5a;color:#fff">'+
       '<th style="padding:6px 8px;font-size:8.5pt;text-align:left">Service / Test</th>'+
@@ -12175,8 +12175,8 @@ async function generateInsuranceClaim(invId) {
       '<th style="padding:6px 8px;font-size:8.5pt;text-align:right">Total</th></tr></thead>'+
       '<tbody>'+(inv.line_items||[]).map(item=>
         '<tr style="border-bottom:1px solid #f1f5fb">'+
-        '<td style="padding:4px 8px;font-size:9pt">'+item.name+'</td>'+
-        '<td style="padding:4px 8px;font-size:8.5pt;color:#64748b">'+(item.category||'')+'</td>'+
+        '<td style="padding:4px 8px;font-size:9pt">'+escapeHtml(item.name)+'</td>'+
+        '<td style="padding:4px 8px;font-size:8.5pt;color:#64748b">'+escapeHtml(item.category||'')+'</td>'+
         '<td style="padding:4px 8px;text-align:right;font-size:9pt">'+((item.unit_price||0).toFixed(2))+'</td>'+
         '<td style="padding:4px 8px;text-align:right;font-size:9pt;font-weight:600">'+((item.total_price||0).toFixed(2))+'</td></tr>'
       ).join('')+
@@ -14144,12 +14144,12 @@ function renderBillTable(invoices) {
     invoices.map(i=>{
       const unpaid=i.payment_status==='unpaid'||i.payment_status==='insurance_pending';
       return '<tr class="'+(unpaid?'pay-unpaid':'')+'" id="inv-row-'+i.id+'">'+
-        '<td style="font-family:DM Mono,monospace;font-size:.7rem;font-weight:700;color:var(--teal)">'+(i.invoice_no||'—')+(i.queue_token?'<div style="font-size:.62rem;color:var(--slate);font-weight:500">Token '+i.queue_token+'</div>':'')+'</td>'+
-        '<td style="font-weight:600;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(i.patient_name||'—')+'</td>'+
-        '<td><span class="bdg bdg-sl" style="font-size:.65rem">'+(i.invoice_type||'—')+'</span></td>'+
-        '<td style="font-weight:700;color:var(--teal);white-space:nowrap">'+((i.net_amount||i.total_amount||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}))+' '+(i.currency||'SDG')+'</td>'+
+        '<td style="font-family:DM Mono,monospace;font-size:.7rem;font-weight:700;color:var(--teal)">'+escapeHtml(i.invoice_no||'—')+(i.queue_token?'<div style="font-size:.62rem;color:var(--slate);font-weight:500">Token '+escapeHtml(i.queue_token)+'</div>':'')+'</td>'+
+        '<td style="font-weight:600;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escapeHtml(i.patient_name||'—')+'</td>'+
+        '<td><span class="bdg bdg-sl" style="font-size:.65rem">'+escapeHtml(i.invoice_type||'—')+'</span></td>'+
+        '<td style="font-weight:700;color:var(--teal);white-space:nowrap">'+((i.net_amount||i.total_amount||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}))+' '+escapeHtml(i.currency||'SDG')+'</td>'+
         '<td>'+(i.voided?'<span class="pay-tag-void">VOID</span>':paymentTag(i.payment_status))+'</td>'+
-        '<td style="font-size:.72rem">'+(i.payment_method||'—')+'</td>'+
+        '<td style="font-size:.72rem">'+escapeHtml(i.payment_method||'—')+'</td>'+
         '<td style="font-size:.72rem;color:var(--slate)">'+fmtDate(i.created_at)+'</td>'+
         '<td><div class="acts">'+
           '<button class="btn btn-s btn-xs" onclick="openBillDetail(\''+i.id+'\')">👁</button>'+
@@ -14954,7 +14954,7 @@ async function openBillDetail(id) {
     const items = inv.line_items||[];
     const itemRows = items.map(item=>
       '<tr style="border-bottom:1px solid #f1f5fb">'+
-      '<td style="padding:5px 8px;font-size:9pt">'+item.name+'</td>'+
+      '<td style="padding:5px 8px;font-size:9pt">'+escapeHtml(item.name)+'</td>'+
       '<td style="padding:5px 8px;font-size:9pt;text-align:center">'+(item.qty||1)+'</td>'+
       '<td style="padding:5px 8px;font-size:9pt;text-align:right">'+((item.unit_price||0).toLocaleString('en-US',{minimumFractionDigits:2}))+'</td>'+
       '<td style="padding:5px 8px;font-size:9pt;text-align:right;font-weight:600">'+((item.total_price||0).toLocaleString('en-US',{minimumFractionDigits:2}))+'</td></tr>'
@@ -14962,13 +14962,13 @@ async function openBillDetail(id) {
     const body = document.getElementById('bill-detail-body');
     if(body) body.innerHTML =
       '<div style="background:#f1f5f9;padding:10px 14px;border-radius:8px;margin-bottom:12px;display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:.82rem">'+
-      '<div><div style="font-size:.68rem;color:var(--slate)">Invoice No</div><div style="font-weight:700;color:var(--teal);font-family:DM Mono,monospace">'+(inv.invoice_no||'—')+'</div></div>'+
-      '<div><div style="font-size:.68rem;color:var(--slate)">Patient</div><div style="font-weight:700">'+(inv.patient_name||'—')+'</div></div>'+
+      '<div><div style="font-size:.68rem;color:var(--slate)">Invoice No</div><div style="font-weight:700;color:var(--teal);font-family:DM Mono,monospace">'+escapeHtml(inv.invoice_no||'—')+'</div></div>'+
+      '<div><div style="font-size:.68rem;color:var(--slate)">Patient</div><div style="font-weight:700">'+escapeHtml(inv.patient_name||'—')+'</div></div>'+
       '<div><div style="font-size:.68rem;color:var(--slate)">Date</div><div>'+fmtDate(inv.invoice_date||inv.created_at)+'</div></div>'+
       '<div><div style="font-size:.68rem;color:var(--slate)">Status</div><div>'+paymentTag(inv.payment_status)+'</div></div>'+
-      '<div><div style="font-size:.68rem;color:var(--slate)">Type</div><div>'+(inv.invoice_type||'—')+'</div></div>'+
-      '<div><div style="font-size:.68rem;color:var(--slate)">Method</div><div>'+(inv.payment_method||'—')+'</div></div>'+
-      (inv.insurance_company?'<div style="grid-column:1/3"><div style="font-size:.68rem;color:var(--slate)">Insurance</div><div>'+(inv.insurance_company||'—')+' / '+(inv.insurance_no||'—')+'</div></div>':'')+
+      '<div><div style="font-size:.68rem;color:var(--slate)">Type</div><div>'+escapeHtml(inv.invoice_type||'—')+'</div></div>'+
+      '<div><div style="font-size:.68rem;color:var(--slate)">Method</div><div>'+escapeHtml(inv.payment_method||'—')+'</div></div>'+
+      (inv.insurance_company?'<div style="grid-column:1/3"><div style="font-size:.68rem;color:var(--slate)">Insurance</div><div>'+escapeHtml(inv.insurance_company||'—')+' / '+escapeHtml(inv.insurance_no||'—')+'</div></div>':'')+
       '</div>'+
       '<table style="width:100%;border-collapse:collapse;margin-bottom:10px"><thead><tr style="background:#1e3a5a;color:#fff">'+
       '<th style="padding:5px 8px;font-size:8.5pt;text-align:left">Item</th><th style="padding:5px 8px;text-align:center">Qty</th>'+
@@ -15040,7 +15040,7 @@ async function printInvoice(id) {
     const items = inv.line_items||[];
     const itemRows = items.map((item,n)=>
       '<tr style="border-bottom:1px solid #f1f5fb;background:'+(n%2?'#f8fafd':'#fff')+'">'+
-      '<td style="padding:5px 8px;font-size:9pt">'+item.name+'</td>'+
+      '<td style="padding:5px 8px;font-size:9pt">'+escapeHtml(item.name)+'</td>'+
       '<td style="padding:5px 8px;font-size:9pt;text-align:center">'+(item.qty||1)+'</td>'+
       '<td style="padding:5px 8px;font-size:9pt;text-align:right">'+((item.unit_price||0).toLocaleString('en-US',{minimumFractionDigits:2}))+'</td>'+
       '<td style="padding:5px 8px;font-size:9pt;text-align:right;font-weight:600">'+((item.total_price||0).toLocaleString('en-US',{minimumFractionDigits:2}))+'</td></tr>'
@@ -15049,14 +15049,14 @@ async function printInvoice(id) {
       (newCount>1?'<div style="text-align:center"><span class="reprint-badge">⚠ DUPLICATE REPRINT — COPY #'+newCount+'</span></div>':'')+
       (inv.voided?'<div style="text-align:center"><span class="reprint-badge" style="background:#64748b">VOIDED INVOICE</span></div>':'')+
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">'+
-      '<div><div style="font-size:8pt;color:#64748b">Invoice No</div><div style="font-weight:800;font-size:11pt;color:#0b7a75;font-family:DM Mono,monospace">'+(inv.invoice_no||'—')+'</div>'+
+      '<div><div style="font-size:8pt;color:#64748b">Invoice No</div><div style="font-weight:800;font-size:11pt;color:#0b7a75;font-family:DM Mono,monospace">'+escapeHtml(inv.invoice_no||'—')+'</div>'+
       '<div style="font-size:8pt;color:#64748b;margin-top:6px">Date</div><div style="font-size:9pt">'+fmtDate(inv.invoice_date||inv.created_at)+'</div>'+
-      (inv.queue_token?'<div style="font-size:8pt;color:#64748b;margin-top:6px">Queue Token</div><div style="font-size:13pt;font-weight:900;color:#1e3a5a;font-family:DM Mono,monospace">'+inv.queue_token+'</div>':'')+
+      (inv.queue_token?'<div style="font-size:8pt;color:#64748b;margin-top:6px">Queue Token</div><div style="font-size:13pt;font-weight:900;color:#1e3a5a;font-family:DM Mono,monospace">'+escapeHtml(inv.queue_token)+'</div>':'')+
       '</div>'+
-      '<div><div style="font-size:8pt;color:#64748b">Patient</div><div style="font-weight:700;font-size:10pt">'+(inv.patient_name||'—')+'</div>'+
-      '<div style="font-size:8pt;color:#64748b;margin-top:6px">Lab No / MRN</div><div style="font-size:9pt;font-family:DM Mono,monospace">'+(inv.lab_no||'—')+'</div>'+
-      '<div style="font-size:8pt;color:#64748b;margin-top:6px">Cashier / Shift</div><div style="font-size:9pt">'+(currentProfile?.full_name||'—')+(_activeShift?' · '+_activeShift.shift_no:'')+'</div>'+
-      (inv.insurance_company?'<div style="font-size:8pt;color:#64748b;margin-top:6px">Insurance</div><div style="font-size:9pt">'+inv.insurance_company+' / '+(inv.insurance_no||'—')+(inv.pre_auth_no?' · Pre-auth '+inv.pre_auth_no:'')+'</div>':'')+
+      '<div><div style="font-size:8pt;color:#64748b">Patient</div><div style="font-weight:700;font-size:10pt">'+escapeHtml(inv.patient_name||'—')+'</div>'+
+      '<div style="font-size:8pt;color:#64748b;margin-top:6px">Lab No / MRN</div><div style="font-size:9pt;font-family:DM Mono,monospace">'+escapeHtml(inv.lab_no||'—')+'</div>'+
+      '<div style="font-size:8pt;color:#64748b;margin-top:6px">Cashier / Shift</div><div style="font-size:9pt">'+escapeHtml(currentProfile?.full_name||'—')+(_activeShift?' · '+escapeHtml(_activeShift.shift_no):'')+'</div>'+
+      (inv.insurance_company?'<div style="font-size:8pt;color:#64748b;margin-top:6px">Insurance</div><div style="font-size:9pt">'+escapeHtml(inv.insurance_company)+' / '+escapeHtml(inv.insurance_no||'—')+(inv.pre_auth_no?' · Pre-auth '+escapeHtml(inv.pre_auth_no):'')+'</div>':'')+
       '</div></div>'+
       '<table style="width:100%;border-collapse:collapse;margin-bottom:12px"><thead><tr style="background:#1e3a5a;color:#fff">'+
       '<th style="padding:6px 8px;font-size:8.5pt;text-align:left">Description</th>'+
@@ -15072,7 +15072,7 @@ async function printInvoice(id) {
       '</tfoot></table>'+
       '<div style="display:flex;justify-content:space-between;align-items:center;background:#f1f5f9;padding:10px 14px;border-radius:8px;margin-bottom:16px">'+
       '<div><span style="font-size:9pt;color:#64748b">Payment Status: </span>'+(inv.voided?'<span class="pay-tag-void">VOID</span>':paymentTag(inv.payment_status))+'</div>'+
-      '<div style="font-size:9pt;color:#64748b">Method: <strong>'+(inv.payment_method||'—')+'</strong></div></div>'+
+      '<div style="font-size:9pt;color:#64748b">Method: <strong>'+escapeHtml(inv.payment_method||'—')+'</strong></div></div>'+
       '<div style="margin-top:30px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;text-align:center">'+
       '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">Cashier / Receptionist</div>'+
       '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">Patient / Guardian</div>'+
@@ -15093,7 +15093,7 @@ async function printInvoiceThermal(id) {
     const newCount = await trackInvoicePrint(inv);
     const items = inv.line_items||[];
     const itemLines = items.map(item=>
-      '<tr><td style="font-size:8pt">'+item.name+' x'+(item.qty||1)+'</td>'+
+      '<tr><td style="font-size:8pt">'+escapeHtml(item.name)+' x'+(item.qty||1)+'</td>'+
       '<td style="text-align:right;font-size:8pt">'+((item.total_price||0).toFixed(2))+'</td></tr>'
     ).join('');
     const html =
@@ -15101,11 +15101,11 @@ async function printInvoiceThermal(id) {
       (newCount>1?'<div style="text-align:center;font-weight:800;border:1px solid #000;padding:2px;margin-bottom:6px;font-size:8pt">DUPLICATE REPRINT — COPY #'+newCount+'</div>':'')+
       (inv.voided?'<div style="text-align:center;font-weight:800;border:1px solid #000;padding:2px;margin-bottom:6px;font-size:8pt">VOIDED INVOICE</div>':'')+
       '<div style="font-size:8pt;border-top:1px dashed #000;border-bottom:1px dashed #000;padding:4px 0;margin-bottom:6px">'+
-      'Invoice: '+(inv.invoice_no||'—')+'<br>'+
-      (inv.queue_token?('Token: <b style="font-size:11pt">'+inv.queue_token+'</b><br>'):'')+
+      'Invoice: '+escapeHtml(inv.invoice_no||'—')+'<br>'+
+      (inv.queue_token?('Token: <b style="font-size:11pt">'+escapeHtml(inv.queue_token)+'</b><br>'):'')+
       'Date: '+fmtDate(inv.invoice_date||inv.created_at)+'<br>'+
-      'Patient: '+(inv.patient_name||'—')+'<br>'+
-      'Cashier: '+(currentProfile?.full_name||'—')+(_activeShift?(' / '+_activeShift.shift_no):'')+
+      'Patient: '+escapeHtml(inv.patient_name||'—')+'<br>'+
+      'Cashier: '+escapeHtml(currentProfile?.full_name||'—')+(_activeShift?(' / '+escapeHtml(_activeShift.shift_no)):'')+
       '</div>'+
       '<table>'+itemLines+'</table>'+
       '<div style="border-top:1px dashed #000;margin-top:4px;padding-top:4px;display:flex;justify-content:space-between;font-weight:800;font-size:9.5pt">'+
