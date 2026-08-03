@@ -11276,7 +11276,17 @@ async function updateSampleStatus(patientId, status, extra={}){
   // Cyto) already calls this with 'Completed' on verify and 'Released' on
   // release — hooking the visit-status check here covers all of them from
   // one place instead of duplicating the check in each save function.
-  if(status==='Completed'||status==='Released') checkAndAdvanceToResultsReady(patientId);
+  if(status==='Completed'||status==='Released') {
+    checkAndAdvanceToResultsReady(patientId);
+    // doctor_orders.status was only ever written once at order placement
+    // ('Pending') and on cancellation — nothing advanced it when the
+    // actual results were verified/released, so a Lab order stayed stuck
+    // showing "Pending" forever in both Doctor Consultation's Active
+    // Orders list and the per-admission Orders tab, even once results
+    // were long since released. Fixed at this shared choke point rather
+    // than patching each status-display call site individually.
+    try{ await sb.from('doctor_orders').update({status:'Completed'}).eq('patient_id',patientId).eq('order_type','Lab').eq('status','Pending'); }catch(e){}
+  }
 }
 
 // ── BARCODE SCANNING (camera, via html5-qrcode) ──────────────────────
