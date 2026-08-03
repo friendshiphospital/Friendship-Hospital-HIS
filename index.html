@@ -802,6 +802,42 @@ html[dir="rtl"] body{direction:rtl;}
       <div id="adm-table-body"><div class="spin-center"><div class="spinner"></div>Loading…</div></div>
     </div>
   </div>
+
+  <!-- Bed Transfer Register (Bed Management Phase 6) — surfaces
+       bed_transfers as its own hospital-wide/ward-wide log with date
+       filtering and export, rather than only the per-admission inline
+       history that already existed inside the bed detail drawer. -->
+  <div class="card" style="margin-top:14px">
+    <div class="card-hd">
+      <span class="card-title">📋 Bed Transfer Register</span>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <select class="fc" id="xferreg-ward" onchange="loadTransferRegister()" style="width:130px;padding:5px 8px;font-size:.76rem">
+          <option value="">All Wards</option>
+          <option>Medical</option><option>Surgical</option><option>ICU</option><option>Maternity</option><option>Paediatric</option><option>Private</option>
+        </select>
+        <input type="date" class="fc" id="xferreg-from" onchange="loadTransferRegister()" style="width:140px;padding:5px 8px;font-size:.76rem">
+        <span style="color:var(--slate);font-size:.75rem">to</span>
+        <input type="date" class="fc" id="xferreg-to" onchange="loadTransferRegister()" style="width:140px;padding:5px 8px;font-size:.76rem">
+        <button class="btn btn-s btn-sm" onclick="exportTransferRegisterCSV()">⬇ Export CSV</button>
+        <button class="btn btn-s btn-sm" onclick="printTransferRegister()">🖨 Print</button>
+      </div>
+    </div>
+    <div id="transfer-register-body"><div class="empty-state">Select a date range to load the register</div></div>
+  </div>
+
+  <!-- Daily Bed Census (Bed Management Phase 6) — a point-in-time
+       occupancy snapshot by ward, distinct from the live "right now"
+       counters computeBedOccupancyStats() already provides. -->
+  <div class="card" style="margin-top:14px">
+    <div class="card-hd">
+      <span class="card-title">📊 Daily Bed Census</span>
+      <div style="display:flex;gap:6px;align-items:center">
+        <input type="date" class="fc" id="census-date" onchange="loadBedCensus()" style="width:150px;padding:5px 8px;font-size:.76rem">
+        <button class="btn btn-s btn-sm" onclick="printBedCensus()">🖨 Print</button>
+      </div>
+    </div>
+    <div id="bed-census-body"><div class="empty-state">Select a date</div></div>
+  </div>
 </div>
 
 <div class="page" id="page-theatre">
@@ -1124,7 +1160,7 @@ html[dir="rtl"] body{direction:rtl;}
         <div style="overflow-x:auto;padding:8px">
           <table class="tbl" id="mar-table">
             <thead>
-              <tr><th>Drug</th><th>Dose</th><th>Route</th><th>Frequency</th><th>Time Due</th><th>Status</th><th>Given By</th><th></th></tr>
+              <tr><th>Drug</th><th>Dose</th><th>Route</th><th>Frequency</th><th>Time Due</th><th>Status</th><th>Reason (Omit/Hold/Refused)</th><th>High-Alert Verify</th><th>Given By</th><th></th></tr>
             </thead>
             <tbody id="mar-body">
               <tr><td colspan="8" class="empty-state">Select a patient or add medications from doctor orders</td></tr>
@@ -1141,13 +1177,17 @@ html[dir="rtl"] body{direction:rtl;}
         <div class="card-body" style="font-size:.78rem">
           <div style="display:flex;flex-direction:column;gap:6px">
             <div style="display:flex;align-items:center;gap:10px"><span style="background:#dcfce7;color:#166534;padding:2px 10px;border-radius:4px;font-weight:700;min-width:60px;text-align:center">Given</span><span>Medication administered on time</span></div>
-            <div style="display:flex;align-items:center;gap:10px"><span style="background:#fee2e2;color:#b91c1c;padding:2px 10px;border-radius:4px;font-weight:700;min-width:60px;text-align:center">Omit</span><span>Dose omitted — document reason</span></div>
-            <div style="display:flex;align-items:center;gap:10px"><span style="background:#fef9c3;color:#92400e;padding:2px 10px;border-radius:4px;font-weight:700;min-width:60px;text-align:center">Hold</span><span>On hold — pending review</span></div>
+            <div style="display:flex;align-items:center;gap:10px"><span style="background:#fde68a;color:#92400e;padding:2px 10px;border-radius:4px;font-weight:700;min-width:60px;text-align:center">Refused</span><span>Patient declined — reason required</span></div>
+            <div style="display:flex;align-items:center;gap:10px"><span style="background:#fee2e2;color:#b91c1c;padding:2px 10px;border-radius:4px;font-weight:700;min-width:60px;text-align:center">Omit</span><span>Dose omitted for a clinical/administrative reason — reason required</span></div>
+            <div style="display:flex;align-items:center;gap:10px"><span style="background:#fef9c3;color:#92400e;padding:2px 10px;border-radius:4px;font-weight:700;min-width:60px;text-align:center">Hold</span><span>On hold — pending review — reason required</span></div>
             <div style="display:flex;align-items:center;gap:10px"><span style="background:#dbeafe;color:#1d4ed8;padding:2px 10px;border-radius:4px;font-weight:700;min-width:60px;text-align:center">PRN</span><span>Given as needed (document indication)</span></div>
             <div style="display:flex;align-items:center;gap:10px"><span style="background:#f3f4f6;color:#374151;padding:2px 10px;border-radius:4px;font-weight:700;min-width:60px;text-align:center">Due</span><span>Scheduled — not yet given</span></div>
           </div>
           <div style="margin-top:14px;padding:10px 12px;background:#fffbeb;border-radius:8px;border:1.5px solid #fde68a;font-size:.74rem;color:#92400e;line-height:1.6">
             ⚠️ <strong>ISO 15189 / CAP:</strong> Always verify patient identity with two identifiers before administering. Document each administration immediately. Never pre-sign the MAR.
+          </div>
+          <div style="margin-top:8px;padding:10px 12px;background:#fee2e2;border-radius:8px;border:1.5px solid #fca5a5;font-size:.74rem;color:#b91c1c;line-height:1.6">
+            🚨 <strong>High-alert medications</strong> (insulin, heparin, warfarin, opioids, concentrated electrolytes, etc.) cannot be marked Given without a second staff member's independent confirmation — see the Verify column.
           </div>
         </div>
       </div>
@@ -1295,6 +1335,21 @@ html[dir="rtl"] body{direction:rtl;}
             <div class="fg"><label class="fl">Receiving</label><input class="fc" id="ho-to" placeholder="Staff name / ID"></div>
           </div>
           <div class="fg"><label class="fl">Patient Count</label><input class="fc" type="number" id="ho-count" placeholder="Total patients in ward" min="0"></div>
+          <div style="background:#f0f9ff;border-radius:8px;padding:10px 12px;margin-bottom:12px">
+            <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:#0369a1;margin-bottom:8px">🗣️ SBAR Structured Handoff</div>
+            <div class="fg"><label class="fl">Situation — what is happening right now</label>
+              <textarea class="fc" id="ho-situation" rows="2" placeholder="Current status/reason this handoff matters…"></textarea>
+            </div>
+            <div class="fg"><label class="fl">Background — relevant clinical/admission history</label>
+              <textarea class="fc" id="ho-background" rows="2" placeholder="Diagnosis, admission reason, relevant history…"></textarea>
+            </div>
+            <div class="fg"><label class="fl">Assessment — current clinical assessment</label>
+              <textarea class="fc" id="ho-assessment" rows="2" placeholder="Vitals trend, clinical impression, concerns…"></textarea>
+            </div>
+            <div class="fg"><label class="fl">Recommendation — what the receiving shift should do</label>
+              <textarea class="fc" id="ho-recommendation" rows="2" placeholder="Actions, monitoring, escalation thresholds…"></textarea>
+            </div>
+          </div>
           <div class="fg"><label class="fl">Critical / High-dependency Patients</label>
             <textarea class="fc" id="ho-critical" rows="2" placeholder="List critical patients and key concerns…"></textarea>
           </div>
@@ -1450,6 +1505,7 @@ html[dir="rtl"] body{direction:rtl;}
         <button class="tab" onclick="switchDocTab('sl',this)">📄 Sick Leave</button>
         <button class="tab" onclick="switchDocTab('ref',this)">🔁 Referral</button>
         <button class="tab" onclick="switchDocTab('discharge',this)">🏠 Discharge</button>
+        <button class="tab" onclick="switchDocTab('consent',this)">✍️ Consent</button>
         <button class="tab" onclick="switchDocTab('history',this)">🕐 History</button>
       </div>
 
@@ -1700,7 +1756,7 @@ html[dir="rtl"] body{direction:rtl;}
           <div id="order-tab-radiology" style="display:none">
             <div class="g2" style="margin-top:8px">
               <div class="fg"><label class="fl">Imaging Type</label>
-                <select class="fc" id="ord-rad-type">
+                <select class="fc" id="ord-rad-type" onchange="updateOrdRadSafetyFields()">
                   <option>X-Ray — Chest PA</option>
                   <option>X-Ray — Abdomen</option>
                   <option>X-Ray — Pelvis</option>
@@ -1736,6 +1792,27 @@ html[dir="rtl"] body{direction:rtl;}
             </div>
             <div class="fg"><label class="fl">Relevant History / Contraindications</label>
               <input class="fc" id="ord-rad-history" placeholder="Pregnancy, renal function, contrast allergy, pacemaker…">
+            </div>
+            <!-- Safety-field parity (Radiology Phase 4): the same
+                 pregnancy/contrast gate the dedicated Radiology module's
+                 own request form has always had — previously absent here,
+                 so an order placed from Doctor Orders could bypass it
+                 entirely. -->
+            <div class="fg" id="ord-rad-pregnancy-wrap" style="display:none">
+              <label class="fl">Pregnancy Status (required — female, childbearing age, X-Ray/CT)</label>
+              <select class="fc" id="ord-rad-pregnancy-status">
+                <option value="">— Confirm before submitting —</option>
+                <option value="confirmed_not_pregnant">Confirmed not pregnant</option>
+                <option value="confirmed_pregnant">Confirmed pregnant</option>
+                <option value="declined_unknown">Declined to answer / unknown</option>
+              </select>
+            </div>
+            <div class="fg" id="ord-rad-contrast-wrap" style="display:none">
+              <div class="g2">
+                <div class="fg"><label class="fl">eGFR</label><input class="fc" type="number" id="ord-rad-egfr" oninput="checkOrdRadContrastSafety()"></div>
+                <div class="fg"><label class="fl">Creatinine</label><input class="fc" type="number" id="ord-rad-creatinine"></div>
+              </div>
+              <div id="ord-rad-contrast-warning" style="display:none;color:var(--red);font-size:.74rem;font-weight:600">⚠️ eGFR &lt;30 — contrast nephrotoxicity risk, confirm with radiologist</div>
             </div>
             <button class="btn btn-p btn-sm" onclick="submitRadOrder()" style="margin-top:8px">🩻 Submit Radiology Request</button>
           </div>
@@ -2017,6 +2094,52 @@ html[dir="rtl"] body{direction:rtl;}
             <button class="btn btn-s" onclick="printDischarge()" style="flex:1;justify-content:center">🖨 Print</button>
           </div>
           <input type="hidden" id="dis-pt-id">
+        </div>
+      </div>
+
+      <!-- ── TAB: DIGITAL INFORMED CONSENT ── -->
+      <div id="doc-tab-consent" class="card" style="display:none;border-radius:0 10px 10px 10px">
+        <div class="card-body">
+          <div class="g2">
+            <div class="fg"><label class="fl">Consent Type</label>
+              <select class="fc" id="con-type">
+                <option>Surgical Procedure</option>
+                <option>Anaesthesia</option>
+                <option>High-Risk Procedure / Intervention</option>
+                <option>Blood Transfusion</option>
+                <option>Other</option>
+              </select>
+            </div>
+            <div class="fg"><label class="fl">Date</label><input class="fc" type="date" id="con-date"></div>
+          </div>
+          <div class="fg"><label class="fl">Procedure / Intervention Description</label>
+            <textarea class="fc" id="con-procedure" rows="2" placeholder="What the patient is consenting to…"></textarea>
+          </div>
+          <div class="fg"><label class="fl">Risks, Benefits &amp; Alternatives Explained</label>
+            <textarea class="fc" id="con-risks" rows="3" placeholder="Summary of what was discussed with the patient/guardian…"></textarea>
+          </div>
+          <div class="g2">
+            <div class="fg"><label class="fl">Patient / Guardian Name</label><input class="fc" id="con-signee-name"></div>
+            <div class="fg"><label class="fl">Relationship (if guardian)</label><input class="fc" id="con-relationship" placeholder="Self / Parent / Next of kin…"></div>
+          </div>
+          <div class="fg"><label class="fl">Witnessed By</label><input class="fc" id="con-witness" placeholder="Staff name"></div>
+          <div class="fg">
+            <label class="fl">Signature</label>
+            <div style="border:1.5px dashed var(--border);border-radius:8px;background:#fff">
+              <canvas id="con-sig-pad" width="500" height="150" style="width:100%;height:150px;touch-action:none;cursor:crosshair"></canvas>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
+              <span id="con-sig-status" style="font-size:.72rem;color:var(--slate)">Sign above using mouse or touch</span>
+              <button class="btn btn-s btn-xs" onclick="clearConsentSignature()">🧹 Clear</button>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <button class="btn btn-p" onclick="saveConsentForm()" style="flex:2;justify-content:center">💾 Save Signed Consent</button>
+          </div>
+          <div style="margin-top:14px">
+            <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:var(--slate);margin-bottom:6px">Signed Consent Forms — This Patient</div>
+            <div id="con-list-body"><div class="empty-state">Select a patient</div></div>
+          </div>
         </div>
       </div>
 
@@ -2616,9 +2739,9 @@ html[dir="rtl"] body{direction:rtl;}
             <div class="fg"><label class="fl" data-i18n="reg_lname">Last Name</label><input class="fc" id="r-lname" oninput="regValidate()"></div>
           </div>
           <div class="g4">
-            <div class="fg"><label class="fl" data-i18n="reg_age">Age *</label><input class="fc" type="number" id="r-age" min="0" oninput="regValidate()"></div>
-            <div class="fg"><label class="fl" data-i18n="reg_unit">Unit</label><select class="fc" id="r-age-unit"><option>Years</option><option>Months</option><option>Days</option></select></div>
-            <div class="fg"><label class="fl" data-i18n="reg_sex">Sex *</label><select class="fc" id="r-sex" onchange="regValidate()"><option value="">—</option><option>Male</option><option>Female</option></select></div>
+            <div class="fg"><label class="fl" data-i18n="reg_age">Age *</label><input class="fc" type="number" id="r-age" min="0" oninput="regValidate();updateRegRadSafetyFields()"></div>
+            <div class="fg"><label class="fl" data-i18n="reg_unit">Unit</label><select class="fc" id="r-age-unit" onchange="updateRegRadSafetyFields()"><option>Years</option><option>Months</option><option>Days</option></select></div>
+            <div class="fg"><label class="fl" data-i18n="reg_sex">Sex *</label><select class="fc" id="r-sex" onchange="regValidate();updateRegRadSafetyFields()"><option value="">—</option><option>Male</option><option>Female</option></select></div>
             <div class="fg"><label class="fl" data-i18n="reg_dob">D.O.B</label><input class="fc" type="date" id="r-dob" onchange="calcAgeFromDob()"></div>
           </div>
           <div class="g2">
@@ -2769,6 +2892,26 @@ html[dir="rtl"] body{direction:rtl;}
             </div>
             <div class="fg"><label class="fl" data-i18n="reg_clinical_indication">Clinical Indication</label>
               <textarea class="fc" id="r-rad-indication" rows="2" placeholder="Reason for study, specific question to be answered…"></textarea>
+            </div>
+            <!-- Safety-field parity (Radiology Phase 4): the same
+                 pregnancy/contrast gate the dedicated Radiology module's
+                 own request form has always had — Reception was the
+                 other order-entry path confirmed to bypass it entirely. -->
+            <div class="fg" id="r-rad-pregnancy-wrap" style="display:none">
+              <label class="fl">Pregnancy Status (required — female, childbearing age, X-Ray/CT)</label>
+              <select class="fc" id="r-rad-pregnancy-status">
+                <option value="">— Confirm before submitting —</option>
+                <option value="confirmed_not_pregnant">Confirmed not pregnant</option>
+                <option value="confirmed_pregnant">Confirmed pregnant</option>
+                <option value="declined_unknown">Declined to answer / unknown</option>
+              </select>
+            </div>
+            <div class="fg" id="r-rad-contrast-wrap" style="display:none">
+              <div class="g2">
+                <div class="fg"><label class="fl">eGFR</label><input class="fc" type="number" id="r-rad-egfr" oninput="checkRegRadContrastSafety()"></div>
+                <div class="fg"><label class="fl">Creatinine</label><input class="fc" type="number" id="r-rad-creatinine"></div>
+              </div>
+              <div id="r-rad-contrast-warning" style="display:none;color:var(--red);font-size:.74rem;font-weight:600">⚠️ eGFR &lt;30 — contrast nephrotoxicity risk, confirm with radiologist</div>
             </div>
           </div>
 
@@ -3743,6 +3886,7 @@ html[dir="rtl"] body{direction:rtl;}
           <option value="approved">Approved</option>
           <option value="rejected">Rejected</option>
           <option value="fulfilled">Fulfilled</option>
+          <option value="received">Received</option>
         </select>
       </div><div id="req-table-body"><div class="spin-center"><div class="spinner"></div>Loading…</div></div></div>
     </div>
@@ -5861,6 +6005,82 @@ html[dir="rtl"] body{direction:rtl;}
   </div>
 </div>
 
+<!-- High-alert medication second-staff double-verification (Nursing Phase 3) -->
+<div class="ov" id="mar-verify-ov">
+  <div class="mo mo-sm">
+    <div class="mo-hd"><h3>🚨 High-Alert Medication — Second Staff Verification</h3><button class="mo-x" onclick="closeOv('mar-verify-ov')">✕</button></div>
+    <div class="mo-b">
+      <div id="mar-verify-info" style="background:var(--red-lt);border:1.5px solid var(--red);border-radius:8px;padding:12px;margin-bottom:12px;font-size:.82rem"></div>
+      <p style="font-size:.76rem;color:var(--slate);margin-bottom:10px">A second staff member must independently confirm this administration. They must sign in with their own credentials — not the same login administering the dose.</p>
+      <div class="fg"><label class="fl">Second Staff Email</label><input class="fc" id="mar-verify-email" placeholder="email@hospital.sd"></div>
+      <div class="fg"><label class="fl">Password</label><input class="fc" type="password" id="mar-verify-pass"></div>
+      <div id="mar-verify-status" style="font-size:.76rem;margin-top:4px"></div>
+    </div>
+    <div class="mo-ft">
+      <button class="btn btn-s" onclick="closeOv('mar-verify-ov')">Cancel</button>
+      <button class="btn btn-r" onclick="confirmMarVerify()">✅ Confirm Verification</button>
+    </div>
+  </div>
+</div>
+
+<!-- Inventory wastage/discard (Phase 5) — same reason-coded, mandatory-
+     notes, no-silent-removals pattern as Blood Bank's unit discard flow. -->
+<div class="ov" id="inv-discard-ov">
+  <div class="mo mo-sm">
+    <div class="mo-hd"><h3>🗑 Discard Batch</h3><button class="mo-x" onclick="closeOv('inv-discard-ov')">✕</button></div>
+    <div class="mo-b">
+      <div id="inv-discard-info" style="background:var(--red-lt);border:1.5px solid var(--red);border-radius:8px;padding:12px;margin-bottom:12px;font-size:.82rem"></div>
+      <div class="fg"><label class="fl">Reason Code</label>
+        <select class="fc" id="inv-discard-reason-code">
+          <option value="">— Select —</option>
+          <option value="Expired">Expired</option>
+          <option value="Damaged">Damaged</option>
+          <option value="Contaminated">Contaminated</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+      <div class="fg"><label class="fl">Details (required — no silent discards)</label>
+        <textarea class="fc" id="inv-discard-notes" rows="3" placeholder="What happened, how it was found…"></textarea>
+      </div>
+    </div>
+    <div class="mo-ft">
+      <button class="btn btn-s" onclick="closeOv('inv-discard-ov')">Cancel</button>
+      <button class="btn btn-r" onclick="submitDiscardBatch()">🗑 Confirm Discard</button>
+    </div>
+  </div>
+</div>
+
+<!-- WHO Surgical Safety Checklist (Bed Management / Theatre Phase 6) —
+     three mandatory sequential stages tied to a theatre booking, each
+     requiring every item checked plus a signing staff name before the
+     next stage unlocks. Genuinely new — the existing pre-op checklist is
+     a single flat form completed once before the OT day; this is the
+     intra-operative three-phase team check. -->
+<div class="ov" id="who-checklist-ov">
+  <div class="mo mo-lg">
+    <div class="mo-hd"><h3>☑ WHO Surgical Safety Checklist</h3><button class="mo-x" onclick="closeOv('who-checklist-ov')">✕</button></div>
+    <div class="mo-b">
+      <div id="who-checklist-info" style="background:var(--teal-lt);border:1.5px solid var(--teal2);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:.82rem"></div>
+      <div id="who-stage-signin" class="card" style="margin-bottom:10px">
+        <div class="card-hd"><span class="card-title">1️⃣ Sign In — before induction of anaesthesia</span><span id="who-signin-badge"></span></div>
+        <div class="card-body" id="who-signin-items"></div>
+      </div>
+      <div id="who-stage-timeout" class="card" style="margin-bottom:10px">
+        <div class="card-hd"><span class="card-title">2️⃣ Time Out — before skin incision</span><span id="who-timeout-badge"></span></div>
+        <div class="card-body" id="who-timeout-items"></div>
+      </div>
+      <div id="who-stage-signout" class="card">
+        <div class="card-hd"><span class="card-title">3️⃣ Sign Out — before patient leaves OR</span><span id="who-signout-badge"></span></div>
+        <div class="card-body" id="who-signout-items"></div>
+      </div>
+    </div>
+    <div class="mo-ft">
+      <button class="btn btn-s" onclick="closeOv('who-checklist-ov')">Close</button>
+      <button class="btn btn-s" onclick="printWhoChecklist()">🖨 Print</button>
+    </div>
+  </div>
+</div>
+
 <div class="ov" id="bb-issue-ov">
   <div class="mo mo-lg">
     <div class="mo-hd"><h3>🩸 Issue Blood Unit — Two-Person Verification</h3><button class="mo-x" onclick="closeOv('bb-issue-ov')">✕</button></div>
@@ -6106,6 +6326,27 @@ async function queueWrite(table, op, payload, opts={}) {
 // ── Generic safe write: try network, queue on connectivity failure ──
 // Returns {ok, data, queued}. Throws only for real (non-network) errors so
 // existing validation/toast logic in callers keeps working unchanged.
+// Cross-cutting (Documentation/Logbook) — the existing audit_logs table
+// (a DB trigger, migration_v2.8) only covers 8 lab/consultation tables;
+// billing_audit_logs (an app-level table, same insert-and-forget pattern)
+// only covers billing. Neither reaches Nursing, Radiology, Bed
+// Management, Theatre, or Blood Bank. app_audit_logs follows the exact
+// same billing_audit_logs shape/insert pattern, generalized with a
+// `module` column, for those modules' safety-relevant actions that don't
+// already have an equally strong audit trail of their own (many already
+// do, via performed_by/verified_at columns directly on their own rows —
+// this is for the ones that didn't). A logging failure here must never
+// block the action itself, same discipline as the billing call sites.
+async function logAppAudit(module, action, recordId, details) {
+  if(!sb) return;
+  try {
+    await dbWrite('app_audit_logs','insert',{
+      module, action, record_id:recordId||null,
+      performed_by:currentProfile?.id, performed_by_name:currentProfile?.full_name||'',
+      details: details!=null ? String(details) : null,
+    });
+  } catch(e){ /* audit log failure must never block the underlying action */ }
+}
 async function dbWrite(table, op, payload, opts={}) {
   if (navigator.onLine && sb) {
     try {
@@ -6675,6 +6916,22 @@ const I18N = {
     reg_pay_method:'Payment Method', reg_pay_status:'Payment Status',
     reg_policy_no:'Policy No.', reg_preauth_no:'Pre-auth No.',
     reg_amount_paid:'Amount Paid (SDG)',
+
+    // Discharge summary print labels (Doc/Logbook Phase 2) — labels only.
+    // Free-text clinical content (diagnosis, findings, instructions) is
+    // never auto-translated: it is printed exactly as the doctor typed
+    // it, in whichever language they wrote it in. Auto-translating
+    // clinical narrative is not something this app attempts.
+    dis_title:'Discharge Summary', dis_patient:'Patient', dis_mrn:'MRN',
+    dis_admission_date:'Admission Date', dis_discharge_date:'Discharge Date',
+    dis_consultant:'Consultant', dis_ward:'Ward', dis_los:'Length of Stay',
+    dis_los_days:'days', dis_discharge_type:'Discharge Type',
+    dis_reason:'Reason for Admission / Presenting Complaint',
+    dis_clinical:'History & Clinical Findings', dis_diagnosis:'Diagnosis',
+    dis_investigations:'Investigations', dis_treatment:'Treatment & Procedures',
+    dis_condition:'Condition at Discharge', dis_medications:'Medications on Discharge',
+    dis_followup:'Follow-up Instructions', dis_referral:'GP / Referral Notes',
+    dis_sig_doctor:'Discharging Doctor', dis_sig_signature:'Signature', dis_sig_date:'Date',
   },
   ar: {
     navgrp_overview:'نظرة عامة', navgrp_reception:'🏥 الاستقبال', navgrp_hospital:'🏥 المستشفى',
@@ -6730,6 +6987,17 @@ const I18N = {
     reg_pay_method:'طريقة الدفع', reg_pay_status:'حالة الدفع',
     reg_policy_no:'رقم البوليصة', reg_preauth_no:'رقم الموافقة المسبقة',
     reg_amount_paid:'المبلغ المدفوع (جنيه سوداني)',
+
+    dis_title:'ملخص الخروج', dis_patient:'المريض', dis_mrn:'رقم الملف',
+    dis_admission_date:'تاريخ القبول', dis_discharge_date:'تاريخ الخروج',
+    dis_consultant:'الاستشاري', dis_ward:'الجناح', dis_los:'مدة الإقامة',
+    dis_los_days:'أيام', dis_discharge_type:'نوع الخروج',
+    dis_reason:'سبب القبول / الشكوى الرئيسية',
+    dis_clinical:'التاريخ المرضي والنتائج السريرية', dis_diagnosis:'التشخيص',
+    dis_investigations:'الفحوصات', dis_treatment:'العلاج والإجراءات',
+    dis_condition:'الحالة عند الخروج', dis_medications:'الأدوية عند الخروج',
+    dis_followup:'تعليمات المتابعة', dis_referral:'ملاحظات الإحالة',
+    dis_sig_doctor:'الطبيب المعالج', dis_sig_signature:'التوقيع', dis_sig_date:'التاريخ',
   }
 };
 function t(key){
@@ -7107,7 +7375,12 @@ function goPage(p) {
   const run = fn => { try{ const r=fn(); if(r&&r.catch) r.catch(e=>console.warn(e)); }catch(e){console.warn(e);} };
   const td=new Date().toISOString().slice(0,10), td16=new Date().toISOString().slice(0,16);
   if(p==='dashboard') run(loadDashboard);
-  else if(p==='admission'){ run(loadAdmissions); run(loadAdmissionStats); run(loadDoctorDropdowns); run(loadBedsForWard); run(loadBedGrid); run(subscribeBedGridRealtime); generateAdmNo(); setD('adm-date',td16); }
+  else if(p==='admission'){ run(loadAdmissions); run(loadAdmissionStats); run(loadDoctorDropdowns); run(loadBedsForWard); run(loadBedGrid); run(subscribeBedGridRealtime); generateAdmNo(); setD('adm-date',td16);
+    const xf=document.getElementById('xferreg-from'); if(xf&&!xf.value) xf.value=new Date(Date.now()-7*864e5).toISOString().slice(0,10);
+    const xt=document.getElementById('xferreg-to'); if(xt&&!xt.value) xt.value=td;
+    if(xf&&xt) run(loadTransferRegister);
+    const cd=document.getElementById('census-date'); if(cd&&!cd.value){ cd.value=td; run(loadBedCensus); }
+  }
   else if(p==='theatre'){ run(loadOTSchedule); run(loadSurgeonDropdown); setD('ot-date',td); setD('ot-sched-date',td); }
   else if(p==='nursing'){ run(loadNursingQueue); setD('ho-date',td); setEl('vs-by',currentProfile?.full_name||''); }
   else if(p==='fluid-chart'){ setD('fc-date',td); run(loadFluidChart); }
@@ -7923,6 +8196,118 @@ async function loadDashboard() {
 }
 
 // ── ADMISSIONS ────────────────────────────────────────
+// ── Bed Management Phase 6: Bed Transfer Register ───────────────────────
+// bed_transfers (migration_v2.21) already existed and already had a
+// working insert-on-transfer path, but was only ever queried per-
+// admission and shown inline in the per-bed drawer — no hospital-wide/
+// ward-wide register view, no date filtering, no export. This is purely
+// a reporting layer over data that already exists.
+let _transferRegisterRows=[];
+async function loadTransferRegister(){
+  const body=document.getElementById('transfer-register-body'); if(!body||!sb) return;
+  const ward=document.getElementById('xferreg-ward')?.value;
+  const from=document.getElementById('xferreg-from')?.value;
+  const to=document.getElementById('xferreg-to')?.value;
+  body.innerHTML='<div class="spin-center"><div class="spinner"></div>Loading…</div>';
+  try{
+    let q=sb.from('bed_transfers').select('*,patients(name,mrn)').order('transferred_at',{ascending:false}).limit(200);
+    if(ward) q=q.or('from_ward.eq.'+ward+',to_ward.eq.'+ward);
+    if(from) q=q.gte('transferred_at',from+'T00:00:00');
+    if(to) q=q.lte('transferred_at',to+'T23:59:59');
+    const {data}=await q;
+    _transferRegisterRows=data||[];
+    renderTransferRegister();
+  }catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+e.message+'</div>'; }
+}
+function renderTransferRegister(){
+  const body=document.getElementById('transfer-register-body'); if(!body) return;
+  if(!_transferRegisterRows.length){ body.innerHTML='<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-title">No transfers found for this filter</div></div>'; return; }
+  body.innerHTML='<div style="overflow-x:auto"><table class="tbl" style="font-size:.78rem"><thead><tr><th>Date/Time</th><th>Patient</th><th>From</th><th>To</th><th>Reason</th><th>Transferred By</th></tr></thead><tbody>'+
+    _transferRegisterRows.map(x=>{
+      const pt=x.patients||{};
+      return '<tr><td style="font-size:.72rem">'+fmtDT(x.transferred_at)+'</td>'+
+        '<td>'+escapeHtml(pt.name||'—')+' <span style="color:var(--slate);font-size:.7rem">'+escapeHtml(pt.mrn||'')+'</span></td>'+
+        '<td>'+escapeHtml(x.from_ward||'—')+' / '+escapeHtml(x.from_room||'—')+' / '+escapeHtml(x.from_bed||'—')+'</td>'+
+        '<td>'+escapeHtml(x.to_ward||'—')+' / '+escapeHtml(x.to_room||'—')+' / '+escapeHtml(x.to_bed||'—')+'</td>'+
+        '<td>'+escapeHtml(x.reason||'—')+'</td>'+
+        '<td style="font-size:.72rem">'+escapeHtml(x.transferred_by_name||'—')+'</td></tr>';
+    }).join('')+'</tbody></table></div>';
+}
+function exportTransferRegisterCSV(){
+  if(!_transferRegisterRows.length){ toast('No data to export','err'); return; }
+  const headers=['Date/Time','Patient','MRN','From Ward','From Room','From Bed','To Ward','To Room','To Bed','Reason','Transferred By'];
+  const esc=v=>{ const s=String(v??''); return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s; };
+  const rows=_transferRegisterRows.map(x=>{ const pt=x.patients||{};
+    return [fmtDT(x.transferred_at),pt.name||'',pt.mrn||'',x.from_ward||'',x.from_room||'',x.from_bed||'',x.to_ward||'',x.to_room||'',x.to_bed||'',x.reason||'',x.transferred_by_name||'']; });
+  const csv=[headers.map(esc).join(','), ...rows.map(r=>r.map(esc).join(','))].join('\r\n');
+  const blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download='Bed Transfer Register — '+today()+'.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
+function printTransferRegister(){
+  const rows=_transferRegisterRows;
+  const table=rows.length
+    ? '<table><thead><tr><th>Date/Time</th><th>Patient</th><th>From</th><th>To</th><th>Reason</th><th>By</th></tr></thead><tbody>'+
+      rows.map(x=>{ const pt=x.patients||{};
+        return '<tr><td>'+fmtDT(x.transferred_at)+'</td><td>'+escapeHtml(pt.name||'—')+'</td><td>'+escapeHtml(x.from_ward||'—')+'</td><td>'+escapeHtml(x.to_ward||'—')+'</td><td>'+escapeHtml(x.reason||'—')+'</td><td>'+escapeHtml(x.transferred_by_name||'—')+'</td></tr>'; }).join('')
+      +'</tbody></table>'
+    : '<div style="color:#64748b;font-size:.85rem">No transfers recorded for this filter.</div>';
+  const html=printHeader('Bed Transfer Register')+table+printFooter();
+  openPrintWin(html,'Bed Transfer Register');
+}
+
+// ── Bed Management Phase 6: Daily Bed Census ────────────────────────────
+// Confirmed genuinely missing by the Phase 0 audit — only live/current-
+// state occupancy counters (computeBedOccupancyStats()) existed, no
+// point-in-time historical snapshot capability. This reconstructs
+// occupancy for a past date from admissions still open on that date.
+// Honest limitation: it groups each admission by its CURRENT ward field,
+// not the ward it was actually in on the census date — a patient
+// transferred between wards after the census date will be counted under
+// their present ward, not their historical one, since reconstructing
+// full ward-transfer history per point in time is out of scope here.
+async function loadBedCensus(){
+  const date=document.getElementById('census-date')?.value; if(!date||!sb) return;
+  const body=document.getElementById('bed-census-body'); if(!body) return;
+  body.innerHTML='<div class="spin-center"><div class="spinner"></div>Loading…</div>';
+  try{
+    const dayEnd=date+'T23:59:59';
+    const [{data:adms},{data:beds}]=await Promise.all([
+      sb.from('admissions').select('ward').lte('admission_date',dayEnd).or('discharge_date.is.null,discharge_date.gt.'+dayEnd),
+      sb.from('beds').select('ward'),
+    ]);
+    const wards=['Medical','Surgical','ICU','Maternity','Paediatric','Private'];
+    const occ={}, total={};
+    wards.forEach(w=>{ occ[w]=0; total[w]=0; });
+    (beds||[]).forEach(b=>{ if(total[b.ward]!==undefined) total[b.ward]++; });
+    (adms||[]).forEach(a=>{ if(occ[a.ward]!==undefined) occ[a.ward]++; });
+    window._bedCensusRows=wards.map(w=>({ward:w,occupied:occ[w],total:total[w]}));
+    renderBedCensus(date);
+  }catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+e.message+'</div>'; }
+}
+function renderBedCensus(date){
+  const body=document.getElementById('bed-census-body'); if(!body) return;
+  const rows=window._bedCensusRows||[];
+  let totOcc=0, totBeds=0;
+  body.innerHTML='<div style="font-size:.72rem;color:var(--slate);margin-bottom:8px">Census as of '+fmtDate(date)+' — reconstructed from admissions still open on that date</div>'+
+    '<div style="overflow-x:auto"><table class="tbl" style="font-size:.8rem"><thead><tr><th>Ward</th><th>Occupied</th><th>Total Beds</th><th>Occupancy %</th></tr></thead><tbody>'+
+    rows.map(r=>{ totOcc+=r.occupied; totBeds+=r.total; const pct=r.total>0?Math.round(r.occupied/r.total*100):0;
+      return '<tr><td style="font-weight:600">'+r.ward+'</td><td style="text-align:center">'+r.occupied+'</td><td style="text-align:center">'+r.total+'</td><td style="text-align:center">'+pct+'%</td></tr>'; }).join('')+
+    '<tr style="font-weight:700;background:var(--bg)"><td>Total</td><td style="text-align:center">'+totOcc+'</td><td style="text-align:center">'+totBeds+'</td><td style="text-align:center">'+(totBeds>0?Math.round(totOcc/totBeds*100):0)+'%</td></tr>'+
+    '</tbody></table></div>';
+}
+function printBedCensus(){
+  const date=document.getElementById('census-date')?.value||today();
+  const rows=window._bedCensusRows||[];
+  const table=rows.length
+    ? '<table><thead><tr><th>Ward</th><th>Occupied</th><th>Total Beds</th><th>Occupancy %</th></tr></thead><tbody>'+
+      rows.map(r=>{ const pct=r.total>0?Math.round(r.occupied/r.total*100):0; return '<tr><td>'+r.ward+'</td><td>'+r.occupied+'</td><td>'+r.total+'</td><td>'+pct+'%</td></tr>'; }).join('')+'</tbody></table>'
+    : '<div style="color:#64748b;font-size:.85rem">No census data loaded.</div>';
+  const html=printHeader('Daily Bed Census — '+fmtDate(date))+table+printFooter();
+  openPrintWin(html,'Daily Bed Census');
+}
+
 function setAdmFilter(f,btn) {
   _admFilter=f;
   document.querySelectorAll('[onclick*="setAdmFilter"]').forEach(b=>b.classList.remove('active'));
@@ -8174,6 +8559,7 @@ async function setBedStatus(bedId,newStatus) {
   try {
     await sb.from('beds').update({status:newStatus,status_changed_at:new Date().toISOString()}).eq('id',bedId);
     toast('Bed status updated to '+newStatus,'ok');
+    logAppAudit('Bed Management','Manual bed status change',bedId,'New status: '+newStatus);
     loadBedGrid(); loadAdmissionStats();
   } catch(e){ toast(e.message,'err'); }
 }
@@ -8564,12 +8950,132 @@ async function loadOTSchedule() {
     setText('ots-inprog',all.filter(a=>a.status==='In Progress').length); setText('ots-emerg',all.filter(a=>a.operation_type==='Emergency').length);
     if(!all.length){ body.innerHTML='<div class="empty-state"><div class="empty-icon">🔪</div><div class="empty-title">No operations scheduled</div></div>'; return; }
     body.innerHTML=all.map(b=>'<div class="ot-time-card"><div class="ot-time-slot">'+(b.start_time||'—')+'</div><div class="ot-info"><div class="ot-op">'+(b.operation_name||'—')+'</div><div class="ot-meta">'+(b.patients?.name||fullName(b.patients)||'—')+' · '+(b.surgeon||'—')+' · '+(b.theatre_room||'—')+'</div><div class="ot-meta">Anaest: '+(b.anaesthetist||'—')+' · '+(b.anaesthesia_type||'—')+' · ASA '+(b.asa_class||'—')+'</div></div><div>'+statusBadge(b.status)+'</div><div class="ot-acts">'+
+      '<button class="btn btn-s btn-xs" onclick="openWhoChecklist(\''+b.id+'\')">☑ WHO Checklist</button>'+
       (b.status==='Scheduled'?'<button class="btn btn-p btn-xs" onclick="startOperation(\''+b.id+'\')">▶ Start</button>':'')+
       (b.status==='In Progress'?'<button class="btn btn-p btn-xs" style="background:var(--green)" onclick="openPostop(\''+b.id+'\')">✅ Done</button>':'')+
       '<button class="btn btn-s btn-xs" onclick="openPostop(\''+b.id+'\')">📝</button>'+
       (b.status==='Scheduled'?'<button class="btn btn-r btn-xs" onclick="cancelOperation(\''+b.id+'\')">✕</button>':'')+
       '</div></div>').join('');
   } catch(e){ body.innerHTML='<div style="padding:14px;color:var(--red);font-size:.78rem">'+e.message+'</div>'; }
+}
+// ── Theatre Phase 6: WHO Surgical Safety Checklist ──────────────────────
+// Standard WHO Surgical Safety Checklist items, per stage. Each stage
+// requires every item checked AND a "Completed By" name before it can be
+// confirmed; confirming a stage stamps who/when and unlocks the next
+// stage — Time Out is disabled until Sign In is complete, Sign Out until
+// Time Out is complete. This is a real sequential gate, not just three
+// independent forms.
+const WHO_CHECKLIST_ITEMS={
+  signin:[
+    'Patient has confirmed identity, site, procedure, and consent',
+    'Site marked / not applicable',
+    'Anaesthesia safety check completed',
+    'Pulse oximeter on patient and functioning',
+    'Does patient have a known allergy?',
+    'Difficult airway or aspiration risk?',
+    'Risk of >500ml blood loss (7ml/kg in children)?',
+  ],
+  timeout:[
+    'All team members have introduced themselves by name and role',
+    'Surgeon, anaesthesia professional and nurse verbally confirm patient, site, and procedure',
+    'Anticipated critical events reviewed by surgeon/anaesthetist/nursing team',
+    'Antibiotic prophylaxis given within the last 60 minutes (or not applicable)',
+    'Essential imaging displayed (or not applicable)',
+  ],
+  signout:[
+    'Nurse verbally confirms the name of the procedure recorded',
+    'Instrument, sponge, and needle counts are correct (or not applicable)',
+    'Specimen is labelled correctly, including patient name',
+    'Whether there are equipment problems to be addressed',
+    'Key concerns for recovery and management reviewed by surgeon/anaesthetist/nurse',
+  ],
+};
+let _whoCtx=null;
+async function openWhoChecklist(bookingId){
+  if(!sb) return;
+  try{
+    const {data:b}=await sb.from('theatre_bookings').select('*,patients(name,mrn)').eq('id',bookingId).single();
+    if(!b){ toast('Booking not found','err'); return; }
+    let {data:cl}=await sb.from('who_safety_checklist').select('*').eq('booking_id',bookingId).maybeSingle();
+    if(!cl){
+      const {data:created}=await sb.from('who_safety_checklist').insert({booking_id:bookingId}).select().single();
+      cl=created;
+    }
+    _whoCtx={booking:b,checklist:cl};
+    const pt=b.patients||{};
+    const info=document.getElementById('who-checklist-info');
+    if(info) info.innerHTML='<strong>'+escapeHtml(pt.name||'—')+'</strong> ('+escapeHtml(pt.mrn||'—')+') — '+escapeHtml(b.operation_name||'—')+' · '+escapeHtml(b.theatre_room||'—');
+    ['signin','timeout','signout'].forEach(renderWhoStage);
+    openOv('who-checklist-ov');
+  }catch(e){ toast(e.message,'err'); }
+}
+const WHO_STAGE_ORDER=['signin','timeout','signout'];
+function renderWhoStage(stage){
+  const cl=_whoCtx?.checklist||{};
+  const doneField=stage+'_completed_at', byField=stage+'_completed_by_name';
+  const isDone=!!cl[doneField];
+  const idx=WHO_STAGE_ORDER.indexOf(stage);
+  const priorStage=idx>0?WHO_STAGE_ORDER[idx-1]:null;
+  const priorDone=!priorStage||!!cl[priorStage+'_completed_at'];
+  const itemsEl=document.getElementById('who-'+stage+'-items');
+  const badge=document.getElementById('who-'+stage+'-badge');
+  if(badge) badge.innerHTML=isDone?'<span class="bdg bdg-g">✓ '+escapeHtml(cl[byField]||'')+' · '+fmtDT(cl[doneField])+'</span>':(priorDone?'<span class="bdg bdg-a">Pending</span>':'<span class="bdg bdg-sl">🔒 Locked</span>');
+  if(!itemsEl) return;
+  if(isDone){
+    itemsEl.innerHTML='<div style="font-size:.8rem;color:var(--green)">✅ Completed by '+escapeHtml(cl[byField]||'—')+' at '+fmtDT(cl[doneField])+'</div>';
+    return;
+  }
+  if(!priorDone){
+    itemsEl.innerHTML='<div style="font-size:.8rem;color:var(--slate)">🔒 Complete the previous stage first</div>';
+    return;
+  }
+  const items=WHO_CHECKLIST_ITEMS[stage];
+  itemsEl.innerHTML=items.map((label,i)=>'<label class="chk-item" style="display:block;margin-bottom:6px"><input type="checkbox" id="who-'+stage+'-chk-'+i+'" onchange="updateWhoStageButton(\''+stage+'\')"> '+escapeHtml(label)+'</label>').join('')+
+    '<div class="fg" style="margin-top:8px"><label class="fl">Completed By</label><input class="fc" id="who-'+stage+'-by" value="'+escapeHtml(currentProfile?.full_name||'')+'"></div>'+
+    '<button class="btn btn-p btn-sm" id="who-'+stage+'-confirm-btn" disabled onclick="completeWhoStage(\''+stage+'\')" style="margin-top:6px">✅ Confirm '+({signin:'Sign In',timeout:'Time Out',signout:'Sign Out'}[stage])+'</button>';
+}
+function updateWhoStageButton(stage){
+  const items=WHO_CHECKLIST_ITEMS[stage];
+  const allChecked=items.every((_,i)=>document.getElementById('who-'+stage+'-chk-'+i)?.checked);
+  const btn=document.getElementById('who-'+stage+'-confirm-btn'); if(btn) btn.disabled=!allChecked;
+}
+async function completeWhoStage(stage){
+  if(!sb||!_whoCtx) return;
+  const items=WHO_CHECKLIST_ITEMS[stage];
+  const allChecked=items.every((_,i)=>document.getElementById('who-'+stage+'-chk-'+i)?.checked);
+  const by=document.getElementById('who-'+stage+'-by')?.value?.trim();
+  if(!allChecked||!by){ toast('All items must be checked and a Completed By name entered','err'); return; }
+  try{
+    const payload={};
+    payload[stage+'_completed_by']=currentProfile?.id;
+    payload[stage+'_completed_by_name']=by;
+    payload[stage+'_completed_at']=new Date().toISOString();
+    payload[stage+'_items']=items.map((label,i)=>({label,checked:true}));
+    await sb.from('who_safety_checklist').update(payload).eq('id',_whoCtx.checklist.id);
+    Object.assign(_whoCtx.checklist,payload);
+    toast('✅ '+({signin:'Sign In',timeout:'Time Out',signout:'Sign Out'}[stage])+' confirmed','ok');
+    logAppAudit('Theatre','WHO Checklist — '+({signin:'Sign In',timeout:'Time Out',signout:'Sign Out'}[stage]),_whoCtx.booking.id,'Completed by '+by);
+    const idx=WHO_STAGE_ORDER.indexOf(stage);
+    WHO_STAGE_ORDER.slice(idx).forEach(renderWhoStage);
+  }catch(e){ toast(e.message,'err'); }
+}
+function printWhoChecklist(){
+  if(!_whoCtx) return;
+  const pt=_whoCtx.booking.patients||{};
+  const cl=_whoCtx.checklist;
+  const sec=(stage,title)=>{
+    const done=!!cl[stage+'_completed_at'];
+    return '<div style="margin-bottom:14px"><div style="font-size:10pt;font-weight:700;color:#1e3a5a;margin-bottom:4px">'+title+'</div>'+
+      (done?'<div style="font-size:9pt;color:#166534">✅ Completed by '+escapeHtml(cl[stage+'_completed_by_name']||'—')+' at '+fmtDT(cl[stage+'_completed_at'])+'</div>'
+           :'<div style="font-size:9pt;color:#b91c1c">Not yet completed</div>')+'</div>';
+  };
+  const html=printHeader('WHO Surgical Safety Checklist')+
+    '<div style="background:#f1f5f9;padding:10px 14px;border-radius:8px;margin-bottom:14px;font-size:9pt"><strong>Patient:</strong> '+escapeHtml(pt.name||'—')+' ('+escapeHtml(pt.mrn||'—')+') · <strong>Procedure:</strong> '+escapeHtml(_whoCtx.booking.operation_name||'—')+'</div>'+
+    sec('signin','1. Sign In — before induction of anaesthesia')+
+    sec('timeout','2. Time Out — before skin incision')+
+    sec('signout','3. Sign Out — before patient leaves OR')+
+    printFooter();
+  openPrintWin(html,'WHO Surgical Safety Checklist');
 }
 async function startOperation(id) {
   if(!sb) return;
@@ -8797,10 +9303,17 @@ async function saveHandover() {
       patient_count:parseInt(g('ho-count'),10)||null,
       critical_patients:g('ho-critical')||null,
       pending_tasks:g('ho-pending')||null,
+      // SBAR — genuinely structured (Situation/Background/Assessment/
+      // Recommendation), distinct fields rather than a single free-text
+      // block, per the Nursing Phase 3 spec.
+      situation:g('ho-situation')||null,
+      background:g('ho-background')||null,
+      assessment:g('ho-assessment')||null,
+      recommendation:g('ho-recommendation')||null,
       created_by:currentProfile?.id,
     });
     toast('✅ Handover saved','ok');
-    ['ho-notes','ho-critical','ho-pending','ho-count'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+    ['ho-notes','ho-critical','ho-pending','ho-count','ho-situation','ho-background','ho-assessment','ho-recommendation'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
   }
   catch(e){ toast(e.message,'err'); }
 }
@@ -9284,7 +9797,7 @@ async function loadDocVitalsTrend(ptId) {
 }
 
 function switchDocTab(tab,btn) {
-  ['notes','vitals','orders','rx','sl','ref','discharge','history'].forEach(t=>{
+  ['notes','vitals','orders','rx','sl','ref','discharge','consent','history'].forEach(t=>{
     const el=document.getElementById('doc-tab-'+t); if(el) el.style.display=t===tab?'':'none';
   });
   document.querySelectorAll('#doc-tabs .tab').forEach(b=>b.classList.remove('active'));
@@ -9294,6 +9807,7 @@ function switchDocTab(tab,btn) {
   if(tab==='orders') { loadActiveOrders(); buildOrderTestPanel(); }
   if(tab==='rx') loadRxDrugList();
   if(tab==='discharge'){ const d=document.getElementById('dis-date'); if(d&&!d.value) d.value=today(); const di=document.getElementById('dis-pt-id'); if(di&&_docPt) di.value=_docPt.id; loadDischargeTabAdmission(); }
+  if(tab==='consent'){ const d=document.getElementById('con-date'); if(d&&!d.value) d.value=today(); initConsentPad(); loadConsentForms(_docPt?.id); }
 }
 // Bug fix (Documentation/Logbook Phase 0 audit): the Consultation Discharge
 // tab never used to resolve/set _currentAdmId (only openDischarge(), reached
@@ -9321,6 +9835,7 @@ function switchOrderType(t,btn) {
   });
   document.querySelectorAll('#doc-tab-orders .tabs .tab').forEach(b=>b.classList.remove('active'));
   if(btn) btn.classList.add('active');
+  if(t==='radiology') updateOrdRadSafetyFields();
 }
 
 function switchOrderTestTab(tab,btn) {
@@ -9383,8 +9898,29 @@ async function _submitLabOrder(deferred) {
   } catch(e){toast(e.message,'err');}
 }
 
+// Safety-field parity (Radiology Phase 4): mirrors updateRadSafetyFields()/
+// checkContrastSafety() from the dedicated Radiology module's own request
+// form \u2014 this order-entry path previously had no pregnancy/contrast
+// fields at all, so it could bypass those checks entirely (confirmed gap
+// from the Phase 0 audit). Uses _docPt (this tab's own patient context)
+// instead of _radPt.
+function updateOrdRadSafetyFields(){
+  const type=document.getElementById('ord-rad-type')?.value||'';
+  const pregWrap=document.getElementById('ord-rad-pregnancy-wrap');
+  if(pregWrap) pregWrap.style.display=(isFemaleChildbearing(_docPt)&&/^(X-Ray|CT)/i.test(type))?'':'none';
+  const contrastWrap=document.getElementById('ord-rad-contrast-wrap');
+  if(contrastWrap) contrastWrap.style.display=isContrastStudy(type)?'':'none';
+}
+function checkOrdRadContrastSafety(){
+  const egfr=parseFloat(document.getElementById('ord-rad-egfr')?.value);
+  const warn=document.getElementById('ord-rad-contrast-warning'); if(!warn) return;
+  warn.style.display=(!isNaN(egfr)&&egfr<30)?'':'none';
+}
 async function submitRadOrder() {
   if(!sb||!_docPt){toast('Select patient','err');return;}
+  if(document.getElementById('ord-rad-pregnancy-wrap')?.style.display!=='none' && !document.getElementById('ord-rad-pregnancy-status')?.value){
+    toast('\u26a0\ufe0f Pregnancy status must be confirmed before submitting this request','err'); return;
+  }
   const isStat=document.getElementById('ord-rad-urgency')?.value==='STAT';
   if(!isPaymentCleared(_docPt)){
     checkPaymentGate(_docPt,'Radiology Order',()=>_submitRadOrder(false),{isStat,onDeferred:()=>_submitRadOrder(true)});
@@ -9395,11 +9931,12 @@ async function submitRadOrder() {
 async function _submitRadOrder(deferred) {
   const g=id=>document.getElementById(id)?.value||'';
   const deferralFields=buildPaymentDeferralFields(deferred);
+  const pregWrapShown=document.getElementById('ord-rad-pregnancy-wrap')?.style.display!=='none';
   try {
     let radiologyNo;
     for(let attempt=0; attempt<3; attempt++){
       radiologyNo = await getNextNumber('radiology_number');
-      const {error:radErr} = await sb.from('radiology_requests').insert({patient_id:_docPt.id,radiology_no:radiologyNo,imaging_type:g('ord-rad-type'),urgency:g('ord-rad-urgency'),indication:g('ord-rad-indication'),clinical_history:g('ord-rad-history'),requesting_doctor:g('doc-doctor-name')||currentProfile?.full_name,status:'Requested',created_by:currentProfile?.id,...deferralFields});
+      const {error:radErr} = await sb.from('radiology_requests').insert({patient_id:_docPt.id,radiology_no:radiologyNo,imaging_type:g('ord-rad-type'),urgency:g('ord-rad-urgency'),indication:g('ord-rad-indication'),clinical_history:g('ord-rad-history'),requesting_doctor:g('doc-doctor-name')||currentProfile?.full_name,pregnancy_status:pregWrapShown?(g('ord-rad-pregnancy-status')||null):'not_applicable',egfr_value:g('ord-rad-egfr')?parseFloat(g('ord-rad-egfr')):null,creatinine_value:g('ord-rad-creatinine')?parseFloat(g('ord-rad-creatinine')):null,status:'Requested',created_by:currentProfile?.id,...deferralFields});
       if(!radErr) break;
       const isCollision = radErr?.code==='23505' || /duplicate key|unique constraint/i.test(radErr?.message||'');
       if(isCollision && attempt<2) continue;
@@ -9408,6 +9945,8 @@ async function _submitRadOrder(deferred) {
     await sb.from('doctor_orders').insert({patient_id:_docPt.id,order_type:'Radiology',order_detail:g('ord-rad-type'),priority:g('ord-rad-urgency'),notes:g('ord-rad-indication'),ordered_by:g('doc-doctor-name')||currentProfile?.full_name,ordered_at:new Date().toISOString(),status:'Pending',created_by:currentProfile?.id,...deferralFields});
     advanceVisitStatus(_docPt.id,'Orders Pending');
     toast((deferred?'\u26a1 \u2705 Radiology request submitted (\u26a0 Payment Deferred \u2014 STAT) \u2014 No. ':'\u2705 Radiology request submitted \u2014 No. ')+radiologyNo,'ok'); loadActiveOrders();
+    ['ord-rad-egfr','ord-rad-creatinine'].forEach(id=>{const el=document.getElementById(id);if(el) el.value='';});
+    const pregSel=document.getElementById('ord-rad-pregnancy-status'); if(pregSel) pregSel.value='';
   } catch(e){toast(e.message,'err');}
 }
 
@@ -10023,6 +10562,9 @@ async function submitRegistration() {
   if(!document.getElementById('r-consent')?.checked){ toast('Patient consent required','err'); return; }
   if(_regDestinations.size===0){ toast('Please select at least one visit destination (Doctor / Lab / Radiology / Admission)','err'); return; }
   if(_regDestinations.has('radiology') && !g('r-rad-type')){ toast('Please select an imaging type','err'); return; }
+  if(_regDestinations.has('radiology') && document.getElementById('r-rad-pregnancy-wrap')?.style.display!=='none' && !g('r-rad-pregnancy-status')){
+    toast('⚠️ Pregnancy status must be confirmed before submitting this radiology request','err'); return;
+  }
   if(!sb && navigator.onLine){ toast('Not connected','err'); return; }
   const tests=[...document.querySelectorAll('.test-chk:checked')].map(c=>c.value);
   const destList=[..._regDestinations];
@@ -10102,13 +10644,18 @@ async function submitRegistration() {
       try{ await dbWrite('sample_records','insert',{patient_id:pt.id,status:'Pending'}); }catch(e){}
 
     // Auto-create a real radiology order (not just an invoice line) when Radiology was selected
-    if(needsRad)
+    if(needsRad){
+      const regPregWrapShown=document.getElementById('r-rad-pregnancy-wrap')?.style.display!=='none';
       try{ await dbWrite('radiology_requests','insert',{
         patient_id:pt.id, radiology_no:radiologyNo,
         imaging_type:g('r-rad-type'), urgency:g('r-rad-urgency')||'Routine',
         indication:g('r-rad-indication'), clinical_history:g('r-rad-history'),
+        pregnancy_status:regPregWrapShown?(g('r-rad-pregnancy-status')||null):'not_applicable',
+        egfr_value:g('r-rad-egfr')?parseFloat(g('r-rad-egfr')):null,
+        creatinine_value:g('r-rad-creatinine')?parseFloat(g('r-rad-creatinine')):null,
         requesting_doctor:getRegDoctor(), status:'Requested', created_by:currentProfile?.id
       }); }catch(e){}
+    }
 
     // Auto-create ONE invoice covering every selected destination (lab + radiology + doctor + admission + registration)
     const invNo = genOfflineId('INV');
@@ -11374,7 +11921,30 @@ function setDest(dest) {
   }
   buildRegInvoicePreview();
 }
-function onRegRadTypeChange() { buildRegInvoicePreview(); }
+function onRegRadTypeChange() { buildRegInvoicePreview(); updateRegRadSafetyFields(); }
+// Safety-field parity (Radiology Phase 4) — Reception path. Registration
+// has no patient object yet (this may be a brand-new patient being
+// registered), so this reads the form's own sex/age fields directly
+// rather than reusing isFemaleChildbearing(p), which expects an already-
+// loaded patient record with normalized sex/age_unit values.
+function isRegFemaleChildbearing(){
+  const sex=document.getElementById('r-sex')?.value;
+  const age=parseFloat(document.getElementById('r-age')?.value);
+  const unit=document.getElementById('r-age-unit')?.value||'Years';
+  return sex==='Female' && unit==='Years' && age>=12 && age<=55;
+}
+function updateRegRadSafetyFields(){
+  const type=document.getElementById('r-rad-type')?.value||'';
+  const pregWrap=document.getElementById('r-rad-pregnancy-wrap');
+  if(pregWrap) pregWrap.style.display=(isRegFemaleChildbearing()&&/^(X-Ray|CT)/i.test(type))?'':'none';
+  const contrastWrap=document.getElementById('r-rad-contrast-wrap');
+  if(contrastWrap) contrastWrap.style.display=isContrastStudy(type)?'':'none';
+}
+function checkRegRadContrastSafety(){
+  const egfr=parseFloat(document.getElementById('r-rad-egfr')?.value);
+  const warn=document.getElementById('r-rad-contrast-warning'); if(!warn) return;
+  warn.style.display=(!isNaN(egfr)&&egfr<30)?'':'none';
+}
 
 function onPayMethodChange() {
   const method = document.getElementById('r-pay-method')?.value;
@@ -11519,7 +12089,7 @@ function clearRegForm() {
   ['r-fname','r-mname','r-lname','r-age','r-phone','r-national-id','r-kin-name',
    'r-kin-phone','r-diagnosis','r-ins-co','r-ins-no','r-dob',
    'r-pay-amount','r-pay-notes','r-pay-ins-co','r-pay-ins-no','r-pay-preauth',
-   'r-rad-type','r-rad-history','r-rad-indication','r-adm-los','r-adm-consultant','r-adm-reason'].forEach(id=>{
+   'r-rad-type','r-rad-history','r-rad-indication','r-rad-egfr','r-rad-creatinine','r-rad-pregnancy-status','r-adm-los','r-adm-consultant','r-adm-reason'].forEach(id=>{
     const el=document.getElementById(id); if(el) el.value='';
   });
   document.querySelectorAll('.test-chk').forEach(c=>c.checked=false);
@@ -12158,6 +12728,13 @@ async function loadHandoverNotes() {
             <div style="font-size:.78rem"><span style="color:var(--slate);font-weight:600">Handing Over:</span> ${h.handing_over||'—'}</div>
             <div style="font-size:.78rem"><span style="color:var(--slate);font-weight:600">Receiving:</span> ${h.receiving||'—'}</div>
           </div>
+          ${(h.situation||h.background||h.assessment||h.recommendation)?'<div style="background:#f0f9ff;border-radius:8px;padding:10px 12px;margin-bottom:10px">'+
+            '<div style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:#0369a1;margin-bottom:6px">SBAR</div>'+
+            (h.situation?'<div style="font-size:.78rem;margin-bottom:4px"><strong>S:</strong> '+h.situation+'</div>':'')+
+            (h.background?'<div style="font-size:.78rem;margin-bottom:4px"><strong>B:</strong> '+h.background+'</div>':'')+
+            (h.assessment?'<div style="font-size:.78rem;margin-bottom:4px"><strong>A:</strong> '+h.assessment+'</div>':'')+
+            (h.recommendation?'<div style="font-size:.78rem"><strong>R:</strong> '+h.recommendation+'</div>':'')+
+          '</div>':''}
           ${h.critical_patients?'<div style="margin-bottom:8px"><div style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:var(--red);margin-bottom:3px">Critical / High-Dependency Patients</div><div style="background:#fef2f2;border-radius:7px;padding:8px 10px;font-size:.8rem;line-height:1.6;white-space:pre-wrap">'+h.critical_patients+'</div></div>':''}
           ${h.pending_tasks?'<div style="margin-bottom:8px"><div style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:var(--blue);margin-bottom:3px">Pending Tasks / Outstanding Orders</div><div style="background:#eff6ff;border-radius:7px;padding:8px 10px;font-size:.8rem;line-height:1.6;white-space:pre-wrap">'+h.pending_tasks+'</div></div>':''}
           ${h.notes?'<div style="background:var(--bg);border-radius:7px;padding:10px 12px;font-size:.82rem;line-height:1.6;white-space:pre-wrap">'+h.notes+'</div>':'<div style="color:var(--slate);font-size:.8rem">No notes recorded.</div>'}
@@ -12617,35 +13194,150 @@ async function printDischarge() {
         .order('created_at',{ascending:false}).limit(1).single()
     ]);
     if(!pt||!d){ toast('No discharge record found','err'); return; }
-    const sec = (label,val) => val ? `<div style="margin-bottom:12px">
-      <div style="font-size:8pt;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#64748b;margin-bottom:3px">${label}</div>
-      <div style="font-size:9.5pt;line-height:1.6">${val}</div></div>` : '';
-    const html = printHeader('Discharge Summary')+
-      '<div style="background:#f1f5f9;border-radius:8px;padding:10px 14px;margin-bottom:14px;display:grid;grid-template-columns:repeat(4,1fr);gap:8px">'+
-      `<div><div style="font-size:8pt;color:#64748b">Patient</div><div style="font-weight:700">${pt.name||fullName(pt)}</div></div>`+
-      `<div><div style="font-size:8pt;color:#64748b">MRN</div><div style="font-weight:700;color:var(--teal)">${pt.mrn||'—'}</div></div>`+
-      `<div><div style="font-size:8pt;color:#64748b">Admission Date</div><div>${fmtDate(d.admission_date||pt.created_at)}</div></div>`+
-      `<div><div style="font-size:8pt;color:#64748b">Discharge Date</div><div>${fmtDate(d.discharge_date||d.created_at)}</div></div>`+
-      `<div><div style="font-size:8pt;color:#64748b">Consultant</div><div>${d.doctor_name||d.prepared_by||'—'}</div></div>`+
-      `<div><div style="font-size:8pt;color:#64748b">Ward</div><div>${pt.ward||'—'}</div></div>`+
-      `<div><div style="font-size:8pt;color:#64748b">LOS</div><div>${d.los_days||'—'} days</div></div>`+
-      `<div><div style="font-size:8pt;color:#64748b">Discharge Type</div><div>${d.discharge_type||'—'}</div></div></div>`+
-      sec('Reason for Admission / Presenting Complaint', d.reason_for_admission||d.chief_complaint)+
-      sec('History & Clinical Findings', d.clinical_findings)+
-      sec('Diagnosis', d.primary_diagnosis||d.diagnosis||d.final_diagnosis)+
-      sec('Investigations', d.investigations_summary)+
-      sec('Treatment & Procedures', d.treatment_given||d.procedures_done)+
-      sec('Condition at Discharge', d.condition_at_discharge||d.discharge_condition)+
-      sec('Medications on Discharge', d.discharge_medications)+
-      sec('Follow-up Instructions', d.followup_instructions||d.discharge_instructions||(d.follow_up_date?('Follow-up on '+fmtDate(d.follow_up_date)+(d.follow_up_with?' with '+d.follow_up_with:'')):''))+
-      sec('GP / Referral Notes', d.referral_notes)+
-      '<div style="margin-top:20px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;text-align:center">'+
-      '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">Discharging Doctor</div>'+
-      '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">Signature</div>'+
-      '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">Date</div></div>'+
-      printFooter();
-    openPrintWin(html,'Discharge Summary');
+    openPrintWin(buildDischargeSummaryHtml(pt,d),'Discharge Summary');
   } catch(e){ toast(e.message,'err'); }
+}
+// Bilingual (Doc/Logbook Phase 2): reuses the existing I18N/t() mechanism
+// (dis_* keys) and currentLang to translate the TEMPLATE labels — the
+// bilingual toggle was previously confirmed (Phase 0 audit) to NOT cover
+// discharge summaries at all. Doctor-entered clinical free text (reason,
+// findings, diagnosis, instructions, etc.) is deliberately never auto-
+// translated — it prints exactly as typed, in whichever language the
+// doctor wrote it in, since automatic translation of clinical narrative
+// is not something this app attempts (same caution as the original
+// Phase 4 scope note). RTL is applied via an inline dir/style wrapper
+// rather than editing the shared openPrintWin() shell, since that
+// function is used by every print document in the app.
+function buildDischargeSummaryHtml(pt,d){
+  const isAr = currentLang==='ar';
+  const L = key => t(key) || key;
+  const sec = (label,val) => val ? `<div style="margin-bottom:12px">
+    <div style="font-size:8pt;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#64748b;margin-bottom:3px">${label}</div>
+    <div style="font-size:9.5pt;line-height:1.6">${val}</div></div>` : '';
+  const body = printHeader(L('dis_title'))+
+    '<div style="background:#f1f5f9;border-radius:8px;padding:10px 14px;margin-bottom:14px;display:grid;grid-template-columns:repeat(4,1fr);gap:8px">'+
+    `<div><div style="font-size:8pt;color:#64748b">${L('dis_patient')}</div><div style="font-weight:700">${pt.name||fullName(pt)}</div></div>`+
+    `<div><div style="font-size:8pt;color:#64748b">${L('dis_mrn')}</div><div style="font-weight:700;color:var(--teal)">${pt.mrn||'—'}</div></div>`+
+    `<div><div style="font-size:8pt;color:#64748b">${L('dis_admission_date')}</div><div>${fmtDate(d.admission_date||pt.created_at)}</div></div>`+
+    `<div><div style="font-size:8pt;color:#64748b">${L('dis_discharge_date')}</div><div>${fmtDate(d.discharge_date||d.created_at)}</div></div>`+
+    `<div><div style="font-size:8pt;color:#64748b">${L('dis_consultant')}</div><div>${d.doctor_name||d.prepared_by||'—'}</div></div>`+
+    `<div><div style="font-size:8pt;color:#64748b">${L('dis_ward')}</div><div>${pt.ward||'—'}</div></div>`+
+    `<div><div style="font-size:8pt;color:#64748b">${L('dis_los')}</div><div>${d.los_days||'—'} ${L('dis_los_days')}</div></div>`+
+    `<div><div style="font-size:8pt;color:#64748b">${L('dis_discharge_type')}</div><div>${d.discharge_type||'—'}</div></div></div>`+
+    sec(L('dis_reason'), d.reason_for_admission||d.chief_complaint)+
+    sec(L('dis_clinical'), d.clinical_findings)+
+    sec(L('dis_diagnosis'), d.primary_diagnosis||d.diagnosis||d.final_diagnosis)+
+    sec(L('dis_investigations'), d.investigations_summary)+
+    sec(L('dis_treatment'), d.treatment_given||d.procedures_done)+
+    sec(L('dis_condition'), d.condition_at_discharge||d.discharge_condition)+
+    sec(L('dis_medications'), d.discharge_medications)+
+    sec(L('dis_followup'), d.followup_instructions||d.discharge_instructions||(d.follow_up_date?('Follow-up on '+fmtDate(d.follow_up_date)+(d.follow_up_with?' with '+d.follow_up_with:'')):''))+
+    sec(L('dis_referral'), d.referral_notes)+
+    '<div style="margin-top:20px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;text-align:center">'+
+    `<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">${L('dis_sig_doctor')}</div>`+
+    `<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">${L('dis_sig_signature')}</div>`+
+    `<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">${L('dis_sig_date')}</div></div>`+
+    printFooter();
+  return isAr ? '<div dir="rtl" lang="ar" style="text-align:right">'+body+'</div>' : body;
+}
+
+// ── Doctor Phase 2: Digital Informed Consent ────────────────────────────
+// Canvas-based e-signature pad, no external library — same plain-canvas
+// convention already used by the Levey-Jennings chart (renderQcChart())
+// and the fluid-balance trend (drawFluidTrend()), just mouse/touch-driven
+// instead of programmatically drawn. Mirrors the DICOM viewer's existing
+// mouse-event wiring pattern (dicomStartPan()/dicomPan()/dicomEndPan()).
+let _consentHasSignature=false, _consentDrawing=false, _consentPadInit=false;
+function initConsentPad(){
+  const canvas=document.getElementById('con-sig-pad'); if(!canvas||_consentPadInit) return;
+  _consentPadInit=true;
+  const ctx=canvas.getContext('2d');
+  ctx.lineWidth=2.2; ctx.lineCap='round'; ctx.strokeStyle='#0f172a';
+  const pos=e=>{
+    const r=canvas.getBoundingClientRect();
+    const t=e.touches&&e.touches.length?e.touches[0]:e;
+    return {x:(t.clientX-r.left)*(canvas.width/r.width),y:(t.clientY-r.top)*(canvas.height/r.height)};
+  };
+  const start=e=>{ _consentDrawing=true; const p=pos(e); ctx.beginPath(); ctx.moveTo(p.x,p.y); e.preventDefault(); };
+  const move=e=>{
+    if(!_consentDrawing) return;
+    const p=pos(e); ctx.lineTo(p.x,p.y); ctx.stroke();
+    if(!_consentHasSignature){ _consentHasSignature=true; const st=document.getElementById('con-sig-status'); if(st){ st.textContent='✅ Signature captured'; st.style.color='var(--green)'; } }
+    e.preventDefault();
+  };
+  const end=()=>{ _consentDrawing=false; };
+  canvas.onmousedown=start; canvas.onmousemove=move; canvas.onmouseup=end; canvas.onmouseleave=end;
+  canvas.ontouchstart=start; canvas.ontouchmove=move; canvas.ontouchend=end;
+}
+function clearConsentSignature(){
+  const canvas=document.getElementById('con-sig-pad'); const ctx=canvas?.getContext('2d');
+  if(ctx) ctx.clearRect(0,0,canvas.width,canvas.height);
+  _consentHasSignature=false;
+  const st=document.getElementById('con-sig-status'); if(st){ st.textContent='Sign above using mouse or touch'; st.style.color='var(--slate)'; }
+}
+async function saveConsentForm(){
+  if(!sb){ toast('Not connected','err'); return; }
+  const ptId=_docPt?.id; if(!ptId){ toast('Select a patient first','err'); return; }
+  const g=id=>document.getElementById(id)?.value?.trim()||'';
+  const procedure=g('con-procedure'), signeeName=g('con-signee-name');
+  if(!procedure){ toast('Describe the procedure/intervention being consented to','err'); return; }
+  if(!signeeName){ toast('Enter the patient/guardian name','err'); return; }
+  if(!_consentHasSignature){ toast('A signature is required before saving','err'); return; }
+  const canvas=document.getElementById('con-sig-pad');
+  try{
+    await sb.from('consent_forms').insert({
+      patient_id:ptId, admission_id:_currentAdmId||null,
+      consent_type:g('con-type')||document.getElementById('con-type')?.value,
+      consent_date:g('con-date')||today(),
+      procedure_description:procedure, risks_explained:g('con-risks')||null,
+      signee_name:signeeName, signee_relationship:g('con-relationship')||'Self',
+      witnessed_by:g('con-witness')||null,
+      signature_data_url:canvas.toDataURL('image/png'),
+      performed_by:currentProfile?.id, performed_by_name:currentProfile?.full_name||'',
+      created_at:new Date().toISOString(),
+    });
+    toast('✅ Consent form saved and signed','ok');
+    ['con-procedure','con-risks','con-signee-name','con-relationship','con-witness'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+    clearConsentSignature();
+    loadConsentForms(ptId);
+  }catch(e){ toast(e.message,'err'); }
+}
+async function loadConsentForms(ptId){
+  const body=document.getElementById('con-list-body'); if(!body) return;
+  if(!ptId||!sb){ body.innerHTML='<div class="empty-state">Select a patient</div>'; return; }
+  body.innerHTML='<div class="spin-center"><div class="spinner"></div>Loading…</div>';
+  try{
+    const {data}=await sb.from('consent_forms').select('*').eq('patient_id',ptId).order('created_at',{ascending:false}).limit(10);
+    if(!data?.length){ body.innerHTML='<div class="empty-state">No consent forms signed yet</div>'; return; }
+    body.innerHTML=data.map(c=>
+      '<div style="border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">'+
+      '<div><div style="font-weight:600;font-size:.82rem">'+escapeHtml(c.consent_type||'—')+' <span class="bdg bdg-g" style="margin-left:4px">✓ Signed</span></div>'+
+      '<div style="font-size:.72rem;color:var(--slate)">'+fmtDate(c.consent_date||c.created_at)+' · '+escapeHtml(c.performed_by_name||'—')+' · Signed by '+escapeHtml(c.signee_name||'—')+'</div></div>'+
+      '<button class="btn btn-s btn-xs" onclick="printConsentForm(\''+c.id+'\')">🖨 Print</button></div>'
+    ).join('');
+  }catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+e.message+'</div>'; }
+}
+async function printConsentForm(id){
+  if(!sb) return;
+  try{
+    const {data:c}=await sb.from('consent_forms').select('*,patients(name,mrn)').eq('id',id).single();
+    if(!c){ toast('Consent form not found','err'); return; }
+    const pt=c.patients||{};
+    const html=printHeader('Digital Informed Consent')+
+      '<div style="background:#f1f5f9;border-radius:8px;padding:10px 14px;margin-bottom:14px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px">'+
+      '<div><div style="font-size:8pt;color:#64748b">Patient</div><div style="font-weight:700">'+escapeHtml(pt.name||'—')+'</div></div>'+
+      '<div><div style="font-size:8pt;color:#64748b">MRN</div><div style="font-weight:700;color:var(--teal)">'+escapeHtml(pt.mrn||'—')+'</div></div>'+
+      '<div><div style="font-size:8pt;color:#64748b">Date</div><div>'+fmtDate(c.consent_date||c.created_at)+'</div></div></div>'+
+      '<div style="margin-bottom:12px"><div style="font-size:8pt;font-weight:700;text-transform:uppercase;color:#64748b;margin-bottom:3px">Consent Type</div><div style="font-size:10pt;font-weight:700">'+escapeHtml(c.consent_type||'—')+'</div></div>'+
+      '<div style="margin-bottom:12px"><div style="font-size:8pt;font-weight:700;text-transform:uppercase;color:#64748b;margin-bottom:3px">Procedure / Intervention</div><div style="font-size:9.5pt;line-height:1.6">'+escapeHtml(c.procedure_description||'—')+'</div></div>'+
+      (c.risks_explained?'<div style="margin-bottom:12px"><div style="font-size:8pt;font-weight:700;text-transform:uppercase;color:#64748b;margin-bottom:3px">Risks, Benefits &amp; Alternatives Explained</div><div style="font-size:9.5pt;line-height:1.6">'+escapeHtml(c.risks_explained)+'</div></div>':'')+
+      '<div style="margin-bottom:12px"><div style="font-size:8pt;font-weight:700;text-transform:uppercase;color:#64748b;margin-bottom:3px">Signed By</div><div style="font-size:9.5pt">'+escapeHtml(c.signee_name||'—')+' ('+escapeHtml(c.signee_relationship||'Self')+')'+(c.witnessed_by?' · Witnessed by '+escapeHtml(c.witnessed_by):'')+'</div></div>'+
+      '<div style="margin:16px 0"><div style="font-size:8pt;font-weight:700;text-transform:uppercase;color:#64748b;margin-bottom:4px">Signature</div>'+
+      (c.signature_data_url?'<img src="'+c.signature_data_url+'" style="max-width:320px;height:auto;border:1px solid #e2e8f0;border-radius:6px;background:#fff">':'<div style="color:#b91c1c">No signature on file</div>')+'</div>'+
+      '<div style="font-size:8pt;color:#64748b;margin-top:14px">Recorded by '+escapeHtml(c.performed_by_name||'—')+' · '+fmtDT(c.created_at)+'</div>'+
+      printFooter();
+    openPrintWin(html,'Informed Consent — '+(pt.name||''));
+  }catch(e){ toast(e.message,'err'); }
 }
 
 // ── 7. searchDocPatient ───────────────────────────────────
@@ -12872,44 +13564,131 @@ async function saveWoundAssessment() {
 }
 
 // MAR functions
+// High-alert drug list (Nursing Phase 3) — ISMP-style default set,
+// overridable via Settings-style localStorage (comma-separated list,
+// key 'high_alert_drugs_override'), same pattern as TEA_REFERENCE_DEFAULTS
+// override. isHighAlertDrug() is a case-insensitive substring match
+// against the row's drug-name field, since MAR drug names are free text.
+const HIGH_ALERT_DRUGS_DEFAULT=['Insulin','Heparin','Warfarin','Potassium Chloride','KCl','Morphine','Fentanyl','Pethidine','Digoxin','Chemotherapy','Methotrexate','Concentrated Sodium Chloride','Magnesium Sulfate'];
+function highAlertDrugList(){
+  const override=localStorage.getItem('high_alert_drugs_override');
+  if(override) return override.split(',').map(s=>s.trim()).filter(Boolean);
+  return HIGH_ALERT_DRUGS_DEFAULT;
+}
+function isHighAlertDrug(name){
+  if(!name) return false;
+  const n=name.toLowerCase();
+  return highAlertDrugList().some(d=>n.includes(d.toLowerCase()));
+}
 let _marRowCount = 0;
+window._marSecondVerify = {};
 function addMarRow() {
   const i = _marRowCount++;
   const tbody = document.getElementById('mar-body');
   if(!tbody) return;
   if(tbody.querySelector('td[colspan]')) tbody.innerHTML='';
   const tr = document.createElement('tr'); tr.id='mar-row-'+i;
-  tr.innerHTML=`<td><input class="fc" id="mar-drug-${i}" placeholder="Drug name" style="padding:3px 6px;min-width:120px"></td>`+
+  tr.innerHTML=`<td><input class="fc" id="mar-drug-${i}" placeholder="Drug name" style="padding:3px 6px;min-width:120px" oninput="updateMarRowUI(${i})"></td>`+
     `<td><input class="fc" id="mar-dose-${i}" placeholder="Dose" style="padding:3px 6px;width:80px"></td>`+
     `<td><select class="fc" id="mar-route-${i}" style="padding:3px 6px"><option>PO</option><option>IV</option><option>IM</option><option>SC</option><option>SL</option><option>INH</option><option>TOP</option></select></td>`+
     `<td><select class="fc" id="mar-freq-${i}" style="padding:3px 6px"><option>Once daily</option><option>Twice daily</option><option>Three times daily</option><option>Four times daily</option><option>Every 6h</option><option>Every 8h</option><option>Every 12h</option><option>PRN</option><option>Stat</option></select></td>`+
     `<td><input class="fc" type="time" id="mar-time-${i}" style="padding:3px 6px"></td>`+
-    `<td><select class="fc" id="mar-status-${i}" style="padding:3px 6px">
+    `<td><select class="fc" id="mar-status-${i}" style="padding:3px 6px" onchange="updateMarRowUI(${i})">
       <option value="Due">Due</option><option value="Given" style="color:#166534">Given ✅</option>
+      <option value="Refused" style="color:#92400e">Refused 🚫</option>
       <option value="Omit" style="color:#b91c1c">Omit ❌</option>
       <option value="Hold" style="color:#92400e">Hold ⏸</option>
       <option value="PRN" style="color:#1d4ed8">PRN</option></select></td>`+
+    `<td><input class="fc" id="mar-reason-${i}" placeholder="Required if Omit/Hold/Refused" style="padding:3px 6px;min-width:150px;display:none"></td>`+
+    `<td id="mar-verify-cell-${i}" style="min-width:110px"></td>`+
     `<td><input class="fc" id="mar-by-${i}" placeholder="Initials" style="padding:3px 6px;width:70px"></td>`+
     `<td><button class="btn btn-r btn-xs" onclick="this.closest('tr').remove()">✕</button></td>`;
   tbody.appendChild(tr);
+}
+// Shows/hides the Reason field (Omit/Hold/Refused) and the high-alert
+// second-verify control (Given + high-alert drug) as the drug name or
+// status changes.
+function updateMarRowUI(i){
+  const status=document.getElementById('mar-status-'+i)?.value;
+  const drug=document.getElementById('mar-drug-'+i)?.value;
+  const reasonEl=document.getElementById('mar-reason-'+i);
+  if(reasonEl) reasonEl.style.display=['Omit','Hold','Refused'].includes(status)?'':'none';
+  const verifyCell=document.getElementById('mar-verify-cell-'+i);
+  if(!verifyCell) return;
+  if(status==='Given'&&isHighAlertDrug(drug)){
+    const v=window._marSecondVerify[i];
+    verifyCell.innerHTML=v
+      ? '<span class="bdg bdg-g" style="font-size:.68rem">✓ '+escapeHtml(v.staffName)+'</span>'
+      : '<button class="btn btn-r btn-xs" onclick="openMarVerify('+i+')">🔒 Verify</button>';
+  } else {
+    verifyCell.innerHTML='';
+    delete window._marSecondVerify[i];
+  }
+}
+let _marVerifyRow=null;
+function openMarVerify(i){
+  _marVerifyRow=i;
+  const drug=document.getElementById('mar-drug-'+i)?.value||'—';
+  const dose=document.getElementById('mar-dose-'+i)?.value||'—';
+  const info=document.getElementById('mar-verify-info');
+  if(info) info.innerHTML='<strong>'+escapeHtml(drug)+'</strong> — '+escapeHtml(dose)+' — high-alert medication';
+  document.getElementById('mar-verify-email').value='';
+  document.getElementById('mar-verify-pass').value='';
+  const st=document.getElementById('mar-verify-status'); if(st) st.textContent='';
+  openOv('mar-verify-ov');
+}
+// Reuses verifyStaffCredentials() exactly as built for Blood Bank's
+// two-person issue verification — a throwaway Supabase client signs in
+// as the second staff member, reads their staff row, signs back out,
+// never touching the primary session. Same "must be a different person
+// than whoever is currently logged in" rule as Blood Bank's issue flow.
+async function confirmMarVerify(){
+  const i=_marVerifyRow; if(i==null) return;
+  const email=document.getElementById('mar-verify-email')?.value?.trim();
+  const pass=document.getElementById('mar-verify-pass')?.value;
+  const status=document.getElementById('mar-verify-status');
+  if(!email||!pass){ if(status){ status.style.color='var(--red)'; status.textContent='Enter the second staff member\'s email and password.'; } return; }
+  try{
+    const staff=await verifyStaffCredentials(email,pass);
+    if(!staff){ if(status){ status.style.color='var(--red)'; status.textContent='❌ Invalid credentials.'; } return; }
+    if(staff.id===currentProfile?.id){ if(status){ status.style.color='var(--red)'; status.textContent='❌ Must be a different staff member from the one administering.'; } return; }
+    window._marSecondVerify[i]={staffId:staff.id,staffName:staff.full_name};
+    closeOv('mar-verify-ov');
+    updateMarRowUI(i);
+    toast('✅ Second-staff verification confirmed','ok');
+    logAppAudit('Nursing','High-alert MAR second-staff verification',document.getElementById('vs-pt-id')?.value,'Verified by '+staff.full_name);
+  }catch(e){ if(status){ status.style.color='var(--red)'; status.textContent=e.message; } }
 }
 
 async function saveMAR() {
   const ptId = document.getElementById('vs-pt-id')?.value;
   if(!sb||!ptId){ toast('Load a patient first','err'); return; }
   const meds = [];
-  document.querySelectorAll('[id^="mar-row-"]').forEach(row=>{
+  const rows=[...document.querySelectorAll('[id^="mar-row-"]')];
+  for(const row of rows){
     const i=row.id.replace('mar-row-','');
+    const status=document.getElementById('mar-status-'+i)?.value;
+    const drug=document.getElementById('mar-drug-'+i)?.value;
+    const reason=document.getElementById('mar-reason-'+i)?.value?.trim();
+    // No silent Omit/Hold/Refused — a reason is mandatory.
+    if(['Omit','Hold','Refused'].includes(status)&&!reason){
+      toast('Reason required for '+status+' — '+(drug||'this row'),'err'); return;
+    }
+    // High-alert medications cannot be marked Given without an
+    // independently-confirmed second staff member.
+    if(status==='Given'&&isHighAlertDrug(drug)&&!window._marSecondVerify[i]){
+      toast('🚨 '+drug+' is high-alert — second staff verification required before it can be marked Given','err'); return;
+    }
     meds.push({
-      drug:document.getElementById('mar-drug-'+i)?.value,
-      dose:document.getElementById('mar-dose-'+i)?.value,
+      drug, dose:document.getElementById('mar-dose-'+i)?.value,
       route:document.getElementById('mar-route-'+i)?.value,
       frequency:document.getElementById('mar-freq-'+i)?.value,
       time:document.getElementById('mar-time-'+i)?.value,
-      status:document.getElementById('mar-status-'+i)?.value,
+      status, reason:reason||null,
+      second_verified_by:window._marSecondVerify[i]?.staffName||null,
       given_by:document.getElementById('mar-by-'+i)?.value,
     });
-  });
+  }
   try {
     await sb.from('vital_signs').insert({
       patient_id:ptId, recorded_at:new Date().toISOString(),
@@ -12925,19 +13704,20 @@ async function printMAR() {
   const rows = [...document.querySelectorAll('[id^="mar-row-"]')].map(row=>{
     const i=row.id.replace('mar-row-','');
     const status=document.getElementById('mar-status-'+i)?.value||'';
-    const color={Given:'#166534',Omit:'#b91c1c',Hold:'#92400e',PRN:'#1d4ed8',Due:'#374151'}[status]||'';
+    const color={Given:'#166534',Refused:'#92400e',Omit:'#b91c1c',Hold:'#92400e',PRN:'#1d4ed8',Due:'#374151'}[status]||'';
     return `<tr><td>${document.getElementById('mar-drug-'+i)?.value||'—'}</td>`+
       `<td>${document.getElementById('mar-dose-'+i)?.value||'—'}</td>`+
       `<td>${document.getElementById('mar-route-'+i)?.value||'—'}</td>`+
       `<td>${document.getElementById('mar-freq-'+i)?.value||'—'}</td>`+
       `<td>${document.getElementById('mar-time-'+i)?.value||'—'}</td>`+
       `<td style="font-weight:700;color:${color}">${status}</td>`+
+      `<td>${document.getElementById('mar-reason-'+i)?.value||'—'}</td>`+
       `<td>${document.getElementById('mar-by-'+i)?.value||'—'}</td></tr>`;
   }).join('');
   const html=printHeader('Medication Administration Record (MAR)')+
     `<div style="background:#f1f5f9;padding:10px;border-radius:8px;margin-bottom:12px;font-size:9pt"><strong>Patient:</strong> ${ptName} &nbsp;|&nbsp; <strong>Date:</strong> ${today()}</div>`+
     '<table style="width:100%;border-collapse:collapse"><thead><tr style="background:#1e3a5a;color:#fff">'+
-    '<th style="padding:5px 8px;font-size:8.5pt;text-align:left">Drug</th><th style="padding:5px 8px;font-size:8.5pt;text-align:left">Dose</th><th>Route</th><th>Frequency</th><th>Time</th><th>Status</th><th>Given By</th></tr></thead>'+
+    '<th style="padding:5px 8px;font-size:8.5pt;text-align:left">Drug</th><th style="padding:5px 8px;font-size:8.5pt;text-align:left">Dose</th><th>Route</th><th>Frequency</th><th>Time</th><th>Status</th><th>Reason</th><th>Given By</th></tr></thead>'+
     `<tbody>${rows}</tbody></table>`+
     '<div style="margin-top:16px;padding:10px 12px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;font-size:8pt;color:#92400e">'+
     'Never pre-sign. Each entry must be made at time of administration. (ISO 15189 / Hospital Policy)</div>'+
@@ -13122,6 +13902,11 @@ async function printHandoverNote() {
       <div><div style="font-size:8pt;color:#64748b">Handing Over</div><div>${g('ho-from')}</div></div>
       <div><div style="font-size:8pt;color:#64748b">Receiving</div><div>${g('ho-to')}</div></div>
     </div>`+
+    `<div style="margin-bottom:12px"><div style="font-size:8pt;font-weight:700;text-transform:uppercase;color:#0369a1;margin-bottom:4px">SBAR</div>`+
+    `<div style="font-size:9.5pt;margin-bottom:3px"><strong>Situation:</strong> ${g('ho-situation')||'—'}</div>`+
+    `<div style="font-size:9.5pt;margin-bottom:3px"><strong>Background:</strong> ${g('ho-background')||'—'}</div>`+
+    `<div style="font-size:9.5pt;margin-bottom:3px"><strong>Assessment:</strong> ${g('ho-assessment')||'—'}</div>`+
+    `<div style="font-size:9.5pt"><strong>Recommendation:</strong> ${g('ho-recommendation')||'—'}</div></div>`+
     `<div style="margin-bottom:12px"><div style="font-size:8pt;font-weight:700;text-transform:uppercase;color:#b91c1c;margin-bottom:4px">Critical / High-Dependency Patients</div><div style="font-size:9.5pt;white-space:pre-wrap">${g('ho-critical')||'None documented'}</div></div>`+
     `<div style="margin-bottom:12px"><div style="font-size:8pt;font-weight:700;text-transform:uppercase;color:#1d4ed8;margin-bottom:4px">Pending Tasks / Outstanding Orders</div><div style="font-size:9.5pt;white-space:pre-wrap">${g('ho-pending')||'None'}</div></div>`+
     `<div style="margin-bottom:12px"><div style="font-size:8pt;font-weight:700;text-transform:uppercase;color:#166534;margin-bottom:4px">General Notes</div><div style="font-size:9.5pt;white-space:pre-wrap">${g('ho-notes')||'—'}</div></div>`+
@@ -15500,10 +16285,23 @@ async function openRadReport(requestId) {
   } catch(e){toast(e.message,'err');}
 }
 
+// Cross-cutting (Documentation/Logbook) — the "✓ Verified" badge pattern
+// used throughout Lab (is_verified/verified_at) had no radiology
+// equivalent: the Verify action only ever flipped the status string,
+// capturing no verifier identity or timestamp at all (confirmed gap from
+// the Phase 0 audit). This brings radiology's Verify step in line with
+// that same pattern.
 async function updateRadStatus(id,status) {
   if(!sb) return;
   try {
-    await sb.from('radiology_requests').update({status}).eq('id',id);
+    const payload={status};
+    if(status==='Verified'){
+      payload.verified_by=currentProfile?.id;
+      payload.verified_by_name=currentProfile?.full_name||'';
+      payload.verified_at=new Date().toISOString();
+    }
+    await sb.from('radiology_requests').update(payload).eq('id',id);
+    if(status==='Verified') logAppAudit('Radiology','Verify',id,'Report verified');
     toast('Status updated to '+status,'ok'); loadRadRequests();
   } catch(e){toast(e.message,'err');}
 }
@@ -15543,8 +16341,27 @@ async function saveRadReport() {
     // for the bell's own periodic poll.
     refreshNotifications();
     try{
-      const {data:rr}=await sb.from('radiology_requests').select('patient_id').eq('id',requestId).maybeSingle();
+      const {data:rr}=await sb.from('radiology_requests').select('patient_id,imaging_type,patients(mrn,lab_no)').eq('id',requestId).maybeSingle();
       if(rr?.patient_id) checkAndAdvanceToResultsReady(rr.patient_id);
+      // Radiology Phase 4: integrate critical findings into the SAME
+      // shared critical_values/Criticals-page/notification-bell pipeline
+      // Lab and Blood Bank already use, rather than leaving radiology
+      // critical findings visible only inside the Radiology module's own
+      // lists (the gap confirmed by the Phase 0 audit). This does not
+      // replace the structured name/time/channel capture above — both
+      // are kept, since that detail is genuinely richer than Lab's.
+      if(isCritical&&rr?.patient_id){
+        try{
+          await sb.from('critical_values').insert({
+            patient_id:rr.patient_id, department:'Radiology',
+            parameter:(rr.imaging_type||'Radiology')+' — Critical Finding',
+            value:g('rad-critical-desc'), unit:'', reference:'N/A',
+            mrn:rr.patients?.mrn||null, lab_no:rr.patients?.lab_no||null,
+            is_acknowledged:false, notified_by:g('rad-crit-notified-name'),
+            created_by:currentProfile?.id,
+          });
+        }catch(e){}
+      }
     }catch(e){}
   } catch(e){toast(e.message,'err');}
 }
@@ -15602,7 +16419,7 @@ async function loadReportedStudies() {
         '<td style="font-size:.78rem;font-weight:600">'+(r.imaging_type||'—')+(r.is_critical?' <span class="bdg" style="background:#b91c1c;color:#fff">🚨 CRITICAL</span>':'')+'</td>'+
         '<td style="font-size:.75rem">'+(r.radiologist||'—')+'</td>'+
         '<td style="font-size:.75rem;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(r.impression||'—')+'</td>'+
-        '<td>'+statusBadge(r.status)+'</td>'+
+        '<td>'+statusBadge(r.status)+(r.status==='Verified'&&r.verified_by_name?'<div style="font-size:.65rem;color:var(--slate);margin-top:2px">by '+r.verified_by_name+' · '+fmtDT(r.verified_at)+'</div>':'')+'</td>'+
         '<td><div class="acts">'+
           '<button class="btn btn-s btn-xs" onclick="openRadReport(\''+r.id+'\')">📝</button>'+
           '<button class="btn btn-s btn-xs" onclick="printRadReportById(\''+r.id+'\')">🖨</button>'+
@@ -15978,7 +16795,7 @@ function renderLotRegister(){
   body.innerHTML='<div style="overflow-x:auto"><table class="tbl" style="font-size:.78rem"><thead><tr><th>Item</th><th>Lot No</th><th>Received</th><th>Qty</th><th>Opened</th><th>Printed Expiry</th><th>Effective Expiry</th><th>Status</th></tr></thead><tbody>'+
     rows.map(({batch:b,item})=>{
       const eff=effectiveBatchExpiry(b,item);
-      const st=computeExpiryStatus(eff);
+      const st=b.discard_reason_code?{emoji:'🗑',label:'Discarded — '+b.discard_reason_code,color:'var(--slate)'}:computeExpiryStatus(eff);
       return '<tr><td style="font-weight:600">'+escapeHtml(item.item_name||'—')+'</td>'+
         '<td style="font-family:DM Mono,monospace;color:var(--teal)">'+escapeHtml(b.batch_no||'—')+'</td>'+
         '<td>'+fmtDate(b.received_date)+'</td><td style="text-align:center">'+(b.quantity??'—')+'</td>'+
@@ -16064,7 +16881,8 @@ function invBatchesPanelHtml(it,batches){
       '<td>'+(b.quantity??0)+' '+escapeHtml(it.unit||'')+'</td>'+
       '<td style="font-size:.72rem">'+(b.expiry_date||'—')+(b.is_opened?' <span style="color:var(--amber)">(opened '+(b.opened_date||'')+')</span>':'')+'</td>'+
       '<td><span class="bdg" style="background:'+st.color+'22;color:'+st.color+'">'+st.emoji+' '+escapeHtml(st.label)+'</span></td>'+
-      '<td>'+(b.is_opened?'—':'<button class="btn btn-s btn-xs" onclick="markBatchOpened('+b.id+')">Mark Opened</button>')+'</td>'+
+      '<td style="display:flex;gap:4px">'+(b.is_opened?'':'<button class="btn btn-s btn-xs" onclick="markBatchOpened('+b.id+')">Mark Opened</button>')+
+      '<button class="btn btn-r btn-xs" onclick="openDiscardBatch(\''+b.id+'\',\''+it.id+'\')">🗑 Discard</button></td>'+
       '</tr>';
   }).join('') : '<tr><td colspan="5" style="text-align:center;color:var(--slate);padding:10px">No active batches — this item has no FEFO detail yet</td></tr>';
   return '<div style="font-size:.72rem;font-weight:700;text-transform:uppercase;color:var(--slate);margin-bottom:6px">📦 Batches (FEFO order — soonest expiry dispensed first)</div>'+
@@ -16098,6 +16916,38 @@ async function markBatchOpened(batchId){
   if(!sb) return;
   try{ await sb.from('inventory_batches').update({is_opened:true,opened_date:today()}).eq('id',batchId); toast('Batch marked as opened','ok'); loadInventory(); }
   catch(e){ toast(e.message,'err'); }
+}
+// Inventory Phase 5 — wastage/discard log. Ports Blood Bank's existing
+// discard pattern (reason code + mandatory notes, no silent removals)
+// to general Inventory, which previously had no equivalent at all —
+// expired batches were only ever visually flagged, never formally
+// written off with a reason.
+let _invDiscardBatchId=null, _invDiscardItemId=null;
+function openDiscardBatch(batchId,itemId){
+  _invDiscardBatchId=batchId; _invDiscardItemId=itemId;
+  const it=(window._invItems||[]).find(x=>x.id===itemId);
+  const info=document.getElementById('inv-discard-info');
+  if(info) info.innerHTML='<strong>'+escapeHtml(it?.item_name||'—')+'</strong>';
+  document.getElementById('inv-discard-reason-code').value='';
+  document.getElementById('inv-discard-notes').value='';
+  openOv('inv-discard-ov');
+}
+async function submitDiscardBatch(){
+  if(!sb||!_invDiscardBatchId) return;
+  const reasonCode=document.getElementById('inv-discard-reason-code')?.value;
+  const notes=document.getElementById('inv-discard-notes')?.value?.trim();
+  if(!reasonCode){ toast('Select a reason code','err'); return; }
+  if(!notes){ toast('Details are required — no silent discards','err'); return; }
+  try{
+    await sb.from('inventory_batches').update({
+      is_active:false, discard_reason_code:reasonCode, discard_notes:notes,
+      discarded_by:currentProfile?.id, discarded_by_name:currentProfile?.full_name||'',
+      discarded_at:new Date().toISOString(),
+    }).eq('id',_invDiscardBatchId);
+    toast('🗑 Batch discarded — '+reasonCode,'ok');
+    closeOv('inv-discard-ov');
+    loadInventory();
+  }catch(e){ toast(e.message,'err'); }
 }
 // FEFO: consumes from the batch with the soonest EFFECTIVE expiry first,
 // skipping any batch already 🔴 Expired (auto-locked from usage, per
@@ -16843,6 +17693,7 @@ async function submitDiscardUnit() {
   try {
     await sb.from('blood_units').update({status:'Discarded',discard_reason_code:reasonCode,discard_reason:notes,discarded_by:currentProfile?.id,discarded_by_name:currentProfile?.full_name,discarded_at:new Date().toISOString()}).eq('id',unitId);
     toast('✅ Unit discarded — reason recorded','ok');
+    logAppAudit('Blood Bank','Unit discarded',unitId,reasonCode+': '+notes);
     closeOv('bb-discard-ov');
     loadBloodUnits();
   } catch(e){ toast(e.message,'err'); }
@@ -17893,8 +18744,10 @@ async function loadStockRequisitions(){
       data.map(r=>{
         const itemLabel=(r.reagent_inventory?.item_name||'\u2014')+' ('+r.qty_requested+' '+(r.reagent_inventory?.unit||'')+')';
         let actions='';
+        const canConfirmReceipt=r.requested_by===currentProfile?.id||currentProfile?.role==='admin';
         if(r.status==='pending'&&canDecide) actions='<button class="btn btn-p btn-xs" onclick="decideRequisition('+r.id+',\'approved\')">\u2705 Approve</button> <button class="btn btn-r btn-xs" onclick="decideRequisition('+r.id+',\'rejected\')">\u2715 Reject</button>';
         else if(r.status==='approved'&&canDecide) actions='<button class="btn btn-w btn-xs" onclick="fulfillRequisition('+r.id+')">\ud83d\udce4 Fulfill (FEFO)</button>';
+        else if(r.status==='fulfilled'&&canConfirmReceipt) actions='<button class="btn btn-p btn-xs" onclick="confirmRequisitionReceipt('+r.id+')">\ud83d\udce5 Confirm Receipt</button>';
         return '<tr>'+
           '<td>'+escapeHtml(r.requesting_department||'\u2014')+'</td>'+
           '<td>'+escapeHtml(itemLabel)+'</td>'+
@@ -17929,6 +18782,25 @@ async function fulfillRequisition(id){
     toast(shortfall>0?'\u26a0\ufe0f Partially fulfilled: '+dispensed+' of '+req.qty_requested+' (insufficient non-expired stock)':'\ud83d\udce4 Requisition fulfilled \u2014 '+dispensed+' transferred to '+req.requesting_department,shortfall>0?'err':'ok');
     loadStockRequisitions();
     loadInventory();
+  }catch(e){ toast(e.message,'err'); }
+}
+// Inventory Phase 5 \u2014 closes the department-to-department loop: the
+// requisition/transfer pipeline previously ended at "fulfilled" (decided
+// and released by the same admin/lab_supervisor role, per the Phase 0
+// audit), with no step for the REQUESTING department to confirm the
+// stock actually arrived, in the quantity expected. This is a genuine
+// third, distinct actor (the original requester, not whoever
+// approved/fulfilled it) closing the transfer.
+async function confirmRequisitionReceipt(id){
+  if(!sb) return;
+  try{
+    await sb.from('stock_requisitions').update({
+      status:'received', received_confirmed_by:currentProfile?.id,
+      received_confirmed_by_name:currentProfile?.full_name||'',
+      received_confirmed_at:new Date().toISOString(),
+    }).eq('id',id);
+    toast('\ud83d\udce5 Receipt confirmed','ok');
+    loadStockRequisitions();
   }catch(e){ toast(e.message,'err'); }
 }
 
