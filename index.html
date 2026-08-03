@@ -3850,6 +3850,7 @@ html[dir="rtl"] body{direction:rtl;}
           <option value="approved">Approved</option>
           <option value="rejected">Rejected</option>
           <option value="fulfilled">Fulfilled</option>
+          <option value="received">Received</option>
         </select>
       </div><div id="req-table-body"><div class="spin-center"><div class="spinner"></div>Loading…</div></div></div>
     </div>
@@ -5982,6 +5983,33 @@ html[dir="rtl"] body{direction:rtl;}
     <div class="mo-ft">
       <button class="btn btn-s" onclick="closeOv('mar-verify-ov')">Cancel</button>
       <button class="btn btn-r" onclick="confirmMarVerify()">✅ Confirm Verification</button>
+    </div>
+  </div>
+</div>
+
+<!-- Inventory wastage/discard (Phase 5) — same reason-coded, mandatory-
+     notes, no-silent-removals pattern as Blood Bank's unit discard flow. -->
+<div class="ov" id="inv-discard-ov">
+  <div class="mo mo-sm">
+    <div class="mo-hd"><h3>🗑 Discard Batch</h3><button class="mo-x" onclick="closeOv('inv-discard-ov')">✕</button></div>
+    <div class="mo-b">
+      <div id="inv-discard-info" style="background:var(--red-lt);border:1.5px solid var(--red);border-radius:8px;padding:12px;margin-bottom:12px;font-size:.82rem"></div>
+      <div class="fg"><label class="fl">Reason Code</label>
+        <select class="fc" id="inv-discard-reason-code">
+          <option value="">— Select —</option>
+          <option value="Expired">Expired</option>
+          <option value="Damaged">Damaged</option>
+          <option value="Contaminated">Contaminated</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+      <div class="fg"><label class="fl">Details (required — no silent discards)</label>
+        <textarea class="fc" id="inv-discard-notes" rows="3" placeholder="What happened, how it was found…"></textarea>
+      </div>
+    </div>
+    <div class="mo-ft">
+      <button class="btn btn-s" onclick="closeOv('inv-discard-ov')">Cancel</button>
+      <button class="btn btn-r" onclick="submitDiscardBatch()">🗑 Confirm Discard</button>
     </div>
   </div>
 </div>
@@ -16427,7 +16455,7 @@ function renderLotRegister(){
   body.innerHTML='<div style="overflow-x:auto"><table class="tbl" style="font-size:.78rem"><thead><tr><th>Item</th><th>Lot No</th><th>Received</th><th>Qty</th><th>Opened</th><th>Printed Expiry</th><th>Effective Expiry</th><th>Status</th></tr></thead><tbody>'+
     rows.map(({batch:b,item})=>{
       const eff=effectiveBatchExpiry(b,item);
-      const st=computeExpiryStatus(eff);
+      const st=b.discard_reason_code?{emoji:'🗑',label:'Discarded — '+b.discard_reason_code,color:'var(--slate)'}:computeExpiryStatus(eff);
       return '<tr><td style="font-weight:600">'+escapeHtml(item.item_name||'—')+'</td>'+
         '<td style="font-family:DM Mono,monospace;color:var(--teal)">'+escapeHtml(b.batch_no||'—')+'</td>'+
         '<td>'+fmtDate(b.received_date)+'</td><td style="text-align:center">'+(b.quantity??'—')+'</td>'+
@@ -16513,7 +16541,8 @@ function invBatchesPanelHtml(it,batches){
       '<td>'+(b.quantity??0)+' '+escapeHtml(it.unit||'')+'</td>'+
       '<td style="font-size:.72rem">'+(b.expiry_date||'—')+(b.is_opened?' <span style="color:var(--amber)">(opened '+(b.opened_date||'')+')</span>':'')+'</td>'+
       '<td><span class="bdg" style="background:'+st.color+'22;color:'+st.color+'">'+st.emoji+' '+escapeHtml(st.label)+'</span></td>'+
-      '<td>'+(b.is_opened?'—':'<button class="btn btn-s btn-xs" onclick="markBatchOpened('+b.id+')">Mark Opened</button>')+'</td>'+
+      '<td style="display:flex;gap:4px">'+(b.is_opened?'':'<button class="btn btn-s btn-xs" onclick="markBatchOpened('+b.id+')">Mark Opened</button>')+
+      '<button class="btn btn-r btn-xs" onclick="openDiscardBatch(\''+b.id+'\',\''+it.id+'\')">🗑 Discard</button></td>'+
       '</tr>';
   }).join('') : '<tr><td colspan="5" style="text-align:center;color:var(--slate);padding:10px">No active batches — this item has no FEFO detail yet</td></tr>';
   return '<div style="font-size:.72rem;font-weight:700;text-transform:uppercase;color:var(--slate);margin-bottom:6px">📦 Batches (FEFO order — soonest expiry dispensed first)</div>'+
@@ -16547,6 +16576,38 @@ async function markBatchOpened(batchId){
   if(!sb) return;
   try{ await sb.from('inventory_batches').update({is_opened:true,opened_date:today()}).eq('id',batchId); toast('Batch marked as opened','ok'); loadInventory(); }
   catch(e){ toast(e.message,'err'); }
+}
+// Inventory Phase 5 — wastage/discard log. Ports Blood Bank's existing
+// discard pattern (reason code + mandatory notes, no silent removals)
+// to general Inventory, which previously had no equivalent at all —
+// expired batches were only ever visually flagged, never formally
+// written off with a reason.
+let _invDiscardBatchId=null, _invDiscardItemId=null;
+function openDiscardBatch(batchId,itemId){
+  _invDiscardBatchId=batchId; _invDiscardItemId=itemId;
+  const it=(window._invItems||[]).find(x=>x.id===itemId);
+  const info=document.getElementById('inv-discard-info');
+  if(info) info.innerHTML='<strong>'+escapeHtml(it?.item_name||'—')+'</strong>';
+  document.getElementById('inv-discard-reason-code').value='';
+  document.getElementById('inv-discard-notes').value='';
+  openOv('inv-discard-ov');
+}
+async function submitDiscardBatch(){
+  if(!sb||!_invDiscardBatchId) return;
+  const reasonCode=document.getElementById('inv-discard-reason-code')?.value;
+  const notes=document.getElementById('inv-discard-notes')?.value?.trim();
+  if(!reasonCode){ toast('Select a reason code','err'); return; }
+  if(!notes){ toast('Details are required — no silent discards','err'); return; }
+  try{
+    await sb.from('inventory_batches').update({
+      is_active:false, discard_reason_code:reasonCode, discard_notes:notes,
+      discarded_by:currentProfile?.id, discarded_by_name:currentProfile?.full_name||'',
+      discarded_at:new Date().toISOString(),
+    }).eq('id',_invDiscardBatchId);
+    toast('🗑 Batch discarded — '+reasonCode,'ok');
+    closeOv('inv-discard-ov');
+    loadInventory();
+  }catch(e){ toast(e.message,'err'); }
 }
 // FEFO: consumes from the batch with the soonest EFFECTIVE expiry first,
 // skipping any batch already 🔴 Expired (auto-locked from usage, per
@@ -18342,8 +18403,10 @@ async function loadStockRequisitions(){
       data.map(r=>{
         const itemLabel=(r.reagent_inventory?.item_name||'\u2014')+' ('+r.qty_requested+' '+(r.reagent_inventory?.unit||'')+')';
         let actions='';
+        const canConfirmReceipt=r.requested_by===currentProfile?.id||currentProfile?.role==='admin';
         if(r.status==='pending'&&canDecide) actions='<button class="btn btn-p btn-xs" onclick="decideRequisition('+r.id+',\'approved\')">\u2705 Approve</button> <button class="btn btn-r btn-xs" onclick="decideRequisition('+r.id+',\'rejected\')">\u2715 Reject</button>';
         else if(r.status==='approved'&&canDecide) actions='<button class="btn btn-w btn-xs" onclick="fulfillRequisition('+r.id+')">\ud83d\udce4 Fulfill (FEFO)</button>';
+        else if(r.status==='fulfilled'&&canConfirmReceipt) actions='<button class="btn btn-p btn-xs" onclick="confirmRequisitionReceipt('+r.id+')">\ud83d\udce5 Confirm Receipt</button>';
         return '<tr>'+
           '<td>'+escapeHtml(r.requesting_department||'\u2014')+'</td>'+
           '<td>'+escapeHtml(itemLabel)+'</td>'+
@@ -18378,6 +18441,25 @@ async function fulfillRequisition(id){
     toast(shortfall>0?'\u26a0\ufe0f Partially fulfilled: '+dispensed+' of '+req.qty_requested+' (insufficient non-expired stock)':'\ud83d\udce4 Requisition fulfilled \u2014 '+dispensed+' transferred to '+req.requesting_department,shortfall>0?'err':'ok');
     loadStockRequisitions();
     loadInventory();
+  }catch(e){ toast(e.message,'err'); }
+}
+// Inventory Phase 5 \u2014 closes the department-to-department loop: the
+// requisition/transfer pipeline previously ended at "fulfilled" (decided
+// and released by the same admin/lab_supervisor role, per the Phase 0
+// audit), with no step for the REQUESTING department to confirm the
+// stock actually arrived, in the quantity expected. This is a genuine
+// third, distinct actor (the original requester, not whoever
+// approved/fulfilled it) closing the transfer.
+async function confirmRequisitionReceipt(id){
+  if(!sb) return;
+  try{
+    await sb.from('stock_requisitions').update({
+      status:'received', received_confirmed_by:currentProfile?.id,
+      received_confirmed_by_name:currentProfile?.full_name||'',
+      received_confirmed_at:new Date().toISOString(),
+    }).eq('id',id);
+    toast('\ud83d\udce5 Receipt confirmed','ok');
+    loadStockRequisitions();
   }catch(e){ toast(e.message,'err'); }
 }
 
