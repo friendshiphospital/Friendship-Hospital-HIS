@@ -525,6 +525,7 @@ html[dir="rtl"] body{direction:rtl;}
       <div class="sb-item" data-p="labhistory" onclick="goPage('labhistory')"><span class="ic">📈</span><span data-i18n="nav_labhistory">Lab History</span></div>
       <div class="sb-item" data-p="tat" onclick="goPage('tat')"><span class="ic">⏱️</span><span data-i18n="nav_tat">TAT Tracker</span></div>
       <div class="sb-item" data-p="qc" onclick="goPage('qc')"><span class="ic">🔬</span><span data-i18n="nav_qc">QC Module</span></div>
+      <div class="sb-item" data-p="analyzer" onclick="goPage('analyzer')"><span class="ic">🔌</span><span data-i18n="nav_analyzer">Analyzer Interface</span></div>
       <div class="sb-item" data-p="pt-history" onclick="goPage('pt-history')"><span class="ic">🕐</span><span data-i18n="nav_pt_history">Patient Timeline</span></div>
     </div>
     <div class="sb-group" data-module="radiology">
@@ -567,7 +568,6 @@ html[dir="rtl"] body{direction:rtl;}
       <div class="sb-item" data-p="dashboard" onclick="goPage('dashboard')"><span class="ic">📊</span><span data-i18n="nav_dashboard">Dashboard</span></div>
       <div class="sb-item" data-p="staff" onclick="goPage('staff')"><span class="ic">👥</span><span data-i18n="nav_staff">Staff</span></div>
       <div class="sb-item" data-p="doctors" onclick="goPage('doctors')"><span class="ic">🩺</span><span data-i18n="nav_doctors">Doctors</span></div>
-      <div class="sb-item" data-p="analyzer" onclick="goPage('analyzer')"><span class="ic">🔌</span><span data-i18n="nav_analyzer">Analyzer Interface</span></div>
       <div class="sb-item" data-p="delivery" onclick="goPage('delivery')"><span class="ic">📲</span><span data-i18n="nav_delivery">Result Delivery</span></div>
       <div class="sb-item" data-p="settings" onclick="goPage('settings')"><span class="ic">⚙️</span><span data-i18n="nav_settings">Settings</span></div>
     </div>
@@ -6717,7 +6717,7 @@ const PAGE_TITLES = {
 const MODULE_PAGES = {
   reception:      { label:'Reception',      icon:'🏥', pages:['register','appointments','print-reports-hub'] },
   phlebotomy:     { label:'Phlebotomy',      icon:'💉', pages:['samples','set-printer'] },
-  laboratory:     { label:'Laboratory',      icon:'🔬', pages:['worklist','unified-entry','hem-entry','chem-entry','sero-entry','immuno-entry','micro-entry','pcr-entry','histo-entry','cyto-entry','reports','allresults','labhistory','criticals','qc','tat','pt-history'] },
+  laboratory:     { label:'Laboratory',      icon:'🔬', pages:['worklist','unified-entry','hem-entry','chem-entry','sero-entry','immuno-entry','micro-entry','pcr-entry','histo-entry','cyto-entry','reports','allresults','labhistory','criticals','qc','analyzer','tat','pt-history'] },
   radiology:      { label:'Radiology',       icon:'🩻', pages:['radiology','rad-print'] },
   doctor:         { label:'Doctor',          icon:'🩺', pages:['consultation','pt-history'] },
   nursing:        { label:'Nursing',         icon:'🧑‍⚕️', pages:['nursing','fluid-chart','infection','handover','pt-history'] },
@@ -6736,7 +6736,7 @@ const MODULE_PAGES = {
   // launcher context (a standalone top-level tile) makes it unambiguous.
   bloodbank:      { label:'Blood Bank',      icon:'🩸', pages:['bloodbank'] },
   statistics:     { label:'Statistics',      icon:'📊', pages:['statistics'] },
-  administration: { label:'Administration',  icon:'⚙️', pages:['staff','doctors','analyzer','delivery','settings','dashboard'] },
+  administration: { label:'Administration',  icon:'⚙️', pages:['staff','doctors','delivery','settings','dashboard'] },
 };
 const MODULE_ORDER = ['reception','phlebotomy','laboratory','radiology','doctor','nursing','admissions','theatre','billing','inventory','bloodbank','statistics','administration'];
 // Which module is currently entered (null = at the launcher/Home screen).
@@ -15847,10 +15847,10 @@ function renderPermissionsMatrix() {
     {label:'💰 Billing',pages:['billing','prices']},
     {label:'🛏 Inpatient',pages:['admission','theatre','nursing','fluid-chart','handover','infection']},
     {label:'🩺 Doctor',pages:['consultation']},
-    {label:'🔬 Laboratory',pages:['worklist','samples','hem-entry','chem-entry','sero-entry','micro-entry','pcr-entry','histo-entry','cyto-entry','allresults','criticals','reports','qc','labhistory','tat','inventory','delivery']},
+    {label:'🔬 Laboratory',pages:['worklist','samples','hem-entry','chem-entry','sero-entry','micro-entry','pcr-entry','histo-entry','cyto-entry','allresults','criticals','reports','qc','analyzer','labhistory','tat','inventory','delivery']},
     {label:'🩻 Radiology',pages:['radiology']},
     {label:'📊 Reports',pages:['pt-history']},
-    {label:'⚙️ Admin',pages:['staff','doctors','settings','analyzer']},
+    {label:'⚙️ Admin',pages:['staff','doctors','settings']},
   ];
   const roles=['admin','doctor','nurse','lab_tech','lab_supervisor','receptionist','cashier','theatre_nurse','radiologist'];
   const pageLabels={register:'Register Patient',appointments:'Appointments',billing:'Billing',prices:'Price List',admission:'Admissions',theatre:'Theatre',nursing:'Nursing/Vitals','fluid-chart':'Fluid Chart',handover:'Handover',infection:'Infection Flags',consultation:'Consultation','hem-entry':'Haematology','chem-entry':'Chemistry','sero-entry':'Serology','micro-entry':'Microbiology','pcr-entry':'PCR','histo-entry':'Histopathology','cyto-entry':'Cytology',worklist:'Worklist',samples:'Sample Collection',allresults:'All Results',criticals:'Critical Values',reports:'Reports/Print',qc:'QC Module',labhistory:'Lab History',tat:'TAT Tracker',inventory:'Inventory',delivery:'Delivery',radiology:'Radiology','pt-history':'Patient History',staff:'Staff Mgmt',doctors:'Doctors',settings:'Settings',analyzer:'Analyzer'};
@@ -16631,6 +16631,195 @@ function sigmaBand(sigma){
   if(sigma>=4) return {label:'Good',color:'#166534',bg:'#f0fdf4'};
   if(sigma>=3) return {label:'Marginal',color:'#b45309',bg:'#fef3c7'};
   return {label:'Poor',color:'#b91c1c',bg:'#fee2e2'};
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// ANALYZER VALIDATION & VERIFICATION — CLSI EP15-A3 (precision
+// verification) / EP09-A3 (method comparison). Plain JS, no external
+// stats library, matching this codebase's "no dependencies" convention.
+// Distinct from the QC engine above: QC monitors an in-service
+// instrument continuously; these functions certify an instrument
+// before/after a change, from a bounded set of validation samples.
+// ═══════════════════════════════════════════════════════════════════
+
+// Wilson-Hilferty approximation of the upper 95th-percentile (one-sided,
+// alpha=0.05) chi-square quantile for `df` degrees of freedom. There is
+// no closed-form exact inverse chi-square CDF; Wilson-Hilferty (1931) is
+// a well-established closed-form approximation — see Phase 5's tests for
+// this implementation's actual measured error against known tabulated
+// chi-square critical values, not just an assertion that it's "close
+// enough." Measured: <1% relative error for df>=2, degrading to ~2.5%
+// at df=1 (Wilson-Hilferty's own well-documented weak spot) — df=1 means
+// only 1 replicate beyond the number of runs, a degenerate design this
+// app already warns against well before that point (see the totalN<20
+// warning in calculateEP15()).
+//   chi2_p ≈ df * (1 - 2/(9df) + z_p * sqrt(2/(9df)))^3
+// z_p is the standard normal quantile for the same one-sided probability
+// (z_0.95 = 1.6448536... for the upper 95th percentile).
+function chi2Upper95(df){
+  const z=1.6448536269514722; // standard normal 95th percentile (one-sided)
+  const term=1-2/(9*df)+z*Math.sqrt(2/(9*df));
+  return df*Math.pow(term,3);
+}
+
+// ── EP15-A3: Precision Verification (one-way ANOVA) ─────────────────
+// dataMatrix: array of runs (e.g. days), each an array of replicate
+// result values for that run — e.g. [[v1,v2,v3], [v1,v2,v3], ...].
+// claimedCV: manufacturer/method-claimed %CV being verified against.
+// TEa: total allowable error %, used as a secondary PASS/FAIL check
+// alongside the claimed-CV/UVL comparison (a lab may pass on TEa even
+// if it narrowly misses the claimed-CV UVL, or vice versa — both are
+// reported so a reviewer can see which criterion actually applies).
+function calculateEP15(dataMatrix, claimedCV, TEa){
+  const warnings=[];
+  // Clean input: drop any run with no valid numeric replicates, and any
+  // non-numeric/null cell within a run, rather than silently computing
+  // on undefined values (which would poison every downstream sum).
+  const runs=(dataMatrix||[])
+    .map(run=>(run||[]).filter(v=>v!=null&&!isNaN(v)))
+    .filter(run=>run.length>0);
+
+  const D=runs.length; // number of runs/days
+  const totalN=runs.reduce((s,r)=>s+r.length,0);
+
+  if(D<2) return {error:'At least 2 runs (days) are required to separate within-run from between-run variance — one-way ANOVA is undefined with a single run.'};
+  if(runs.some(r=>r.length<2)) warnings.push('At least one run has fewer than 2 replicates — its within-run variance contributes 0 degrees of freedom, reducing the precision of MS_within.');
+  // A practical minimum commonly used for precision-verification studies
+  // (enough degrees of freedom for a stable variance estimate); flagged
+  // as a warning rather than a hard block, since exact minimums vary by
+  // lab SOP and specific protocol variant.
+  if(totalN<20) warnings.push('Only '+totalN+' total results ('+D+' runs) — precision estimates with fewer than ~20 total replicates are statistically unstable; interpret with caution.');
+
+  // Unbalanced design allowed (runs of different replicate counts) — the
+  // formulas below use each run's own length rather than assuming a
+  // fixed replicate count.
+  const runMeans=runs.map(r=>r.reduce((a,b)=>a+b,0)/r.length);
+  const grandMean=runs.reduce((s,r)=>s+r.reduce((a,b)=>a+b,0),0)/totalN;
+
+  // SS_within: sum of squared deviations of each replicate from ITS OWN
+  // run's mean (repeatability — variation a single run doesn't explain).
+  const ssWithin=runs.reduce((s,r,i)=>s+r.reduce((a,v)=>a+(v-runMeans[i])**2,0),0);
+  // df_within = total N minus number of runs (one mean estimated per run).
+  const dfWithin=totalN-D;
+  const msWithin=dfWithin>0?ssWithin/dfWithin:0;
+
+  // SS_between: sum of squared deviations of each run's mean from the
+  // grand mean, weighted by that run's replicate count (between-run /
+  // day-to-day variation).
+  const ssBetween=runs.reduce((s,r,i)=>s+r.length*(runMeans[i]-grandMean)**2,0);
+  const dfBetween=D-1;
+  const msBetween=dfBetween>0?ssBetween/dfBetween:0;
+
+  // Average replicates per run (for the between-run variance component
+  // formula — exact for a balanced design, a standard/conventional
+  // approximation for unbalanced designs).
+  const avgR=totalN/D;
+  // Between-run variance component can't be negative in reality (it's a
+  // true population variance); MS_between can fall below MS_within by
+  // chance in a small sample, which would imply a negative component —
+  // floored at 0 per standard ANOVA variance-component convention.
+  const varBetweenComponent=avgR>0?Math.max(0,(msBetween-msWithin)/avgR):0;
+  const varTotal=msWithin+varBetweenComponent;
+
+  if(msWithin<=0) return {error:'Within-run variance is zero (every replicate in every run is numerically identical) — %CV is undefined (division by zero avoided; this almost always indicates a data-entry error, not genuine zero imprecision).',grandMean,msWithin,msBetween,warnings};
+  if(grandMean===0) return {error:'Grand mean is zero — %CV is undefined (division by zero).',msWithin,msBetween,warnings};
+
+  const sdWithin=Math.sqrt(msWithin);
+  const sdTotal=Math.sqrt(varTotal);
+  const cvWithinPct=(sdWithin/Math.abs(grandMean))*100;
+  const cvTotalPct=(sdTotal/Math.abs(grandMean))*100;
+
+  // Upper Verification Limit: the 95% one-sided upper confidence bound
+  // on the claimed SD, scaled by the chi-square distribution (standard
+  // inferential-statistics result for a variance estimate with dfWithin
+  // degrees of freedom) — UVL = claimedSD * sqrt(chi2_upper(0.95,df)/df).
+  const claimedSD=(claimedCV!=null&&!isNaN(claimedCV))?(claimedCV/100)*Math.abs(grandMean):null;
+  let uvl=null, passClaimedCV=null;
+  if(claimedSD!=null&&dfWithin>0){
+    const chi2=chi2Upper95(dfWithin);
+    uvl=claimedSD*Math.sqrt(chi2/dfWithin);
+    passClaimedCV=sdWithin<=uvl;
+  }
+
+  const passTEa=(TEa!=null&&!isNaN(TEa))?cvTotalPct<=TEa:null;
+  // Overall PASS requires every criterion that was actually evaluable to
+  // pass — a criterion the caller didn't supply data for (claimedCV or
+  // TEa left null) is simply not counted against the result.
+  const evaluated=[passClaimedCV,passTEa].filter(v=>v!==null);
+  const overallPass=evaluated.length>0?evaluated.every(Boolean):null;
+
+  return {
+    grandMean, msWithin, msBetween, sdWithin, sdTotal, cvWithinPct, cvTotalPct,
+    dfWithin, dfBetween, totalN, runCount:D,
+    uvl, passClaimedCV, passTEa, overallPass, warnings,
+  };
+}
+
+// ── EP09-A3: Method Comparison (regression) ──────────────────────────
+// methodXData/methodYData: parallel arrays of paired results, one pair
+// per specimen, method X (reference/comparative) vs method Y (test
+// method). Must be index-aligned (pairs[i] = same specimen).
+//
+// IMPORTANT: this implements Ordinary Least Squares (OLS) regression,
+// NOT Deming regression. OLS assumes all measurement error is in Y and
+// none in X, which is not strictly true for two fallible methods being
+// compared (Deming regression accounts for error in both) — CLSI EP09-A3
+// itself recommends Deming or Passing-Bablok for method comparison.
+// Full Deming regression requires an estimate of the error-variance
+// ratio between the two methods (typically from replicate
+// measurements) and is out of scope for this first pass, per an
+// explicit instruction to implement OLS but never present it as Deming.
+// regressionMethod is always reported as 'OLS' and MUST be displayed as
+// such everywhere in the UI/printed report — never relabel this as
+// Deming.
+function calculateEP09(methodXData, methodYData){
+  const warnings=[];
+  const pairs=[];
+  const len=Math.min((methodXData||[]).length,(methodYData||[]).length);
+  for(let i=0;i<len;i++){
+    const x=methodXData[i], y=methodYData[i];
+    if(x!=null&&y!=null&&!isNaN(x)&&!isNaN(y)) pairs.push({x,y});
+  }
+  if((methodXData||[]).length!==(methodYData||[]).length){
+    warnings.push('Method X ('+(methodXData||[]).length+') and Method Y ('+(methodYData||[]).length+') have different sample counts — only the first '+len+' index-aligned pairs were considered, and only those with both values present were used.');
+  }
+  const droppedCount=len-pairs.length;
+  if(droppedCount>0) warnings.push(droppedCount+' pair(s) dropped for a missing/non-numeric value in X or Y.');
+
+  const n=pairs.length;
+  if(n<2) return {error:'At least 2 valid paired results are required for a regression line.',warnings};
+  // CLSI EP09-A3's own minimum recommendation is commonly cited as 40
+  // patient samples spanning the reportable range — flagged as a
+  // warning (this function still computes a result on fewer pairs) since
+  // the exact minimum depends on the specific comparison being made.
+  if(n<40) warnings.push('Only '+n+' paired result(s) — CLSI EP09-A3 method-comparison studies are typically run on 40+ samples spanning the full reportable range for a statistically defensible conclusion; interpret a result on fewer pairs with caution.');
+
+  const xMean=pairs.reduce((s,p)=>s+p.x,0)/n;
+  const yMean=pairs.reduce((s,p)=>s+p.y,0)/n;
+  const sxx=pairs.reduce((s,p)=>s+(p.x-xMean)**2,0);
+  const syy=pairs.reduce((s,p)=>s+(p.y-yMean)**2,0);
+  const sxy=pairs.reduce((s,p)=>s+(p.x-xMean)*(p.y-yMean),0);
+
+  if(sxx===0) return {error:'Every Method X value is identical (zero variance in X) — OLS slope is undefined (division by zero).',warnings};
+
+  const slope=sxy/sxx;
+  const intercept=yMean-slope*xMean;
+  const r2=(sxx>0&&syy>0)?(sxy*sxy)/(sxx*syy):null;
+
+  // Differences (Y - X) for Bland-Altman / relative bias.
+  const diffs=pairs.map(p=>p.y-p.x);
+  const meanDiff=diffs.reduce((a,b)=>a+b,0)/n;
+  const sdDiffs=n>1?Math.sqrt(diffs.reduce((s,d)=>s+(d-meanDiff)**2,0)/(n-1)):null;
+  // Relative mean bias as a percentage of the mean of the reference
+  // method (X) — the conventional EP09 bias-% definition.
+  const biasPct=xMean!==0?(meanDiff/xMean)*100:null;
+
+  return {
+    regressionMethod:'OLS', n, slope, intercept, r2,
+    meanDiff, sdDiffs, biasPct,
+    xMean, yMean, warnings,
+    pairs, // returned so scatter/Bland-Altman charts can consume directly
+  };
 }
 document.addEventListener('DOMContentLoaded',()=>{
   const sel=document.getElementById('qc-analyte');
