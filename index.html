@@ -2682,7 +2682,9 @@ html[dir="rtl"] body{direction:rtl;}
           <div class="fg"><label class="fl">Currency</label>
             <select class="fc" id="price-currency">
               <option value="SDG">SDG (Sudanese Pound)</option>
-              <option value="USD">USD</option>
+              <option value="USD">USD (US Dollar)</option>
+              <option value="OMR">OMR (Omani Rial)</option>
+              <option value="SAR">SAR (Saudi Riyal)</option>
             </select>
           </div>
         </div>
@@ -13491,13 +13493,28 @@ function printSampleLabel() {
 }
 
 // ── 5. loadPatientHistory ─────────────────────────────────
+// A SEPARATE history view from Patient History Timeline (pth-timeline) —
+// this is the inline "History" tab inside Doctor Consultation itself.
+// Had the identical MRN-scoping gap loadPthTimeline() did (see
+// patient-history-mrn-aggregation.test.js): querying only by the single
+// clicked patient_id meant a follow-up visit under the same MRN
+// (submitRegistration() creates a genuinely new row) could never see the
+// prior visit's consultations/labs here, even though that's exactly what
+// "History" is for. Resolves every patients.id sharing this patient's MRN
+// first and queries every table with .in(...) across all of them.
 async function loadPatientHistory(ptId) {
   if(!sb||!ptId) return;
   try {
+    const {data:pt}=await sb.from('patients').select('mrn').eq('id',ptId).maybeSingle();
+    let allIdsForMrn=[ptId];
+    if(pt?.mrn){
+      const {data:mrnRows}=await sb.from('patients').select('id').eq('mrn',pt.mrn);
+      if(mrnRows?.length) allIdsForMrn=mrnRows.map(r=>r.id);
+    }
     const [{data:cons},{data:labs},{data:vitals}] = await Promise.all([
-      sb.from('doctor_consultations').select('*').eq('patient_id',ptId).order('consultation_date',{ascending:false}).limit(10),
-      sb.from('results_hematology').select('created_at,is_verified').eq('patient_id',ptId).limit(5),
-      sb.from('vital_signs').select('*').eq('patient_id',ptId).order('recorded_at',{ascending:false}).limit(5),
+      sb.from('doctor_consultations').select('*').in('patient_id',allIdsForMrn).order('consultation_date',{ascending:false}).limit(10),
+      sb.from('results_hematology').select('created_at,is_verified').in('patient_id',allIdsForMrn).limit(5),
+      sb.from('vital_signs').select('*').in('patient_id',allIdsForMrn).order('recorded_at',{ascending:false}).limit(5),
     ]);
     const container = document.getElementById('doc-history-body');
     if(!container) return;
@@ -15908,6 +15925,117 @@ async function seedDefaultPrices() {
     {code:'CY007',name:'Sputum Cytology',category:'lab',price:5000,currency:'SDG'},
     {code:'CY008',name:'Urine Cytology',category:'lab',price:5000,currency:'SDG'},
     {code:'CY009',name:'CSF Cytology',category:'lab',price:6000,currency:'SDG'},
+
+    // ── LAB CATALOG (exact-name match) ──────────────────
+    // The entries above use descriptive/clinical names (e.g. "CBC —
+    // Complete Blood Count") that never match what Registration/Doctor
+    // order forms actually send, since those are built from TEST_CATALOG
+    // (index.html ~line 7192) using shorter catalog names (e.g. "CBC
+    // (Full Blood Count)"). buildAutoInvoiceLines() looks up price_list
+    // by an EXACT name match, so every one of those orders silently
+    // priced at 0 / showed "—" on the invoice, confirmed live. These
+    // entries exactly mirror every TEST_CATALOG name so the lookup
+    // always finds a price — kept separate from (not replacing) the
+    // entries above in case any custom pricing was already keyed to
+    // those names.
+    {code:'LC001',name:'CBC (Full Blood Count)',category:'lab',price:3000,currency:'SDG'},
+    {code:'LC002',name:'Haemoglobin Only',category:'lab',price:1000,currency:'SDG'},
+    {code:'LC003',name:'WBC Count',category:'lab',price:1500,currency:'SDG'},
+    {code:'LC004',name:'Platelet Count',category:'lab',price:1500,currency:'SDG'},
+    {code:'LC005',name:'Reticulocyte Count',category:'lab',price:2000,currency:'SDG'},
+    {code:'LC006',name:'ESR',category:'lab',price:1500,currency:'SDG'},
+    {code:'LC007',name:'Blood Film',category:'lab',price:2500,currency:'SDG'},
+    {code:'LC008',name:'PT / INR',category:'lab',price:2500,currency:'SDG'},
+    {code:'LC009',name:'aPTT',category:'lab',price:2500,currency:'SDG'},
+    {code:'LC010',name:'D-Dimer',category:'lab',price:6000,currency:'SDG'},
+    {code:'LC011',name:'Fibrinogen',category:'lab',price:3500,currency:'SDG'},
+    {code:'LC012',name:'Blood Group & Rh',category:'lab',price:2000,currency:'SDG'},
+    {code:'LC013',name:'Cross-Match',category:'lab',price:3000,currency:'SDG'},
+    {code:'LC014',name:'LFT (Liver Function)',category:'lab',price:4000,currency:'SDG'},
+    {code:'LC015',name:'RFT (Renal Function)',category:'lab',price:3500,currency:'SDG'},
+    {code:'LC016',name:'Lipid Profile',category:'lab',price:4000,currency:'SDG'},
+    {code:'LC017',name:'HbA1c',category:'lab',price:4500,currency:'SDG'},
+    {code:'LC018',name:'Fasting Blood Sugar',category:'lab',price:1000,currency:'SDG'},
+    {code:'LC019',name:'Random Blood Sugar',category:'lab',price:1000,currency:'SDG'},
+    {code:'LC020',name:'2hr Post Prandial',category:'lab',price:1500,currency:'SDG'},
+    {code:'LC021',name:'Serum Electrolytes',category:'lab',price:3000,currency:'SDG'},
+    {code:'LC022',name:'Calcium',category:'lab',price:1500,currency:'SDG'},
+    {code:'LC023',name:'Phosphorus',category:'lab',price:1500,currency:'SDG'},
+    {code:'LC024',name:'Magnesium',category:'lab',price:1500,currency:'SDG'},
+    {code:'LC025',name:'Iron Studies',category:'lab',price:5000,currency:'SDG'},
+    {code:'LC026',name:'Cardiac Enzymes',category:'lab',price:6000,currency:'SDG'},
+    {code:'LC027',name:'Troponin I',category:'lab',price:6000,currency:'SDG'},
+    {code:'LC028',name:'hs-CRP',category:'lab',price:3000,currency:'SDG'},
+    {code:'LC029',name:'LDH',category:'lab',price:2000,currency:'SDG'},
+    {code:'LC030',name:'Lipase',category:'lab',price:2500,currency:'SDG'},
+    {code:'LC031',name:'Amylase',category:'lab',price:2500,currency:'SDG'},
+    {code:'LC032',name:'🔹 Thyroid Profile (TSH+FT3+FT4)',category:'lab',price:8000,currency:'SDG'},
+    {code:'LC033',name:'🔹 Fertility Profile (FSH+LH+E2+Prog+Testo+Prolactin)',category:'lab',price:15000,currency:'SDG'},
+    {code:'LC034',name:'🔹 Tumour Marker Profile (AFP+CEA+CA125+CA19.9)',category:'lab',price:18000,currency:'SDG'},
+    {code:'LC035',name:'TSH',category:'lab',price:3500,currency:'SDG'},
+    {code:'LC036',name:'Free T3',category:'lab',price:3500,currency:'SDG'},
+    {code:'LC037',name:'Free T4',category:'lab',price:3500,currency:'SDG'},
+    {code:'LC038',name:'Total T3',category:'lab',price:3500,currency:'SDG'},
+    {code:'LC039',name:'Total T4',category:'lab',price:3500,currency:'SDG'},
+    {code:'LC040',name:'FSH',category:'lab',price:4000,currency:'SDG'},
+    {code:'LC041',name:'LH',category:'lab',price:4000,currency:'SDG'},
+    {code:'LC042',name:'Estradiol',category:'lab',price:4500,currency:'SDG'},
+    {code:'LC043',name:'Progesterone',category:'lab',price:4500,currency:'SDG'},
+    {code:'LC044',name:'Testosterone',category:'lab',price:4500,currency:'SDG'},
+    {code:'LC045',name:'Prolactin',category:'lab',price:4000,currency:'SDG'},
+    {code:'LC046',name:'Cortisol',category:'lab',price:4500,currency:'SDG'},
+    {code:'LC047',name:'Insulin',category:'lab',price:5000,currency:'SDG'},
+    {code:'LC048',name:'C-Peptide',category:'lab',price:5500,currency:'SDG'},
+    {code:'LC049',name:'Pregnancy Test (βHCG)',category:'lab',price:2000,currency:'SDG'},
+    {code:'LC050',name:'PSA (Tumour Marker)',category:'lab',price:5000,currency:'SDG'},
+    {code:'LC051',name:'AFP (Tumour Marker)',category:'lab',price:5000,currency:'SDG'},
+    {code:'LC052',name:'CEA (Tumour Marker)',category:'lab',price:5000,currency:'SDG'},
+    {code:'LC053',name:'CA-125',category:'lab',price:6000,currency:'SDG'},
+    {code:'LC054',name:'CA-19.9',category:'lab',price:6000,currency:'SDG'},
+    {code:'LC055',name:'Vitamin D',category:'lab',price:5500,currency:'SDG'},
+    {code:'LC056',name:'Vitamin B12',category:'lab',price:4500,currency:'SDG'},
+    {code:'LC057',name:'Folate',category:'lab',price:4500,currency:'SDG'},
+    {code:'LC058',name:'Ferritin',category:'lab',price:4000,currency:'SDG'},
+    {code:'LC059',name:'HIV Ag/Ab',category:'lab',price:2500,currency:'SDG'},
+    {code:'LC060',name:'HBsAg',category:'lab',price:2000,currency:'SDG'},
+    {code:'LC061',name:'HCV Ab',category:'lab',price:2500,currency:'SDG'},
+    {code:'LC062',name:'RPR/VDRL',category:'lab',price:1500,currency:'SDG'},
+    {code:'LC063',name:'TPHA',category:'lab',price:2000,currency:'SDG'},
+    {code:'LC064',name:'Brucella Ab',category:'lab',price:2500,currency:'SDG'},
+    {code:'LC065',name:'H. Pylori Ag',category:'lab',price:3000,currency:'SDG'},
+    {code:'LC066',name:'Widal Test',category:'lab',price:1500,currency:'SDG'},
+    {code:'LC067',name:'ANA',category:'lab',price:4000,currency:'SDG'},
+    {code:'LC068',name:'Anti-CCP',category:'lab',price:5500,currency:'SDG'},
+    {code:'LC069',name:'RF',category:'lab',price:2000,currency:'SDG'},
+    {code:'LC070',name:'ASO',category:'lab',price:2000,currency:'SDG'},
+    {code:'LC071',name:'IgE Total',category:'lab',price:3500,currency:'SDG'},
+    {code:'LC072',name:'Urinalysis (UA)',category:'lab',price:1000,currency:'SDG'},
+    {code:'LC073',name:'Urine Culture & Sensitivity',category:'lab',price:3000,currency:'SDG'},
+    {code:'LC074',name:'Stool Routine',category:'lab',price:1000,currency:'SDG'},
+    {code:'LC075',name:'Stool Occult Blood',category:'lab',price:1000,currency:'SDG'},
+    {code:'LC076',name:'Stool Culture',category:'lab',price:3000,currency:'SDG'},
+    {code:'LC077',name:'Blood Culture',category:'lab',price:4000,currency:'SDG'},
+    {code:'LC078',name:'Wound Swab C/S',category:'lab',price:3000,currency:'SDG'},
+    {code:'LC079',name:'Sputum C/S',category:'lab',price:3000,currency:'SDG'},
+    {code:'LC080',name:'CSF Analysis',category:'lab',price:3500,currency:'SDG'},
+    {code:'LC081',name:'CSF Culture',category:'lab',price:4000,currency:'SDG'},
+    {code:'LC082',name:'High Vaginal Swab',category:'lab',price:2500,currency:'SDG'},
+    {code:'LC083',name:'Throat Swab',category:'lab',price:2500,currency:'SDG'},
+    {code:'LC084',name:'COVID-19 PCR',category:'lab',price:8000,currency:'SDG'},
+    {code:'LC085',name:'Influenza A/B PCR',category:'lab',price:8000,currency:'SDG'},
+    {code:'LC086',name:'HBV DNA',category:'lab',price:12000,currency:'SDG'},
+    {code:'LC087',name:'HCV RNA',category:'lab',price:12000,currency:'SDG'},
+    {code:'LC088',name:'HIV Viral Load',category:'lab',price:15000,currency:'SDG'},
+    {code:'LC089',name:'CMV PCR',category:'lab',price:12000,currency:'SDG'},
+    {code:'LC090',name:'EBV PCR',category:'lab',price:12000,currency:'SDG'},
+    {code:'LC091',name:'TB-PCR',category:'lab',price:10000,currency:'SDG'},
+    {code:'LC092',name:'Chlamydia PCR',category:'lab',price:8000,currency:'SDG'},
+    {code:'LC093',name:'Biopsy (Histopathology)',category:'lab',price:15000,currency:'SDG'},
+    {code:'LC094',name:'Liver Biopsy',category:'lab',price:18000,currency:'SDG'},
+    {code:'LC095',name:'Bone Marrow Biopsy',category:'lab',price:18000,currency:'SDG'},
+    {code:'LC096',name:'Lymph Node Biopsy',category:'lab',price:15000,currency:'SDG'},
+    {code:'LC097',name:'Skin Biopsy',category:'lab',price:12000,currency:'SDG'},
+    {code:'LC098',name:'Renal Biopsy',category:'lab',price:20000,currency:'SDG'},
 
     // ── RADIOLOGY ────────────────────────────────────────
     {code:'RAD001',name:'X-Ray — Chest PA',category:'radiology',price:3000,currency:'SDG'},
