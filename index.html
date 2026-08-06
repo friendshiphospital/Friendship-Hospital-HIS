@@ -526,6 +526,7 @@ html[dir="rtl"] body{direction:rtl;}
       <div class="sb-item" data-p="tat" onclick="goPage('tat')"><span class="ic">⏱️</span><span data-i18n="nav_tat">TAT Tracker</span></div>
       <div class="sb-item" data-p="qc" onclick="goPage('qc')"><span class="ic">🔬</span><span data-i18n="nav_qc">QC Module</span></div>
       <div class="sb-item" data-p="analyzer" onclick="goPage('analyzer')"><span class="ic">🔌</span><span data-i18n="nav_analyzer">Analyzer Interface</span></div>
+      <div class="sb-item" data-p="validation" onclick="goPage('validation')"><span class="ic">📐</span><span data-i18n="nav_validation">Analyzer Validation</span></div>
       <div class="sb-item" data-p="pt-history" onclick="goPage('pt-history')"><span class="ic">🕐</span><span data-i18n="nav_pt_history">Patient Timeline</span></div>
     </div>
     <div class="sb-group" data-module="radiology">
@@ -5842,6 +5843,122 @@ html[dir="rtl"] body{direction:rtl;}
   </div>
 </div><!-- /page-analyzer -->
 
+<!-- Analyzer Validation & Verification (CLSI EP15-A3 precision, EP09-A3
+     method comparison) — distinct from ongoing QC (Levey-Jennings/
+     Westgard/Six Sigma above) and from Analyzer Interface (connectivity
+     config): this certifies an instrument before/around go-live rather
+     than monitoring one already in service. See migration_v2.38 for the
+     schema notes on why no instrument-registry FK and no DB-side TEa
+     table exist to reuse. -->
+<div class="page" id="page-validation">
+  <div class="pg-title" style="margin-bottom:16px">📐 Analyzer Validation &amp; Verification</div>
+  <div class="tabs">
+    <button class="tab active" id="val-tab-btn-new" onclick="switchValidationTab('new',this)">➕ New Study</button>
+    <button class="tab" id="val-tab-btn-studies" onclick="switchValidationTab('studies',this)">📋 Studies</button>
+    <button class="tab" id="val-tab-btn-workspace" onclick="switchValidationTab('workspace',this)">🧮 Data Entry &amp; Results</button>
+  </div>
+
+  <div id="val-tab-new">
+    <div class="card" style="max-width:640px">
+      <div class="card-hd"><span class="card-title">➕ New Validation Study</span></div>
+      <div class="card-body">
+        <div class="g2">
+          <div class="fg"><label class="fl">Analyte *</label>
+            <input class="fc" id="val-analyte" list="val-analyte-list" placeholder="e.g. Glucose" oninput="onValidationAnalyteChange()">
+            <datalist id="val-analyte-list"></datalist>
+          </div>
+          <div class="fg"><label class="fl">Protocol *</label>
+            <select class="fc" id="val-protocol" onchange="onValidationProtocolChange()">
+              <option value="EP15-A3">EP15-A3 — Precision Verification</option>
+              <option value="EP09-A3">EP09-A3 — Method Comparison</option>
+            </select>
+          </div>
+        </div>
+        <div class="g2">
+          <div class="fg"><label class="fl">Instrument Name *</label><input class="fc" id="val-instrument" placeholder="e.g. Sysmex XN-1000"></div>
+          <div class="fg"><label class="fl">Serial No.</label><input class="fc" id="val-serial"></div>
+        </div>
+        <div class="g3">
+          <div class="fg"><label class="fl">Unit</label><input class="fc" id="val-unit" placeholder="e.g. mmol/L"></div>
+          <div class="fg"><label class="fl">TEa (%)</label><input class="fc" type="number" step="0.1" id="val-tea" title="Auto-filled from the Six Sigma TEa reference when the analyte matches — editable"></div>
+          <div class="fg" id="val-claimed-cv-wrap"><label class="fl">Claimed CV (%)</label><input class="fc" type="number" step="0.1" id="val-claimed-cv" title="Manufacturer/method-claimed %CV being verified"></div>
+        </div>
+        <button class="btn btn-p" onclick="saveValidationStudy()" style="width:100%;justify-content:center">💾 Create Study</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="val-tab-studies" style="display:none">
+    <div class="card"><div class="card-hd"><span class="card-title">📋 Validation Studies</span></div><div id="val-studies-body"><div class="spin-center"><div class="spinner"></div>Loading…</div></div></div>
+  </div>
+
+  <div id="val-tab-workspace" style="display:none">
+    <div class="card" id="val-ws-header-card">
+      <div class="card-hd"><span class="card-title">🧮 Study</span>
+        <button class="btn btn-s btn-sm" onclick="printValidationReport()">🖨 Print Report</button>
+      </div>
+      <div class="card-body" id="val-ws-header"><div style="font-size:.8rem;color:var(--slate)">Select a study from the Studies tab first.</div></div>
+    </div>
+
+    <div class="card" id="val-ep15-entry" style="display:none">
+      <div class="card-hd"><span class="card-title">📝 Precision Data Entry (EP15-A3)</span></div>
+      <div class="card-body">
+        <div style="font-size:.72rem;color:var(--slate);margin-bottom:8px">Paste run data — one run (day) per line, replicate values separated by tab or comma (e.g. copy straight from a spreadsheet). Each Save &amp; Calculate replaces this study's saved samples with whatever is currently pasted.</div>
+        <textarea class="fc" id="val-ep15-paste" rows="5" placeholder="10.1&#9;10.3&#9;10.0&#10;9.8&#9;10.1&#9;9.9&#10;10.4&#9;10.2&#9;10.5" oninput="parseEP15Grid()" onpaste="setTimeout(parseEP15Grid,0)" style="font-family:'DM Mono',monospace"></textarea>
+        <div id="val-ep15-preview" style="margin-top:10px"></div>
+        <button class="btn btn-p" id="val-ep15-save-btn" onclick="saveAndCalculateValidation()" style="width:100%;justify-content:center;margin-top:10px">🧮 Save &amp; Calculate</button>
+      </div>
+    </div>
+
+    <div class="card" id="val-ep09-entry" style="display:none">
+      <div class="card-hd"><span class="card-title">📝 Method Comparison Data Entry (EP09-A3)</span></div>
+      <div class="card-body">
+        <div style="font-size:.72rem;color:var(--slate);margin-bottom:8px">Paste paired results — one specimen per line, Method X value then Method Y value, separated by tab or comma. Each Save &amp; Calculate replaces this study's saved samples with whatever is currently pasted.</div>
+        <textarea class="fc" id="val-ep09-paste" rows="5" placeholder="10.2&#9;10.5&#10;15.1&#9;15.8&#10;20.4&#9;19.9" oninput="parseEP09Grid()" onpaste="setTimeout(parseEP09Grid,0)" style="font-family:'DM Mono',monospace"></textarea>
+        <div id="val-ep09-preview" style="margin-top:10px"></div>
+        <button class="btn btn-p" id="val-ep09-save-btn" onclick="saveAndCalculateValidation()" style="width:100%;justify-content:center;margin-top:10px">🧮 Save &amp; Calculate</button>
+      </div>
+    </div>
+
+    <div id="val-result-panel" style="display:none">
+      <div class="card">
+        <div class="card-hd"><span class="card-title">📊 Results</span><span id="val-passfail-badge"></span></div>
+        <div class="card-body">
+          <div class="stat-grid" id="val-kpi-cards" style="grid-template-columns:repeat(4,1fr)"></div>
+          <div id="val-warnings" style="margin-top:10px"></div>
+        </div>
+      </div>
+      <div class="g2" id="val-charts-row">
+        <div class="card" id="val-scatter-card" style="display:none">
+          <div class="card-hd"><span class="card-title">📈 Method Comparison Scatter</span></div>
+          <div class="card-body"><canvas id="val-scatter-canvas" height="260" style="width:100%"></canvas></div>
+        </div>
+        <div class="card" id="val-ba-card" style="display:none">
+          <div class="card-hd"><span class="card-title">📉 Bland-Altman (Bias % vs. Mean)</span></div>
+          <div class="card-body"><canvas id="val-ba-canvas" height="260" style="width:100%"></canvas></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-hd"><span class="card-title">✍️ Sign-off</span></div>
+        <div class="card-body">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+            <div>
+              <div style="font-size:.7rem;color:var(--slate);text-transform:uppercase;font-weight:700;margin-bottom:4px">Reviewed by Quality Manager</div>
+              <div id="val-verify-status" style="font-size:.82rem;margin-bottom:6px">Not yet reviewed</div>
+              <button class="btn btn-s btn-sm" id="val-verify-btn" onclick="signValidationResult('verify')">✅ Confirm Review</button>
+            </div>
+            <div>
+              <div style="font-size:.7rem;color:var(--slate);text-transform:uppercase;font-weight:700;margin-bottom:4px">Approved by Laboratory Director</div>
+              <div id="val-approve-status" style="font-size:.82rem;margin-bottom:6px">Not yet approved</div>
+              <button class="btn btn-s btn-sm" id="val-approve-btn" onclick="signValidationResult('approve')">✅ Confirm Approval</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
     </div><!-- /.content -->
   </div><!-- /#main -->
 </div><!-- /#app -->
@@ -6673,11 +6790,11 @@ const CFG = {
 const BLOOD_SHELF_LIFE_CFG_KEY={'Whole Blood':'bloodShelfWholeBlood','Packed RBC':'bloodShelfPrbc',Platelets:'bloodShelfPlatelets',FFP:'bloodShelfFfp',Cryoprecipitate:'bloodShelfCryo'};
 
 const ROLE_PAGES = {
-  admin:['dashboard','admission','theatre','consultation','nursing','fluid-chart','appointments','infection','handover','register','worklist','samples','set-printer','hem-entry','chem-entry','sero-entry','immuno-entry','micro-entry','pcr-entry','histo-entry','cyto-entry','unified-entry','allresults','criticals','reports','print-reports-hub','rad-print','billing','prices','pt-history','labhistory','tat','inventory','bloodbank','qc','staff','doctors','radiology','analyzer','delivery','settings','statistics'],
+  admin:['dashboard','admission','theatre','consultation','nursing','fluid-chart','appointments','infection','handover','register','worklist','samples','set-printer','hem-entry','chem-entry','sero-entry','immuno-entry','micro-entry','pcr-entry','histo-entry','cyto-entry','unified-entry','allresults','criticals','reports','print-reports-hub','rad-print','billing','prices','pt-history','labhistory','tat','inventory','bloodbank','qc','validation','staff','doctors','radiology','analyzer','delivery','settings','statistics'],
   doctor:['dashboard','admission','theatre','consultation','nursing','fluid-chart','allresults','criticals','radiology','bloodbank','pt-history'],
   nurse:['dashboard','nursing','fluid-chart','admission','criticals','bloodbank','pt-history','inventory'],
-  lab_tech:['dashboard','worklist','samples','set-printer','hem-entry','chem-entry','sero-entry','immuno-entry','micro-entry','pcr-entry','histo-entry','cyto-entry','unified-entry','allresults','criticals','reports','tat','inventory','delivery','qc','labhistory','bloodbank','pt-history'],
-  lab_supervisor:['register','worklist','samples','set-printer','hem-entry','chem-entry','sero-entry','immuno-entry','micro-entry','unified-entry','allresults','criticals','reports','qc','labhistory','tat','inventory','delivery','staff','bloodbank','pt-history'],
+  lab_tech:['dashboard','worklist','samples','set-printer','hem-entry','chem-entry','sero-entry','immuno-entry','micro-entry','pcr-entry','histo-entry','cyto-entry','unified-entry','allresults','criticals','reports','tat','inventory','delivery','qc','validation','labhistory','bloodbank','pt-history'],
+  lab_supervisor:['register','worklist','samples','set-printer','hem-entry','chem-entry','sero-entry','immuno-entry','micro-entry','unified-entry','allresults','criticals','reports','qc','validation','labhistory','tat','inventory','delivery','staff','bloodbank','pt-history'],
   receptionist:['register','appointments','billing','prices','worklist','dashboard','infection','print-reports-hub','reports','rad-print'],
   cashier:['billing','prices'],
   theatre_nurse:['theatre','nursing','fluid-chart','criticals','pt-history','inventory'],
@@ -6717,7 +6834,7 @@ const PAGE_TITLES = {
 const MODULE_PAGES = {
   reception:      { label:'Reception',      icon:'🏥', pages:['register','appointments','print-reports-hub'] },
   phlebotomy:     { label:'Phlebotomy',      icon:'💉', pages:['samples','set-printer'] },
-  laboratory:     { label:'Laboratory',      icon:'🔬', pages:['worklist','unified-entry','hem-entry','chem-entry','sero-entry','immuno-entry','micro-entry','pcr-entry','histo-entry','cyto-entry','reports','allresults','labhistory','criticals','qc','analyzer','tat','pt-history'] },
+  laboratory:     { label:'Laboratory',      icon:'🔬', pages:['worklist','unified-entry','hem-entry','chem-entry','sero-entry','immuno-entry','micro-entry','pcr-entry','histo-entry','cyto-entry','reports','allresults','labhistory','criticals','qc','analyzer','validation','tat','pt-history'] },
   radiology:      { label:'Radiology',       icon:'🩻', pages:['radiology','rad-print'] },
   doctor:         { label:'Doctor',          icon:'🩺', pages:['consultation','pt-history'] },
   nursing:        { label:'Nursing',         icon:'🧑‍⚕️', pages:['nursing','fluid-chart','infection','handover','pt-history'] },
@@ -6882,7 +6999,7 @@ const I18N = {
     nav_pt_history:'Patient Timeline', nav_labhistory:'Lab History', nav_tat:'TAT Tracker',
     nav_inventory:'Inventory', nav_qc:'QC Module',
     nav_statistics:'Statistics', nav_staff:'Staff', nav_doctors:'Doctors', nav_radiology:'Radiology',
-    nav_analyzer:'Analyzer Interface', nav_delivery:'Result Delivery', nav_settings:'Settings',
+    nav_analyzer:'Analyzer Interface', nav_validation:'Analyzer Validation', nav_delivery:'Result Delivery', nav_settings:'Settings',
 
     page_dashboard:'Dashboard', page_admission:'Admissions', page_theatre:'Theatre / OT',
     page_consultation:'Doctor Orders & Consultation', page_nursing:'Nursing & Vital Signs',
@@ -6956,7 +7073,7 @@ const I18N = {
     nav_pt_history:'الجدول الزمني للمريض', nav_labhistory:'سجل المختبر', nav_tat:'متتبع وقت الإنجاز',
     nav_inventory:'المخزون', nav_qc:'وحدة ضبط الجودة',
     nav_statistics:'الإحصائيات', nav_staff:'الموظفون', nav_doctors:'الأطباء', nav_radiology:'الأشعة',
-    nav_analyzer:'واجهة المحلل', nav_delivery:'تسليم النتائج', nav_settings:'الإعدادات',
+    nav_analyzer:'واجهة المحلل', nav_validation:'التحقق من صحة المحلل', nav_delivery:'تسليم النتائج', nav_settings:'الإعدادات',
 
     page_dashboard:'لوحة التحكم', page_admission:'القبول', page_theatre:'غرفة العمليات',
     page_consultation:'أوامر واستشارة الطبيب', page_nursing:'التمريض والعلامات الحيوية',
@@ -7401,6 +7518,7 @@ function goPage(p) {
   else if(p==='criticals') run(loadCriticals);
   else if(p==='qc') run(loadQcPage);
   else if(p==='analyzer') run(loadInstrumentMessages);
+  else if(p==='validation') run(initValidationPage);
   else if(p==='labhistory'){ setD('lh-from',new Date(Date.now()-7*864e5).toISOString().slice(0,10)); setD('lh-to',td); }
   else if(p==='tat'){ setD('tat-filter-date',td); run(loadTat); }
   else if(p==='inventory') run(loadInventory);
@@ -15832,11 +15950,11 @@ function renderPermissionsMatrix() {
   const body=document.getElementById('perm-matrix-body'); if(!body) return;
   // Role access definitions
   const roleAccess={
-    admin:['dashboard','register','appointments','billing','prices','admission','theatre','consultation','nursing','fluid-chart','handover','infection','worklist','samples','hem-entry','chem-entry','sero-entry','micro-entry','pcr-entry','histo-entry','cyto-entry','allresults','criticals','reports','qc','labhistory','tat','inventory','staff','doctors','radiology','analyzer','delivery','settings','pt-history'],
+    admin:['dashboard','register','appointments','billing','prices','admission','theatre','consultation','nursing','fluid-chart','handover','infection','worklist','samples','hem-entry','chem-entry','sero-entry','micro-entry','pcr-entry','histo-entry','cyto-entry','allresults','criticals','reports','qc','validation','labhistory','tat','inventory','staff','doctors','radiology','analyzer','delivery','settings','pt-history'],
     doctor:['dashboard','consultation','nursing','fluid-chart','admission','theatre','radiology','pt-history','labhistory'],
     nurse:['dashboard','nursing','fluid-chart','admission','handover','infection','samples'],
-    lab_tech:['dashboard','worklist','samples','hem-entry','chem-entry','sero-entry','micro-entry','pcr-entry','histo-entry','cyto-entry','allresults','criticals','reports','tat','inventory','delivery','qc','labhistory'],
-    lab_supervisor:['dashboard','worklist','samples','hem-entry','chem-entry','sero-entry','micro-entry','pcr-entry','histo-entry','cyto-entry','allresults','criticals','reports','tat','inventory','delivery','qc','labhistory','staff'],
+    lab_tech:['dashboard','worklist','samples','hem-entry','chem-entry','sero-entry','micro-entry','pcr-entry','histo-entry','cyto-entry','allresults','criticals','reports','tat','inventory','delivery','qc','validation','labhistory'],
+    lab_supervisor:['dashboard','worklist','samples','hem-entry','chem-entry','sero-entry','micro-entry','pcr-entry','histo-entry','cyto-entry','allresults','criticals','reports','tat','inventory','delivery','qc','validation','labhistory','staff'],
     receptionist:['dashboard','register','appointments','billing','prices','worklist','infection'],
     cashier:['dashboard','billing','prices','register','appointments'],
     theatre_nurse:['dashboard','theatre','nursing','admission','fluid-chart','inventory'],
@@ -15847,13 +15965,13 @@ function renderPermissionsMatrix() {
     {label:'💰 Billing',pages:['billing','prices']},
     {label:'🛏 Inpatient',pages:['admission','theatre','nursing','fluid-chart','handover','infection']},
     {label:'🩺 Doctor',pages:['consultation']},
-    {label:'🔬 Laboratory',pages:['worklist','samples','hem-entry','chem-entry','sero-entry','micro-entry','pcr-entry','histo-entry','cyto-entry','allresults','criticals','reports','qc','analyzer','labhistory','tat','inventory','delivery']},
+    {label:'🔬 Laboratory',pages:['worklist','samples','hem-entry','chem-entry','sero-entry','micro-entry','pcr-entry','histo-entry','cyto-entry','allresults','criticals','reports','qc','analyzer','validation','labhistory','tat','inventory','delivery']},
     {label:'🩻 Radiology',pages:['radiology']},
     {label:'📊 Reports',pages:['pt-history']},
     {label:'⚙️ Admin',pages:['staff','doctors','settings']},
   ];
   const roles=['admin','doctor','nurse','lab_tech','lab_supervisor','receptionist','cashier','theatre_nurse','radiologist'];
-  const pageLabels={register:'Register Patient',appointments:'Appointments',billing:'Billing',prices:'Price List',admission:'Admissions',theatre:'Theatre',nursing:'Nursing/Vitals','fluid-chart':'Fluid Chart',handover:'Handover',infection:'Infection Flags',consultation:'Consultation','hem-entry':'Haematology','chem-entry':'Chemistry','sero-entry':'Serology','micro-entry':'Microbiology','pcr-entry':'PCR','histo-entry':'Histopathology','cyto-entry':'Cytology',worklist:'Worklist',samples:'Sample Collection',allresults:'All Results',criticals:'Critical Values',reports:'Reports/Print',qc:'QC Module',labhistory:'Lab History',tat:'TAT Tracker',inventory:'Inventory',delivery:'Delivery',radiology:'Radiology','pt-history':'Patient History',staff:'Staff Mgmt',doctors:'Doctors',settings:'Settings',analyzer:'Analyzer'};
+  const pageLabels={register:'Register Patient',appointments:'Appointments',billing:'Billing',prices:'Price List',admission:'Admissions',theatre:'Theatre',nursing:'Nursing/Vitals','fluid-chart':'Fluid Chart',handover:'Handover',infection:'Infection Flags',consultation:'Consultation','hem-entry':'Haematology','chem-entry':'Chemistry','sero-entry':'Serology','micro-entry':'Microbiology','pcr-entry':'PCR','histo-entry':'Histopathology','cyto-entry':'Cytology',worklist:'Worklist',samples:'Sample Collection',allresults:'All Results',criticals:'Critical Values',reports:'Reports/Print',qc:'QC Module',labhistory:'Lab History',tat:'TAT Tracker',inventory:'Inventory',delivery:'Delivery',radiology:'Radiology','pt-history':'Patient History',staff:'Staff Mgmt',doctors:'Doctors',settings:'Settings',analyzer:'Analyzer',validation:'Analyzer Validation'};
   let html='';
   modules.forEach(mod=>{
     html+='<tr style="background:#f1f5f9"><td colspan="10" style="padding:5px 10px;font-weight:700;font-size:.72rem;text-transform:uppercase;letter-spacing:.4px;color:var(--slate)">'+mod.label+'</td></tr>';
@@ -16824,7 +16942,396 @@ function calculateEP09(methodXData, methodYData){
 document.addEventListener('DOMContentLoaded',()=>{
   const sel=document.getElementById('qc-analyte');
   if(sel) sel.innerHTML='<option value="">— not set (Sigma metric unavailable) —</option>'+Object.keys(TEA_REFERENCE_DEFAULTS).map(a=>'<option>'+a+'</option>').join('');
+  const dl=document.getElementById('val-analyte-list');
+  if(dl) dl.innerHTML=Object.keys(TEA_REFERENCE_DEFAULTS).map(a=>'<option value="'+a+'">').join('');
 });
+
+// ── Analyzer Validation & Verification: frontend (CLSI EP15-A3/EP09-A3) ─
+// Data-entry table, KPI cards, and canvas charts around the calculateEP15/
+// calculateEP09/chi2Upper95 statistics above. Charts and study-reopen both
+// recompute from the raw validation_samples rows rather than storing a
+// duplicate copy of the plotted points — the same "recompute on view"
+// approach renderQcChart() already uses for Levey-Jennings.
+let _valCurrentStudy=null;
+let _valCurrentResult=null;
+let _valPastedRuns=[];      // EP15-A3: array of arrays (one array per run)
+let _valPastedPairs={x:[],y:[]}; // EP09-A3: parallel arrays
+
+function switchValidationTab(tab,btn){
+  ['new','studies','workspace'].forEach(t=>{ const el=document.getElementById('val-tab-'+t); if(el) el.style.display=t===tab?'':'none'; });
+  document.querySelectorAll('#page-validation .tabs .tab').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  if(tab==='studies') loadValidationStudies();
+}
+function initValidationPage(){
+  onValidationProtocolChange();
+  switchValidationTab('new',document.getElementById('val-tab-btn-new'));
+}
+function onValidationAnalyteChange(){
+  const analyte=document.getElementById('val-analyte')?.value;
+  const tea=teaFor(analyte);
+  const teaEl=document.getElementById('val-tea');
+  if(teaEl&&tea!=null) teaEl.value=tea;
+}
+function onValidationProtocolChange(){
+  const protocol=document.getElementById('val-protocol')?.value;
+  const wrap=document.getElementById('val-claimed-cv-wrap');
+  if(wrap) wrap.style.display=protocol==='EP15-A3'?'':'none';
+}
+async function saveValidationStudy(){
+  if(!sb){ toast('Not connected','err'); return; }
+  const g=id=>document.getElementById(id)?.value||null;
+  const gn=id=>{ const v=parseFloat(document.getElementById(id)?.value); return isNaN(v)?null:v; };
+  const analyte=g('val-analyte'), instrument=g('val-instrument'), protocol=g('val-protocol');
+  if(!analyte||!instrument||!protocol){ toast('Analyte, instrument name, and protocol are required','err'); return; }
+  try{
+    const payload={
+      analyte, instrument_name:instrument, instrument_serial:g('val-serial'),
+      protocol_type:protocol, unit:g('val-unit'),
+      tea_limit:gn('val-tea'), claimed_cv_pct:gn('val-claimed-cv'),
+      status:'Draft', created_by:currentProfile?.id, created_by_name:currentProfile?.full_name||'',
+    };
+    const {data,error}=await sb.from('validation_studies').insert(payload).select().single();
+    if(error) throw error;
+    toast('✅ Validation study created','ok');
+    ['val-analyte','val-instrument','val-serial','val-unit','val-claimed-cv','val-tea'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+    if(data) openValidationWorkspace(data.id);
+  }catch(e){ toast(e.message,'err'); }
+}
+async function loadValidationStudies(){
+  const body=document.getElementById('val-studies-body'); if(!body||!sb) return;
+  body.innerHTML='<div class="spin-center"><div class="spinner"></div>Loading…</div>';
+  try{
+    const {data}=await sb.from('validation_studies').select('*').order('created_at',{ascending:false}).limit(50);
+    const studies=data||[];
+    if(!studies.length){ body.innerHTML='<div class="empty-state">No validation studies yet — create one on the New Study tab</div>'; return; }
+    body.innerHTML='<div style="overflow-x:auto"><table class="tbl" style="font-size:.78rem"><thead><tr><th>Analyte</th><th>Instrument</th><th>Protocol</th><th>Status</th><th>Created</th><th></th></tr></thead><tbody>'+
+      studies.map(s=>'<tr><td style="font-weight:600">'+escapeHtml(s.analyte)+'</td>'+
+        '<td>'+escapeHtml(s.instrument_name)+(s.instrument_serial?' <span style="color:var(--slate);font-size:.7rem">('+escapeHtml(s.instrument_serial)+')</span>':'')+'</td>'+
+        '<td>'+escapeHtml(s.protocol_type)+'</td><td>'+statusBadge(s.status)+'</td>'+
+        '<td style="font-size:.72rem;color:var(--slate)">'+fmtDT(s.created_at)+'</td>'+
+        '<td><button class="btn btn-p btn-xs" onclick="openValidationWorkspace(\''+s.id+'\')">Open</button></td></tr>').join('')+
+      '</tbody></table></div>';
+  }catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>'; }
+}
+async function openValidationWorkspace(studyId){
+  if(!sb) return;
+  try{
+    const {data:study}=await sb.from('validation_studies').select('*').eq('id',studyId).single();
+    if(!study){ toast('Study not found','err'); return; }
+    _valCurrentStudy=study; _valCurrentResult=null;
+    _valPastedRuns=[]; _valPastedPairs={x:[],y:[]};
+    const epEl=document.getElementById('val-ep15-paste'); if(epEl) epEl.value='';
+    const ep9El=document.getElementById('val-ep09-paste'); if(ep9El) ep9El.value='';
+    switchValidationTab('workspace',document.getElementById('val-tab-btn-workspace'));
+    document.getElementById('val-ep15-entry').style.display=study.protocol_type==='EP15-A3'?'':'none';
+    document.getElementById('val-ep09-entry').style.display=study.protocol_type==='EP09-A3'?'':'none';
+    renderValidationWorkspaceHeader();
+    await loadValidationSamplesAndResult();
+  }catch(e){ toast(e.message,'err'); }
+}
+function renderValidationWorkspaceHeader(){
+  const el=document.getElementById('val-ws-header'); if(!el||!_valCurrentStudy) return;
+  const s=_valCurrentStudy;
+  el.innerHTML='<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;font-size:.8rem">'+
+    '<div><div style="color:var(--slate);font-size:.7rem">Analyte</div><div style="font-weight:700">'+escapeHtml(s.analyte)+'</div></div>'+
+    '<div><div style="color:var(--slate);font-size:.7rem">Instrument</div><div>'+escapeHtml(s.instrument_name)+(s.instrument_serial?' ('+escapeHtml(s.instrument_serial)+')':'')+'</div></div>'+
+    '<div><div style="color:var(--slate);font-size:.7rem">Protocol</div><div>'+escapeHtml(s.protocol_type)+'</div></div>'+
+    '<div><div style="color:var(--slate);font-size:.7rem">TEa / Claimed CV</div><div>'+(s.tea_limit??'—')+'% / '+(s.claimed_cv_pct??'—')+'%</div></div>'+
+    '<div><div style="color:var(--slate);font-size:.7rem">Status</div><div>'+statusBadge(s.status)+'</div></div>'+
+    '</div>';
+}
+// ── Paste-to-grid parsing (tab/comma-separated, one row per line) ──────
+function parseDelimitedGrid(text){
+  return (text||'').trim().split(/\r?\n/).filter(l=>l.trim()).map(line=>line.split(/\t|,/).map(v=>v.trim()).filter(v=>v!==''));
+}
+function parseEP15Grid(){
+  const text=document.getElementById('val-ep15-paste')?.value||'';
+  const rows=parseDelimitedGrid(text);
+  _valPastedRuns=rows.map(r=>r.map(v=>parseFloat(v)).filter(v=>!isNaN(v))).filter(r=>r.length>0);
+  renderEP15PreviewTable();
+}
+function renderEP15PreviewTable(){
+  const el=document.getElementById('val-ep15-preview'); if(!el) return;
+  if(!_valPastedRuns.length){ el.innerHTML='<div class="empty-state" style="padding:10px;font-size:.78rem">Paste run data above (one run per line, replicate values separated by tab or comma)</div>'; return; }
+  el.innerHTML='<table class="tbl" style="font-size:.76rem"><thead><tr><th>Run</th><th>Replicates</th><th>Run Mean</th></tr></thead><tbody>'+
+    _valPastedRuns.map((r,i)=>'<tr><td>'+(i+1)+'</td><td>'+r.join(', ')+'</td><td style="font-weight:700">'+(r.length?(r.reduce((a,b)=>a+b,0)/r.length).toFixed(2):'—')+'</td></tr>').join('')+
+    '</tbody></table>';
+}
+function parseEP09Grid(){
+  const text=document.getElementById('val-ep09-paste')?.value||'';
+  const rows=parseDelimitedGrid(text);
+  const pairs=rows.map(r=>({x:parseFloat(r[0]),y:parseFloat(r[1])})).filter(p=>!isNaN(p.x)&&!isNaN(p.y));
+  _valPastedPairs={x:pairs.map(p=>p.x),y:pairs.map(p=>p.y)};
+  renderEP09PreviewTable();
+}
+function renderEP09PreviewTable(){
+  const el=document.getElementById('val-ep09-preview'); if(!el) return;
+  const {x,y}=_valPastedPairs;
+  if(!x.length){ el.innerHTML='<div class="empty-state" style="padding:10px;font-size:.78rem">Paste paired Method X / Method Y values above (one pair per line, tab or comma separated)</div>'; return; }
+  el.innerHTML='<table class="tbl" style="font-size:.76rem"><thead><tr><th>#</th><th>Method X</th><th>Method Y</th></tr></thead><tbody>'+
+    x.map((v,i)=>'<tr><td>'+(i+1)+'</td><td>'+v+'</td><td>'+y[i]+'</td></tr>').join('')+
+    '</tbody></table>';
+}
+// ── Save & Calculate: replaces this study's saved samples with whatever
+// is currently pasted (simpler and less error-prone than incremental
+// run-number bookkeeping across repeated partial saves), then runs the
+// appropriate statistics function and persists a new validation_results row. ──
+async function saveAndCalculateValidation(){
+  if(!sb||!_valCurrentStudy) return;
+  const study=_valCurrentStudy;
+  try{
+    if(study.protocol_type==='EP15-A3'){
+      if(!_valPastedRuns.length){ toast('Paste run data first','err'); return; }
+      const result=calculateEP15(_valPastedRuns,study.claimed_cv_pct,study.tea_limit);
+      if(result.error){ toast(result.error,'err'); return; }
+      await sb.from('validation_samples').delete().eq('study_id',study.id);
+      const sampleRows=[];
+      _valPastedRuns.forEach((run,ri)=>run.forEach((val,repi)=>sampleRows.push({
+        study_id:study.id, run_number:ri+1, replicate_number:repi+1, result_value:val,
+        entered_by:currentProfile?.id, entered_by_name:currentProfile?.full_name||'',
+      })));
+      await sb.from('validation_samples').insert(sampleRows);
+      const resultStatus=result.overallPass==null?'Pending Review':(result.overallPass?'Pass':'Fail');
+      await sb.from('validation_results').insert({
+        study_id:study.id, grand_mean:result.grandMean, ms_within:result.msWithin, ms_between:result.msBetween,
+        cv_within_pct:result.cvWithinPct, cv_total_pct:result.cvTotalPct, uvl:result.uvl,
+        result_status:resultStatus, performed_by:currentProfile?.id, performed_by_name:currentProfile?.full_name||'',
+      });
+    } else if(study.protocol_type==='EP09-A3'){
+      const {x,y}=_valPastedPairs;
+      if(!x.length){ toast('Paste paired data first','err'); return; }
+      const result=calculateEP09(x,y);
+      if(result.error){ toast(result.error,'err'); return; }
+      await sb.from('validation_samples').delete().eq('study_id',study.id);
+      const sampleRows=x.map((val,i)=>({study_id:study.id,run_number:1,replicate_number:i+1,method:'X',result_value:val,entered_by:currentProfile?.id,entered_by_name:currentProfile?.full_name||''}))
+        .concat(y.map((val,i)=>({study_id:study.id,run_number:1,replicate_number:i+1,method:'Y',result_value:val,entered_by:currentProfile?.id,entered_by_name:currentProfile?.full_name||''})));
+      await sb.from('validation_samples').insert(sampleRows);
+      const passBias=study.tea_limit!=null?Math.abs(result.biasPct)<=study.tea_limit:null;
+      const resultStatus=passBias==null?'Pending Review':(passBias?'Pass':'Fail');
+      await sb.from('validation_results').insert({
+        study_id:study.id, regression_method:result.regressionMethod, slope:result.slope, intercept:result.intercept,
+        r_squared:result.r2, bias_pct:result.biasPct, sd_differences:result.sdDiffs,
+        result_status:resultStatus, performed_by:currentProfile?.id, performed_by_name:currentProfile?.full_name||'',
+      });
+    }
+    await sb.from('validation_studies').update({status:'Completed'}).eq('id',study.id);
+    _valCurrentStudy.status='Completed';
+    toast('✅ Calculated and saved','ok');
+    renderValidationWorkspaceHeader();
+    await loadValidationSamplesAndResult();
+  }catch(e){ toast(e.message,'err'); }
+}
+// Recomputes from the raw saved samples (source of truth) and separately
+// fetches the latest validation_results row for its PASS/FAIL/sign-off
+// state — the numeric stats always come from a fresh calculation, so a
+// study reopened later renders identically to how it looked right after
+// Save & Calculate.
+async function loadValidationSamplesAndResult(){
+  if(!sb||!_valCurrentStudy) return;
+  const study=_valCurrentStudy;
+  try{
+    const [{data:samples},{data:results}]=await Promise.all([
+      sb.from('validation_samples').select('*').eq('study_id',study.id).order('run_number').order('replicate_number'),
+      sb.from('validation_results').select('*').eq('study_id',study.id).order('calculated_at',{ascending:false}).limit(1),
+    ]);
+    _valCurrentResult=results?.[0]||null;
+    const panel=document.getElementById('val-result-panel');
+    if(!samples?.length){ if(panel) panel.style.display='none'; return; }
+    if(study.protocol_type==='EP15-A3'){
+      const byRun={};
+      samples.forEach(s=>{ (byRun[s.run_number]=byRun[s.run_number]||[])[s.replicate_number-1]=s.result_value; });
+      const runs=Object.keys(byRun).sort((a,b)=>a-b).map(k=>byRun[k].filter(v=>v!=null));
+      const result=calculateEP15(runs,study.claimed_cv_pct,study.tea_limit);
+      renderValidationResultPanel({ep15:result});
+    } else if(study.protocol_type==='EP09-A3'){
+      const xVals=samples.filter(s=>s.method==='X').map(s=>s.result_value);
+      const yVals=samples.filter(s=>s.method==='Y').map(s=>s.result_value);
+      const result=calculateEP09(xVals,yVals);
+      renderValidationResultPanel({ep09:result});
+    }
+  }catch(e){ /* best-effort — a fresh study with nothing saved yet has no result to show */ }
+}
+function renderValidationResultPanel({ep15,ep09}){
+  const panel=document.getElementById('val-result-panel'); if(!panel) return;
+  const result=ep15||ep09;
+  if(!result||result.error){ panel.style.display='none'; return; }
+  panel.style.display='';
+  renderValidationKPIs(ep15,ep09);
+  const finalStatus=_valCurrentResult?.result_status||'Pending Review';
+  renderValidationPassFail(finalStatus);
+  const warnEl=document.getElementById('val-warnings');
+  if(warnEl) warnEl.innerHTML=(result.warnings||[]).map(w=>'<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:6px 10px;font-size:.74rem;color:#92400e;margin-top:4px">⚠️ '+escapeHtml(w)+'</div>').join('');
+  const scatterCard=document.getElementById('val-scatter-card'), baCard=document.getElementById('val-ba-card');
+  if(ep09){
+    scatterCard.style.display=''; baCard.style.display='';
+    drawEP09ScatterChart(ep09); drawBlandAltmanChart(ep09);
+  } else {
+    scatterCard.style.display='none'; baCard.style.display='none';
+  }
+  const vStatus=document.getElementById('val-verify-status'), vBtn=document.getElementById('val-verify-btn');
+  const aStatus=document.getElementById('val-approve-status'), aBtn=document.getElementById('val-approve-btn');
+  const r=_valCurrentResult;
+  if(r?.verified_at){ vStatus.innerHTML='✅ '+escapeHtml(r.verified_by_name||'')+' · '+fmtDT(r.verified_at); vBtn.style.display='none'; }
+  else { vStatus.textContent='Not yet reviewed'; vBtn.style.display=''; }
+  if(r?.approved_at){ aStatus.innerHTML='✅ '+escapeHtml(r.approved_by_name||'')+' · '+fmtDT(r.approved_at); aBtn.style.display='none'; }
+  else { aStatus.textContent='Not yet approved'; aBtn.style.display=r?.verified_at?'':'none'; if(!r?.verified_at) aStatus.textContent='Awaiting Quality Manager review first'; }
+}
+function renderValidationKPIs(ep15,ep09){
+  const el=document.getElementById('val-kpi-cards'); if(!el) return;
+  if(ep15){
+    el.innerHTML=statCard('Grand Mean',ep15.grandMean!=null?ep15.grandMean.toFixed(3):'—','var(--teal)')+
+      statCard('Within-Run %CV',ep15.cvWithinPct!=null?ep15.cvWithinPct.toFixed(2)+'%':'—','#8b5cf6')+
+      statCard('Within-Lab %CV',ep15.cvTotalPct!=null?ep15.cvTotalPct.toFixed(2)+'%':'—','#f59e0b')+
+      statCard('UVL',ep15.uvl!=null?ep15.uvl.toFixed(4):'—','#3b82f6');
+  } else if(ep09){
+    el.innerHTML=statCard('Slope',ep09.slope!=null?ep09.slope.toFixed(3):'—','var(--teal)')+
+      statCard('Intercept',ep09.intercept!=null?ep09.intercept.toFixed(3):'—','#8b5cf6')+
+      statCard('R²',ep09.r2!=null?ep09.r2.toFixed(4):'—','#3b82f6')+
+      statCard('Bias %',ep09.biasPct!=null?ep09.biasPct.toFixed(2)+'%':'—','#f59e0b');
+  }
+}
+function renderValidationPassFail(status){
+  const el=document.getElementById('val-passfail-badge'); if(!el) return;
+  const map={Pass:{bg:'#dcfce7',color:'#166534',label:'✅ PASS'},Fail:{bg:'#fee2e2',color:'#b91c1c',label:'⛔ FAIL'},'Pending Review':{bg:'#fef3c7',color:'#92400e',label:'🟡 PENDING REVIEW'}};
+  const m=map[status]||map['Pending Review'];
+  el.innerHTML='<span class="bdg" style="background:'+m.bg+';color:'+m.color+';font-size:.9rem;padding:6px 16px;font-weight:800">'+m.label+'</span>';
+}
+// ── Canvas charts (plain <canvas>, no charting library — same convention
+// as renderQcChart()'s Levey-Jennings chart and drawSparkline()). ──────
+function drawEP09ScatterChart(ep09){
+  const canvas=document.getElementById('val-scatter-canvas'); if(!canvas||!ep09.pairs?.length) return;
+  const ctx=canvas.getContext('2d');
+  const W=canvas.offsetWidth||canvas.width||500, H=canvas.height||260;
+  canvas.width=W; ctx.clearRect(0,0,W,H);
+  const pad={t:16,r:16,b:34,l:50};
+  const xs=ep09.pairs.map(p=>p.x), ys=ep09.pairs.map(p=>p.y);
+  const minV=Math.min(...xs,...ys), maxV=Math.max(...xs,...ys);
+  const range=(maxV-minV)||1;
+  const sx=v=>pad.l+(v-minV)/range*(W-pad.l-pad.r);
+  const sy=v=>H-pad.b-(v-minV)/range*(H-pad.t-pad.b);
+  ctx.strokeStyle='#e2e8f3'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(pad.l,pad.t); ctx.lineTo(pad.l,H-pad.b); ctx.lineTo(W-pad.r,H-pad.b); ctx.stroke();
+  ctx.setLineDash([4,3]); ctx.strokeStyle='#94a3b8';
+  ctx.beginPath(); ctx.moveTo(sx(minV),sy(minV)); ctx.lineTo(sx(maxV),sy(maxV)); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.strokeStyle='#0b7a75'; ctx.lineWidth=2;
+  const y1=ep09.slope*minV+ep09.intercept, y2=ep09.slope*maxV+ep09.intercept;
+  ctx.beginPath(); ctx.moveTo(sx(minV),sy(y1)); ctx.lineTo(sx(maxV),sy(y2)); ctx.stroke();
+  ctx.fillStyle='#0b7a75';
+  ep09.pairs.forEach(p=>{ ctx.beginPath(); ctx.arc(sx(p.x),sy(p.y),3.5,0,Math.PI*2); ctx.fill(); });
+  ctx.fillStyle='#64748b'; ctx.font='10px sans-serif'; ctx.textAlign='center';
+  ctx.fillText('Method X',W/2,H-6);
+  ctx.save(); ctx.translate(12,H/2); ctx.rotate(-Math.PI/2); ctx.fillText('Method Y',0,0); ctx.restore();
+  ctx.textAlign='left'; ctx.fillText('y = '+ep09.slope.toFixed(3)+'x + '+ep09.intercept.toFixed(3)+' (OLS) · R² = '+(ep09.r2!=null?ep09.r2.toFixed(4):'—'),pad.l,pad.t+2);
+}
+function drawBlandAltmanChart(ep09){
+  const canvas=document.getElementById('val-ba-canvas'); if(!canvas||!ep09.pairs?.length) return;
+  const ctx=canvas.getContext('2d');
+  const W=canvas.offsetWidth||canvas.width||500, H=canvas.height||260;
+  canvas.width=W; ctx.clearRect(0,0,W,H);
+  const pad={t:16,r:16,b:34,l:50};
+  const pts=ep09.pairs.map(p=>({mean:(p.x+p.y)/2, diffPct:p.x!==0?((p.y-p.x)/p.x)*100:0}));
+  const diffs=pts.map(p=>p.diffPct);
+  const meanDiffPct=diffs.reduce((a,b)=>a+b,0)/diffs.length;
+  const sdDiffPct=diffs.length>1?Math.sqrt(diffs.reduce((s,d)=>s+(d-meanDiffPct)**2,0)/(diffs.length-1)):0;
+  const loaHi=meanDiffPct+1.96*sdDiffPct, loaLo=meanDiffPct-1.96*sdDiffPct;
+  const xs=pts.map(p=>p.mean);
+  const minX=Math.min(...xs), maxX=Math.max(...xs), rangeX=(maxX-minX)||1;
+  const minY=Math.min(loaLo,...diffs), maxY=Math.max(loaHi,...diffs), rangeY=(maxY-minY)||1;
+  const sx=v=>pad.l+(v-minX)/rangeX*(W-pad.l-pad.r);
+  const sy=v=>H-pad.b-(v-minY)/rangeY*(H-pad.t-pad.b);
+  // Shaded limits-of-agreement band — same technique as drawSparkline()'s
+  // shaded normal-range band.
+  ctx.fillStyle='rgba(11,122,117,.08)';
+  ctx.fillRect(pad.l,sy(loaHi),W-pad.l-pad.r,sy(loaLo)-sy(loaHi));
+  ctx.setLineDash([4,3]); ctx.strokeStyle='#94a3b8';
+  [0,meanDiffPct,loaHi,loaLo].forEach(v=>{ ctx.beginPath(); ctx.moveTo(pad.l,sy(v)); ctx.lineTo(W-pad.r,sy(v)); ctx.stroke(); });
+  ctx.setLineDash([]);
+  ctx.fillStyle='#0b7a75';
+  pts.forEach(p=>{ ctx.beginPath(); ctx.arc(sx(p.mean),sy(p.diffPct),3.5,0,Math.PI*2); ctx.fill(); });
+  ctx.fillStyle='#64748b'; ctx.font='9px sans-serif'; ctx.textAlign='left';
+  ctx.fillText('+1.96 SD: '+loaHi.toFixed(1)+'%',pad.l+4,Math.max(pad.t+8,sy(loaHi)-4));
+  ctx.fillText('Mean bias: '+meanDiffPct.toFixed(1)+'%',pad.l+4,sy(meanDiffPct)-4);
+  ctx.fillText('−1.96 SD: '+loaLo.toFixed(1)+'%',pad.l+4,Math.min(H-pad.b-2,sy(loaLo)+12));
+  ctx.textAlign='center'; ctx.fillText('Mean of X & Y',W/2,H-6);
+}
+async function signValidationResult(stage){
+  if(!sb||!_valCurrentResult) return;
+  if(stage==='approve'&&!_valCurrentResult.verified_at){ toast('Quality Manager review must be confirmed first','err'); return; }
+  const field=stage==='verify'
+    ?{verified_by:currentProfile?.id, verified_by_name:currentProfile?.full_name||'', verified_at:new Date().toISOString()}
+    :{approved_by:currentProfile?.id, approved_by_name:currentProfile?.full_name||'', approved_at:new Date().toISOString()};
+  try{
+    await sb.from('validation_results').update(field).eq('id',_valCurrentResult.id);
+    toast(stage==='verify'?'✅ Reviewed by Quality Manager':'✅ Approved by Laboratory Director','ok');
+    await loadValidationSamplesAndResult();
+  }catch(e){ toast(e.message,'err'); }
+}
+// ── Audit-ready printable report (openPrintWin()/printHeader() pattern —
+// no jsPDF, matching every other report in this app). Approval block
+// reuses this app's existing digital-signature-style attribution
+// (verified_by_name/approved_by_name + timestamp, same as Radiology's
+// verified_by display) rather than a canvas signature pad — that pad
+// pattern (consent_forms) is specifically for PATIENT informed consent,
+// not staff review sign-off, where identity+timestamp is the established
+// convention throughout this app (WHO Checklist, Radiology verify). Blank
+// centered line prints when a stage hasn't been signed yet. ──────────
+async function printValidationReport(){
+  if(!sb||!_valCurrentStudy){ toast('Open a study first','err'); return; }
+  const study=_valCurrentStudy;
+  try{
+    const {data:results}=await sb.from('validation_results').select('*').eq('study_id',study.id).order('calculated_at',{ascending:false}).limit(1);
+    const r=results?.[0];
+    if(!r){ toast('Save & Calculate a result before printing','err'); return; }
+    const isEP15=study.protocol_type==='EP15-A3';
+    const row=(k,v)=>'<tr><td style="font-weight:600;padding:5px 8px;border-bottom:1px solid #f1f5fb">'+escapeHtml(k)+'</td><td style="padding:5px 8px;border-bottom:1px solid #f1f5fb">'+escapeHtml(String(v))+'</td></tr>';
+    const statsRows=isEP15
+      ? [
+          ['Grand Mean', r.grand_mean!=null?r.grand_mean.toFixed(3):'—'],
+          ['MS (Within-Run)', r.ms_within!=null?r.ms_within.toFixed(4):'—'],
+          ['MS (Between-Run)', r.ms_between!=null?r.ms_between.toFixed(4):'—'],
+          ['Within-Run %CV (Repeatability)', r.cv_within_pct!=null?r.cv_within_pct.toFixed(2)+'%':'—'],
+          ['Within-Laboratory %CV', r.cv_total_pct!=null?r.cv_total_pct.toFixed(2)+'%':'—'],
+          ['Claimed CV%', study.claimed_cv_pct!=null?study.claimed_cv_pct+'%':'—'],
+          ['Upper Verification Limit (UVL)', r.uvl!=null?r.uvl.toFixed(4):'—'],
+          ['TEa (Total Allowable Error)', study.tea_limit!=null?study.tea_limit+'%':'—'],
+        ].map(([k,v])=>row(k,v)).join('')
+      : [
+          ['Regression Method', (r.regression_method||'—')+' — see note below'],
+          ['Slope', r.slope!=null?r.slope.toFixed(4):'—'],
+          ['Intercept', r.intercept!=null?r.intercept.toFixed(4):'—'],
+          ['R²', r.r_squared!=null?r.r_squared.toFixed(4):'—'],
+          ['Relative Mean Bias', r.bias_pct!=null?r.bias_pct.toFixed(2)+'%':'—'],
+          ['SD of Differences', r.sd_differences!=null?r.sd_differences.toFixed(4):'—'],
+          ['TEa (Total Allowable Error)', study.tea_limit!=null?study.tea_limit+'%':'—'],
+        ].map(([k,v])=>row(k,v)).join('');
+    const methodNote=!isEP15?'<div style="font-size:8pt;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:8px 10px;margin-top:10px">⚠️ Regression computed via Ordinary Least Squares (OLS), <strong>not Deming regression</strong>. OLS assumes measurement error is confined to Method Y — for a formal CLSI EP09-A3 conclusion, review alongside a true error-in-both-variables (Deming/Passing-Bablok) analysis.</div>':'';
+    const statusMap={Pass:{color:'#166534',bg:'#dcfce7',label:'PASS'},Fail:{color:'#b91c1c',bg:'#fee2e2',label:'FAIL'},'Pending Review':{color:'#92400e',bg:'#fef3c7',label:'PENDING REVIEW'}};
+    const sm=statusMap[r.result_status]||statusMap['Pending Review'];
+    const sigBlock=(name,at,role)=>'<div style="border-top:1px solid #000;padding-top:6px;font-size:8.5pt;text-align:center">'+
+      (at?escapeHtml(name||'—')+'<br><span style="font-size:7.5pt;color:#64748b">'+fmtDT(at)+'</span>':'&nbsp;')+
+      '<div style="margin-top:2px;color:#64748b">'+role+'</div></div>';
+    const html=printHeader('Analyzer Validation Report — '+study.protocol_type)+
+      '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px;font-size:9pt">'+
+      '<div><div style="color:#64748b;font-size:8pt">Analyte</div><div style="font-weight:700">'+escapeHtml(study.analyte)+'</div></div>'+
+      '<div><div style="color:#64748b;font-size:8pt">Instrument / Serial</div><div>'+escapeHtml(study.instrument_name)+(study.instrument_serial?' / '+escapeHtml(study.instrument_serial):'')+'</div></div>'+
+      '<div><div style="color:#64748b;font-size:8pt">Protocol</div><div>'+escapeHtml(study.protocol_type)+'</div></div>'+
+      '<div><div style="color:#64748b;font-size:8pt">Date</div><div>'+fmtDT(r.calculated_at)+'</div></div>'+
+      '<div><div style="color:#64748b;font-size:8pt">Evaluator</div><div>'+escapeHtml(r.performed_by_name||'—')+'</div></div>'+
+      '<div><div style="color:#64748b;font-size:8pt">Unit</div><div>'+escapeHtml(study.unit||'—')+'</div></div>'+
+      '</div>'+
+      '<div style="text-align:center;margin-bottom:14px"><span style="background:'+sm.bg+';color:'+sm.color+';font-weight:800;font-size:13pt;padding:8px 24px;border-radius:8px">'+sm.label+'</span></div>'+
+      '<table style="width:100%;border-collapse:collapse;margin-bottom:6px"><tbody>'+statsRows+'</tbody></table>'+
+      methodNote+
+      '<div style="margin-top:24px;display:grid;grid-template-columns:1fr 1fr;gap:30px">'+
+      sigBlock(r.verified_by_name,r.verified_at,'Reviewed by Quality Manager')+
+      sigBlock(r.approved_by_name,r.approved_at,'Approved by Laboratory Director')+
+      '</div>'+
+      printFooter();
+    openPrintWin(html,'Validation Report — '+study.analyte+' ('+study.protocol_type+')');
+  }catch(e){ toast(e.message,'err'); }
+}
 
 // ===== MISSING FUNCTIONS =====
 function switchQcTab(tab,btn){

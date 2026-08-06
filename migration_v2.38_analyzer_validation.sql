@@ -104,8 +104,11 @@ create table if not exists public.validation_results (
   bias_pct numeric,
   sd_differences numeric,
   -- Shared determination + two-stage sign-off, mirroring
-  -- who_safety_checklist's multiple-independently-signed-stages pattern
-  result_status text not null check (result_status in ('Pass','Fail')),
+  -- who_safety_checklist's multiple-independently-signed-stages pattern.
+  -- 'Pending Review' covers EP09-A3 studies where no TEa is on file to
+  -- auto-judge bias% against -- EP15-A3 always resolves to Pass/Fail
+  -- (claimed-CV/UVL is always evaluable once claimed_cv_pct is entered).
+  result_status text not null check (result_status in ('Pass','Fail','Pending Review')),
   calculated_at timestamptz not null default now(),
   performed_by uuid references auth.users(id),
   performed_by_name text,
