@@ -20,9 +20,9 @@
 create table if not exists public.who_safety_checklist (
   id uuid primary key default gen_random_uuid(),
   booking_id uuid not null unique references public.theatre_bookings(id) on delete cascade,
-  signin_items jsonb, signin_completed_by uuid references auth.users(id), signin_completed_by_name text, signin_completed_at timestamptz,
-  timeout_items jsonb, timeout_completed_by uuid references auth.users(id), timeout_completed_by_name text, timeout_completed_at timestamptz,
-  signout_items jsonb, signout_completed_by uuid references auth.users(id), signout_completed_by_name text, signout_completed_at timestamptz,
+  signin_items jsonb, signin_completed_by uuid, signin_completed_by_name text, signin_completed_at timestamptz,
+  timeout_items jsonb, timeout_completed_by uuid, timeout_completed_by_name text, timeout_completed_at timestamptz,
+  signout_items jsonb, signout_completed_by uuid, signout_completed_by_name text, signout_completed_at timestamptz,
   created_at timestamptz not null default now()
 );
 

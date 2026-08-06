@@ -23,7 +23,7 @@ create table if not exists public.consent_forms (
   signee_relationship text default 'Self',
   witnessed_by text,
   signature_data_url text not null,
-  performed_by uuid references auth.users(id),
+  performed_by uuid,
   performed_by_name text,
   created_at timestamptz not null default now()
 );

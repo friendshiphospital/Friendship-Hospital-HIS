@@ -43,6 +43,16 @@
 -- way who_safety_checklist already models multiple independently-signed
 -- stages on one row, rather than a single generic "verified" flag.
 --
+-- Actor columns (created_by/entered_by/performed_by/verified_by/
+-- approved_by) are plain uuid, NOT `references auth.users(id)`. The app
+-- writes currentProfile?.id to these — the `staff` table's own row id,
+-- not the Supabase Auth user id (that's currentProfile.user_id) — and
+-- this codebase never enforces that FK anywhere else (see
+-- migration_v2.14/24/25/26). Constraining it here (an earlier version of
+-- this migration did) broke every save for any staff account whose row
+-- wasn't created with id==auth uid, which is not guaranteed for accounts
+-- set up before the one-step staff-creation flow existed.
+--
 -- Idempotent — safe to re-run. Not applied automatically; for manual
 -- review and application in the Supabase SQL editor.
 -- ═══════════════════════════════════════════════════════════════════════
@@ -57,7 +67,7 @@ create table if not exists public.validation_studies (
   tea_limit numeric,
   claimed_cv_pct numeric,
   status text not null default 'Draft' check (status in ('Draft','In Progress','Completed')),
-  created_by uuid references auth.users(id),
+  created_by uuid,
   created_by_name text,
   created_at timestamptz not null default now()
 );
@@ -77,7 +87,7 @@ create table if not exists public.validation_samples (
   target_level text,
   method text check (method in ('X','Y')),
   result_value numeric not null,
-  entered_by uuid references auth.users(id),
+  entered_by uuid,
   entered_by_name text,
   entered_at timestamptz not null default now()
 );
@@ -110,12 +120,12 @@ create table if not exists public.validation_results (
   -- (claimed-CV/UVL is always evaluable once claimed_cv_pct is entered).
   result_status text not null check (result_status in ('Pass','Fail','Pending Review')),
   calculated_at timestamptz not null default now(),
-  performed_by uuid references auth.users(id),
+  performed_by uuid,
   performed_by_name text,
-  verified_by uuid references auth.users(id),
+  verified_by uuid,
   verified_by_name text,
   verified_at timestamptz,
-  approved_by uuid references auth.users(id),
+  approved_by uuid,
   approved_by_name text,
   approved_at timestamptz
 );
