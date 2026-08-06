@@ -74,7 +74,10 @@ module.exports = async function run(context, baseUrl) {
     // does: pull the function's source and count LC-coded entries whose
     // name matches a catalog test.
     const src = seedDefaultPrices.toString();
-    const missing = allCatalogTests.filter(name => !src.includes("name:'" + name.replace(/'/g, "\\'") + "'"));
+    const missing = allCatalogTests.filter(name => {
+      const escapedName = JSON.stringify(name).slice(1, -1).replace(/'/g, "\\'");
+      return !src.includes("name:'" + escapedName + "'");
+    });
     return { total: allCatalogTests.length, missing };
   });
   t.check('every TEST_CATALOG test name has a canonical (exact-match) entry in the price seed source', auditResult.missing.length === 0);
