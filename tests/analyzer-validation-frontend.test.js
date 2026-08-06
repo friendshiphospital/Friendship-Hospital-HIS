@@ -109,6 +109,16 @@ module.exports = async function run(context, baseUrl) {
     const badgeText = await page.evaluate(() => document.getElementById('val-passfail-badge').textContent);
     t.check('a PASS/FAIL badge is shown (not stuck on Pending Review, since claimed CV was supplied)', badgeText.includes('PASS') || badgeText.includes('FAIL'));
 
+    const precisionCardVisible = await page.evaluate(() => document.getElementById('val-precision-card').style.display !== 'none');
+    t.check('the EP15 precision run chart card becomes visible (EP Evaluator-style report chart)', precisionCardVisible);
+    const precisionChartDrawn = await page.evaluate(() => {
+      const c = document.getElementById('val-precision-canvas');
+      // A blank, never-drawn canvas encodes to a tiny constant-size PNG;
+      // an actually-drawn chart (axes, bands, points) is meaningfully larger.
+      return c && c.toDataURL('image/png').length > 1000;
+    });
+    t.check('the precision run chart canvas actually has content drawn on it', precisionChartDrawn);
+
     const studyStatus = await page.evaluate(() => window.__mock.studyInserts.length > 0);
     t.check('sanity: study creation itself was captured', studyStatus);
 
@@ -138,6 +148,7 @@ module.exports = async function run(context, baseUrl) {
     t.check('Print Report opens a print window titled with the analyte and protocol', printedTitle && printedTitle.includes('Glucose') && printedTitle.includes('EP15-A3'));
     const printedHtml = await page.evaluate(() => window.__mock.printedHtml);
     t.check('the printed report includes the PASS/FAIL determination and the Quality Manager/Lab Director sign-off names', /PASS|FAIL/.test(printedHtml) && printedHtml.includes('Quality Officer Test'));
+    t.check('the printed report embeds the precision run chart as an image, not just numbers', printedHtml.includes('Precision Run Chart') && /<img src="data:image\/png/.test(printedHtml));
 
     await page.close();
   }
@@ -177,6 +188,16 @@ module.exports = async function run(context, baseUrl) {
 
     const resultPayload = await page.evaluate(() => window.__mock.resultInserts[0]);
     t.check('regression_method is always recorded as OLS, never mislabeled as Deming', resultPayload.regression_method === 'OLS');
+
+    // --- Print report embeds BOTH charts for a method-comparison study ---
+    await page.evaluate(() => { window.open = () => ({ document: { write: () => {}, close: () => {} }, focus: () => {} }); });
+    await page.evaluate(() => { const orig = openPrintWin; window.openPrintWin = (html, title) => { window.__mock.printedTitle = title; window.__mock.printedHtml = html; return orig(html, title); }; });
+    await page.click('button[onclick="printValidationReport()"]');
+    await page.waitForTimeout(150);
+    const printedHtml = await page.evaluate(() => window.__mock.printedHtml);
+    const imgCount = (printedHtml.match(/<img src="data:image\/png/g) || []).length;
+    t.check('the printed EP09 report embeds both the scatter and Bland-Altman charts as images', imgCount === 2);
+    t.check('the printed EP09 report does not include the EP15-only precision chart section', !printedHtml.includes('Precision Run Chart'));
 
     await page.close();
   }
