@@ -511,14 +511,22 @@ html[dir="rtl"] body{direction:rtl;}
     <div class="sb-group" data-module="laboratory">
       <div class="sb-lbl" data-i18n="navgrp_lab">🔬 Laboratory</div>
       <div class="sb-item" data-p="worklist" onclick="goPage('worklist')"><span class="ic">📋</span><span data-i18n="nav_worklist">Worklist</span></div>
-      <div class="sb-item" data-p="hem-entry" onclick="goPage('hem-entry')"><span class="ic">🩸</span><span data-i18n="nav_hem_entry">Haematology Entry</span></div>
-      <div class="sb-item" data-p="chem-entry" onclick="goPage('chem-entry')"><span class="ic">⚗️</span><span data-i18n="nav_chem_entry">Chemistry Entry</span></div>
-      <div class="sb-item" data-p="sero-entry" onclick="goPage('sero-entry')"><span class="ic">💉</span><span data-i18n="nav_sero_entry">Serology Entry</span></div>
-      <div class="sb-item" data-p="immuno-entry" onclick="goPage('immuno-entry')"><span class="ic">🧪</span><span data-i18n="nav_immuno_entry">Immunology Entry</span></div>
-      <div class="sb-item" data-p="micro-entry" onclick="goPage('micro-entry')"><span class="ic">🦠</span><span data-i18n="nav_micro_entry">Microbiology Entry</span></div>
-      <div class="sb-item" data-p="pcr-entry" onclick="goPage('pcr-entry')"><span class="ic">🧬</span><span data-i18n="nav_pcr_entry">PCR / Molecular</span></div>
-      <div class="sb-item" data-p="histo-entry" onclick="goPage('histo-entry')"><span class="ic">🔬</span><span data-i18n="nav_histo_entry">Histopathology</span></div>
-      <div class="sb-item" data-p="cyto-entry" onclick="goPage('cyto-entry')"><span class="ic">🧫</span><span data-i18n="nav_cyto_entry">Cytology</span></div>
+      <!-- The 7 individual per-department Entry pages (Haematology/Chemistry/
+           Serology/Immunology/Microbiology/PCR/Histopathology/Cytology) used
+           to each have their own sidebar link here. None of them ever had a
+           patient-search UI of their own (their *-entry-pt-id fields are
+           hidden inputs, only ever populated programmatically) and no code
+           anywhere called goPage() on them except these links themselves —
+           the only real, working path to result entry has always been
+           Worklist -> Enter -> openUnifiedResultsEntry(), which physically
+           relocates the relevant department cards onto this one page. The
+           underlying pages/save functions are untouched and still reachable
+           (e.g. openEnterModalDept()'s "View/Edit" links) — only this
+           redundant, effectively-nonfunctional set of direct sidebar
+           shortcuts is gone, consolidated into the one link below that
+           actually works standalone (it shows "No patient loaded — go to
+           Worklist" if opened cold, see #ue-pt-banner). -->
+      <div class="sb-item" data-p="unified-entry" onclick="goPage('unified-entry')"><span class="ic">📝</span><span data-i18n="nav_unified_entry">Enter Results</span></div>
       <div class="sb-item" data-p="allresults" onclick="goPage('allresults')"><span class="ic">📂</span><span data-i18n="nav_allresults">All Results</span></div>
       <div class="sb-item" data-p="criticals" onclick="goPage('criticals')"><span class="ic">🚨</span><span data-i18n="nav_criticals">Critical Values</span><span class="sb-badge" id="crit-badge" style="display:none">0</span></div>
       <div class="sb-item" data-p="reports" onclick="goPage('reports')"><span class="ic">🖨</span><span data-i18n="nav_reports">Print Reports</span></div>
@@ -6991,6 +6999,7 @@ const I18N = {
     nav_nursing:'Nursing & Vitals', nav_fluid_chart:'Fluid Balance', nav_infection:'Infection Flags',
     nav_handover:'Handover Notes',
     nav_worklist:'Worklist', nav_samples:'Sample Collection', nav_set_printer:'Set Printer',
+    nav_unified_entry:'Enter Results',
     nav_hem_entry:'Haematology Entry', nav_chem_entry:'Chemistry Entry', nav_sero_entry:'Serology Entry',
     nav_immuno_entry:'Immunology Entry', nav_micro_entry:'Microbiology Entry', nav_pcr_entry:'PCR / Molecular',
     nav_histo_entry:'Histopathology', nav_cyto_entry:'Cytology', nav_allresults:'All Results',
@@ -7065,6 +7074,7 @@ const I18N = {
     nav_nursing:'التمريض والعلامات الحيوية', nav_fluid_chart:'توازن السوائل', nav_infection:'علامات العدوى',
     nav_handover:'ملاحظات التسليم',
     nav_worklist:'قائمة العمل', nav_samples:'جمع العينات', nav_set_printer:'إعداد الطابعة',
+    nav_unified_entry:'إدخال النتائج',
     nav_hem_entry:'إدخال أمراض الدم', nav_chem_entry:'إدخال الكيمياء', nav_sero_entry:'إدخال الأمصال',
     nav_immuno_entry:'إدخال المناعة', nav_micro_entry:'إدخال الأحياء الدقيقة', nav_pcr_entry:'PCR / الجزيئي',
     nav_histo_entry:'علم الأنسجة المرضي', nav_cyto_entry:'علم الخلايا', nav_allresults:'جميع النتائج',
@@ -16076,11 +16086,11 @@ function renderPermissionsMatrix() {
   const body=document.getElementById('perm-matrix-body'); if(!body) return;
   // Role access definitions
   const roleAccess={
-    admin:['dashboard','register','appointments','billing','prices','admission','theatre','consultation','nursing','fluid-chart','handover','infection','worklist','samples','hem-entry','chem-entry','sero-entry','micro-entry','pcr-entry','histo-entry','cyto-entry','allresults','criticals','reports','qc','validation','labhistory','tat','inventory','staff','doctors','radiology','analyzer','delivery','settings','pt-history'],
+    admin:['dashboard','register','appointments','billing','prices','admission','theatre','consultation','nursing','fluid-chart','handover','infection','worklist','samples','unified-entry','hem-entry','chem-entry','sero-entry','micro-entry','pcr-entry','histo-entry','cyto-entry','allresults','criticals','reports','qc','validation','labhistory','tat','inventory','staff','doctors','radiology','analyzer','delivery','settings','pt-history'],
     doctor:['dashboard','consultation','nursing','fluid-chart','admission','theatre','radiology','pt-history','labhistory'],
     nurse:['dashboard','nursing','fluid-chart','admission','handover','infection','samples'],
-    lab_tech:['dashboard','worklist','samples','hem-entry','chem-entry','sero-entry','micro-entry','pcr-entry','histo-entry','cyto-entry','allresults','criticals','reports','tat','inventory','delivery','qc','validation','labhistory'],
-    lab_supervisor:['dashboard','worklist','samples','hem-entry','chem-entry','sero-entry','micro-entry','pcr-entry','histo-entry','cyto-entry','allresults','criticals','reports','tat','inventory','delivery','qc','validation','labhistory','staff'],
+    lab_tech:['dashboard','worklist','samples','unified-entry','hem-entry','chem-entry','sero-entry','micro-entry','pcr-entry','histo-entry','cyto-entry','allresults','criticals','reports','tat','inventory','delivery','qc','validation','labhistory'],
+    lab_supervisor:['dashboard','worklist','samples','unified-entry','hem-entry','chem-entry','sero-entry','micro-entry','pcr-entry','histo-entry','cyto-entry','allresults','criticals','reports','tat','inventory','delivery','qc','validation','labhistory','staff'],
     receptionist:['dashboard','register','appointments','billing','prices','worklist','infection'],
     cashier:['dashboard','billing','prices','register','appointments'],
     theatre_nurse:['dashboard','theatre','nursing','admission','fluid-chart','inventory'],
@@ -16091,13 +16101,13 @@ function renderPermissionsMatrix() {
     {label:'💰 Billing',pages:['billing','prices']},
     {label:'🛏 Inpatient',pages:['admission','theatre','nursing','fluid-chart','handover','infection']},
     {label:'🩺 Doctor',pages:['consultation']},
-    {label:'🔬 Laboratory',pages:['worklist','samples','hem-entry','chem-entry','sero-entry','micro-entry','pcr-entry','histo-entry','cyto-entry','allresults','criticals','reports','qc','analyzer','validation','labhistory','tat','inventory','delivery']},
+    {label:'🔬 Laboratory',pages:['worklist','samples','unified-entry','hem-entry','chem-entry','sero-entry','micro-entry','pcr-entry','histo-entry','cyto-entry','allresults','criticals','reports','qc','analyzer','validation','labhistory','tat','inventory','delivery']},
     {label:'🩻 Radiology',pages:['radiology']},
     {label:'📊 Reports',pages:['pt-history']},
     {label:'⚙️ Admin',pages:['staff','doctors','settings']},
   ];
   const roles=['admin','doctor','nurse','lab_tech','lab_supervisor','receptionist','cashier','theatre_nurse','radiologist'];
-  const pageLabels={register:'Register Patient',appointments:'Appointments',billing:'Billing',prices:'Price List',admission:'Admissions',theatre:'Theatre',nursing:'Nursing/Vitals','fluid-chart':'Fluid Chart',handover:'Handover',infection:'Infection Flags',consultation:'Consultation','hem-entry':'Haematology','chem-entry':'Chemistry','sero-entry':'Serology','micro-entry':'Microbiology','pcr-entry':'PCR','histo-entry':'Histopathology','cyto-entry':'Cytology',worklist:'Worklist',samples:'Sample Collection',allresults:'All Results',criticals:'Critical Values',reports:'Reports/Print',qc:'QC Module',labhistory:'Lab History',tat:'TAT Tracker',inventory:'Inventory',delivery:'Delivery',radiology:'Radiology','pt-history':'Patient History',staff:'Staff Mgmt',doctors:'Doctors',settings:'Settings',analyzer:'Analyzer',validation:'Analyzer Validation'};
+  const pageLabels={register:'Register Patient',appointments:'Appointments',billing:'Billing',prices:'Price List',admission:'Admissions',theatre:'Theatre',nursing:'Nursing/Vitals','fluid-chart':'Fluid Chart',handover:'Handover',infection:'Infection Flags',consultation:'Consultation','unified-entry':'Enter Results (Unified)','hem-entry':'Haematology (direct)','chem-entry':'Chemistry (direct)','sero-entry':'Serology (direct)','micro-entry':'Microbiology (direct)','pcr-entry':'PCR (direct)','histo-entry':'Histopathology (direct)','cyto-entry':'Cytology (direct)',worklist:'Worklist',samples:'Sample Collection',allresults:'All Results',criticals:'Critical Values',reports:'Reports/Print',qc:'QC Module',labhistory:'Lab History',tat:'TAT Tracker',inventory:'Inventory',delivery:'Delivery',radiology:'Radiology','pt-history':'Patient History',staff:'Staff Mgmt',doctors:'Doctors',settings:'Settings',analyzer:'Analyzer',validation:'Analyzer Validation'};
   let html='';
   modules.forEach(mod=>{
     html+='<tr style="background:#f1f5f9"><td colspan="10" style="padding:5px 10px;font-weight:700;font-size:.72rem;text-transform:uppercase;letter-spacing:.4px;color:var(--slate)">'+mod.label+'</td></tr>';
