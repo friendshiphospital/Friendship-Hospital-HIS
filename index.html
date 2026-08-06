@@ -12313,9 +12313,23 @@ async function buildAutoInvoiceLines(tests, destinations) {
     : Array.isArray(destinations) ? destinations
     : (destinations||'').split(',').map(s=>s.trim()).filter(Boolean);
   const lines = [];
+  // Flat/fixed fees (Consultation, Admission, Registration) are looked up from the
+  // editable price_list first, same as lab/radiology below, so editing them on the
+  // Price List page actually changes what registration charges. The literal numbers
+  // here are only the fallback used if price_list has no matching row.
+  const flatFeeDefaults = { 'Consultation Fee': 500, 'Admission Fee (one-time)': 1000, 'Registration Fee': 50 };
+  let flatFeePrices = {};
+  if(sb) {
+    try {
+      const {data:flatPrices} = await sb.from('price_list').select('name,price').in('name', Object.keys(flatFeeDefaults));
+      (flatPrices||[]).forEach(p => { flatFeePrices[p.name] = p.price; });
+    } catch(e){}
+  }
+  const flatFee = (name) => (flatFeePrices[name] != null ? flatFeePrices[name] : flatFeeDefaults[name]);
   // Consultation fee
   if(dests.includes('doctor')) {
-    lines.push({name:'Consultation Fee', category:'consultation', qty:1, unit_price:500, total_price:500});
+    const price = flatFee('Consultation Fee');
+    lines.push({name:'Consultation Fee', category:'consultation', qty:1, unit_price:price, total_price:price});
   }
   // Radiology request fee — price the actual imaging study selected, fall back to a flat assessment fee
   if(dests.includes('radiology')) {
@@ -12331,10 +12345,11 @@ async function buildAutoInvoiceLines(tests, destinations) {
   }
   // Admission — deposit/admin fee (final ward/bed charges are billed from the Admission page)
   if(dests.includes('admission')) {
-    lines.push({name:'Admission — '+(document.getElementById('r-adm-type')?.value||'Elective')+' (initial fee)', category:'admission', qty:1, unit_price:1000, total_price:1000});
+    const price = flatFee('Admission Fee (one-time)');
+    lines.push({name:'Admission — '+(document.getElementById('r-adm-type')?.value||'Elective')+' (initial fee)', category:'admission', qty:1, unit_price:price, total_price:price});
   }
   // Registration fee — always charged once, regardless of how many destinations are selected
-  lines.push({name:'Registration Fee', category:'registration', qty:1, unit_price:50, total_price:50});
+  { const price = flatFee('Registration Fee'); lines.push({name:'Registration Fee', category:'registration', qty:1, unit_price:price, total_price:price}); }
   // Lab test prices — looked up for real so the preview and the final invoice always match
   if(tests.length > 0 && sb) {
     try {
@@ -15709,6 +15724,7 @@ async function seedDefaultPrices() {
     {code:'REG003',name:'Emergency Registration',category:'registration',price:700,currency:'SDG'},
 
     // ── CONSULTATION ─────────────────────────────────────
+    {code:'CON000',name:'Consultation Fee',category:'consultation',price:500,currency:'SDG'},
     {code:'CON001',name:'General Practitioner Consultation',category:'consultation',price:2000,currency:'SDG'},
     {code:'CON002',name:'Specialist Consultation — First Visit',category:'consultation',price:4000,currency:'SDG'},
     {code:'CON003',name:'Specialist Consultation — Follow-up',category:'consultation',price:2500,currency:'SDG'},
