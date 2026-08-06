@@ -10170,18 +10170,54 @@ async function _submitOtherOrder() {
 //      sourcing from there instead of doctor_orders avoids a doctor-placed
 //      study ever being listed twice.
 // Resolves a lab test name (order_detail, e.g. "CBC") to the full dept
-// key printResultByDept()/the fns/dp maps there use ("haematology" etc.),
-// reusing DEPT_META's own keyword lists rather than a second hardcoded
-// test->department table — same matching approach loadWorklist()'s dept
-// filter already uses.
+// key printResultByDept()/the fns/dp maps there use ("haematology" etc.).
+// TEST_CATALOG's own key names don't line up 1:1 with DEPT_META's ("endo"
+// groups hormone/tumour-marker tests in the order-entry UI, but those are
+// resulted on DEPT_META's "immuno" page) — TEST_CATALOG_DEPT_KEY bridges
+// that.
 const DEPT_SHORT_TO_FULL={hem:'haematology',chem:'chemistry',sero:'serology',immuno:'immunology',micro:'microbiology',pcr:'pcr',histo:'histopathology',cyto:'cytology'};
+const TEST_CATALOG_DEPT_KEY={hem:'hem',chem:'chem',endo:'immuno',sero:'sero',micro:'micro',pcr:'pcr',histo:'histo'};
+// Exact test-name -> department lookup built from TEST_CATALOG, the same
+// authoritative list the order-entry checkboxes are populated from (see
+// buildOrderTestPanel()) — order_detail is always stored as one of these
+// exact strings, so an exact-match lookup is unambiguous by construction
+// and needs no keyword guessing at all. Audit (see Six-issues Phase 3)
+// found the OLD keyword-substring-only approach silently had no "View
+// Result" link for 13 catalog tests whose names don't happen to contain
+// any of their own department's keywords — e.g. "Haemoglobin Only" (no
+// "hgb"/"cbc"/"blood" substring), "PT / INR", "aPTT", "Cortisol",
+// "2hr Post Prandial" — not just the one reported test name.
+const TEST_NAME_TO_DEPT_SHORT={};
+Object.entries(TEST_CATALOG).forEach(([catKey,tests])=>{
+  const deptKey=TEST_CATALOG_DEPT_KEY[catKey];
+  if(!deptKey) return;
+  (tests||[]).forEach(t=>{ TEST_NAME_TO_DEPT_SHORT[t]=deptKey; });
+});
 function resolveDeptFullNameForTest(testName){
-  const t=(testName||'').toLowerCase();
+  const raw=(testName||'').trim();
+  if(TEST_NAME_TO_DEPT_SHORT[raw]) return DEPT_SHORT_TO_FULL[TEST_NAME_TO_DEPT_SHORT[raw]]||null;
+  // Fallback for names outside the catalog (legacy/freeform order_detail
+  // values) — same keyword-substring approach loadWorklist()'s dept filter
+  // already uses.
+  const t=raw.toLowerCase();
   for(const shortKey of Object.keys(DEPT_META)){
     const kws=DEPT_META[shortKey].keywords||[];
     if(kws.some(k=>t.includes(String(k).toLowerCase()))) return DEPT_SHORT_TO_FULL[shortKey]||null;
   }
   return null;
+}
+// Same exact-match-first, keyword-fallback approach as
+// resolveDeptFullNameForTest(), but for the reverse direction (does THIS
+// test belong to THAT department) — used by the Worklist's department
+// filter, which previously relied on keyword substrings alone and so
+// missed the same 13 catalog tests (e.g. "Haemoglobin Only" has no "hgb"
+// substring) when filtering by department.
+function testMatchesDept(testName,deptShortKey){
+  const raw=(testName||'').trim();
+  if(TEST_NAME_TO_DEPT_SHORT[raw]) return TEST_NAME_TO_DEPT_SHORT[raw]===deptShortKey;
+  const t=raw.toLowerCase();
+  const kws=(DEPT_META[deptShortKey]&&DEPT_META[deptShortKey].keywords)||[];
+  return kws.some(k=>t.includes(String(k).toLowerCase()));
 }
 async function loadActiveOrders() {
   const el=document.getElementById('active-orders-list');
@@ -10886,8 +10922,8 @@ async function loadWorklist() {
     let filtered = pts.filter(p => RECEIVABLE_STATUSES.includes(sampleMap[p.id]?.status));
     if(dept) {
       const deptKeyMap={haematology:'hem',chemistry:'chem',serology:'sero',immunology:'immuno',microbiology:'micro',pcr:'pcr',histopathology:'histo',cytology:'cyto'};
-      const meta=DEPT_META[deptKeyMap[dept]];
-      filtered=filtered.filter(p=>{ const t=(p.tests_requested||[]).join(' ').toLowerCase(); return (meta?meta.keywords:[]).some(k=>t.includes(k)); });
+      const deptShort=deptKeyMap[dept];
+      filtered=filtered.filter(p=>(p.tests_requested||[]).some(t=>testMatchesDept(t,deptShort)));
     }
     if(srcFilter) filtered=filtered.filter(p=>(sampleMap[p.id]?.source||'')===srcFilter);
     const sourceSort=window._wlSourceSort||null;
@@ -10917,36 +10953,44 @@ async function loadWorklist() {
         : '<div class="empty-state">No results for selected filters</div>';
       return;
     }
-    body.innerHTML='<div style="overflow-x:auto"><table class="tbl" id="wl-table"><thead><tr><th>Lab No</th><th>MRN</th><th>Name</th><th>Age/Sex</th><th>Tests</th><th>Doctor</th><th>Priority</th><th>Payment</th><th>Sample</th><th>Visit</th><th>Source</th><th>Date</th><th>Actions</th></tr></thead><tbody>'+
-      filtered.map(p=>{
-        const unpaid=p.payment_status==='unpaid'||p.payment_status==='insurance_pending';
-        const stt=sampleMap[p.id]?.status||'Pending';
-        const src=sampleMap[p.id]?.source||'';
-        const pbg=(p.priority==='STAT'||p.priority==='Critical')?'style="background:#fff1f2"':p.priority==='Urgent'?'style="background:#fffbeb"':'';
-        return '<tr class="'+(unpaid?'pay-unpaid':'')+'" '+pbg+'>'+
-          '<td style="font-family:DM Mono,monospace;font-size:.7rem;font-weight:700;color:var(--teal)">'+(p.lab_no||'—')+'</td>'+
-          '<td style="font-size:.72rem">'+(p.mrn||'—')+'</td>'+
-          '<td style="font-weight:600">'+(p.name||fullName(p))+'</td>'+
-          '<td style="font-size:.75rem">'+(p.age||'?')+(p.age_unit||'y')+' / '+(p.sex||'')+'</td>'+
-          '<td style="font-size:.7rem;max-width:150px"><div style="display:flex;flex-wrap:wrap;gap:2px">'+
-            (p.tests_requested||[]).slice(0,3).map(t=>'<span class="bdg bdg-sl" style="font-size:.64rem;padding:1px 5px">'+t+'</span>').join('')+
-            ((p.tests_requested||[]).length>3?'<span class="bdg bdg-sl" style="font-size:.64rem">+'+(( p.tests_requested||[]).length-3)+' more</span>':'')+
-          '</div></td>'+
-          '<td style="font-size:.75rem">'+(p.doctor||'—')+'</td>'+
-          '<td>'+(p.priority==='STAT'?'<span class="bdg" style="background:#fef2f2;color:#b91c1c;border:1.5px solid #fca5a5">\u26a1 STAT</span>':statusBadge(p.priority))+'</td>'+
-          '<td>'+paymentTag(p.payment_status)+'</td>'+
-          '<td>'+statusBadge(stt)+'</td>'+
-          '<td>'+visitStatusBadge(p)+'</td>'+
-          '<td style="font-size:.72rem">'+(src||'—')+'</td>'+
-          '<td style="font-size:.7rem;color:var(--slate)">'+fmtDT(p.created_at)+'</td>'+
-          '<td><div class="acts">'+
-            (unpaid?'<button class="btn btn-s btn-xs" style="opacity:.5;cursor:not-allowed" title="Payment required">\ud83d\udd12 Blocked</button>':
-              '<button class="btn btn-p btn-xs" onclick="openEnterModal(\x27'+p.id+'\x27,\x27'+(p.lab_no||'')+'\x27,\x27'+((p.name||fullName(p)).replace(/'/g,''))+'\x27)">\ud83d\udcdd Enter</button>')+
-            '<button class="btn btn-s btn-xs" onclick="openPatientHistoryTimeline(\x27'+p.id+'\x27)" title="View this patient\x27s full history">\ud83d\udd50 History</button>'+
-          '</div></td></tr>';
-      }).join('')+'</tbody></table></div>';
-    if(window._wlSearchQuery) applyWlRowFilter(window._wlSearchQuery);
+    body.innerHTML='<div style="overflow-x:auto"><table class="tbl" id="wl-table"><thead>'+WL_TABLE_HEAD+'<tbody>'+
+      filtered.map(p=>renderWlRow(p,sampleMap)).join('')+'</tbody></table></div>';
   } catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red)">'+escapeHtml(e.message)+'</div>'; }
+}
+const WL_TABLE_HEAD='<tr><th>Lab No</th><th>MRN</th><th>Name</th><th>Age/Sex</th><th>Tests</th><th>Doctor</th><th>Priority</th><th>Payment</th><th>Sample</th><th>Visit</th><th>Source</th><th>Date</th><th>Actions</th></tr></thead>';
+function renderWlRow(p,sampleMap) {
+  const unpaid=p.payment_status==='unpaid'||p.payment_status==='insurance_pending';
+  const stt=sampleMap[p.id]?.status||'Pending';
+  const src=sampleMap[p.id]?.source||'';
+  const pbg=(p.priority==='STAT'||p.priority==='Critical')?'style="background:#fff1f2"':p.priority==='Urgent'?'style="background:#fffbeb"':'';
+  // Only Received/Processing/Completed samples are actually workable -- a
+  // search result for a patient whose sample hasn't reached the lab yet
+  // must still be VISIBLE (repro: patient 513/"gada" has real, paid orders
+  // but "No patients found" made it look like they didn't exist), just with
+  // Enter disabled instead of offered.
+  const notReceived=!['Received','Processing','Completed'].includes(stt);
+  return '<tr class="'+(unpaid?'pay-unpaid':'')+'" '+pbg+'>'+
+    '<td style="font-family:DM Mono,monospace;font-size:.7rem;font-weight:700;color:var(--teal)">'+(p.lab_no||'—')+'</td>'+
+    '<td style="font-size:.72rem">'+(p.mrn||'—')+'</td>'+
+    '<td style="font-weight:600">'+(p.name||fullName(p))+'</td>'+
+    '<td style="font-size:.75rem">'+(p.age||'?')+(p.age_unit||'y')+' / '+(p.sex||'')+'</td>'+
+    '<td style="font-size:.7rem;max-width:150px"><div style="display:flex;flex-wrap:wrap;gap:2px">'+
+      (p.tests_requested||[]).slice(0,3).map(t=>'<span class="bdg bdg-sl" style="font-size:.64rem;padding:1px 5px">'+t+'</span>').join('')+
+      ((p.tests_requested||[]).length>3?'<span class="bdg bdg-sl" style="font-size:.64rem">+'+(( p.tests_requested||[]).length-3)+' more</span>':'')+
+    '</div></td>'+
+    '<td style="font-size:.75rem">'+(p.doctor||'—')+'</td>'+
+    '<td>'+(p.priority==='STAT'?'<span class="bdg" style="background:#fef2f2;color:#b91c1c;border:1.5px solid #fca5a5">\u26a1 STAT</span>':statusBadge(p.priority))+'</td>'+
+    '<td>'+paymentTag(p.payment_status)+'</td>'+
+    '<td>'+statusBadge(stt)+'</td>'+
+    '<td>'+visitStatusBadge(p)+'</td>'+
+    '<td style="font-size:.72rem">'+(src||'—')+'</td>'+
+    '<td style="font-size:.7rem;color:var(--slate)">'+fmtDT(p.created_at)+'</td>'+
+    '<td><div class="acts">'+
+      (unpaid?'<button class="btn btn-s btn-xs" style="opacity:.5;cursor:not-allowed" title="Payment required">\ud83d\udd12 Blocked</button>':
+        notReceived?'<button class="btn btn-s btn-xs" style="opacity:.5;cursor:not-allowed" title="Sample not yet received in the lab">\ud83d\udce5 Awaiting Receipt</button>':
+        '<button class="btn btn-p btn-xs" onclick="openEnterModal(\x27'+p.id+'\x27,\x27'+(p.lab_no||'')+'\x27,\x27'+((p.name||fullName(p)).replace(/'/g,''))+'\x27)">\ud83d\udcdd Enter</button>')+
+      '<button class="btn btn-s btn-xs" onclick="openPatientHistoryTimeline(\x27'+p.id+'\x27)" title="View this patient\x27s full history">\ud83d\udd50 History</button>'+
+    '</div></td></tr>';
 }
 function toggleWlSourceSort(){
   window._wlSourceSort = window._wlSourceSort==='asc' ? 'desc' : window._wlSourceSort==='desc' ? null : 'asc';
@@ -10967,20 +11011,62 @@ function setWlMode(mode,btn) {
   ['today','week','all','date'].forEach(m=>{ const b=document.getElementById('wl-btn-'+m); if(b){ b.classList.toggle('btn-p',m===mode); b.classList.toggle('btn-s',m!==mode); } });
   loadWorklist();
 }
+let _wlSearchDebounce;
 function filterWorklist(q) {
   window._wlSearchQuery=q;
-  // A search must be able to find a patient regardless of which date window
-  // the worklist happens to be showing. Previously this only filtered rows
-  // already rendered under the current Today/Week/date mode, so searching
-  // for a real, existing patient registered outside that window silently
-  // returned nothing — indistinguishable from the patient not existing.
-  if(q && window._wlMode!=='all'){ setWlMode('all',document.getElementById('wl-btn-all')); return; }
-  applyWlRowFilter(q);
+  clearTimeout(_wlSearchDebounce);
+  if(!q){ loadWorklist(); return; }
+  // Widening the current Today/Week/date mode to "all" only fixed patients
+  // that ARE in the receivable-status list (Received/Processing/Completed)
+  // but registered outside the visible date window — it did nothing for a
+  // patient like MRN 513 ("gada") whose sample simply hasn't been received
+  // into the lab yet, since loadWorklist() filters those out before a
+  // search ever gets a chance to run over the rows (see RECEIVABLE_STATUSES
+  // above). A search has to be able to find ANY matching patient regardless
+  // of date window or sample-receipt state, so this now runs a real
+  // server-side multi-field query — reusing the same .or()-across-columns
+  // approach as the header's globalSearch() — instead of text-filtering
+  // whatever subset of rows happened to already be on screen.
+  _wlSearchDebounce=setTimeout(()=>searchWorklist(q.trim()), 250);
 }
-function applyWlRowFilter(q) {
-  document.querySelectorAll('#wl-table tbody tr').forEach(r=>{
-    r.style.display=!q||r.textContent.toLowerCase().includes(q.toLowerCase())?'':'none';
-  });
+async function searchWorklist(term) {
+  const body=document.getElementById('wl-table-body'); if(!body||!sb) return;
+  if(!term){ loadWorklist(); return; }
+  body.innerHTML='<div class="spin-center"><div class="spinner"></div>Searching…</div>';
+  try {
+    const dept=document.getElementById('wl-dept')?.value||'';
+    const prio=document.getElementById('wl-priority-filter')?.value||'';
+    const {data:pts,error}=await sb.from('patients')
+      .select('id,name,first_name,last_name,mrn,lab_no,age,age_unit,sex,priority,diagnosis,doctor,ward,tests_requested,payment_status,visit_destination,visit_status,created_at,phone')
+      .or('name.ilike.%'+term+'%,mrn.ilike.%'+term+'%,phone.ilike.%'+term+'%,lab_no.ilike.%'+term+'%,doctor.ilike.%'+term+'%')
+      .order('created_at',{ascending:false}).limit(50);
+    if(error) throw error;
+    let results=pts||[];
+    if(dept){
+      const deptKeyMap={haematology:'hem',chemistry:'chem',serology:'sero',immunology:'immuno',microbiology:'micro',pcr:'pcr',histopathology:'histo',cytology:'cyto'};
+      const deptShort=deptKeyMap[dept];
+      results=results.filter(p=>(p.tests_requested||[]).some(t=>testMatchesDept(t,deptShort)));
+    }
+    if(prio) results=results.filter(p=>p.priority===prio);
+    if(!results.length){
+      body.innerHTML='<div class="empty-state"><div class="empty-icon">🔬</div><div class="empty-title">No patients found for "'+escapeHtml(term)+'"</div>'+
+        (pts&&pts.length&&(dept||prio)?'<div style="font-size:.8rem;color:var(--slate);margin-top:4px">'+pts.length+' match(es) exist but are excluded by the current department/priority filter.</div>':'')+'</div>';
+      updateWlStats([]);
+      const stale=document.getElementById('wl-stat-banner'); if(stale) stale.style.display='none';
+      const staleU=document.getElementById('wl-unpaid-banner'); if(staleU) staleU.style.display='none';
+      return;
+    }
+    const ids=results.map(p=>p.id);
+    const {data:samples}=await sb.from('sample_records').select('patient_id,status,sample_source').in('patient_id',ids);
+    const sampleMap={}; (samples||[]).forEach(s=>sampleMap[s.patient_id]={status:s.status, source:s.sample_source||''});
+    updateWlStats(results,sampleMap);
+    const hasStat=results.some(p=>p.priority==='STAT');
+    const hasUnpaid=results.some(p=>p.payment_status==='unpaid'||p.payment_status==='insurance_pending');
+    const sb2=document.getElementById('wl-stat-banner'); if(sb2) sb2.style.display=hasStat?'flex':'none';
+    const ub=document.getElementById('wl-unpaid-banner'); if(ub) ub.style.display=hasUnpaid?'block':'none';
+    body.innerHTML='<div style="overflow-x:auto"><table class="tbl" id="wl-table"><thead>'+WL_TABLE_HEAD+'<tbody>'+
+      results.map(p=>renderWlRow(p,sampleMap)).join('')+'</tbody></table></div>';
+  } catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red)">'+escapeHtml(e.message)+'</div>'; }
 }
 function printWorklist() {
   const rows=document.querySelectorAll('#wl-table tbody tr');
