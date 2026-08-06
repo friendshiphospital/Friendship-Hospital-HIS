@@ -27,7 +27,7 @@ alter table public.inventory_batches
   add column if not exists discard_reason_code text
     check (discard_reason_code in ('Expired','Damaged','Contaminated','Other')),
   add column if not exists discard_notes text,
-  add column if not exists discarded_by uuid references auth.users(id),
+  add column if not exists discarded_by uuid,
   add column if not exists discarded_by_name text,
   add column if not exists discarded_at timestamptz;
 
@@ -53,7 +53,7 @@ alter table public.stock_requisitions
   check (status in ('pending','approved','rejected','fulfilled','received'));
 
 alter table public.stock_requisitions
-  add column if not exists received_confirmed_by uuid references auth.users(id),
+  add column if not exists received_confirmed_by uuid,
   add column if not exists received_confirmed_by_name text,
   add column if not exists received_confirmed_at timestamptz;
 

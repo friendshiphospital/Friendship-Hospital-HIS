@@ -31,7 +31,7 @@ create table if not exists public.app_audit_logs (
   module text not null,
   action text not null,
   record_id text,
-  performed_by uuid references auth.users(id),
+  performed_by uuid,
   performed_by_name text,
   details text,
   created_at timestamptz not null default now()
@@ -63,7 +63,7 @@ comment on table public.app_audit_logs is 'Cross-module audit trail for Nursing/
 --    updateRadStatus(id,'Verified') previously only flipped the status
 --    string, capturing no verifier identity or timestamp at all) ──
 alter table public.radiology_requests
-  add column if not exists verified_by uuid references auth.users(id),
+  add column if not exists verified_by uuid,
   add column if not exists verified_by_name text,
   add column if not exists verified_at timestamptz;
 
