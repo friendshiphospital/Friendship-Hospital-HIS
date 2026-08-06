@@ -10081,6 +10081,7 @@ async function _submitLabOrder(deferred) {
     // the row when it doesn't exist yet; an existing one keeps its real
     // status regardless of what gets added to tests_requested.
     try{ await sb.from('sample_records').upsert({patient_id:_docPt.id,status:'Pending',...deferralFields},{onConflict:'patient_id',ignoreDuplicates:true}); }catch(e){}
+    if(!deferred) await chargeForNewOrder(_docPt, checked.map(t=>({name:t,category:'lab'})), 'lab');
     advanceVisitStatus(_docPt.id,'Orders Pending');
     toast((deferred?'\u26a1 \u2705 Lab orders placed (\u26a0 Payment Deferred \u2014 STAT): ':'\u2705 Lab orders placed: ')+checked.join(', ')+' — Lab No. '+labNo,'ok');
     document.querySelectorAll('.order-test-chk:checked').forEach(c=>c.checked=false);
@@ -10134,6 +10135,7 @@ async function _submitRadOrder(deferred) {
       throw radErr;
     }
     await sb.from('doctor_orders').insert({patient_id:_docPt.id,order_type:'Radiology',order_detail:g('ord-rad-type'),priority:g('ord-rad-urgency'),notes:g('ord-rad-indication'),ordered_by:g('doc-doctor-name')||currentProfile?.full_name,ordered_at:new Date().toISOString(),status:'Pending',created_by:currentProfile?.id,...deferralFields});
+    if(!deferred) await chargeForNewOrder(_docPt, [{name:g('ord-rad-type'),category:'radiology'}], 'radiology');
     advanceVisitStatus(_docPt.id,'Orders Pending');
     toast((deferred?'\u26a1 \u2705 Radiology request submitted (\u26a0 Payment Deferred \u2014 STAT) \u2014 No. ':'\u2705 Radiology request submitted \u2014 No. ')+radiologyNo,'ok'); loadActiveOrders();
     ['ord-rad-egfr','ord-rad-creatinine'].forEach(id=>{const el=document.getElementById(id);if(el) el.value='';});
@@ -10657,6 +10659,7 @@ function calcSlTo() {
 
 function printSickLeave() {
   if(!_docPt){toast('Select patient','err');return;}
+  if(!isPaymentCleared(_docPt)){ toast('🚫 Sick Leave Certificate blocked — payment has not been received for '+(_docPt.name||fullName(_docPt))+'. Please contact billing.','err'); return; }
   const g=id=>document.getElementById(id)?.value||'';
   const dn=document.getElementById('doc-doctor-name')?.value||'Doctor';
   const html=printHeader('Medical Certificate / Sick Leave')+
@@ -10676,6 +10679,7 @@ function printSickLeave() {
 
 function printReferral() {
   if(!_docPt){toast('Select patient','err');return;}
+  if(!isPaymentCleared(_docPt)){ toast('🚫 Referral Letter blocked — payment has not been received for '+(_docPt.name||fullName(_docPt))+'. Please contact billing.','err'); return; }
   const g=id=>document.getElementById(id)?.value||'';
   const dn=document.getElementById('doc-doctor-name')?.value||'Doctor';
   const dx=document.getElementById('doc-dx1')?.value||'—';
@@ -10911,7 +10915,13 @@ async function submitRegistration() {
     const amtPaid = parseFloat(g('r-pay-amount'))||0;
     const finalPayStatus = payMethod==='waiver'?'waived': amtPaid>=netAmount&&netAmount>0?'paid': amtPaid>0?'partial': payStatus;
     try {
-      await dbWrite('invoices','insert',{
+      // shift_id must be stamped here exactly like the manual Billing page's
+      // finalizeSaveInvoice() does -- otherwise computeShiftTotals() (Close
+      // Shift / X-Report), which filters invoices by shift_id, silently sees
+      // none of the revenue collected at registration (the most common
+      // invoice source) and reports 0 gross revenue / 0 cash collected even
+      // on a shift with real paid invoices.
+      const invResult = await dbWrite('invoices','insert',{
         patient_id:pt.id, patient_name:fullname, lab_no:labNo,
         invoice_no:invNo, invoice_type:(destList.length===1&&destList[0]==='lab')?'lab':'hospital',
         line_items:lineItems, total_amount:subTotal, discount_amount:followUpDiscount, net_amount:netAmount,
@@ -10919,8 +10929,22 @@ async function submitRegistration() {
         insurance_company:g('r-pay-ins-co')||g('r-ins-co'),
         insurance_no:g('r-pay-ins-no')||g('r-ins-no'),
         pre_auth_no:g('r-pay-preauth'), notes:(followUpMatch?'Follow-up pricing applied ('+CFG.followupPricingRule+'). ':'')+g('r-pay-notes'),
-        created_by:currentProfile?.id
+        created_by:currentProfile?.id, shift_id:_activeShift?.id||null
       });
+      // Same reason: computeShiftTotals() derives its cash/card/insurance
+      // breakdown from the `payments` ledger, not from invoices.payment_method
+      // -- the manual Billing page always writes a payments row alongside the
+      // invoice (finalizeSaveInvoice()), but registration never did. Only
+      // write one when money actually changed hands (a real amount was taken
+      // via a real method) -- a Waiver or a not-yet-paid invoice moves no cash
+      // and must not appear on the reconciliation as if it had.
+      const invId = invResult?.data?.[0]?.id;
+      if(invId && amtPaid>0 && payMethod!=='waiver'){
+        try{ await dbWrite('payments','insert',{
+          invoice_id:invId, method:payMethod, amount:amtPaid, currency:CFG.currency,
+          shift_id:_activeShift?.id||null, received_by:currentProfile?.id, received_by_name:currentProfile?.full_name
+        }); }catch(e){}
+      }
       if(followUpMatch){
         try{ await sb.from('follow_ups').update({used:true,used_at:new Date().toISOString(),used_patient_id:pt.id}).eq('id',followUpMatch.followUpId); }catch(e){}
       }
@@ -11670,6 +11694,8 @@ async function releaseResults(dept) {
     const {data:existing} = await sb.from(map.table).select('is_verified').eq('patient_id',ptId).order('created_at',{ascending:false}).limit(1).maybeSingle();
     if(!existing){ toast('Save and verify results before releasing','err'); return; }
     if(!existing.is_verified){ toast('⚠️ Results must be verified before they can be released','err'); return; }
+    const {data:sampleRec} = await sb.from('sample_records').select('payment_deferred').eq('patient_id',ptId).maybeSingle();
+    if(!(await checkReleasePaymentGate(ptId, sampleRec?.payment_deferred, 'Results release'))) return;
     await sb.from(map.table).update({is_released:true, released_at:new Date().toISOString(), released_by:currentProfile?.id}).eq('patient_id',ptId);
     await updateSampleStatus(ptId,'Released');
     toast('📤 '+meta.label.replace(/^\S+\s/,'')+' results released','ok');
@@ -12609,6 +12635,74 @@ function buildPaymentDeferralFields(deferred){
   return deferred
     ? { payment_deferred:true, payment_deferred_by:currentProfile?.id||null, payment_deferred_by_name:currentProfile?.full_name||'', payment_deferred_at:new Date().toISOString() }
     : { payment_deferred:false, payment_deferred_by:null, payment_deferred_by_name:null, payment_deferred_at:null };
+}
+
+// The registration invoice (buildAutoInvoiceLines()) only ever covers what
+// was selected AT registration. Every order placed afterwards (a doctor
+// ordering more lab tests, another radiology study, ...) previously created
+// NO invoice at all -- confirmed via a live report: a doctor-ordered ESR +
+// Platelet Count both went straight to "Completed" with no charge anywhere.
+// checkPaymentGate() only reads the single patient.payment_status flag,
+// which was already "paid" from registration, so nothing blocked it either.
+// Every new lab/radiology order now generates its own invoice (price looked
+// up from the same editable price_list registration uses) and flips
+// payment_status back to unpaid so the existing payment gate -- already
+// wired into Sample Collection, and now into result/report release too --
+// correctly re-blocks the next step until billing clears this new charge.
+// A blanket waiver (payment_status:'waived') is never overridden -- it was
+// an explicit decision that covers whatever is ordered next, not just what
+// existed the moment it was granted.
+async function chargeForNewOrder(pt, items, invoiceType) {
+  if(!sb || !pt?.id || !items?.length) return;
+  try {
+    const names = items.map(i=>i.name).filter(Boolean);
+    let priceMap = {};
+    if(names.length){
+      const {data:prices} = await sb.from('price_list').select('name,price').in('name', names);
+      (prices||[]).forEach(p=>{ priceMap[p.name]=p.price; });
+    }
+    const lineItems = items.map(i=>{
+      const qty = i.qty||1, unit = priceMap[i.name]||0;
+      return { name:i.name, category:i.category, qty, unit_price:unit, total_price:unit*qty };
+    });
+    const subTotal = lineItems.reduce((s,l)=>s+(l.total_price||0),0);
+    const isWaived = pt.payment_status==='waived';
+    await dbWrite('invoices','insert',{
+      patient_id:pt.id, patient_name:pt.name||fullName(pt), lab_no:pt.lab_no,
+      invoice_no:genOfflineId('INV'), invoice_type:invoiceType, line_items:lineItems,
+      total_amount:subTotal, discount_amount:0, net_amount:subTotal,
+      currency:CFG.currency, payment_status:isWaived?'waived':'unpaid', payment_method:null,
+      notes:'Auto-generated for an order placed after registration',
+      created_by:currentProfile?.id, shift_id:_activeShift?.id||null
+    });
+    if(!isWaived){
+      try{ await dbWrite('patients','update',{payment_status:'unpaid'},{match:{id:pt.id}}); }catch(e){}
+      pt.payment_status='unpaid';
+    }
+  } catch(e){ console.warn('chargeForNewOrder failed:',e.message); }
+}
+
+// ══════════════════════════════════════════════════════════════
+// RELEASE-TIME PAYMENT GATE — called before results/reports are released
+// ══════════════════════════════════════════════════════════════
+// checkPaymentGate() above only guards ORDER submission. A patient whose
+// payment_status flips to unpaid after chargeForNewOrder() (or who was
+// never billed at all) must also be blocked from having those results
+// actually released to the doctor/patient -- lab results, radiology
+// reports, and clinical documents like sick leave certificates and
+// referral letters. deferredFlag mirrors the STAT deferral already granted
+// (and already tracked for follow-up billing via refreshNotifications()'s
+// "Deferred Payments Now Due" category) -- a legitimately deferred order
+// must proceed here, not be blocked a second time.
+async function checkReleasePaymentGate(ptId, deferredFlag, actionName) {
+  if(deferredFlag) return true;
+  if(!sb || !ptId) return true; // no patient context = never block on a lookup failure
+  try {
+    const {data:pt} = await sb.from('patients').select('payment_status,name').eq('id',ptId).maybeSingle();
+    if(isPaymentCleared(pt)) return true;
+    toast('🚫 '+actionName+' blocked — payment has not been received for '+(pt?.name||'this patient')+'. Please contact billing.','err');
+    return false;
+  } catch(e){ return true; }
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -16842,11 +16936,16 @@ async function saveRadReport() {
   // saveRadReport only has the radiology_requests id on hand, not the
   // patient id directly, so resolve it first — same guard as every other
   // write path, just one extra lookup to get there.
-  const {data:radReq}=await sb.from('radiology_requests').select('patient_id').eq('id',requestId).maybeSingle();
+  const {data:radReq}=await sb.from('radiology_requests').select('patient_id,payment_deferred').eq('id',requestId).maybeSingle();
   if(!(await guardVisitNotLocked(radReq?.patient_id,'Saving a radiology report'))) return;
   const g=id=>document.getElementById(id)?.value||'';
   if(!g('rad-rep-impression')){toast('Impression / Conclusion required','err');return;}
   const isCritical=document.getElementById('rad-rep-critical')?.checked;
+  // A critical finding must never be withheld from the ordering doctor over
+  // a billing technicality (it already carries its own mandatory notified-
+  // name/time/channel audit trail below) -- only a routine, non-critical
+  // report is gated on payment.
+  if(!isCritical && !(await checkReleasePaymentGate(radReq?.patient_id, radReq?.payment_deferred, 'Radiology report'))) return;
   // A critical finding must never go out without a documented, immediate
   // notification — these three fields are the audit trail for that call.
   if(isCritical && (!g('rad-crit-notified-name')||!g('rad-crit-notified-time')||!g('rad-crit-channel'))){
@@ -19550,6 +19649,10 @@ async function saveAllUnifiedEntry(verify) {
 
 async function releaseAllUnifiedEntry() {
   if(!_ueCurrentDepts.length){ toast('Nothing to release','err'); return; }
+  if(_uePatientId && sb){
+    const {data:sampleRec} = await sb.from('sample_records').select('payment_deferred').eq('patient_id',_uePatientId).maybeSingle();
+    if(!(await checkReleasePaymentGate(_uePatientId, sampleRec?.payment_deferred, 'Results release'))) return;
+  }
   let released=0, blocked=0;
   for(const d of _ueCurrentDepts) {
     const map = DEPT_LOAD_MAP[d];
