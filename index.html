@@ -5936,6 +5936,10 @@ html[dir="rtl"] body{direction:rtl;}
           <div id="val-warnings" style="margin-top:10px"></div>
         </div>
       </div>
+      <div class="card" id="val-precision-card" style="display:none">
+        <div class="card-hd"><span class="card-title">📈 Precision Run Chart (per-run replicates vs. Grand Mean / UVL)</span></div>
+        <div class="card-body"><canvas id="val-precision-canvas" height="260" style="width:100%"></canvas></div>
+      </div>
       <div class="g2" id="val-charts-row">
         <div class="card" id="val-scatter-card" style="display:none">
           <div class="card-hd"><span class="card-title">📈 Method Comparison Scatter</span></div>
@@ -17097,6 +17101,7 @@ let _valCurrentStudy=null;
 let _valCurrentResult=null;
 let _valPastedRuns=[];      // EP15-A3: array of arrays (one array per run)
 let _valPastedPairs={x:[],y:[]}; // EP09-A3: parallel arrays
+let _valEP15Runs=[];        // EP15-A3: cleaned per-run replicate arrays for the precision run chart, set by loadValidationSamplesAndResult()
 
 function switchValidationTab(tab,btn){
   ['new','studies','workspace'].forEach(t=>{ const el=document.getElementById('val-tab-'+t); if(el) el.style.display=t===tab?'':'none'; });
@@ -17283,6 +17288,7 @@ async function loadValidationSamplesAndResult(){
       const byRun={};
       samples.forEach(s=>{ (byRun[s.run_number]=byRun[s.run_number]||[])[s.replicate_number-1]=s.result_value; });
       const runs=Object.keys(byRun).sort((a,b)=>a-b).map(k=>byRun[k].filter(v=>v!=null));
+      _valEP15Runs=runs;
       const result=calculateEP15(runs,study.claimed_cv_pct,study.tea_limit);
       renderValidationResultPanel({ep15:result});
     } else if(study.protocol_type==='EP09-A3'){
@@ -17304,11 +17310,15 @@ function renderValidationResultPanel({ep15,ep09}){
   const warnEl=document.getElementById('val-warnings');
   if(warnEl) warnEl.innerHTML=(result.warnings||[]).map(w=>'<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:6px 10px;font-size:.74rem;color:#92400e;margin-top:4px">⚠️ '+escapeHtml(w)+'</div>').join('');
   const scatterCard=document.getElementById('val-scatter-card'), baCard=document.getElementById('val-ba-card');
+  const precisionCard=document.getElementById('val-precision-card');
   if(ep09){
-    scatterCard.style.display=''; baCard.style.display='';
+    scatterCard.style.display=''; baCard.style.display=''; precisionCard.style.display='none';
     drawEP09ScatterChart(ep09); drawBlandAltmanChart(ep09);
+  } else if(ep15){
+    scatterCard.style.display='none'; baCard.style.display='none'; precisionCard.style.display='';
+    drawEP15PrecisionChart(_valEP15Runs,ep15);
   } else {
-    scatterCard.style.display='none'; baCard.style.display='none';
+    scatterCard.style.display='none'; baCard.style.display='none'; precisionCard.style.display='none';
   }
   const vStatus=document.getElementById('val-verify-status'), vBtn=document.getElementById('val-verify-btn');
   const aStatus=document.getElementById('val-approve-status'), aBtn=document.getElementById('val-approve-btn');
@@ -17340,6 +17350,51 @@ function renderValidationPassFail(status){
 }
 // ── Canvas charts (plain <canvas>, no charting library — same convention
 // as renderQcChart()'s Levey-Jennings chart and drawSparkline()). ──────
+// EP15-A3 precision run chart — every replicate plotted by run, a black
+// run-mean tick per run, and shaded ±1SD/±2SD bands around the grand mean
+// (same shaded-band technique as drawSparkline()'s normal-range band and
+// renderQcChart()'s Levey-Jennings control limits, applied here to
+// grand mean / sdWithin instead of a QC lot's target mean/SD).
+function drawEP15PrecisionChart(runs,ep15){
+  const canvas=document.getElementById('val-precision-canvas'); if(!canvas||!runs?.length) return;
+  const ctx=canvas.getContext('2d');
+  const W=canvas.offsetWidth||canvas.width||500, H=canvas.height||260;
+  canvas.width=W; ctx.clearRect(0,0,W,H);
+  const pad={t:16,r:16,b:34,l:50};
+  const grandMean=ep15.grandMean, sdW=ep15.sdWithin||0;
+  const allVals=runs.flat();
+  let minV=Math.min(...allVals,grandMean-2*sdW), maxV=Math.max(...allVals,grandMean+2*sdW);
+  if(minV===maxV){ minV-=1; maxV+=1; }
+  const vPad=(maxV-minV)*0.1||1; minV-=vPad; maxV+=vPad;
+  const D=runs.length;
+  const sx=i=>pad.l+(W-pad.l-pad.r)*((i+0.5)/D);
+  const sy=v=>H-pad.b-(v-minV)/(maxV-minV)*(H-pad.t-pad.b);
+  if(sdW>0){
+    ctx.fillStyle='rgba(59,130,246,.06)';
+    ctx.fillRect(pad.l,sy(grandMean+2*sdW),W-pad.l-pad.r,sy(grandMean-2*sdW)-sy(grandMean+2*sdW));
+    ctx.fillStyle='rgba(59,130,246,.12)';
+    ctx.fillRect(pad.l,sy(grandMean+sdW),W-pad.l-pad.r,sy(grandMean-sdW)-sy(grandMean+sdW));
+  }
+  ctx.setLineDash([4,3]); ctx.strokeStyle='#0b7a75'; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.moveTo(pad.l,sy(grandMean)); ctx.lineTo(W-pad.r,sy(grandMean)); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.strokeStyle='#e2e8f3'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(pad.l,pad.t); ctx.lineTo(pad.l,H-pad.b); ctx.lineTo(W-pad.r,H-pad.b); ctx.stroke();
+  runs.forEach((run,ri)=>{
+    const x=sx(ri);
+    ctx.fillStyle='#3b82f6';
+    run.forEach(v=>{ ctx.beginPath(); ctx.arc(x,sy(v),3,0,Math.PI*2); ctx.fill(); });
+    const runMean=run.reduce((a,b)=>a+b,0)/run.length;
+    ctx.strokeStyle='#1e3a5a'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(x-7,sy(runMean)); ctx.lineTo(x+7,sy(runMean)); ctx.stroke();
+    ctx.fillStyle='#64748b'; ctx.font='9px sans-serif'; ctx.textAlign='center';
+    ctx.fillText('Run '+(ri+1),x,H-pad.b+14);
+  });
+  ctx.fillStyle='#64748b'; ctx.font='9px sans-serif'; ctx.textAlign='right';
+  [minV+vPad,grandMean,maxV-vPad].forEach(v=>{ ctx.fillText(v.toFixed(2),pad.l-6,sy(v)+3); });
+  ctx.textAlign='left';
+  ctx.fillText('Grand Mean '+grandMean.toFixed(3)+(sdW>0?' · SD(within) '+sdW.toFixed(4)+' · bands = ±1SD / ±2SD':''),pad.l,pad.t+2);
+}
 function drawEP09ScatterChart(ep09){
   const canvas=document.getElementById('val-scatter-canvas'); if(!canvas||!ep09.pairs?.length) return;
   const ctx=canvas.getContext('2d');
@@ -17426,6 +17481,30 @@ async function printValidationReport(){
     const r=results?.[0];
     if(!r){ toast('Save & Calculate a result before printing','err'); return; }
     const isEP15=study.protocol_type==='EP15-A3';
+    // Re-render the on-screen chart(s) immediately before capturing, same
+    // as printQcReport()'s `await renderQcChart()` — guarantees the canvas
+    // reflects this exact result even if the workspace was navigated away
+    // from and back since it was last drawn. Charts embedded as PNG data
+    // URLs (canvas.toDataURL()), same technique as printQcReport()'s
+    // Levey-Jennings chart — EP Evaluator-style reports always ship the
+    // precision run chart / scatter+Bland-Altman alongside the numbers,
+    // not just a table.
+    await loadValidationSamplesAndResult();
+    let chartHtml='';
+    if(isEP15){
+      const canvas=document.getElementById('val-precision-canvas');
+      const img=canvas?canvas.toDataURL('image/png'):null;
+      if(img) chartHtml='<div style="margin:14px 0"><div style="font-size:8pt;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Precision Run Chart</div>'+
+        '<img src="'+img+'" style="width:100%;max-width:700px;border:1px solid #e2e8f3;border-radius:6px"></div>';
+    } else {
+      const scatterCanvas=document.getElementById('val-scatter-canvas'), baCanvas=document.getElementById('val-ba-canvas');
+      const scatterImg=scatterCanvas?scatterCanvas.toDataURL('image/png'):null;
+      const baImg=baCanvas?baCanvas.toDataURL('image/png'):null;
+      chartHtml='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0">'+
+        (scatterImg?'<div><div style="font-size:8pt;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Method Comparison Scatter</div><img src="'+scatterImg+'" style="width:100%;border:1px solid #e2e8f3;border-radius:6px"></div>':'')+
+        (baImg?'<div><div style="font-size:8pt;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Bland-Altman</div><img src="'+baImg+'" style="width:100%;border:1px solid #e2e8f3;border-radius:6px"></div>':'')+
+        '</div>';
+    }
     const row=(k,v)=>'<tr><td style="font-weight:600;padding:5px 8px;border-bottom:1px solid #f1f5fb">'+escapeHtml(k)+'</td><td style="padding:5px 8px;border-bottom:1px solid #f1f5fb">'+escapeHtml(String(v))+'</td></tr>';
     const statsRows=isEP15
       ? [
@@ -17465,6 +17544,7 @@ async function printValidationReport(){
       '<div style="text-align:center;margin-bottom:14px"><span style="background:'+sm.bg+';color:'+sm.color+';font-weight:800;font-size:13pt;padding:8px 24px;border-radius:8px">'+sm.label+'</span></div>'+
       '<table style="width:100%;border-collapse:collapse;margin-bottom:6px"><tbody>'+statsRows+'</tbody></table>'+
       methodNote+
+      chartHtml+
       '<div style="margin-top:24px;display:grid;grid-template-columns:1fr 1fr;gap:30px">'+
       sigBlock(r.verified_by_name,r.verified_at,'Reviewed by Quality Manager')+
       sigBlock(r.approved_by_name,r.approved_at,'Approved by Laboratory Director')+
