@@ -1128,6 +1128,23 @@ html[dir="rtl"] body{direction:rtl;}
             </div>
             <div id="vs-balance-disp" style="margin-top:8px;padding:8px 10px;border-radius:7px;background:#f1f5f9;font-size:.78rem;font-weight:700;text-align:center">Net Balance: 0 mL</div>
           </div>
+          <!-- Turning Clock (Nursing Safety Ext. Phase 3) — timestamp-anchored
+               to the last logged repositioning, never a client-side countdown;
+               overdue is recalculated from elapsed real time on every render. -->
+          <div style="background:#f5f3ff;border-radius:8px;padding:10px 12px;margin-bottom:12px">
+            <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:#6d28d9;margin-bottom:8px">🔄 Turning Clock (every 2 hours)</div>
+            <div id="turning-status-disp" style="margin-bottom:8px"><span style="color:var(--slate);font-size:.78rem">No repositioning logged yet</span></div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+              <button class="btn btn-s btn-sm" onclick="logTurningPosition('Left')">⬅ Left</button>
+              <button class="btn btn-s btn-sm" onclick="logTurningPosition('Right')">➡ Right</button>
+              <button class="btn btn-s btn-sm" onclick="logTurningPosition('Supine')">⬆ Supine</button>
+              <button class="btn btn-s btn-sm" onclick="logTurningPosition('Prone')">⬇ Prone</button>
+            </div>
+          </div>
+          <!-- Post-Analgesia Reassessment (Nursing Safety Ext. Phase 3) —
+               populated from saveMAR() when an IV/Oral analgesic is marked
+               Given; cleared once a newer pain-score reading is saved above. -->
+          <div id="post-analgesia-status" style="margin-bottom:12px"></div>
           <!-- NEWS2 Score -->
           <div id="vs-news2-bar" style="display:none;border-radius:8px;padding:10px 12px;margin-bottom:12px;text-align:center">
             <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px">NEWS2 Score</div>
@@ -9479,6 +9496,67 @@ function calcBalance() {
   const net=ivIn+poIn-urine-other; const el=document.getElementById('vs-balance-disp'); if(!el) return;
   el.textContent='Net Balance: '+net.toFixed(0)+' mL'; el.style.background=net>500?'#dbeafe':net<-500?'#fee2e2':'#f1f5f9'; el.style.color=net>500?'var(--blue)':net<-500?'var(--red)':'var(--ink)';
 }
+
+// ══════════════════════════════════════════════════════════════
+// TURNING CLOCK (Nursing Safety Ext. Phase 3)
+// ══════════════════════════════════════════════════════════════
+// Timestamp-anchored to the last logged repositioning (turning_position on
+// a vital_signs row) -- never a client-side setInterval counter. Overdue
+// is recalculated from real elapsed time (Date.now() - recorded_at) on
+// every render, so a page refresh or a device losing power never loses or
+// resets the clock; the anchor is whatever's actually stored in Supabase.
+const TURNING_INTERVAL_MS = 2*3600*1000;
+async function logTurningPosition(position){
+  const ptId = document.getElementById('vs-pt-id')?.value || _vsPt?.id;
+  if(!sb||!ptId){ toast('Load a patient first','err'); return; }
+  if(!(await guardVisitNotLocked(ptId,'Logging repositioning'))) return;
+  try{
+    await sb.from('vital_signs').insert({
+      patient_id:ptId, recorded_at:new Date().toISOString(),
+      turning_position:position, recorded_by:currentProfile?.full_name||'',
+      notes:'Repositioned: '+position,
+    });
+    toast('✅ Position logged: '+position,'ok');
+    loadVitals();
+  }catch(e){ toast(e.message,'err'); }
+}
+// data is loadVitals()'s already-fetched vital_signs rows (recorded_at
+// desc) -- turning_position lives on the same table, so the latest logged
+// position is just the first matching row, no extra query needed.
+function renderTurningStatus(data){
+  const el=document.getElementById('turning-status-disp'); if(!el) return;
+  const last=(data||[]).find(v=>v.turning_position);
+  if(!last){ el.innerHTML='<span style="color:var(--slate);font-size:.78rem">No repositioning logged yet</span>'; return; }
+  const elapsedMs=Date.now()-new Date(last.recorded_at).getTime();
+  const overdue=elapsedMs>=TURNING_INTERVAL_MS;
+  const mins=Math.max(0,Math.floor(elapsedMs/60000));
+  const elapsedStr=mins<60?mins+' min ago':Math.floor(mins/60)+'h '+(mins%60)+'m ago';
+  el.innerHTML='<span class="bdg" style="background:'+(overdue?'#fee2e2':'#dcfce7')+';color:'+(overdue?'#b91c1c':'#166534')+'">'+
+    (overdue?'⏰ OVERDUE — ':'')+'Last: '+escapeHtml(last.turning_position)+' ('+elapsedStr+')</span>';
+}
+
+// ══════════════════════════════════════════════════════════════
+// POST-ANALGESIA REASSESSMENT (Nursing Safety Ext. Phase 3)
+// ══════════════════════════════════════════════════════════════
+// Anchored to analgesia_administered_at, stamped by saveMAR() (below) when
+// an IV/Oral analgesic is marked Given. Clears the moment a NEWER
+// pain_score reading exists -- also timestamp-anchored, never a countdown.
+const POST_ANALGESIA_WINDOW_MS = 45*60*1000;
+function renderPostAnalgesiaStatus(data){
+  const el=document.getElementById('post-analgesia-status'); if(!el) return;
+  const lastAnalgesia=(data||[]).find(v=>v.analgesia_administered_at);
+  if(!lastAnalgesia){ el.innerHTML=''; return; }
+  const administeredAt=new Date(lastAnalgesia.analgesia_administered_at).getTime();
+  const reassessed=(data||[]).some(v=>v.pain_score!=null && new Date(v.recorded_at).getTime()>administeredAt);
+  if(reassessed){ el.innerHTML=''; return; }
+  const elapsedMs=Date.now()-administeredAt;
+  if(elapsedMs<POST_ANALGESIA_WINDOW_MS){
+    const dueAt=new Date(administeredAt+POST_ANALGESIA_WINDOW_MS);
+    el.innerHTML='<span class="bdg" style="background:#dbeafe;color:#1d4ed8">🩹 Analgesia given — reassess pain by '+dueAt.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})+'</span>';
+  } else {
+    el.innerHTML='<span class="bdg" style="background:#fee2e2;color:#b91c1c">⏰ OVERDUE — Reassess pain score (analgesia given '+Math.floor(elapsedMs/60000)+' min ago)</span>';
+  }
+}
 async function saveVitals() {
   if(!sb && navigator.onLine){ toast('Not connected','err'); return; }
   const _ptId = _vsPt?.id || document.getElementById('vs-pt-id')?.value;
@@ -13551,6 +13629,8 @@ async function loadVitals() {
     const {data} = await sb.from('vital_signs')
       .select('*').eq('patient_id', ptId)
       .order('recorded_at', {ascending:false}).limit(30);
+    renderTurningStatus(data);
+    renderPostAnalgesiaStatus(data);
     if(!data?.length) { body.innerHTML='<div class="empty-state">No vitals recorded yet</div>'; return; }
     body.innerHTML = '<div style="overflow-x:auto"><table class="tbl" style="font-size:.72rem"><thead><tr>'+
       '<th>Time</th><th>BP</th><th>HR</th><th>RR</th><th>Temp</th><th>SpO₂</th><th>NEWS2</th><th>Pain</th><th>By</th></tr></thead><tbody>'+
@@ -14313,7 +14393,7 @@ function addMarRow() {
     `<td><input class="fc" id="mar-dose-${i}" placeholder="Dose" style="padding:3px 6px;width:80px"></td>`+
     `<td><select class="fc" id="mar-route-${i}" style="padding:3px 6px"><option>PO</option><option>IV</option><option>IM</option><option>SC</option><option>SL</option><option>INH</option><option>TOP</option></select></td>`+
     `<td><select class="fc" id="mar-freq-${i}" style="padding:3px 6px"><option>Once daily</option><option>Twice daily</option><option>Three times daily</option><option>Four times daily</option><option>Every 6h</option><option>Every 8h</option><option>Every 12h</option><option>PRN</option><option>Stat</option></select></td>`+
-    `<td><input class="fc" type="time" id="mar-time-${i}" style="padding:3px 6px"></td>`+
+    `<td><input class="fc" type="time" id="mar-time-${i}" style="padding:3px 6px" oninput="marTimeStatus(${i})"><div id="mar-time-status-${i}" style="margin-top:3px"></div></td>`+
     `<td><select class="fc" id="mar-status-${i}" style="padding:3px 6px" onchange="updateMarRowUI(${i})">
       <option value="Due">Due</option><option value="Given" style="color:#166534">Given ✅</option>
       <option value="Refused" style="color:#92400e">Refused 🚫</option>
@@ -14334,6 +14414,7 @@ function updateMarRowUI(i){
   const drug=document.getElementById('mar-drug-'+i)?.value;
   const reasonEl=document.getElementById('mar-reason-'+i);
   if(reasonEl) reasonEl.style.display=['Omit','Hold','Refused'].includes(status)?'':'none';
+  marTimeStatus(i);
   const verifyCell=document.getElementById('mar-verify-cell-'+i);
   if(!verifyCell) return;
   if(status==='Given'&&isHighAlertDrug(drug)){
@@ -14381,16 +14462,49 @@ async function confirmMarVerify(){
   }catch(e){ if(status){ status.style.color='var(--red)'; status.textContent=e.message; } }
 }
 
+// MAR overdue status (Nursing Safety Ext. Phase 3) — a visible badge, not
+// an escalation. Anchored to the Time Due field (today's date + that
+// HH:MM), recalculated from real elapsed time on every call, never a
+// stored countdown. Only meaningful while a dose is still outstanding
+// (Due/PRN) — once actioned (Given/Refused/Omit/Hold) the outcome itself
+// is what matters, not whether it was on time.
+const MAR_DUE_WINDOW_MIN = 30;
+function marTimeStatus(i){
+  const cell=document.getElementById('mar-time-status-'+i); if(!cell) return;
+  const timeVal=document.getElementById('mar-time-'+i)?.value;
+  const status=document.getElementById('mar-status-'+i)?.value;
+  if(!timeVal || !['Due','PRN'].includes(status)){ cell.innerHTML=''; return; }
+  const [hh,mm]=timeVal.split(':').map(Number);
+  if(isNaN(hh)||isNaN(mm)){ cell.innerHTML=''; return; }
+  const scheduled=new Date(); scheduled.setHours(hh,mm,0,0);
+  const diffMin=(Date.now()-scheduled.getTime())/60000;
+  let label,bg,color;
+  if(diffMin<0){ label='On-time'; bg='#dcfce7'; color='#166534'; }
+  else if(diffMin<=MAR_DUE_WINDOW_MIN){ label='Due'; bg='#fef3c7'; color='#92400e'; }
+  else { label='Overdue'; bg='#fee2e2'; color='#b91c1c'; }
+  cell.innerHTML='<span class="bdg" style="background:'+bg+';color:'+color+';font-size:.64rem">'+label+'</span>';
+}
+// Analgesic keyword match against MAR's free-text drug name field, same
+// pattern as isHighAlertDrug() — case-insensitive substring, admin cannot
+// currently override this list (kept simple for this trimmed-down pass).
+const ANALGESIC_KEYWORDS=['paracetamol','acetaminophen','morphine','fentanyl','pethidine','meperidine','tramadol','ibuprofen','diclofenac','ketorolac','codeine','oxycodone','naproxen'];
+function isAnalgesic(drugName){
+  if(!drugName) return false;
+  const n=drugName.toLowerCase();
+  return ANALGESIC_KEYWORDS.some(k=>n.includes(k));
+}
 async function saveMAR() {
   const ptId = document.getElementById('vs-pt-id')?.value;
   if(!sb||!ptId){ toast('Load a patient first','err'); return; }
   if(!(await guardVisitNotLocked(ptId,'Recording a medication administration'))) return;
   const meds = [];
+  let analgesicGiven = false;
   const rows=[...document.querySelectorAll('[id^="mar-row-"]')];
   for(const row of rows){
     const i=row.id.replace('mar-row-','');
     const status=document.getElementById('mar-status-'+i)?.value;
     const drug=document.getElementById('mar-drug-'+i)?.value;
+    const route=document.getElementById('mar-route-'+i)?.value;
     const reason=document.getElementById('mar-reason-'+i)?.value?.trim();
     // No silent Omit/Hold/Refused — a reason is mandatory.
     if(['Omit','Hold','Refused'].includes(status)&&!reason){
@@ -14401,6 +14515,9 @@ async function saveMAR() {
     if(status==='Given'&&isHighAlertDrug(drug)&&!window._marSecondVerify[i]){
       toast('🚨 '+drug+' is high-alert — second staff verification required before it can be marked Given','err'); return;
     }
+    // Post-Analgesia Reassessment (Phase 3) — an IV/Oral analgesic marked
+    // Given starts the 45-minute reassessment window.
+    if(status==='Given' && (route==='IV'||route==='PO') && isAnalgesic(drug)) analgesicGiven=true;
     meds.push({
       drug, dose:document.getElementById('mar-dose-'+i)?.value,
       route:document.getElementById('mar-route-'+i)?.value,
@@ -14415,9 +14532,11 @@ async function saveMAR() {
     await sb.from('vital_signs').insert({
       patient_id:ptId, recorded_at:new Date().toISOString(),
       mar_entries:meds, recorded_by:currentProfile?.full_name,
-      notes:'MAR — '+meds.length+' medications'
+      notes:'MAR — '+meds.length+' medications',
+      ...(analgesicGiven?{analgesia_administered_at:new Date().toISOString()}:{}),
     });
     toast('✅ MAR saved','ok');
+    loadVitals();
   } catch(e){ toast(e.message,'err'); }
 }
 
@@ -14680,6 +14799,14 @@ function startVitalsClock() {
     el.textContent=now.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
     const timeInput=document.getElementById('vs-time');
     if(timeInput&&!timeInput.value) timeInput.value=now.toTimeString().slice(0,5);
+    // Turning Clock / Post-Analgesia badges are elapsed-time-from-a-stored-
+    // timestamp, not a countdown object -- this just re-renders them from
+    // the already-fetched _vitalsData on the same tick, no re-query.
+    renderTurningStatus(_vitalsData);
+    renderPostAnalgesiaStatus(_vitalsData);
+    // MAR overdue badges are likewise anchored to each row's own Time Due
+    // field, not a countdown -- just re-derived on every tick.
+    document.querySelectorAll('[id^="mar-row-"]').forEach(row=>marTimeStatus(row.id.replace('mar-row-','')));
   },1000);
 }
 
@@ -14715,15 +14842,22 @@ async function loadNursingQueue() {
       return;
     }
     const destIcon={doctor:'\ud83e\ude7a',lab:'\ud83d\udd2c',radiology:'\ud83e\udea7',admission:'\ud83d\udecf'};
-    // Nursing Safety Ext. Phase 2 \u2014 latest NEWS2 per patient, batch-fetched
-    // (not one query per row) so the queue can flag ongoing risk even
-    // between vitals-entry sessions: >=7 stays visibly flagged until the
-    // next reading brings it down, 3-6 shows the hourly-monitoring cue.
-    // No notification-bell integration in this pass \u2014 a visible flag only.
-    const newsMap={};
+    // Nursing Safety Ext. Phase 2/3 \u2014 latest NEWS2, turning position, and
+    // analgesia/pain-reassessment state per patient, all from ONE batch
+    // query (not one per row) so the queue can flag ongoing risk even
+    // between vitals-entry sessions. Rows are ordered recorded_at desc, so
+    // the first occurrence of each field per patient is always the latest.
+    const flagsMap={};
+    const getFlags=id=>flagsMap[id]||(flagsMap[id]={});
     try{
-      const {data:newsRows}=await sb.from('vital_signs').select('patient_id,news2_score,recorded_at').in('patient_id',filtered.map(p=>p.id)).order('recorded_at',{ascending:false}).limit(500);
-      (newsRows||[]).forEach(v=>{ if(v.news2_score!=null&&!(v.patient_id in newsMap)) newsMap[v.patient_id]=v.news2_score; });
+      const {data:rows2}=await sb.from('vital_signs').select('patient_id,news2_score,turning_position,analgesia_administered_at,pain_score,recorded_at').in('patient_id',filtered.map(p=>p.id)).order('recorded_at',{ascending:false}).limit(500);
+      (rows2||[]).forEach(v=>{
+        const f=getFlags(v.patient_id);
+        if(v.news2_score!=null && f.news2==null) f.news2=v.news2_score;
+        if(v.turning_position && !f.turningAt) f.turningAt=v.recorded_at;
+        if(v.analgesia_administered_at && !f.analgesiaAt) f.analgesiaAt=v.analgesia_administered_at;
+        if(v.pain_score!=null && !f.lastPainAt) f.lastPainAt=v.recorded_at;
+      });
     }catch(e){ /* alerts column degrades gracefully -- never blocks the queue itself */ }
     body.innerHTML='<div style="overflow-x:auto"><table class="tbl"><thead><tr>'+
       '<th>MRN</th><th>Name</th><th>Age/Sex</th><th>Location</th><th>Destination</th><th>Payment</th><th>Visit</th><th>Alerts</th><th>Actions</th></tr></thead><tbody>'+
@@ -14734,8 +14868,7 @@ async function loadNursingQueue() {
         const dest=p.visit_destination||'lab';
         const destParts2=dest.split(',').map(s=>s.trim()).filter(Boolean);
         const destIconStr=destParts2.map(d=>destIcon[d]||'\ud83c\udfe5').join('');
-        const news=newsMap[p.id];
-        const alertHtml=nursingQueueAlertBadges(news);
+        const alertHtml=nursingQueueAlertBadges(flagsMap[p.id]||{});
         return '<tr class="'+(unpaid?'pay-unpaid':'')+'" style="cursor:pointer" onclick="selectVitalsFromQueue(\''+p.id+'\',\''+nm+'\')">'+
           '<td style="font-family:DM Mono,monospace;font-size:.72rem;color:var(--teal)">'+(p.mrn||p.lab_no||'\u2014')+'</td>'+
           '<td style="font-weight:600">'+(p.name||[p.first_name,p.last_name].filter(Boolean).join(' ')||'\u2014')+'</td>'+
@@ -14752,14 +14885,26 @@ async function loadNursingQueue() {
       }).join('')+'</tbody></table></div>';
   }catch(e){body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>';}
 }
-// Builds the Nursing Queue's Alerts cell. Kept separate from
-// loadNursingQueue() so Phase 3 (turning clock, post-analgesia) can extend
-// it with more flags without touching the query/render logic above.
-function nursingQueueAlertBadges(news2Score){
+// Builds the Nursing Queue's Alerts cell from one patient's aggregated
+// flags ({news2, turningAt, analgesiaAt, lastPainAt}). NEWS2 badges are
+// Phase 2; Turning Clock and Post-Analgesia badges are Phase 3 \u2014 both
+// timestamp-anchored the same way as their vitals-tab counterparts, never
+// a stored countdown.
+function nursingQueueAlertBadges(flags){
   let html='';
-  if(news2Score!=null){
-    if(news2Score>=7) html+='<span class="bdg news2-pulse" style="background:#fee2e2;color:#b91c1c;display:inline-block;margin:1px 2px 1px 0">\ud83d\udea8 NEWS2 '+news2Score+'</span>';
-    else if(news2Score>=3) html+='<span class="bdg" style="background:#fef3c7;color:#92400e;display:inline-block;margin:1px 2px 1px 0">\u23f0 Hourly Monitoring (NEWS2 '+news2Score+')</span>';
+  const span=(bg,color,text)=>'<span class="bdg" style="background:'+bg+';color:'+color+';display:inline-block;margin:1px 2px 1px 0">'+text+'</span>';
+  if(flags.news2!=null){
+    if(flags.news2>=7) html+='<span class="bdg news2-pulse" style="background:#fee2e2;color:#b91c1c;display:inline-block;margin:1px 2px 1px 0">\ud83d\udea8 NEWS2 '+flags.news2+'</span>';
+    else if(flags.news2>=3) html+=span('#fef3c7','#92400e','\u23f0 Hourly Monitoring (NEWS2 '+flags.news2+')');
+  }
+  if(flags.turningAt){
+    const elapsed=Date.now()-new Date(flags.turningAt).getTime();
+    if(elapsed>=TURNING_INTERVAL_MS) html+=span('#fee2e2','#b91c1c','\ud83d\udd04 Turning Overdue');
+  }
+  if(flags.analgesiaAt){
+    const administeredAt=new Date(flags.analgesiaAt).getTime();
+    const reassessed=flags.lastPainAt && new Date(flags.lastPainAt).getTime()>administeredAt;
+    if(!reassessed && (Date.now()-administeredAt)>=POST_ANALGESIA_WINDOW_MS) html+=span('#fee2e2','#b91c1c','\ud83e\ude79 Pain Reassessment Overdue');
   }
   return html;
 }
