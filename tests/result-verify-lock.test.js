@@ -21,6 +21,11 @@ function initScriptWithHemRow(row) {
           return c;
         }
         if (table === 'sample_records') return chainable(null, []);
+        // releaseResults() now gates on payment status (billing enforcement) --
+        // this suite is testing the verify/release LOCK specifically, so the
+        // mock patient is always paid, keeping that behavior out of scope here
+        // (covered separately by billing-release-gate.test.js).
+        if (table === 'patients') return chainable({ payment_status: 'paid' }, []);
         return chainable(null, []);
       },
       rpc: () => Promise.resolve({ data: null, error: null }),
