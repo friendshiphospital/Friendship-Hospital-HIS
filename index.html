@@ -1272,6 +1272,52 @@ html[dir="rtl"] body{direction:rtl;}
           <button class="btn btn-p" onclick="saveRiskAssessment()" style="width:100%;justify-content:center;margin-top:10px">💾 Save Risk Assessment</button>
         </div>
       </div>
+      <!-- SOFA Score (Nursing Safety Ext. Phase 1) — manual entry only, never
+           auto-pulled from results_chemistry/results_hematology: those tables
+           upsert one row per patient with no true visit history, so a score
+           silently computed against the wrong day's labs would be worse than
+           an obviously-missing one. CNS component reuses the GCS card above
+           instead of asking for it twice. -->
+      <div class="card">
+        <div class="card-hd"><span class="card-title" style="color:#7c2d12">🫁 SOFA Score — Sepsis-Related Organ Failure</span></div>
+        <div class="card-body">
+          <div style="background:#fffbeb;border:1.5px solid #fde68a;border-radius:7px;padding:8px 10px;margin-bottom:10px;font-size:.72rem;color:#92400e">
+            ⚠️ Manual entry only — verify every value against the current chart before scoring. Nothing here is auto-pulled from lab results.
+          </div>
+          <table class="tbl" style="font-size:.78rem">
+            <thead><tr><th>System</th><th>Value</th><th>Points</th></tr></thead>
+            <tbody>
+              <tr><td>Respiration<br><span style="font-size:.68rem;color:var(--slate)">PaO₂/FiO₂ (mmHg)</span></td>
+                <td><input class="fc" type="number" id="sofa-pf-ratio" min="0" oninput="calcSOFA()" style="width:80px">
+                  <label style="font-size:.68rem;display:block;margin-top:3px"><input type="checkbox" id="sofa-resp-support" onchange="calcSOFA()"> On vent/CPAP</label></td>
+                <td id="sofa-pt-resp" style="text-align:center;font-weight:700">—</td></tr>
+              <tr><td>Coagulation<br><span style="font-size:.68rem;color:var(--slate)">Platelets (×10³/µL)</span></td>
+                <td><input class="fc" type="number" id="sofa-platelets" min="0" oninput="calcSOFA()" style="width:80px"></td>
+                <td id="sofa-pt-coag" style="text-align:center;font-weight:700">—</td></tr>
+              <tr><td>Liver<br><span style="font-size:.68rem;color:var(--slate)">Bilirubin (µmol/L)</span></td>
+                <td><input class="fc" type="number" id="sofa-bilirubin" min="0" oninput="calcSOFA()" style="width:80px"></td>
+                <td id="sofa-pt-liver" style="text-align:center;font-weight:700">—</td></tr>
+              <tr><td>Cardiovascular<br><span style="font-size:.68rem;color:var(--slate)">MAP (mmHg) + vasopressors</span></td>
+                <td><input class="fc" type="number" id="sofa-map" min="0" placeholder="MAP" oninput="calcSOFA()" style="width:80px;margin-bottom:3px">
+                  <select class="fc" id="sofa-vasopressor" onchange="calcSOFA()" style="font-size:.7rem">
+                    <option value="none">No vasopressors</option>
+                    <option value="low">Dopamine ≤5 or any Dobutamine</option>
+                    <option value="mid">Dopamine &gt;5, or Epi/Norepi ≤0.1</option>
+                    <option value="high">Dopamine &gt;15, or Epi/Norepi &gt;0.1</option>
+                  </select></td>
+                <td id="sofa-pt-cvs" style="text-align:center;font-weight:700">—</td></tr>
+              <tr><td>CNS<br><span style="font-size:.68rem;color:var(--slate)">GCS total (from GCS card above)</span></td>
+                <td id="sofa-gcs-display" style="font-weight:700">—</td>
+                <td id="sofa-pt-cns" style="text-align:center;font-weight:700">—</td></tr>
+              <tr><td>Renal<br><span style="font-size:.68rem;color:var(--slate)">Creatinine (µmol/L) or urine (mL/24h)</span></td>
+                <td><input class="fc" type="number" id="sofa-creatinine" min="0" placeholder="Creatinine" oninput="calcSOFA()" style="width:80px;margin-bottom:3px">
+                  <input class="fc" type="number" id="sofa-urine-24h" min="0" placeholder="Urine mL/24h" oninput="calcSOFA()" style="width:80px"></td>
+                <td id="sofa-pt-renal" style="text-align:center;font-weight:700">—</td></tr>
+            </tbody>
+          </table>
+          <div id="sofa-result" style="padding:10px 12px;border-radius:8px;background:#f1f5f9;font-weight:700;text-align:center;margin-top:8px">SOFA Total: —</div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -1437,7 +1483,7 @@ html[dir="rtl"] body{direction:rtl;}
             <td style="padding:8px 10px;text-align:center">—</td><td style="padding:8px 10px;text-align:center">—</td>
             <td id="fc-total-urine" style="padding:8px 10px;text-align:center;color:var(--teal)">—</td>
             <td style="padding:8px 10px;text-align:center">—</td><td style="padding:8px 10px;text-align:center">—</td><td style="padding:8px 10px;text-align:center">—</td>
-            <td id="fc-total-net" style="padding:8px 10px;text-align:center;font-size:.9rem;font-weight:900">—</td>
+            <td style="padding:8px 10px;text-align:center"><span id="fc-total-net" style="font-size:.9rem;font-weight:900">—</span><div id="fc-net-positive-badge" style="margin-top:4px"></div></td>
             <td></td>
           </tr>
         </tfoot>
@@ -4609,6 +4655,12 @@ html[dir="rtl"] body{direction:rtl;}
         <button class="btn btn-p btn-sm" onclick="saveFollowupPolicySettings()">💾 Save Follow-Up Policy</button>
         <div id="cfg-followup-policy-status" style="margin-top:7px;font-size:.78rem;color:var(--green)"></div>
       </div></div>
+      <div class="card"><div class="card-hd"><span class="card-title">💧 Nursing Safety Settings</span></div><div class="card-body">
+        <div style="font-size:.72rem;color:var(--slate);margin-bottom:8px">Nursing's 24-Hour Fluid Balance Chart visually flags a patient once their cumulative net balance crosses this threshold — a fluid-overload risk cue for renal/cardiac patients. Never applied silently to any calculation, purely a visual flag on the chart.</div>
+        <div class="fg"><label class="fl">Dangerous Net-Positive Threshold (mL/24h)</label><input class="fc" type="number" min="0" id="cfg-fluid-net-threshold" placeholder="2000"></div>
+        <button class="btn btn-p btn-sm" onclick="saveNursingSafetySettings()">💾 Save Nursing Safety Settings</button>
+        <div id="cfg-nursing-safety-status" style="margin-top:7px;font-size:.78rem;color:var(--green)"></div>
+      </div></div>
       <div class="card" id="cfg-override-pin-card" style="display:none"><div class="card-hd"><span class="card-title">🔑 My Anti-Fraud Override PIN</span></div><div class="card-body">
         <div style="font-size:.72rem;color:var(--slate);margin-bottom:8px">Lets you approve a void/refund/discount-override at the counter with a PIN instead of your full password. Stored as a bcrypt hash — never in plain text, never readable by anyone else, admin or otherwise. Requires migration_v2.12_override_pin.sql to be applied.</div>
         <div class="fg"><label class="fl">New PIN (6+ digits, numeric)</label><input class="fc" type="password" inputmode="numeric" maxlength="12" id="cfg-override-pin" placeholder="e.g. 482913"></div>
@@ -6766,6 +6818,10 @@ const CFG = {
   // requested: 7 days, free pricing.
   get followupWindowDays(){ return parseInt(localStorage.getItem('cfg_followup_window_days'),10)||7; },
   set followupWindowDays(v){ localStorage.setItem('cfg_followup_window_days', v); },
+  // Nursing Safety Ext. Phase 1 — dangerous-net-positive fluid balance
+  // threshold (mL/24h), admin-configurable per hospital policy.
+  get fluidNetPositiveThreshold(){ return parseInt(localStorage.getItem('cfg_fluid_net_positive_threshold'),10)||2000; },
+  set fluidNetPositiveThreshold(v){ localStorage.setItem('cfg_fluid_net_positive_threshold', v); },
   get followupPricingRule(){ return localStorage.getItem('cfg_followup_pricing_rule')||'free'; }, // 'free' | 'percentage' | 'fixed'
   set followupPricingRule(v){ localStorage.setItem('cfg_followup_pricing_rule', v); },
   get followupPricingValue(){ return parseFloat(localStorage.getItem('cfg_followup_pricing_value'))||0; }, // % for 'percentage', amount for 'fixed'
@@ -7697,8 +7753,15 @@ function loadSettings() {
   const bbffp=document.getElementById('cfg-bb-shelf-ffp'); if(bbffp) bbffp.value=CFG.bloodShelfFfp;
   const bbcryo=document.getElementById('cfg-bb-shelf-cryo'); if(bbcryo) bbcryo.value=CFG.bloodShelfCryo;
   const bbdonor=document.getElementById('cfg-bb-donor-collection'); if(bbdonor) bbdonor.checked=CFG.bloodDonorCollectionEnabled;
+  const fnpt=document.getElementById('cfg-fluid-net-threshold'); if(fnpt) fnpt.value=CFG.fluidNetPositiveThreshold;
   loadBedConfig();
   loadIdCounters();
+}
+function saveNursingSafetySettings(){
+  const val=parseInt(document.getElementById('cfg-fluid-net-threshold')?.value,10);
+  CFG.fluidNetPositiveThreshold=(isNaN(val)||val<=0)?2000:val;
+  const el=document.getElementById('cfg-nursing-safety-status');
+  if(el){ el.textContent='✅ Saved'; setTimeout(()=>el.textContent='',3000); }
 }
 function saveBloodBankSettings(){
   const g=(id,fallback)=>{ const v=parseInt(document.getElementById(id)?.value,10); return (isNaN(v)||v<=0)?fallback:v; };
@@ -9503,13 +9566,20 @@ async function loadFluidChart() {
   body.innerHTML='<tr><td colspan="10" style="padding:20px;text-align:center"><div class="spinner" style="margin:0 auto"></div></td></tr>';
   try {
     const {data}=await sb.from('vital_signs').select('*').eq('patient_id',_fcPt.id).gte('recorded_at',d+'T00:00:00').lte('recorded_at',d+'T23:59:59').order('recorded_at');
-    if(!data?.length){ body.innerHTML='<tr><td colspan="10" style="padding:20px;text-align:center;color:var(--slate);font-size:.82rem">No vitals recorded on this date</td></tr>'; return; }
+    if(!data?.length){ body.innerHTML='<tr><td colspan="10" style="padding:20px;text-align:center;color:var(--slate);font-size:.82rem">No vitals recorded on this date</td></tr>'; const badge=document.getElementById('fc-net-positive-badge'); if(badge) badge.innerHTML=''; return; }
     let totIv=0,totUrine=0,totNet=0;
     body.innerHTML=data.map(v=>{ totIv+=v.fluid_in_ml||0; totUrine+=v.urine_output_ml||0; totNet+=v.net_balance||0; const netColor=(v.net_balance||0)>200?'#1d4ed8':(v.net_balance||0)<-200?'#b91c1c':'#16a34a';
       return '<tr style="border-bottom:1px solid var(--border)"><td style="padding:6px 10px;font-family:DM Mono,monospace;font-size:.77rem">'+new Date(v.recorded_at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})+'</td><td style="padding:6px 10px;text-align:center;font-size:.8rem;color:var(--blue)">'+(v.fluid_in_ml||'—')+'</td><td style="padding:6px 10px;text-align:center">—</td><td style="padding:6px 10px;text-align:center">—</td><td style="padding:6px 10px;text-align:center;font-size:.8rem;color:var(--teal)">'+(v.urine_output_ml||'—')+'</td><td style="padding:6px 10px;text-align:center">—</td><td style="padding:6px 10px;text-align:center">—</td><td style="padding:6px 10px;text-align:center">—</td><td style="padding:6px 10px;text-align:center;font-size:.8rem;font-weight:700;color:'+netColor+'">'+((v.net_balance||0)>0?'+':'')+String(v.net_balance||0)+'</td><td style="padding:6px 10px;font-size:.72rem;color:var(--slate)">'+(v.recorded_by_name||'—')+'</td></tr>';
     }).join('');
     setText('fc-total-iv',totIv||'—'); setText('fc-total-urine',totUrine||'—');
     const ne=document.getElementById('fc-total-net'); if(ne){ ne.textContent=(totNet>0?'+':'')+totNet; ne.style.color=totNet>500?'var(--blue)':totNet<-500?'var(--red)':'var(--green)'; }
+    // Nursing Safety Ext. Phase 1 — admin-configurable dangerous-net-positive
+    // flag (fluid overload risk), reusing the same .bdg badge pattern
+    // statusBadge() uses elsewhere rather than inventing new markup.
+    const npBadge=document.getElementById('fc-net-positive-badge');
+    if(npBadge) npBadge.innerHTML = totNet>CFG.fluidNetPositiveThreshold
+      ? '<span class="bdg" style="background:#fee2e2;color:#b91c1c">🚨 Net-Positive — exceeds '+CFG.fluidNetPositiveThreshold+' mL threshold</span>'
+      : '';
     drawFluidTrend(data);
   } catch(e){ body.innerHTML='<tr><td colspan="10" style="padding:14px;color:var(--red);font-size:.78rem">'+escapeHtml(e.message)+'</td></tr>'; }
 }
@@ -13928,6 +13998,89 @@ function calcGCS() {
     el.style.background = total<=8?'#fee2e2':total<=12?'#fef9c3':'#f0fdf4';
     el.style.color = total<=8?'#b91c1c':total<=12?'#92400e':'#166534';
   }
+  if(typeof calcSOFA==='function') calcSOFA();
+}
+
+// SOFA Score (Nursing Safety Ext. Phase 1) — six organ systems, each 0-4,
+// correct clinical cutoffs per the standard SOFA definition. Manual entry
+// only (see the warning banner on the card) — CNS reuses the existing GCS
+// card's total via calcGCS() rather than asking for E/V/M a second time.
+function calcSOFA() {
+  const num = id => { const v = parseFloat(document.getElementById(id)?.value); return isNaN(v) ? null : v; };
+  const setPt = (id, pts) => { const el = document.getElementById(id); if(!el) return; el.textContent = pts==null ? '—' : pts; el.style.color = pts>=3?'#b91c1c':pts>=1?'#92400e':'#166534'; };
+
+  // Respiration — PaO2/FiO2 ratio, worse scores require respiratory support
+  const pf = num('sofa-pf-ratio');
+  const onSupport = document.getElementById('sofa-resp-support')?.checked;
+  let respPts = null;
+  if(pf!=null){
+    if(pf<100&&onSupport) respPts=4;
+    else if(pf<200&&onSupport) respPts=3;
+    else if(pf<300) respPts=2;
+    else if(pf<400) respPts=1;
+    else respPts=0;
+  }
+  setPt('sofa-pt-resp', respPts);
+
+  // Coagulation — Platelets ×10^3/µL
+  const plt = num('sofa-platelets');
+  let coagPts = null;
+  if(plt!=null){
+    if(plt<20) coagPts=4; else if(plt<50) coagPts=3; else if(plt<100) coagPts=2; else if(plt<150) coagPts=1; else coagPts=0;
+  }
+  setPt('sofa-pt-coag', coagPts);
+
+  // Liver — Bilirubin µmol/L
+  const bili = num('sofa-bilirubin');
+  let liverPts = null;
+  if(bili!=null){
+    if(bili>204) liverPts=4; else if(bili>=102) liverPts=3; else if(bili>=33) liverPts=2; else if(bili>=20) liverPts=1; else liverPts=0;
+  }
+  setPt('sofa-pt-liver', liverPts);
+
+  // Cardiovascular — MAP + vasopressor category (whichever is worse)
+  const map = num('sofa-map');
+  const vaso = document.getElementById('sofa-vasopressor')?.value||'none';
+  const vasoPts = {none:0,low:2,mid:3,high:4}[vaso]||0;
+  let cvsPts = null;
+  if(map!=null||vaso!=='none'){
+    const mapPts = map!=null ? (map<70?1:0) : 0;
+    cvsPts = Math.max(mapPts, vasoPts);
+  }
+  setPt('sofa-pt-cvs', cvsPts);
+
+  // CNS — reuse GCS total from the GCS card above, never entered twice
+  const gcsE=parseInt(document.getElementById('vs-gcs-e')?.value)||0, gcsV=parseInt(document.getElementById('vs-gcs-v')?.value)||0, gcsM=parseInt(document.getElementById('vs-gcs-m')?.value)||0;
+  const gcsTotal = gcsE+gcsV+gcsM;
+  let cnsPts = null;
+  const gcsDisp = document.getElementById('sofa-gcs-display');
+  if(gcsTotal>0){
+    if(gcsDisp) gcsDisp.textContent='GCS '+gcsTotal;
+    if(gcsTotal<6) cnsPts=4; else if(gcsTotal<=9) cnsPts=3; else if(gcsTotal<=12) cnsPts=2; else if(gcsTotal<=14) cnsPts=1; else cnsPts=0;
+  } else if(gcsDisp) gcsDisp.textContent='—';
+  setPt('sofa-pt-cns', cnsPts);
+
+  // Renal — Creatinine µmol/L or urine output mL/24h, worse of the two
+  const creat = num('sofa-creatinine');
+  const urine = num('sofa-urine-24h');
+  let renalPts = null;
+  if(creat!=null||urine!=null){
+    let creatPts = creat!=null ? (creat>440?4:creat>=300?3:creat>=171?2:creat>=110?1:0) : null;
+    let urinePts = urine!=null ? (urine<200?4:urine<500?3:0) : null;
+    renalPts = Math.max(creatPts??0, urinePts??0);
+  }
+  setPt('sofa-pt-renal', renalPts);
+
+  const parts = [respPts,coagPts,liverPts,cvsPts,cnsPts,renalPts];
+  const enteredParts = parts.filter(p=>p!=null);
+  const resultEl = document.getElementById('sofa-result');
+  if(!resultEl) return null;
+  if(!enteredParts.length){ resultEl.textContent='SOFA Total: —'; return null; }
+  const total = enteredParts.reduce((s,p)=>s+p,0);
+  resultEl.textContent='SOFA Total: '+total+' / 24 ('+enteredParts.length+' of 6 systems entered)';
+  resultEl.style.background = total>=15?'#fee2e2':total>=8?'#fef9c3':'#f0fdf4';
+  resultEl.style.color = total>=15?'#b91c1c':total>=8?'#92400e':'#166534';
+  return total;
 }
 
 // Braden Scale
@@ -13972,12 +14125,14 @@ async function saveRiskAssessment() {
   const bradenTotal = bradenIds.reduce((s,id)=>s+(parseInt(document.getElementById(id)?.value)||0),0);
   const morseIds = ['mfs-fall','mfs-dx','mfs-aid','mfs-iv','mfs-gait','mfs-mental'];
   const morseTotal = morseIds.reduce((s,id)=>s+(parseInt(document.getElementById(id)?.value)||0),0);
+  const sofaTotal = typeof calcSOFA==='function' ? calcSOFA() : null;
   try {
     await sb.from('vital_signs').insert({
       patient_id: ptId, recorded_at: new Date().toISOString(),
       braden_score: bradenTotal||null, morse_fall_score: morseTotal||null,
+      sofa_score: sofaTotal,
       recorded_by: currentProfile?.full_name||currentProfile?.id,
-      notes: 'Risk assessment: Braden='+bradenTotal+', Morse='+morseTotal
+      notes: 'Risk assessment: Braden='+bradenTotal+', Morse='+morseTotal+(sofaTotal!=null?', SOFA='+sofaTotal:'')
     });
     toast('✅ Risk assessment saved','ok');
   } catch(e){ toast(e.message,'err'); }
