@@ -28,7 +28,7 @@ function initScript(failTable) {
           // source's own .then(r=>r, ()=>({data:[]})) fallback -- when
           // present -- is exercised exactly as it would be for real).
           const failing = {
-            eq(){ return failing; }, order(){ return failing; }, select(){ return failing; }, limit(){ return failing; },
+            eq(){ return failing; }, in(){ return failing; }, order(){ return failing; }, select(){ return failing; }, limit(){ return failing; },
             then(onFulfilled, onRejected){ return Promise.reject(new Error('simulated failure on ${failTable}')).then(onFulfilled, onRejected); },
           };
           return failing;

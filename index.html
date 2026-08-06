@@ -166,6 +166,10 @@ html[dir="rtl"] body{direction:rtl;}
 .bdg-b{background:var(--blue-lt);color:var(--blue);}
 .bdg-sl{background:#f1f5f9;color:var(--slate);}
 .bdg-t{background:var(--teal-lt);color:var(--teal);}
+/* Distinct from bdg-g on purpose — a signed-off/locked visit must never
+   read as "still actionable" at a glance the way green does (see
+   guardVisitNotLocked() / statusBadge()). */
+.bdg-dk{background:#1e293b;color:#e2e8f0;}
 /* BED GRID (Bed Management / IPD) */
 .bed-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:9px;}
 .bed-tile{position:relative;border-radius:9px;padding:9px 10px 8px;cursor:pointer;border:1.5px solid transparent;transition:transform .12s,box-shadow .12s;min-height:76px;}
@@ -7566,11 +7570,17 @@ function fmtDT(d){ if(!d) return '—'; return new Date(d).toLocaleString('en-GB
 function fullName(p){ if(!p) return '—'; return [p.first_name,p.middle_name,p.last_name].filter(Boolean).join(' ')||p.name||'—'; }
 function statusBadge(s){
   const m={Active:'bdg-b',Discharged:'bdg-g',Scheduled:'bdg-b',Completed:'bdg-g','In Progress':'bdg-a',Cancelled:'bdg-r',Postponed:'bdg-sl',paid:'bdg-g',unpaid:'bdg-r',partial:'bdg-a',Pending:'bdg-sl',Routine:'bdg-sl',Urgent:'bdg-a',STAT:'bdg-r',Critical:'bdg-r',
-    // Visit-level status (Phase 4) — same badge classes, no second colour scheme.
-    Registered:'bdg-sl','Payment Pending':'bdg-a','With Doctor':'bdg-b','Orders Pending':'bdg-a','Results Ready':'bdg-g','Visit Complete':'bdg-g',
+    // Visit-level status (Phase 4) — same badge classes, no second colour
+    // scheme, EXCEPT Visit Complete: a signed-off, locked visit must never
+    // share Results Ready's green — that read as "still actionable" and
+    // was directly implicated in staff clicking into an already-closed
+    // prior visit by mistake (confirmed: two same-MRN cards, visually
+    // identical badges, one locked). See guardVisitNotLocked().
+    Registered:'bdg-sl','Payment Pending':'bdg-a','With Doctor':'bdg-b','Orders Pending':'bdg-a','Results Ready':'bdg-g','Visit Complete':'bdg-dk',
     // Blood unit status (Blood Bank module) — same badge classes again.
     Quarantined:'bdg-a',Available:'bdg-g',Crossmatched:'bdg-b',Issued:'bdg-t',Expired:'bdg-r',Discarded:'bdg-sl'};
-  return '<span class="bdg '+(m[s]||'bdg-sl')+'">'+(s||'—')+'</span>';
+  const label=s==='Visit Complete'?'🔒 Visit Complete':(s||'—');
+  return '<span class="bdg '+(m[s]||'bdg-sl')+'">'+label+'</span>';
 }
 // ── VISIT STATUS (distinct from sample_records.status, which tracks one
 // specimen, not the whole visit) — see migration_v2.19_visit_status_and_
@@ -9573,6 +9583,7 @@ async function loadDoctorQueue() {
         paymentTag(p.payment_status)+'</div>'+
         '<div style="font-size:.69rem;color:var(--slate);margin-top:3px">'+(p.mrn||'')+' · '+(p.age||'?')+(p.age_unit||'y')+'/'+(p.sex||'?')+' · '+(p.diagnosis||'—')+'</div>'+
         '<div style="font-size:.68rem;margin-top:2px;color:var(--teal);font-weight:600">'+(p.visit_destination?'\u2192 '+p.visit_destination:'')+' '+(p.priority&&p.priority!=='Routine'?'· '+p.priority:'')+'</div>'+
+        '<div style="font-size:.66rem;margin-top:2px;color:var(--slate)">Registered '+fmtDT(p.created_at)+'</div>'+
         '<div style="margin-top:4px">'+visitStatusBadge(p)+'</div></div>';
     }).join('');
   } catch(e){ body.innerHTML='<div style="padding:10px;color:var(--red);font-size:.78rem">'+escapeHtml(e.message)+'</div>'; }
@@ -11397,6 +11408,23 @@ async function loadPthTimeline() {
     const to=document.getElementById('pth-to')?.value||today();
     const ptId=_pthPt.id;
     const resultTableNames=Object.keys(PTH_RESULT_TABLES);
+    // A follow-up/re-registration under the same MRN creates a genuinely
+    // NEW patients row (see submitRegistration()/checkAndApplyFollowUpPricing())
+    // rather than reusing the old one — so a patient's clinical history is
+    // spread across MULTIPLE patient_id rows sharing one mrn. Every query
+    // below used to filter by ONLY the single row that was clicked into,
+    // so "History" on a fresh re-registration showed nothing at all even
+    // though a completed prior visit existed under the same file number.
+    // Resolve every patients.id sharing this MRN first (falls back to just
+    // the clicked row if there's no MRN — e.g. a walk-in) and query with
+    // .in(...) instead of .eq(...) everywhere, merging every visit's
+    // events into one combined timeline.
+    let allIdsForMrn=[ptId];
+    let allRowsForMrn=[_pthPt];
+    if(_pthPt.mrn){
+      const {data:mrnRows}=await sb.from('patients').select('id,created_at,tests_requested,priority,diagnosis,visit_status').eq('mrn',_pthPt.mrn).then(r=>r,()=>({data:null}));
+      if(mrnRows?.length){ allIdsForMrn=mrnRows.map(r=>r.id); allRowsForMrn=mrnRows; }
+    }
     // Every query below is independently caught (falls back to an empty
     // result rather than rejecting) so ONE failing table -- an RLS policy
     // that denies this role, a migration not yet applied, anything -- can
@@ -11405,26 +11433,28 @@ async function loadPthTimeline() {
     // forever (the outer catch only logged to console, never updated the
     // UI), which read to the user as "History — nothing appears" even
     // though most of the data was perfectly reachable.
-    const [labPt,adms,crits,rads,invs,hemHist,chemHist,consults,...resultRows]=await Promise.all([
-      sb.from('patients').select('id,created_at,tests_requested,priority,diagnosis').eq('id',ptId).single().then(r=>r,()=>({data:null})),
-      sb.from('admissions').select('*').eq('patient_id',ptId).order('admission_date',{ascending:false}).then(r=>r,()=>({data:[]})),
-      sb.from('critical_values').select('*').eq('patient_id',ptId).order('created_at',{ascending:false}).then(r=>r,()=>({data:[]})),
-      sb.from('radiology_requests').select('*').eq('patient_id',ptId).order('created_at',{ascending:false}).then(r=>r,()=>({data:[]})),
-      sb.from('invoices').select('*').eq('patient_id',ptId).order('created_at',{ascending:false}).then(r=>r,()=>({data:[]})),
+    const [adms,crits,rads,invs,hemHist,chemHist,consults,...resultRows]=await Promise.all([
+      sb.from('admissions').select('*').in('patient_id',allIdsForMrn).order('admission_date',{ascending:false}).then(r=>r,()=>({data:[]})),
+      sb.from('critical_values').select('*').in('patient_id',allIdsForMrn).order('created_at',{ascending:false}).then(r=>r,()=>({data:[]})),
+      sb.from('radiology_requests').select('*').in('patient_id',allIdsForMrn).order('created_at',{ascending:false}).then(r=>r,()=>({data:[]})),
+      sb.from('invoices').select('*').in('patient_id',allIdsForMrn).order('created_at',{ascending:false}).then(r=>r,()=>({data:[]})),
       // Trend history reads the append-only twin tables (migration_v2.17) —
       // results_hematology/results_chemistry hold at most one row per
       // patient, so trend charts can never show more than one point off
       // them directly.
-      sb.from('results_hematology_history').select('hgb,wbc,plt,analysis_date,is_verified').eq('patient_id',ptId).order('analysis_date').then(r=>r,()=>({data:[]})),
-      sb.from('results_chemistry_history').select('creat,urea,fbs,alt,ast,alp,ggt,analysis_date,is_verified').eq('patient_id',ptId).order('analysis_date').then(r=>r,()=>({data:[]})),
-      sb.from('doctor_consultations').select('*').eq('patient_id',ptId).order('consultation_date',{ascending:false}).then(r=>r,()=>({data:[]})),
-      ...resultTableNames.map(t=>sb.from(t).select('*').eq('patient_id',ptId).then(r=>r,()=>({data:[]}))),
+      sb.from('results_hematology_history').select('hgb,wbc,plt,analysis_date,is_verified').in('patient_id',allIdsForMrn).order('analysis_date').then(r=>r,()=>({data:[]})),
+      sb.from('results_chemistry_history').select('creat,urea,fbs,alt,ast,alp,ggt,analysis_date,is_verified').in('patient_id',allIdsForMrn).order('analysis_date').then(r=>r,()=>({data:[]})),
+      sb.from('doctor_consultations').select('*').in('patient_id',allIdsForMrn).order('consultation_date',{ascending:false}).then(r=>r,()=>({data:[]})),
+      ...resultTableNames.map(t=>sb.from(t).select('*').in('patient_id',allIdsForMrn).then(r=>r,()=>({data:[]}))),
     ]);
     _pthHemHistory=hemHist.data||[];
     _pthChemHistory=chemHist.data||[];
     const events=[];
-    const pt=labPt.data;
-    if(pt) events.push({t:new Date(pt.created_at),type:'lab',icon:'📋',title:'Patient Registered',detail:'Tests: '+escapeHtml((pt.tests_requested||[]).join(', ')||'—'),color:'var(--teal)',data:pt});
+    allRowsForMrn.forEach(pt=>{
+      if(!pt) return;
+      const closed=pt.visit_status==='Visit Complete';
+      events.push({t:new Date(pt.created_at),type:'lab',icon:closed?'🔒':'📋',title:'Patient Registered'+(closed?' (Visit Complete)':''),detail:'Tests: '+escapeHtml((pt.tests_requested||[]).join(', ')||'—'),color:closed?'#64748b':'var(--teal)',data:pt});
+    });
     (adms.data||[]).forEach(a=>events.push({t:new Date(a.admission_date),type:'admission',icon:'🛏',title:'Admitted — '+escapeHtml(a.ward||''),detail:escapeHtml(a.primary_diagnosis||'—')+' | Dr. '+escapeHtml(a.admitting_doctor||'—')+' | '+escapeHtml(a.status),color:'var(--blue)',data:a}));
     (crits.data||[]).forEach(c=>events.push({t:new Date(c.created_at),type:'lab',icon:'🚨',title:'Critical: '+escapeHtml(c.parameter),detail:'Value: '+escapeHtml(c.value)+' | '+(c.is_acknowledged?'Acknowledged':'⚠️ Unacknowledged'),color:'var(--red)',data:c}));
     (rads.data||[]).forEach(r=>events.push({t:new Date(r.created_at),type:'radiology',icon:'🩻',title:escapeHtml(r.imaging_type||'Radiology'),detail:escapeHtml(r.urgency||'')+' | '+escapeHtml(r.status||'Requested'),color:'var(--sero)',data:r}));
@@ -11432,11 +11462,11 @@ async function loadPthTimeline() {
     (consults.data||[]).forEach(c=>events.push({t:new Date(c.consultation_date||c.created_at),type:'consultation',icon:'🩺',title:'Doctor Visit'+(c.visit_type?' — '+escapeHtml(c.visit_type):''),detail:(c.primary_diagnosis?'Dx: '+escapeHtml(c.primary_diagnosis)+' — ':'')+escapeHtml(c.chief_complaint||'—')+(c.consulting_doctor?' | Dr. '+escapeHtml(c.consulting_doctor):''),color:'#7c3aed',data:c}));
     resultTableNames.forEach((tname,i)=>{
       const meta=PTH_RESULT_TABLES[tname];
-      (resultRows[i]?.data||[]).forEach(r=>events.push({t:new Date(r.analysis_date||r.created_at||pt?.created_at||Date.now()),type:'lab',icon:meta.icon,title:meta.label+' Result'+(r.is_verified?' ✓ Verified':' (unverified)'),detail:pthFormatResultRow(r),color:'var(--teal)',data:r}));
+      (resultRows[i]?.data||[]).forEach(r=>events.push({t:new Date(r.analysis_date||r.created_at||_pthPt?.created_at||Date.now()),type:'lab',icon:meta.icon,title:meta.label+' Result'+(r.is_verified?' ✓ Verified':' (unverified)'),detail:pthFormatResultRow(r),color:'var(--teal)',data:r}));
     });
     events.sort((a,b)=>b.t-a.t);
     _pthAllEvents=events;
-    setText('pths-visits',1); setText('pths-admissions',(adms.data||[]).length); setText('pths-criticals',(crits.data||[]).length); setText('pths-radiology',(rads.data||[]).length); setText('pths-invoices',(invs.data||[]).length);
+    setText('pths-visits',allRowsForMrn.length); setText('pths-admissions',(adms.data||[]).length); setText('pths-criticals',(crits.data||[]).length); setText('pths-radiology',(rads.data||[]).length); setText('pths-invoices',(invs.data||[]).length);
     renderPthTimeline();
     if(_pthHemHistory.length||_pthChemHistory.length){ document.getElementById('pth-trends-card').style.display=''; renderPthTrend(); }
   } catch(e){ console.error(e); if(tl) tl.innerHTML='<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-title">Could not load history</div><div style="font-size:.8rem;color:var(--slate);margin-top:4px">'+escapeHtml(e.message||'Unknown error')+'</div></div>'; }
