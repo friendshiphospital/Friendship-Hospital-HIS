@@ -946,6 +946,13 @@ html[dir="rtl"] body{direction:rtl;}
 
   <!-- ── TAB: QUEUE ── -->
   <div id="nrs-tab-queue">
+    <div class="card" style="margin-bottom:14px">
+      <div class="card-hd">
+        <span class="card-title">🩺 Pending Nursing Orders (from Doctor)</span>
+        <button class="btn btn-s btn-sm" onclick="loadNursingOrders()">↻</button>
+      </div>
+      <div id="nrs-orders-body" style="padding:6px"><div class="spin-center"><div class="spinner"></div>Loading…</div></div>
+    </div>
     <div class="card">
       <div class="card-hd">
         <span class="card-title">📋 Active Patients</span>
@@ -7493,7 +7500,7 @@ function goPage(p) {
   document.querySelectorAll('.sb-item').forEach(el=>el.classList.toggle('active',el.dataset.p===p));
   // Page-specific init hooks
   if(p==='infection') setTimeout(loadInfectionFlags,100);
-  if(p==='nursing') setTimeout(()=>{ loadNursingQueue(); startVitalsClock(); },100);
+  if(p==='nursing') setTimeout(()=>{ loadNursingQueue(); loadNursingOrders(); startVitalsClock(); },100);
   if(p==='samples') setTimeout(()=>{ loadSampleQueue(); updateTubeColor(); },100);
   if(p==='register') setTimeout(()=>{ initRegForm(); loadRecentPatients(); },200);
   if(p==='handover') { const d=document.getElementById('ho-filter-date'); if(d&&!d.value) d.value=today(); setTimeout(loadHandoverNotes,100); }
@@ -7518,7 +7525,7 @@ function goPage(p) {
     const cd=document.getElementById('census-date'); if(cd&&!cd.value){ cd.value=td; run(loadBedCensus); }
   }
   else if(p==='theatre'){ run(loadOTSchedule); run(loadSurgeonDropdown); setD('ot-date',td); setD('ot-sched-date',td); }
-  else if(p==='nursing'){ run(loadNursingQueue); setD('ho-date',td); setEl('vs-by',currentProfile?.full_name||''); }
+  else if(p==='nursing'){ run(loadNursingQueue); run(loadNursingOrders); setD('ho-date',td); setEl('vs-by',currentProfile?.full_name||''); }
   else if(p==='fluid-chart'){ setD('fc-date',td); run(loadFluidChart); }
   else if(p==='consultation'){ run(loadDoctorQueue); run(buildOrderTestPanel); setD('doc-date',td); }
   else if(p==='appointments'){ run(loadAppointments); run(loadApptDoctors); setD('appt-date',td); setD('appt-filter-date',td); }
@@ -7526,7 +7533,7 @@ function goPage(p) {
   else if(p==='prices') run(loadPriceEditor);
   else if(p==='register'){ initRegForm(); run(loadRecentPatients); run(populateDoctorDropdown); }
   else if(p==='worklist') run(loadWorklist);
-  else if(p==='nursing') run(loadNursingQueue);
+  else if(p==='nursing'){ run(loadNursingQueue); run(loadNursingOrders); }
   else if(p==='samples') run(loadSampleQueue);
   else if(p==='allresults'){ setD('ar-date-from',new Date(Date.now()-7*864e5).toISOString().slice(0,10)); setD('ar-date-to',td); run(loadAllResults); }
   else if(p==='criticals') run(loadCriticals);
@@ -10050,7 +10057,17 @@ async function _submitLabOrder(deferred) {
       if(isCollision && attempt<2){ labNo=null; continue; } // regenerate and retry
       throw updErr;
     }
-    try{ await sb.from('sample_records').upsert({patient_id:_docPt.id,status:'Pending',...deferralFields},{onConflict:'patient_id'}); }catch(e){}
+    // ignoreDuplicates: a patient's sample_records row is one row per
+    // patient, not per order -- a NEW lab order must never regress an
+    // already-Collected/Received/Processing/Completed sample back to
+    // Pending. Both the Doctor's View Result gate (loadActiveOrders()'s
+    // labResultsReady) and the Lab Worklist's RECEIVABLE_STATUSES filter
+    // read this exact same row, so overwriting it silently made already-
+    // released results look Pending again and made the patient vanish
+    // from the Worklist the moment a second test was ordered. Only create
+    // the row when it doesn't exist yet; an existing one keeps its real
+    // status regardless of what gets added to tests_requested.
+    try{ await sb.from('sample_records').upsert({patient_id:_docPt.id,status:'Pending',...deferralFields},{onConflict:'patient_id',ignoreDuplicates:true}); }catch(e){}
     advanceVisitStatus(_docPt.id,'Orders Pending');
     toast((deferred?'\u26a1 \u2705 Lab orders placed (\u26a0 Payment Deferred \u2014 STAT): ':'\u2705 Lab orders placed: ')+checked.join(', ')+' — Lab No. '+labNo,'ok');
     document.querySelectorAll('.order-test-chk:checked').forEach(c=>c.checked=false);
@@ -11380,23 +11397,28 @@ async function loadPthTimeline() {
     const to=document.getElementById('pth-to')?.value||today();
     const ptId=_pthPt.id;
     const resultTableNames=Object.keys(PTH_RESULT_TABLES);
+    // Every query below is independently caught (falls back to an empty
+    // result rather than rejecting) so ONE failing table -- an RLS policy
+    // that denies this role, a migration not yet applied, anything -- can
+    // never take the whole Promise.all down with it. Before this, a single
+    // rejection here left the timeline stuck on its "Loading…" spinner
+    // forever (the outer catch only logged to console, never updated the
+    // UI), which read to the user as "History — nothing appears" even
+    // though most of the data was perfectly reachable.
     const [labPt,adms,crits,rads,invs,hemHist,chemHist,consults,...resultRows]=await Promise.all([
-      sb.from('patients').select('id,created_at,tests_requested,priority,diagnosis').eq('id',ptId).single(),
-      sb.from('admissions').select('*').eq('patient_id',ptId).order('admission_date',{ascending:false}),
-      sb.from('critical_values').select('*').eq('patient_id',ptId).order('created_at',{ascending:false}),
-      sb.from('radiology_requests').select('*').eq('patient_id',ptId).order('created_at',{ascending:false}),
-      sb.from('invoices').select('*').eq('patient_id',ptId).order('created_at',{ascending:false}),
+      sb.from('patients').select('id,created_at,tests_requested,priority,diagnosis').eq('id',ptId).single().then(r=>r,()=>({data:null})),
+      sb.from('admissions').select('*').eq('patient_id',ptId).order('admission_date',{ascending:false}).then(r=>r,()=>({data:[]})),
+      sb.from('critical_values').select('*').eq('patient_id',ptId).order('created_at',{ascending:false}).then(r=>r,()=>({data:[]})),
+      sb.from('radiology_requests').select('*').eq('patient_id',ptId).order('created_at',{ascending:false}).then(r=>r,()=>({data:[]})),
+      sb.from('invoices').select('*').eq('patient_id',ptId).order('created_at',{ascending:false}).then(r=>r,()=>({data:[]})),
       // Trend history reads the append-only twin tables (migration_v2.17) —
       // results_hematology/results_chemistry hold at most one row per
       // patient, so trend charts can never show more than one point off
-      // them directly. Each caught independently so a deployment that
-      // hasn't applied migration_v2.17 yet still gets the rest of the
-      // timeline (admissions/criticals/radiology/invoices/etc.) instead of
-      // this whole Promise.all rejecting.
+      // them directly.
       sb.from('results_hematology_history').select('hgb,wbc,plt,analysis_date,is_verified').eq('patient_id',ptId).order('analysis_date').then(r=>r,()=>({data:[]})),
       sb.from('results_chemistry_history').select('creat,urea,fbs,alt,ast,alp,ggt,analysis_date,is_verified').eq('patient_id',ptId).order('analysis_date').then(r=>r,()=>({data:[]})),
-      sb.from('doctor_consultations').select('*').eq('patient_id',ptId).order('consultation_date',{ascending:false}),
-      ...resultTableNames.map(t=>sb.from(t).select('*').eq('patient_id',ptId)),
+      sb.from('doctor_consultations').select('*').eq('patient_id',ptId).order('consultation_date',{ascending:false}).then(r=>r,()=>({data:[]})),
+      ...resultTableNames.map(t=>sb.from(t).select('*').eq('patient_id',ptId).then(r=>r,()=>({data:[]}))),
     ]);
     _pthHemHistory=hemHist.data||[];
     _pthChemHistory=chemHist.data||[];
@@ -11417,7 +11439,7 @@ async function loadPthTimeline() {
     setText('pths-visits',1); setText('pths-admissions',(adms.data||[]).length); setText('pths-criticals',(crits.data||[]).length); setText('pths-radiology',(rads.data||[]).length); setText('pths-invoices',(invs.data||[]).length);
     renderPthTimeline();
     if(_pthHemHistory.length||_pthChemHistory.length){ document.getElementById('pth-trends-card').style.display=''; renderPthTrend(); }
-  } catch(e){ console.error(e); }
+  } catch(e){ console.error(e); if(tl) tl.innerHTML='<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-title">Could not load history</div><div style="font-size:.8rem;color:var(--slate);margin-top:4px">'+escapeHtml(e.message||'Unknown error')+'</div></div>'; }
 }
 function setPthFilter(f,btn) {
   _pthFilter=f; document.querySelectorAll('[onclick*="setPthFilter"]').forEach(b=>b.classList.remove('active')); if(btn) btn.classList.add('active'); renderPthTimeline();
@@ -14321,6 +14343,42 @@ function filterNursingQueue(q) {
   });
 }
 
+// Doctor-placed Nursing orders (submitNursingOrder() -> doctor_orders,
+// order_type='Nursing') previously had nowhere in the Nursing module that
+// ever read them back -- a doctor's "Vitals q4h" or similar order was only
+// ever visible on the DOCTOR's own Active Orders list, never surfaced to
+// the nurse who's actually supposed to act on it. This is the missing
+// read side; "Mark Done" below is the missing write-back side (nothing
+// previously updated doctor_orders.status for a Nursing order at all, so
+// it stayed "Pending" forever even after being carried out).
+async function loadNursingOrders(){
+  const body=document.getElementById('nrs-orders-body'); if(!body||!sb) return;
+  body.innerHTML='<div class="spin-center"><div class="spinner"></div></div>';
+  try{
+    const {data}=await sb.from('doctor_orders').select('id,patient_id,order_detail,ordered_by,ordered_at,priority,patients(name,mrn,lab_no,ward)')
+      .eq('order_type','Nursing').eq('status','Pending').order('ordered_at',{ascending:false}).limit(50);
+    if(!data?.length){ body.innerHTML='<div class="empty-state" style="padding:16px"><div class="empty-title" style="font-size:.82rem">No pending nursing orders</div></div>'; return; }
+    body.innerHTML='<div style="overflow-x:auto"><table class="tbl" style="font-size:.76rem"><thead><tr><th>Patient</th><th>Order</th><th>Ordered By</th><th>Time</th><th>Action</th></tr></thead><tbody>'+
+      data.map(o=>{
+        const pt=o.patients||{};
+        return '<tr><td style="font-weight:600">'+escapeHtml(pt.name||'—')+'<div style="font-size:.68rem;color:var(--slate);font-weight:400">'+escapeHtml(pt.mrn||pt.lab_no||'—')+(pt.ward?' · '+escapeHtml(pt.ward):'')+'</div></td>'+
+          '<td>'+escapeHtml(o.order_detail||'—')+'</td>'+
+          '<td style="font-size:.7rem;color:var(--slate)">'+escapeHtml(o.ordered_by||'—')+'</td>'+
+          '<td style="font-size:.7rem;color:var(--slate)">'+fmtDT(o.ordered_at)+'</td>'+
+          '<td><button class="btn btn-p btn-xs" onclick="completeNursingOrder(\''+o.id+'\')">✅ Mark Done</button>'+
+          '<button class="btn btn-s btn-xs" onclick="selectVitalsFromQueue(\''+o.patient_id+'\',\''+escapeHtml((pt.name||'').replace(/'/g,''))+'\')">📈 Vitals</button></td></tr>';
+      }).join('')+'</tbody></table></div>';
+  }catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>'; }
+}
+async function completeNursingOrder(id){
+  if(!sb) return;
+  try{
+    await sb.from('doctor_orders').update({status:'Completed'}).eq('id',id);
+    toast('✅ Order marked done','ok');
+    loadNursingOrders();
+  }catch(e){ toast(e.message,'err'); }
+}
+
 function selectVitalsFromQueue(ptId, ptName) {
   // Switch to vitals tab and pre-fill patient
   document.querySelectorAll('#page-nursing .tab').forEach((b,i)=>b.classList.toggle('active',i===1));
@@ -14338,7 +14396,7 @@ function switchNurseTab(tab, btn) {
   });
   document.querySelectorAll('#page-nursing .tabs .tab').forEach(b=>b.classList.remove('active'));
   if(btn) btn.classList.add('active');
-  if(tab==='queue') loadNursingQueue();
+  if(tab==='queue'){ loadNursingQueue(); loadNursingOrders(); }
   if(tab==='handover') {
     const d=document.getElementById('ho-date'); if(d&&!d.value) d.value=today();
     const by=document.getElementById('ho-from'); if(by&&!by.value&&currentProfile) by.value=currentProfile.full_name||'';
@@ -18741,11 +18799,29 @@ async function selectScPt(ptId){
     if(m)m.textContent=(p.mrn||p.lab_no||'—')+' · '+(p.age||'?')+(p.age_unit||'y')+' / '+(p.sex||'')+((p.tests_requested?.length)?' · '+p.tests_requested.length+' tests':'');
     const pw=document.getElementById('sc-pay-warn');if(pw)pw.innerHTML=paymentBanner(p);
     const te=document.getElementById('sc-tests-ordered');
-    if(te&&p.tests_requested?.length)te.innerHTML='<div style="display:flex;flex-wrap:wrap;gap:4px;padding:4px">'+p.tests_requested.map(t=>'<span class="bdg bdg-b">'+t+'</span>').join('')+'</div>';
+    // Always overwrite (never leave the PREVIOUS patient's tests showing) --
+    // this must reflect the just-selected patient exactly, including the
+    // empty case.
+    if(te)te.innerHTML=p.tests_requested?.length
+      ?'<div style="display:flex;flex-wrap:wrap;gap:4px;padding:4px">'+p.tests_requested.map(t=>'<span class="bdg bdg-b">'+escapeHtml(t)+'</span>').join('')+'</div>'
+      :'<div style="padding:8px;color:var(--slate);font-size:.76rem">No tests recorded for this patient</div>';
     const tubesEl=document.getElementById('sc-tubes-required');
     if(tubesEl){
       const tubes=getRequiredTubes(p.tests_requested);
-      tubesEl.innerHTML = tubes.length ? tubes.map(t=>
+      // Auto-select the specimen-type dropdown to match the first required
+      // tube instead of always silently defaulting to whatever option
+      // happens to be listed first (EDTA Blood) regardless of what was
+      // actually ordered -- a tech who doesn't manually override it was
+      // recording the wrong specimen type on every sample.
+      const specimenEl=document.getElementById('sc-specimen');
+      if(specimenEl&&tubes.length){
+        const optionByTubeKey={edta:'EDTA Blood',citrate:'Citrate Blood',sst:'Plain Blood / SST',fluoride:'Fluoride Blood',urine:'Urine - Midstream',stool:'Stool',csf:'CSF'};
+        const opt=optionByTubeKey[tubes[0].key];
+        if(opt&&[...specimenEl.options].some(o=>o.value===opt)) specimenEl.value=opt;
+        updateTubeColor();
+      }
+      const multiTubeWarn=tubes.length>1?'<div style="padding:6px 8px;margin-bottom:8px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;font-size:.72rem;color:#92400e">⚠️ '+tubes.length+' different tube types required — Specimen Type above only records one; use the printed tube labels below to track each one collected.</div>':'';
+      tubesEl.innerHTML = tubes.length ? multiTubeWarn+tubes.map(t=>
         '<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;margin-bottom:6px;background:var(--bg);border-radius:8px">'+
         '<div style="width:22px;height:30px;border-radius:4px 4px 8px 8px;background:'+t.color+';border:1.5px solid rgba(0,0,0,.15);flex-shrink:0"></div>'+
         '<div style="flex:1"><div style="font-weight:700;font-size:.8rem">'+t.name+'</div>'+
