@@ -251,6 +251,8 @@ html[dir="rtl"] body{direction:rtl;}
 .sft-dot{width:8px;height:8px;border-radius:50%;background:#4ade80;box-shadow:0 0 0 0 rgba(74,222,128,.6);animation:sftpulse 1.8s infinite;}
 #shift-bar.closed-state .sft-dot{background:#f87171;animation:none;}
 @keyframes sftpulse{0%{box-shadow:0 0 0 0 rgba(74,222,128,.55)}70%{box-shadow:0 0 0 7px rgba(74,222,128,0)}100%{box-shadow:0 0 0 0 rgba(74,222,128,0)}}
+@keyframes news2pulse{0%{box-shadow:0 0 0 0 rgba(220,38,38,.6)}70%{box-shadow:0 0 0 10px rgba(220,38,38,0)}100%{box-shadow:0 0 0 0 rgba(220,38,38,0)}}
+.news2-pulse{animation:news2pulse 1.5s infinite}
 .sft-meta{display:flex;gap:18px;flex-wrap:wrap;flex:1}
 .sft-i .sft-l{font-size:.6rem;text-transform:uppercase;letter-spacing:.4px;color:rgba(255,255,255,.6)}
 .sft-i .sft-v{font-size:.82rem;font-weight:700;margin-top:1px}
@@ -1131,6 +1133,7 @@ html[dir="rtl"] body{direction:rtl;}
             <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px">NEWS2 Score</div>
             <div id="vs-news2-val" style="font-size:1.6rem;font-weight:900">—</div>
             <div id="vs-news2-risk" style="font-size:.75rem;font-weight:700"></div>
+            <div id="vs-news2-hourly-flag" style="display:none;margin-top:6px"><span class="bdg" style="background:#fef3c7;color:#92400e">⏰ Hourly Monitoring</span></div>
           </div>
           <div class="g2">
             <div class="fg"><label class="fl">Recorded By</label><input class="fc" id="vs-by" readonly></div>
@@ -6202,6 +6205,27 @@ html[dir="rtl"] body{direction:rtl;}
   </div>
 </div>
 
+<!-- NEWS2 Rapid Response Team escalation (Nursing Safety Ext. Phase 2) —
+     same acknowledge-with-confirmation discipline as Critical Values above:
+     a real read-back (re-type the score), not a name-only prompt(). -->
+<div class="ov" id="rrt-ack-ov">
+  <div class="mo mo-sm">
+    <div class="mo-hd"><h3 style="color:var(--red)">🚨 STRIKE RAPID RESPONSE TEAM (RRT)</h3><button class="mo-x" onclick="closeOv('rrt-ack-ov')">✕</button></div>
+    <div class="mo-b">
+      <div id="rrt-ack-info" style="background:var(--red-lt);border:1.5px solid var(--red);border-radius:8px;padding:12px;margin-bottom:12px;font-size:.82rem"></div>
+      <p style="font-size:.78rem;color:var(--slate);margin-bottom:10px">NEWS2 ≥7 indicates high clinical risk requiring urgent review. Activate the Rapid Response Team / on-call doctor immediately, then confirm below.</p>
+      <div class="fg"><label class="fl">Re-type the NEWS2 score to confirm</label><input class="fc" id="rrt-readback-val" placeholder="e.g. 8"></div>
+      <div id="rrt-readback-status" style="font-size:.76rem;margin-bottom:6px"></div>
+      <div class="fg"><label class="fl">RRT / On-Call Doctor Notified</label><input class="fc" id="rrt-notified-to" placeholder="Name of person notified"></div>
+      <div class="fg"><label class="fl">Notes</label><input class="fc" id="rrt-ack-notes" placeholder="Action taken…"></div>
+    </div>
+    <div class="mo-ft">
+      <button class="btn btn-s" onclick="closeOv('rrt-ack-ov')">Cancel</button>
+      <button class="btn btn-r" onclick="submitRrtAck()">🚨 Confirm RRT Activated</button>
+    </div>
+  </div>
+</div>
+
 <!-- High-alert medication second-staff double-verification (Nursing Phase 3) -->
 <div class="ov" id="mar-verify-ov">
   <div class="mo mo-sm">
@@ -9462,6 +9486,18 @@ async function saveVitals() {
   if(!(await guardVisitNotLocked(_ptId,'Recording vitals'))) return;
   if(!_vsPt) _vsPt = {id:_ptId};
   const g=id=>document.getElementById(id)?.value||null, gn=id=>{ const v=parseFloat(document.getElementById(id)?.value); return isNaN(v)?null:v; };
+  // Nursing Safety Ext. Phase 2 — a NEWS2 >=7 must actually block the save
+  // until RRT is acknowledged, not just pop a dismissible modal during
+  // typing (which already happens via calcNEWS2()'s oninput handlers, but
+  // covers the edge case of fields set without firing those events, or the
+  // modal being cancelled). Re-opens the same modal so the nurse doesn't
+  // have to go hunting for it.
+  const newsScore = calcNEWS2();
+  if(newsScore>=7 && !window._news2RrtAck){
+    toast('🚨 NEWS2 ≥7 — acknowledge the Rapid Response Team activation before saving','err');
+    openRrtAck(newsScore);
+    return;
+  }
   try {
     const result = await dbWrite('vital_signs','insert',{
       patient_id:_vsPt.id||document.getElementById('vs-pt-id')?.value,
@@ -9476,7 +9512,8 @@ async function saveVitals() {
       o2_delivery:g('vs-o2-route'), o2_flow:gn('vs-o2-flow'), fio2:gn('vs-fio2'),
       gcs_eye:parseInt(g('vs-gcs-e'))||null, gcs_verbal:parseInt(g('vs-gcs-v'))||null, gcs_motor:parseInt(g('vs-gcs-m'))||null,
       pain_score:_painScore||parseInt(document.getElementById('vs-pain')?.value)||null,
-      news2_score:calcNEWS2()||null,
+      news2_score:newsScore||null,
+      ...(window._news2RrtAck||{}),
       fluid_in_ml:(parseFloat(g('vs-iv-in'))||0)+(parseFloat(g('vs-po-in'))||0),
       fluid_out_ml:(parseFloat(g('vs-urine'))||0)+(parseFloat(g('vs-other-out'))||0),
       urine_output_ml:gn('vs-urine'), net_balance:((parseFloat(g('vs-iv-in'))||0)+(parseFloat(g('vs-po-in'))||0)-(parseFloat(g('vs-urine'))||0)-(parseFloat(g('vs-other-out'))||0)),
@@ -9491,6 +9528,10 @@ async function saveVitals() {
     });
     toast(result.queued ? '📥 Offline — vitals saved on this device, will sync later' : '✅ Vital signs saved', result.queued?'warn':'ok');
     if(!result.queued){ loadVitalsHistory(); if(window._transfusionTag) clearTransfusionVitalsTag(); }
+    // The acknowledgement belongs to THIS reading only — the next reading
+    // for the same patient must go through its own fresh RRT check, even
+    // if the score is still >=7.
+    resetNews2RrtState();
   } catch(e){ toast(e.message,'err'); }
 }
 // Blood Bank Phase 5 — tag/clear helpers for the transfusion-vitals
@@ -13952,7 +13993,58 @@ function calcNEWS2() {
   else if(score>=5){ bar.style.background='#fef3c7'; valEl.style.color='#b45309'; riskEl.textContent='⚠️ MEDIUM RISK — Urgent review'; riskEl.style.color='#b45309'; }
   else if(score>=1){ bar.style.background='#fff7ed'; valEl.style.color='#92400e'; riskEl.textContent='🟡 LOW RISK — Routine monitoring'; riskEl.style.color='#92400e'; }
   else { bar.style.background='#f0fdf4'; valEl.style.color='#166534'; riskEl.textContent='🟢 NORMAL'; riskEl.style.color='#166534'; }
+
+  // Nursing Safety Ext. Phase 2 — escalation on top of the score above,
+  // never replacing it. >=7 pulses red and opens the blocking RRT
+  // acknowledge modal (once per crossing, not on every keystroke while it
+  // stays >=7); 3-6 is just a visible "hourly monitoring" flag here and on
+  // the Nursing Queue — no notification-bell integration in this pass.
+  bar.classList.toggle('news2-pulse', score>=7);
+  if(score>=7){
+    if(!window._news2RrtModalShown) openRrtAck(score);
+  } else {
+    window._news2RrtModalShown = false;
+  }
+  const hourlyEl = document.getElementById('vs-news2-hourly-flag');
+  if(hourlyEl) hourlyEl.style.display = (score>=3&&score<7) ? '' : 'none';
+
   return score;
+}
+// Reset per-patient — a fresh vitals load must not carry over a previous
+// patient's "already showed the RRT modal this session" state or stale
+// acknowledgement into the next save.
+function resetNews2RrtState(){
+  window._news2RrtModalShown = false;
+  window._news2RrtAck = null;
+}
+window._news2RrtModalShown = false;
+window._news2RrtAck = null;
+function openRrtAck(score){
+  window._news2RrtModalShown = true;
+  const ptName = document.getElementById('vs-pt-name')?.textContent || _vsPt?.name || '—';
+  const info = document.getElementById('rrt-ack-info');
+  if(info) info.innerHTML = '<strong>'+escapeHtml(ptName)+'</strong><br>NEWS2 Score: <strong style="font-size:1.1em">'+score+'</strong> — 🚨 High Risk';
+  const rb=document.getElementById('rrt-readback-val'); if(rb) rb.value='';
+  const nt=document.getElementById('rrt-notified-to'); if(nt) nt.value='';
+  const nn=document.getElementById('rrt-ack-notes'); if(nn) nn.value='';
+  const st=document.getElementById('rrt-readback-status'); if(st) st.textContent='';
+  openOv('rrt-ack-ov');
+}
+function submitRrtAck(){
+  const readback = document.getElementById('rrt-readback-val')?.value?.trim();
+  const notifiedTo = document.getElementById('rrt-notified-to')?.value?.trim();
+  const notes = document.getElementById('rrt-ack-notes')?.value?.trim();
+  const status = document.getElementById('rrt-readback-status');
+  const currentScore = document.getElementById('vs-news2-val')?.textContent?.trim();
+  if(!readback){ if(status){ status.style.color='var(--red)'; status.textContent='❌ Re-type the NEWS2 score to confirm.'; } return; }
+  if(readback!==currentScore){ if(status){ status.style.color='var(--red)'; status.textContent='❌ Score does not match — re-check and try again.'; } return; }
+  if(!notifiedTo){ toast('Enter who was notified (RRT / on-call doctor)','err'); return; }
+  window._news2RrtAck = {
+    rrt_acknowledged:true, rrt_acknowledged_by:currentProfile?.full_name||null,
+    rrt_acknowledged_at:new Date().toISOString(), rrt_notified_to:notifiedTo, rrt_notes:notes||null,
+  };
+  toast('✅ RRT activation confirmed','ok');
+  closeOv('rrt-ack-ov');
 }
 
 // Override saveVitals to include NEWS2 + MAP
@@ -14623,8 +14715,18 @@ async function loadNursingQueue() {
       return;
     }
     const destIcon={doctor:'\ud83e\ude7a',lab:'\ud83d\udd2c',radiology:'\ud83e\udea7',admission:'\ud83d\udecf'};
+    // Nursing Safety Ext. Phase 2 \u2014 latest NEWS2 per patient, batch-fetched
+    // (not one query per row) so the queue can flag ongoing risk even
+    // between vitals-entry sessions: >=7 stays visibly flagged until the
+    // next reading brings it down, 3-6 shows the hourly-monitoring cue.
+    // No notification-bell integration in this pass \u2014 a visible flag only.
+    const newsMap={};
+    try{
+      const {data:newsRows}=await sb.from('vital_signs').select('patient_id,news2_score,recorded_at').in('patient_id',filtered.map(p=>p.id)).order('recorded_at',{ascending:false}).limit(500);
+      (newsRows||[]).forEach(v=>{ if(v.news2_score!=null&&!(v.patient_id in newsMap)) newsMap[v.patient_id]=v.news2_score; });
+    }catch(e){ /* alerts column degrades gracefully -- never blocks the queue itself */ }
     body.innerHTML='<div style="overflow-x:auto"><table class="tbl"><thead><tr>'+
-      '<th>MRN</th><th>Name</th><th>Age/Sex</th><th>Location</th><th>Destination</th><th>Payment</th><th>Visit</th><th>Actions</th></tr></thead><tbody>'+
+      '<th>MRN</th><th>Name</th><th>Age/Sex</th><th>Location</th><th>Destination</th><th>Payment</th><th>Visit</th><th>Alerts</th><th>Actions</th></tr></thead><tbody>'+
       filtered.map(p=>{
         const unpaid=p.payment_status==='unpaid'||p.payment_status==='insurance_pending';
         const nm=(p.name||[p.first_name,p.last_name].filter(Boolean).join(' ')||'\u2014').replace(/'/g,'\u2019');
@@ -14632,6 +14734,8 @@ async function loadNursingQueue() {
         const dest=p.visit_destination||'lab';
         const destParts2=dest.split(',').map(s=>s.trim()).filter(Boolean);
         const destIconStr=destParts2.map(d=>destIcon[d]||'\ud83c\udfe5').join('');
+        const news=newsMap[p.id];
+        const alertHtml=nursingQueueAlertBadges(news);
         return '<tr class="'+(unpaid?'pay-unpaid':'')+'" style="cursor:pointer" onclick="selectVitalsFromQueue(\''+p.id+'\',\''+nm+'\')">'+
           '<td style="font-family:DM Mono,monospace;font-size:.72rem;color:var(--teal)">'+(p.mrn||p.lab_no||'\u2014')+'</td>'+
           '<td style="font-weight:600">'+(p.name||[p.first_name,p.last_name].filter(Boolean).join(' ')||'\u2014')+'</td>'+
@@ -14640,12 +14744,24 @@ async function loadNursingQueue() {
           '<td><span style="font-size:.72rem">'+destIconStr+' '+dest+'</span></td>'+
           '<td>'+paymentTag(p.payment_status)+'</td>'+
           '<td>'+visitStatusBadge(p)+'</td>'+
+          '<td>'+(alertHtml||'<span style="font-size:.7rem;color:var(--slate)">\u2014</span>')+'</td>'+
           '<td><div class="acts">'+
             '<button class="btn btn-p btn-xs" onclick="selectVitalsFromQueue(\''+p.id+'\',\''+nm+'\');event.stopPropagation()">\ud83d\udcc8 Vitals</button>'+
             '<button class="btn btn-s btn-xs" onclick="goPage(\x27fluid-chart\x27);event.stopPropagation()">\ud83d\udca7 Fluid</button>'+
           '</div></td></tr>';
       }).join('')+'</tbody></table></div>';
   }catch(e){body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>';}
+}
+// Builds the Nursing Queue's Alerts cell. Kept separate from
+// loadNursingQueue() so Phase 3 (turning clock, post-analgesia) can extend
+// it with more flags without touching the query/render logic above.
+function nursingQueueAlertBadges(news2Score){
+  let html='';
+  if(news2Score!=null){
+    if(news2Score>=7) html+='<span class="bdg news2-pulse" style="background:#fee2e2;color:#b91c1c;display:inline-block;margin:1px 2px 1px 0">\ud83d\udea8 NEWS2 '+news2Score+'</span>';
+    else if(news2Score>=3) html+='<span class="bdg" style="background:#fef3c7;color:#92400e;display:inline-block;margin:1px 2px 1px 0">\u23f0 Hourly Monitoring (NEWS2 '+news2Score+')</span>';
+  }
+  return html;
 }
 
 function filterNursingQueue(q) {
@@ -14697,6 +14813,7 @@ function selectVitalsFromQueue(ptId, ptName) {
   const idEl=document.getElementById('vs-pt-id'); if(idEl) idEl.value=ptId;
   const nameEl=document.getElementById('vs-pt-name'); if(nameEl) nameEl.textContent=ptName;
   const banner=document.getElementById('vs-pt-banner'); if(banner) banner.style.display='';
+  resetNews2RrtState();
   loadVitals();
 }
 
