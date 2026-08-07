@@ -2823,9 +2823,10 @@ html[dir="rtl"] body{direction:rtl;}
           <input type="hidden" id="r-existing-mrn">
           <div class="g3">
             <div class="fg"><label class="fl" data-i18n="reg_fname">First Name *</label><input class="fc" id="r-fname" placeholder="First name" oninput="regValidate()"></div>
-            <div class="fg"><label class="fl" data-i18n="reg_mname">Middle Name</label><input class="fc" id="r-mname"></div>
+            <div class="fg"><label class="fl" data-i18n="reg_mname">Middle Name</label><input class="fc" id="r-mname" oninput="regValidate()"></div>
             <div class="fg"><label class="fl" data-i18n="reg_lname">Last Name</label><input class="fc" id="r-lname" oninput="regValidate()"></div>
           </div>
+          <div id="r-name-metachar-hint" style="display:none;color:#b91c1c;font-size:.78rem;margin-top:-8px;margin-bottom:8px">⚠ Names can't contain &lt; &gt; &amp; " or ' — please remove these characters.</div>
           <div class="g4">
             <div class="fg"><label class="fl" data-i18n="reg_age">Age *</label><input class="fc" type="number" id="r-age" min="0" oninput="regValidate();updateRegRadSafetyFields()"></div>
             <div class="fg"><label class="fl" data-i18n="reg_unit">Unit</label><select class="fc" id="r-age-unit" onchange="updateRegRadSafetyFields()"><option>Years</option><option>Months</option><option>Days</option></select></div>
@@ -7380,6 +7381,14 @@ function escAttr(v){
   return String(v??'').replace(/\\/g,'\\\\').replace(/'/g,"\\'")
     .replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
+// Root-cause input validation for free-text name fields, matching
+// escapeHtml()'s own character class (& < > " ') -- display-side escaping
+// (above) stops an injected payload from ever RENDERING as markup, but a
+// name field is still the right place to reject the metacharacters
+// outright, not just contain them at every downstream display site.
+function hasHtmlMetachars(v){
+  return /[&<>"']/.test(String(v??''));
+}
 // ── TOAST ─────────────────────────────────────────────
 function toast(msg, type='') {
   const w = document.getElementById('toast-wrap');
@@ -8112,10 +8121,10 @@ function exportStatsPDF(){
   openPrintWin(html, 'Statistics — '+title);
 }
 function printHeader(docType) {
-  return '<div style="border-bottom:2px solid #0b7a75;padding-bottom:10px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:flex-start"><div><div style="font-size:16pt;font-weight:800;color:#0b7a75;font-family:DM Serif Display,serif">🏥 FRIENDSHIP HOSPITAL — AL DAMAZIN</div><div style="font-size:9pt;color:#64748b;margin-top:2px">Al Damazin, Blue Nile State, Sudan</div><div style="font-size:8.5pt;color:#64748b;margin-top:1px">Tel: '+CFG.phone+'  |  Email: '+CFG.email+'</div></div><div style="text-align:right"><div style="font-size:10pt;font-weight:700;color:#1e3a5a">'+docType+'</div></div></div>';
+  return '<div style="border-bottom:2px solid #0b7a75;padding-bottom:10px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:flex-start"><div><div style="font-size:16pt;font-weight:800;color:#0b7a75;font-family:DM Serif Display,serif">🏥 FRIENDSHIP HOSPITAL — AL DAMAZIN</div><div style="font-size:9pt;color:#64748b;margin-top:2px">Al Damazin, Blue Nile State, Sudan</div><div style="font-size:8.5pt;color:#64748b;margin-top:1px">Tel: '+escapeHtml(CFG.phone)+'  |  Email: '+escapeHtml(CFG.email)+'</div></div><div style="text-align:right"><div style="font-size:10pt;font-weight:700;color:#1e3a5a">'+escapeHtml(docType)+'</div></div></div>';
 }
 function printFooter() {
-  return '<div style="border-top:1px solid #e2e8f3;margin-top:20px;padding-top:8px;font-size:8pt;color:#64748b;display:flex;justify-content:space-between"><span>'+CFG.footer+'</span><span>Printed: '+new Date().toLocaleString('en-GB')+' | By: '+(currentProfile?.full_name||'—')+'</span></div>';
+  return '<div style="border-top:1px solid #e2e8f3;margin-top:20px;padding-top:8px;font-size:8pt;color:#64748b;display:flex;justify-content:space-between"><span>'+escapeHtml(CFG.footer)+'</span><span>Printed: '+new Date().toLocaleString('en-GB')+' | By: '+escapeHtml(currentProfile?.full_name||'—')+'</span></div>';
 }
 function openPrintWin(html, title='Print') {
   const w=window.open('','_blank','width=900,height=750'); if(!w){ toast('Allow popups','warn'); return; }
@@ -10982,6 +10991,9 @@ async function submitRegistration() {
   if(!requireActiveShift()) return;
   const g=id=>document.getElementById(id)?.value||'';
   if(!g('r-fname')){ toast('First name required','err'); return; }
+  if(hasHtmlMetachars(g('r-fname'))||hasHtmlMetachars(g('r-mname'))||hasHtmlMetachars(g('r-lname'))||hasHtmlMetachars(g('r-kin-name'))){
+    toast('⚠️ Names can\'t contain < > & " or \' — please remove these characters and try again','err'); return;
+  }
   if(!g('r-sex')){ toast('Please select sex','err'); return; }
   const phoneDigits = g('r-phone').replace(/\D/g,'');
   if(!phoneDigits){ toast('Mobile number is required','err'); return; }
@@ -11260,7 +11272,7 @@ function renderWlRow(p,sampleMap) {
   return '<tr class="'+(unpaid?'pay-unpaid':'')+'" '+pbg+'>'+
     '<td style="font-family:DM Mono,monospace;font-size:.7rem;font-weight:700;color:var(--teal)">'+(p.lab_no||'—')+'</td>'+
     '<td style="font-size:.72rem">'+(p.mrn||'—')+'</td>'+
-    '<td style="font-weight:600">'+(p.name||fullName(p))+'</td>'+
+    '<td style="font-weight:600">'+escapeHtml(p.name||fullName(p))+'</td>'+
     '<td style="font-size:.75rem">'+(p.age||'?')+(p.age_unit||'y')+' / '+(p.sex||'')+'</td>'+
     '<td style="font-size:.7rem;max-width:150px"><div style="display:flex;flex-wrap:wrap;gap:2px">'+
       (p.tests_requested||[]).slice(0,3).map(t=>'<span class="bdg bdg-sl" style="font-size:.64rem;padding:1px 5px">'+t+'</span>').join('')+
@@ -11276,7 +11288,7 @@ function renderWlRow(p,sampleMap) {
     '<td><div class="acts">'+
       (unpaid?'<button class="btn btn-s btn-xs" style="opacity:.5;cursor:not-allowed" title="Payment required">\ud83d\udd12 Blocked</button>':
         notReceived?'<button class="btn btn-s btn-xs" style="opacity:.5;cursor:not-allowed" title="Sample not yet received in the lab">\ud83d\udce5 Awaiting Receipt</button>':
-        '<button class="btn btn-p btn-xs" onclick="openEnterModal(\x27'+p.id+'\x27,\x27'+(p.lab_no||'')+'\x27,\x27'+((p.name||fullName(p)).replace(/'/g,''))+'\x27)">\ud83d\udcdd Enter</button>')+
+        '<button class="btn btn-p btn-xs" onclick="openEnterModal(\x27'+p.id+'\x27,\x27'+(p.lab_no||'')+'\x27,\x27'+escAttr(p.name||fullName(p))+'\x27)">\ud83d\udcdd Enter</button>')+
       '<button class="btn btn-s btn-xs" onclick="openPatientHistoryTimeline(\x27'+p.id+'\x27)" title="View this patient\x27s full history">\ud83d\udd50 History</button>'+
     '</div></td></tr>';
 }
@@ -12200,11 +12212,11 @@ async function saveMicroEntry(verify=false) {
 function buildLabPtBanner(pt, dateVal){
   const cell=(label,val)=>'<div><div style="font-size:8pt;color:#64748b">'+label+'</div><div style="font-weight:700">'+(val||'—')+'</div></div>';
   return '<div style="background:#f1f5f9;padding:10px 14px;border-radius:8px;margin-bottom:14px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px">'
-    + cell('Patient',pt.name||fullName(pt))
-    + cell('MRN',pt.mrn)
-    + cell('File No.',pt.visit_no)
-    + cell('Lab No.',pt.lab_no)
-    + cell('Age/Sex',(pt.age||'?')+(pt.age_unit||'')+' / '+(pt.sex||''))
+    + cell('Patient',escapeHtml(pt.name||fullName(pt)))
+    + cell('MRN',escapeHtml(pt.mrn))
+    + cell('File No.',escapeHtml(pt.visit_no))
+    + cell('Lab No.',escapeHtml(pt.lab_no))
+    + cell('Age/Sex',escapeHtml((pt.age||'?')+(pt.age_unit||'')+' / '+(pt.sex||'')))
     + cell('Date',fmtDate(dateVal))
     + '</div>';
 }
@@ -12503,9 +12515,12 @@ function clearExistingFilePatient(){
 
 function regValidate() {
   const g = id => document.getElementById(id)?.value||'';
-  const ok = g('r-fname') && g('r-sex') && g('r-age') && g('r-phone');
+  const namesClean = !hasHtmlMetachars(g('r-fname')) && !hasHtmlMetachars(g('r-mname')) && !hasHtmlMetachars(g('r-lname'));
+  const ok = g('r-fname') && g('r-sex') && g('r-age') && g('r-phone') && namesClean;
   const btn = document.getElementById('reg-step1-next');
   if(btn) btn.disabled = !ok;
+  const hint = document.getElementById('r-name-metachar-hint');
+  if(hint) hint.style.display = namesClean ? 'none' : '';
 }
 
 function calcAgeFromDob() {
@@ -13837,7 +13852,7 @@ function openSampleLabelWindow(data, settings) {
   const w = window.open('','_blank','width=400,height=300');
   if(!w){ toast('Allow popups to print labels','warn'); return; }
   const html = `<!DOCTYPE html><html><head><style>
-    @page{size:${s.width}mm ${s.height}mm;margin:0}
+    @page{size:${escapeHtml(s.width)}mm ${escapeHtml(s.height)}mm;margin:0}
     body{font-family:'DM Mono',monospace;font-size:8pt;padding:2mm;width:${s.width-4}mm;box-sizing:border-box}
     .name{font-size:10pt;font-weight:900;margin-bottom:1mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .meta{font-size:7pt;color:#333;margin-bottom:1mm}
@@ -14943,15 +14958,15 @@ async function loadNursingQueue() {
       '<th>MRN</th><th>Name</th><th>Age/Sex</th><th>Location</th><th>Destination</th><th>Payment</th><th>Visit</th><th>Alerts</th><th>Actions</th></tr></thead><tbody>'+
       filtered.map(p=>{
         const unpaid=p.payment_status==='unpaid'||p.payment_status==='insurance_pending';
-        const nm=(p.name||[p.first_name,p.last_name].filter(Boolean).join(' ')||'\u2014').replace(/'/g,'\u2019');
-        const wardBadge=p.ward?'<span class="bdg bdg-b">'+p.ward+'</span>'+(p.bed?' \u00b7 '+p.bed:''):'<span style="font-size:.7rem;color:var(--slate)">OPD/Walk-in</span>';
+        const rawName=p.name||[p.first_name,p.last_name].filter(Boolean).join(' ')||'\u2014';
+        const wardBadge=p.ward?'<span class="bdg bdg-b">'+escapeHtml(p.ward)+'</span>'+(p.bed?' \u00b7 '+escapeHtml(p.bed):''):'<span style="font-size:.7rem;color:var(--slate)">OPD/Walk-in</span>';
         const dest=p.visit_destination||'lab';
         const destParts2=dest.split(',').map(s=>s.trim()).filter(Boolean);
         const destIconStr=destParts2.map(d=>destIcon[d]||'\ud83c\udfe5').join('');
         const alertHtml=nursingQueueAlertBadges(flagsMap[p.id]||{});
-        return '<tr class="'+(unpaid?'pay-unpaid':'')+'" style="cursor:pointer" onclick="selectVitalsFromQueue(\''+p.id+'\',\''+nm+'\')">'+
-          '<td style="font-family:DM Mono,monospace;font-size:.72rem;color:var(--teal)">'+(p.mrn||p.lab_no||'\u2014')+'</td>'+
-          '<td style="font-weight:600">'+(p.name||[p.first_name,p.last_name].filter(Boolean).join(' ')||'\u2014')+'</td>'+
+        return '<tr class="'+(unpaid?'pay-unpaid':'')+'" style="cursor:pointer" onclick="selectVitalsFromQueue(\''+p.id+'\',\''+escAttr(rawName)+'\')">'+
+          '<td style="font-family:DM Mono,monospace;font-size:.72rem;color:var(--teal)">'+escapeHtml(p.mrn||p.lab_no||'\u2014')+'</td>'+
+          '<td style="font-weight:600">'+escapeHtml(rawName)+'</td>'+
           '<td>'+(p.age||'?')+(p.age_unit||'y')+' / '+(p.sex||'')+'</td>'+
           '<td>'+wardBadge+'</td>'+
           '<td><span style="font-size:.72rem">'+destIconStr+' '+dest+'</span></td>'+
@@ -14959,7 +14974,7 @@ async function loadNursingQueue() {
           '<td>'+visitStatusBadge(p)+'</td>'+
           '<td>'+(alertHtml||'<span style="font-size:.7rem;color:var(--slate)">\u2014</span>')+'</td>'+
           '<td><div class="acts">'+
-            '<button class="btn btn-p btn-xs" onclick="selectVitalsFromQueue(\''+p.id+'\',\''+nm+'\');event.stopPropagation()">\ud83d\udcc8 Vitals</button>'+
+            '<button class="btn btn-p btn-xs" onclick="selectVitalsFromQueue(\''+p.id+'\',\''+escAttr(rawName)+'\');event.stopPropagation()">\ud83d\udcc8 Vitals</button>'+
             '<button class="btn btn-s btn-xs" onclick="goPage(\x27fluid-chart\x27);event.stopPropagation()">\ud83d\udca7 Fluid</button>'+
           '</div></td></tr>';
       }).join('')+'</tbody></table></div>';
