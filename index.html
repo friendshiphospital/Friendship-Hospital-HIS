@@ -8113,7 +8113,7 @@ function exportStatsPDF(){
   const {title,headers,rows}=_statsExport;
   const {from,to}=statsDateRange();
   const table = rows.length
-    ? '<table><thead><tr>'+headers.map(h=>'<th>'+h+'</th>').join('')+'</tr></thead><tbody>'+rows.map(r=>'<tr>'+r.map(c=>'<td>'+(c??'—')+'</td>').join('')+'</tr>').join('')+'</tbody></table>'
+    ? '<table><thead><tr>'+headers.map(h=>'<th>'+escapeHtml(h)+'</th>').join('')+'</tr></thead><tbody>'+rows.map(r=>'<tr>'+r.map(c=>'<td>'+escapeHtml(c??'—')+'</td>').join('')+'</tr>').join('')+'</tbody></table>'
     : '<div style="color:#64748b;font-size:.85rem">No records in this date range.</div>';
   const html = printHeader('Statistics — '+title)
     + '<div style="margin:10px 0;font-size:9.5pt;color:#475569">Period: '+fmtDate(from)+' – '+fmtDate(to)+'</div>'
@@ -9149,7 +9149,7 @@ async function openDischarge(admId) {
     if(!adm.discharge_planning_started_at){ try{ await sb.from('admissions').update({discharge_planning_started_at:new Date().toISOString()}).eq('id',admId); }catch(e){} }
     const pt=adm.patients, los=Math.ceil((new Date()-new Date(adm.admission_date))/(864e5));
     const banner=document.getElementById('disch-pt-banner');
-    if(banner) banner.innerHTML='<div class="pb-i"><div class="pb-l">Patient</div><div class="pb-v">'+(pt?.name||fullName(pt))+'</div></div><div class="pb-i"><div class="pb-l">Adm No</div><div class="pb-v">'+adm.admission_no+'</div></div><div class="pb-i"><div class="pb-l">Admitted</div><div class="pb-v">'+fmtDT(adm.admission_date)+'</div></div><div class="pb-i"><div class="pb-l">LOS</div><div class="pb-v">'+los+' day'+(los!==1?'s':'')+'</div></div>';
+    if(banner) banner.innerHTML='<div class="pb-i"><div class="pb-l">Patient</div><div class="pb-v">'+escapeHtml(pt?.name||fullName(pt))+'</div></div><div class="pb-i"><div class="pb-l">Adm No</div><div class="pb-v">'+escapeHtml(adm.admission_no)+'</div></div><div class="pb-i"><div class="pb-l">Admitted</div><div class="pb-v">'+fmtDT(adm.admission_date)+'</div></div><div class="pb-i"><div class="pb-l">LOS</div><div class="pb-v">'+los+' day'+(los!==1?'s':'')+'</div></div>';
     const labRows=document.getElementById('disch-lab-rows');
     if(labRows&&pt?.id) {
       const [hem,chem]=await Promise.all([sb.from('results_hematology').select('hgb,wbc').eq('patient_id',pt.id).order('created_at',{ascending:false}).limit(1),sb.from('results_chemistry').select('creat,fbs').eq('patient_id',pt.id).order('created_at',{ascending:false}).limit(1)]);
@@ -9201,7 +9201,7 @@ async function saveDischarge(source) {
   } catch(e){ toast(e.message,'err'); }
 }
 function printDischargeSummary() {
-  const g=id=>document.getElementById(id)?.value||'—';
+  const g=id=>escapeHtml(document.getElementById(id)?.value||'—');
   const bn=document.getElementById('disch-pt-banner');
   const html=printHeader('Discharge Summary')+'<div style="margin-bottom:14px">'+(bn?.innerHTML||'')+'</div><table><tr><th colspan="2">Discharge Information</th></tr><tr><td style="width:40%"><b>Discharge Date</b></td><td>'+g('disch-date')+'</td></tr><tr><td><b>Discharge Type</b></td><td>'+g('disch-type')+'</td></tr><tr><td><b>Final Diagnosis</b></td><td>'+g('disch-dx')+'</td></tr><tr><td><b>Condition at Discharge</b></td><td>'+g('disch-condition')+'</td></tr><tr><td><b>Procedures Performed</b></td><td>'+g('disch-procedures')+'</td></tr></table><h3 style="margin:14px 0 6px;font-size:10pt;color:#1e3a5a">Discharge Instructions</h3><p style="white-space:pre-wrap">'+g('disch-instructions')+'</p><div style="margin-top:8px"><b>Follow-up:</b> '+g('disch-fu-date')+' with '+g('disch-fu-with')+'</div><div style="margin-top:30px;display:flex;justify-content:space-between"><div style="width:200px;text-align:center;border-top:1px solid #000;padding-top:6px">Prepared by<br>'+g('disch-prepared-by')+'</div></div>'+printFooter();
   openPrintWin(html,'Discharge Summary');
@@ -9436,7 +9436,7 @@ async function openPreop(admId,patId) {
   try {
     const {data:pt}=await sb.from('patients').select('name,first_name,last_name,mrn,age,age_unit,sex').eq('id',patId).single();
     const banner=document.getElementById('preop-pt-banner');
-    if(banner) banner.innerHTML='<div class="pb-i"><div class="pb-l">Patient</div><div class="pb-v">'+(pt?.name||fullName(pt))+'</div></div><div class="pb-i"><div class="pb-l">MRN</div><div class="pb-v">'+(pt?.mrn||'—')+'</div></div>';
+    if(banner) banner.innerHTML='<div class="pb-i"><div class="pb-l">Patient</div><div class="pb-v">'+escapeHtml(pt?.name||fullName(pt))+'</div></div><div class="pb-i"><div class="pb-l">MRN</div><div class="pb-v">'+escapeHtml(pt?.mrn||'—')+'</div></div>';
     document.getElementById('preop-ov').dataset.admId=admId; document.getElementById('preop-ov').dataset.patId=patId;
   } catch(e){}
 }
@@ -9451,7 +9451,7 @@ async function savePreop(cleared) {
   } catch(e){ toast(e.message,'err'); }
 }
 function printPreopForm() {
-  const g=id=>document.getElementById(id)?.value||'—';
+  const g=id=>escapeHtml(document.getElementById(id)?.value||'—');
   const bn=document.getElementById('preop-pt-banner');
   const html=printHeader('Pre-Operative Assessment Form')+'<div style="margin-bottom:12px">'+(bn?.innerHTML||'')+'</div><table><tr><th colspan="2">Pre-Operative Assessment</th></tr><tr><td style="width:35%"><b>Allergies</b></td><td>'+g('preop-allergies')+'</td></tr><tr><td><b>Current Medications</b></td><td>'+g('preop-meds')+'</td></tr><tr><td><b>Past Medical History</b></td><td>'+g('preop-pmh')+'</td></tr><tr><td><b>Airway Assessment</b></td><td>'+g('preop-airway')+'</td></tr><tr><td><b>Anaesthesia Plan</b></td><td>'+g('preop-anaes-plan')+'</td></tr><tr><td><b>Fasting Instructions</b></td><td>'+g('preop-fasting')+'</td></tr><tr><td><b>Consent</b></td><td>'+(document.getElementById('preop-consent-chk')?.checked?'✅ Confirmed':'❌ Not confirmed')+'</td></tr></table><div style="margin-top:20px;display:flex;gap:40px"><div style="width:200px;text-align:center;border-top:1px solid #000;padding-top:6px">Surgeon Signature</div><div style="width:200px;text-align:center;border-top:1px solid #000;padding-top:6px">Anaesthetist Signature</div></div>'+printFooter();
   openPrintWin(html,'Pre-Op Form');
@@ -9464,7 +9464,7 @@ async function printOTSchedule() {
     if(!data?.length){ toast('No operations scheduled','warn'); return; }
     const sc=b=>b?'☑':'☐';
     const html=printHeader('Operating Theatre Schedule')+'<div style="text-align:center;margin-bottom:14px"><div style="font-size:12pt;font-weight:700;color:#1e3a5a">OPERATING THEATRE SCHEDULE</div><div style="font-size:10pt;color:#64748b">Date: '+fmtDate(d)+'</div></div><table><thead><tr style="background:#0e1928;color:#fff"><th style="padding:7px 10px;font-size:8.5pt;text-align:left">Time</th><th style="padding:7px 10px;font-size:8.5pt;text-align:left">Patient</th><th style="padding:7px 10px;font-size:8.5pt;text-align:left">Operation</th><th style="padding:7px 10px;font-size:8.5pt;text-align:left">Surgeon</th><th style="padding:7px 10px;font-size:8.5pt;text-align:left">Anaesthetist</th><th style="padding:7px 10px;font-size:8.5pt;text-align:center">Room</th><th style="padding:7px 10px;font-size:8.5pt;text-align:center">ASA</th><th style="padding:7px 10px;font-size:8.5pt;text-align:center">Status</th></tr></thead><tbody>'+
-      data.map((b,i)=>'<tr style="background:'+(i%2===0?'#fff':'#f8fafd')+';border-bottom:1px solid #e2e8f3"><td style="padding:8px 10px;font-weight:700;font-family:monospace">'+(b.start_time||'—')+'</td><td style="padding:8px 10px"><div style="font-weight:700">'+(b.patients?.name||fullName(b.patients)||'—')+'</div><div style="font-size:8pt;color:#64748b">'+(b.patients?.mrn||'')+'</div></td><td style="padding:8px 10px"><div style="font-weight:600">'+(b.operation_name||'—')+'</div><div style="font-size:8pt;color:#64748b">'+(b.operation_type||'')+' · '+(b.anaesthesia_type||'')+'</div></td><td style="padding:8px 10px;font-size:9pt">'+(b.surgeon||'—')+'<br><span style="font-size:8pt;color:#64748b">Asst: '+(b.assistant_surgeon||'—')+'</span></td><td style="padding:8px 10px;font-size:9pt">'+(b.anaesthetist||'—')+'</td><td style="padding:8px 10px;text-align:center;font-weight:700;color:#0b7a75">'+(b.theatre_room||'—')+'</td><td style="padding:8px 10px;text-align:center;font-weight:700">'+(b.asa_class||'—')+'</td><td style="padding:8px 10px;text-align:center"><span style="padding:2px 8px;border-radius:12px;font-size:8pt;font-weight:700;background:'+(b.status==='Completed'?'#dcfce7':b.status==='In Progress'?'#fef3c7':'#dbeafe')+';color:'+(b.status==='Completed'?'#166534':b.status==='In Progress'?'#92400e':'#1d4ed8')+'">'+(b.status||'—')+'</span></td></tr>'+
+      data.map((b,i)=>'<tr style="background:'+(i%2===0?'#fff':'#f8fafd')+';border-bottom:1px solid #e2e8f3"><td style="padding:8px 10px;font-weight:700;font-family:monospace">'+(b.start_time||'—')+'</td><td style="padding:8px 10px"><div style="font-weight:700">'+escapeHtml(b.patients?.name||fullName(b.patients)||'—')+'</div><div style="font-size:8pt;color:#64748b">'+escapeHtml(b.patients?.mrn||'')+'</div></td><td style="padding:8px 10px"><div style="font-weight:600">'+escapeHtml(b.operation_name||'—')+'</div><div style="font-size:8pt;color:#64748b">'+(b.operation_type||'')+' · '+(b.anaesthesia_type||'')+'</div></td><td style="padding:8px 10px;font-size:9pt">'+escapeHtml(b.surgeon||'—')+'<br><span style="font-size:8pt;color:#64748b">Asst: '+escapeHtml(b.assistant_surgeon||'—')+'</span></td><td style="padding:8px 10px;font-size:9pt">'+escapeHtml(b.anaesthetist||'—')+'</td><td style="padding:8px 10px;text-align:center;font-weight:700;color:#0b7a75">'+(b.theatre_room||'—')+'</td><td style="padding:8px 10px;text-align:center;font-weight:700">'+(b.asa_class||'—')+'</td><td style="padding:8px 10px;text-align:center"><span style="padding:2px 8px;border-radius:12px;font-size:8pt;font-weight:700;background:'+(b.status==='Completed'?'#dcfce7':b.status==='In Progress'?'#fef3c7':'#dbeafe')+';color:'+(b.status==='Completed'?'#166534':b.status==='In Progress'?'#92400e':'#1d4ed8')+'">'+(b.status||'—')+'</span></td></tr>'+
         '<tr style="background:#f8f9fa"><td colspan="8" style="padding:4px 10px 10px"><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;font-size:8pt">'+
         sc(b.pre_op_checklist?.consent)+' Consent &nbsp;'+sc(b.pre_op_checklist?.fast)+' Fasting &nbsp;'+sc(b.pre_op_checklist?.xm)+' Blood X-match &nbsp;'+sc(b.pre_op_checklist?.labs)+' Pre-op labs &nbsp;'+sc(b.pre_op_checklist?.allergy)+' Allergies &nbsp;'+sc(b.pre_op_checklist?.iv)+' IV access &nbsp;'+sc(b.pre_op_checklist?.site)+' Site marked &nbsp;'+sc(b.pre_op_checklist?.anaes)+' Anaes. assessment'+
         '</div></td></tr>').join('')+
@@ -9730,9 +9730,9 @@ async function printFluidChart() {
     const {data}=await sb.from('vital_signs').select('*').eq('patient_id',_fcPt.id).gte('recorded_at',d+'T00:00:00').lte('recorded_at',d+'T23:59:59').order('recorded_at');
     let totIv=0,totUrine=0,totNet=0;
     const rows=(data||[]).map(v=>{ totIv+=v.fluid_in_ml||0; totUrine+=v.urine_output_ml||0; totNet+=v.net_balance||0;
-      return '<tr style="border-bottom:1px solid #e2e8f3"><td style="padding:4px 8px;font-family:monospace;font-size:9pt">'+new Date(v.recorded_at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})+'</td><td style="padding:4px 8px;text-align:center">'+(v.fluid_in_ml||'—')+'</td><td style="padding:4px 8px;text-align:center">—</td><td style="padding:4px 8px;text-align:center">—</td><td style="padding:4px 8px;text-align:center">'+(v.urine_output_ml||'—')+'</td><td style="padding:4px 8px;text-align:center">—</td><td style="padding:4px 8px;text-align:center">—</td><td style="padding:4px 8px;text-align:center">—</td><td style="padding:4px 8px;text-align:center;font-weight:700;color:'+((v.net_balance||0)>0?'#1d4ed8':'#b91c1c')+'">'+(((v.net_balance||0)>0?'+':'')+String(v.net_balance||0))+'</td><td style="padding:4px 8px;font-size:8pt">'+(v.recorded_by_name||'—')+'</td></tr>';
+      return '<tr style="border-bottom:1px solid #e2e8f3"><td style="padding:4px 8px;font-family:monospace;font-size:9pt">'+new Date(v.recorded_at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})+'</td><td style="padding:4px 8px;text-align:center">'+(v.fluid_in_ml||'—')+'</td><td style="padding:4px 8px;text-align:center">—</td><td style="padding:4px 8px;text-align:center">—</td><td style="padding:4px 8px;text-align:center">'+(v.urine_output_ml||'—')+'</td><td style="padding:4px 8px;text-align:center">—</td><td style="padding:4px 8px;text-align:center">—</td><td style="padding:4px 8px;text-align:center">—</td><td style="padding:4px 8px;text-align:center;font-weight:700;color:'+((v.net_balance||0)>0?'#1d4ed8':'#b91c1c')+'">'+(((v.net_balance||0)>0?'+':'')+String(v.net_balance||0))+'</td><td style="padding:4px 8px;font-size:8pt">'+escapeHtml(v.recorded_by_name||'—')+'</td></tr>';
     }).join('');
-    const html=printHeader('Nursing Fluid Balance Chart')+'<div style="display:flex;gap:20px;margin-bottom:12px;font-size:9.5pt"><div><strong>Patient:</strong> '+(_fcPt.name||'—')+'</div><div><strong>MRN:</strong> '+(_fcPt.mrn||'—')+'</div><div><strong>Ward/Bed:</strong> '+(_fcPt.ward||'—')+'/'+(_fcPt.bed||'—')+'</div><div><strong>Date:</strong> '+fmtDate(d)+'</div></div>'+
+    const html=printHeader('Nursing Fluid Balance Chart')+'<div style="display:flex;gap:20px;margin-bottom:12px;font-size:9.5pt"><div><strong>Patient:</strong> '+escapeHtml(_fcPt.name||'—')+'</div><div><strong>MRN:</strong> '+escapeHtml(_fcPt.mrn||'—')+'</div><div><strong>Ward/Bed:</strong> '+escapeHtml(_fcPt.ward||'—')+'/'+escapeHtml(_fcPt.bed||'—')+'</div><div><strong>Date:</strong> '+fmtDate(d)+'</div></div>'+
       '<table style="width:100%;border-collapse:collapse"><thead><tr style="background:#0e1928;color:#fff"><th style="padding:6px 8px;font-size:8pt;width:70px">Time</th><th colspan="3" style="padding:6px 8px;font-size:8pt;border-left:2px solid rgba(255,255,255,.2)">INTAKE (mL)</th><th colspan="4" style="padding:6px 8px;font-size:8pt;border-left:2px solid rgba(255,255,255,.2)">OUTPUT (mL)</th><th style="padding:6px 8px;font-size:8pt;border-left:2px solid rgba(255,255,255,.2)">NET</th><th style="padding:6px 8px;font-size:8pt">Nurse</th></tr><tr style="background:#1e3a5a;color:rgba(255,255,255,.7)"><th></th><th style="padding:4px 8px;font-size:7.5pt;border-left:2px solid rgba(255,255,255,.1)">IV</th><th style="padding:4px 8px;font-size:7.5pt">PO</th><th style="padding:4px 8px;font-size:7.5pt">Other</th><th style="padding:4px 8px;font-size:7.5pt;border-left:2px solid rgba(255,255,255,.1)">Urine</th><th style="padding:4px 8px;font-size:7.5pt">Drain</th><th style="padding:4px 8px;font-size:7.5pt">NG</th><th style="padding:4px 8px;font-size:7.5pt">Other</th><th style="padding:4px 8px;font-size:7.5pt">Net</th><th></th></tr></thead><tbody>'+
       (rows||'<tr><td colspan="10" style="padding:20px;text-align:center">No entries</td></tr>')+'</tbody><tfoot><tr style="background:#f1f5f9;font-weight:800;border-top:2px solid var(--border)"><td style="padding:6px 8px">24hr TOTAL</td><td style="padding:6px 8px;text-align:center;color:#1d4ed8">'+totIv+'</td><td colspan="2" style="padding:6px 8px;text-align:center">—</td><td style="padding:6px 8px;text-align:center;color:#0b7a75">'+totUrine+'</td><td colspan="3" style="padding:6px 8px;text-align:center">—</td><td style="padding:6px 8px;text-align:center;font-size:10pt;color:'+(totNet>0?'#1d4ed8':'#b91c1c')+'">'+((totNet>0?'+':'')+totNet)+'</td><td></td></tr></tfoot></table>'+
       '<div style="margin-top:20px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px"><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Nurse Signature</div><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Charge Nurse</div><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Doctor Review</div></div>'+printFooter();
@@ -10574,13 +10574,13 @@ async function saveConsultation() {
 
 function printConsultation() {
   if(!_docPt){toast('Select patient first','err');return;}
-  const g=id=>document.getElementById(id)?.value||'';
+  const g=id=>escapeHtml(document.getElementById(id)?.value||'');
   const sec=(label,val,col)=>val?'<div style="margin-bottom:10px"><div style="font-size:8pt;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:'+(col||'#64748b')+';margin-bottom:2px">'+label+'</div><div style="font-size:9.5pt;line-height:1.6;white-space:pre-wrap">'+val+'</div></div>':'';
   const html=printHeader('Medical Consultation Note')+
     '<div style="background:#f1f5f9;padding:10px 14px;border-radius:8px;margin-bottom:14px;display:grid;grid-template-columns:repeat(4,1fr);gap:8px;font-size:9pt">'+
-    '<div><div style="font-size:8pt;color:#64748b">Patient</div><div style="font-weight:700">'+(_docPt.name||fullName(_docPt))+'</div></div>'+
-    '<div><div style="font-size:8pt;color:#64748b">MRN</div><div style="font-weight:700;color:#0b7a75">'+(_docPt.mrn||'—')+'</div></div>'+
-    '<div><div style="font-size:8pt;color:#64748b">Age/Sex</div><div>'+(_docPt.age||'?')+(_docPt.age_unit||'y')+' / '+(_docPt.sex||'')+'</div></div>'+
+    '<div><div style="font-size:8pt;color:#64748b">Patient</div><div style="font-weight:700">'+escapeHtml(_docPt.name||fullName(_docPt))+'</div></div>'+
+    '<div><div style="font-size:8pt;color:#64748b">MRN</div><div style="font-weight:700;color:#0b7a75">'+escapeHtml(_docPt.mrn||'—')+'</div></div>'+
+    '<div><div style="font-size:8pt;color:#64748b">Age/Sex</div><div>'+escapeHtml((_docPt.age||'?')+(_docPt.age_unit||'y'))+' / '+escapeHtml(_docPt.sex||'')+'</div></div>'+
     '<div><div style="font-size:8pt;color:#64748b">Date</div><div>'+g('doc-date')+'</div></div>'+
     '<div><div style="font-size:8pt;color:#64748b">Doctor</div><div>'+g('doc-doctor-name')+'</div></div>'+
     '<div><div style="font-size:8pt;color:#64748b">Visit Type</div><div>'+g('doc-visit-type')+'</div></div>'+
@@ -10831,18 +10831,18 @@ function printPrescription() {
   if(rows) rows.querySelectorAll('[id^="rx-drug-"]').forEach(inp=>{
     const i=inp.id.split('-')[2]; if(inp.value) rx.push({drug:inp.value,dose:document.getElementById('rx-dose-'+i)?.value||'',route:document.getElementById('rx-route-'+i)?.value||'',freq:document.getElementById('rx-freq-'+i)?.value||'',dur:document.getElementById('rx-dur-'+i)?.value||'',inst:document.getElementById('rx-inst-'+i)?.value||''});
   });
-  const dn=document.getElementById('doc-doctor-name')?.value||'Doctor';
+  const dn=escapeHtml(document.getElementById('doc-doctor-name')?.value||'Doctor');
   const html=printHeader('Prescription')+
     '<div style="background:#f1f5f9;padding:10px 14px;border-radius:8px;margin-bottom:14px;display:grid;grid-template-columns:repeat(4,1fr);gap:8px;font-size:9pt">'+
-    '<div><div style="font-size:8pt;color:#64748b">Patient</div><div style="font-weight:700">'+(_docPt.name||fullName(_docPt))+'</div></div>'+
-    '<div><div style="font-size:8pt;color:#64748b">MRN</div><div>'+(_docPt.mrn||'—')+'</div></div>'+
-    '<div><div style="font-size:8pt;color:#64748b">Age/Sex</div><div>'+(_docPt.age||'?')+(_docPt.age_unit||'y')+' / '+(_docPt.sex||'')+'</div></div>'+
+    '<div><div style="font-size:8pt;color:#64748b">Patient</div><div style="font-weight:700">'+escapeHtml(_docPt.name||fullName(_docPt))+'</div></div>'+
+    '<div><div style="font-size:8pt;color:#64748b">MRN</div><div>'+escapeHtml(_docPt.mrn||'—')+'</div></div>'+
+    '<div><div style="font-size:8pt;color:#64748b">Age/Sex</div><div>'+escapeHtml((_docPt.age||'?')+(_docPt.age_unit||'y'))+' / '+escapeHtml(_docPt.sex||'')+'</div></div>'+
     '<div><div style="font-size:8pt;color:#64748b">Date</div><div>'+today()+'</div></div></div>'+
     '<table style="width:100%;border-collapse:collapse"><thead><tr style="background:#1e3a5a;color:#fff">'+
     '<th style="padding:6px 8px;font-size:8.5pt;text-align:left">Drug</th><th style="padding:6px 8px;text-align:left">Dose</th><th style="padding:6px 8px;text-align:left">Route</th><th style="padding:6px 8px;text-align:left">Frequency</th><th style="padding:6px 8px;text-align:left">Duration</th><th style="padding:6px 8px;text-align:left">Instructions</th></tr></thead>'+
     '<tbody>'+rx.map((r,n)=>'<tr style="border-bottom:1px solid #f1f5fb;background:'+(n%2?'#f8fafd':'#fff')+'">'+
-      '<td style="padding:6px 8px;font-size:9.5pt;font-weight:700">'+r.drug+'</td><td style="padding:6px 8px;font-size:9pt">'+r.dose+'</td><td style="padding:6px 8px;font-size:9pt">'+r.route+'</td><td style="padding:6px 8px;font-size:9pt">'+r.freq+'</td><td style="padding:6px 8px;font-size:9pt">'+r.dur+'</td><td style="padding:6px 8px;font-size:9pt;color:#64748b">'+r.inst+'</td></tr>').join('')+'</tbody></table>'+
-    (document.getElementById('rx-notes')?.value?'<div style="background:#f8fafd;border-left:3px solid var(--teal);padding:10px 12px;margin-top:12px;font-size:9pt">'+document.getElementById('rx-notes').value+'</div>':'')+
+      '<td style="padding:6px 8px;font-size:9.5pt;font-weight:700">'+escapeHtml(r.drug)+'</td><td style="padding:6px 8px;font-size:9pt">'+escapeHtml(r.dose)+'</td><td style="padding:6px 8px;font-size:9pt">'+escapeHtml(r.route)+'</td><td style="padding:6px 8px;font-size:9pt">'+escapeHtml(r.freq)+'</td><td style="padding:6px 8px;font-size:9pt">'+escapeHtml(r.dur)+'</td><td style="padding:6px 8px;font-size:9pt;color:#64748b">'+escapeHtml(r.inst)+'</td></tr>').join('')+'</tbody></table>'+
+    (document.getElementById('rx-notes')?.value?'<div style="background:#f8fafd;border-left:3px solid var(--teal);padding:10px 12px;margin-top:12px;font-size:9pt">'+escapeHtml(document.getElementById('rx-notes').value)+'</div>':'')+
     '<div style="margin-top:30px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;text-align:center">'+
     '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">'+dn+'<br>Prescribing Doctor</div>'+
     '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">Signature &amp; Stamp</div>'+
@@ -10858,13 +10858,13 @@ function calcSlTo() {
 function printSickLeave() {
   if(!_docPt){toast('Select patient','err');return;}
   if(!isPaymentCleared(_docPt)){ toast('🚫 Sick Leave Certificate blocked — payment has not been received for '+(_docPt.name||fullName(_docPt))+'. Please contact billing.','err'); return; }
-  const g=id=>document.getElementById(id)?.value||'';
-  const dn=document.getElementById('doc-doctor-name')?.value||'Doctor';
+  const g=id=>escapeHtml(document.getElementById(id)?.value||'');
+  const dn=escapeHtml(document.getElementById('doc-doctor-name')?.value||'Doctor');
   const html=printHeader('Medical Certificate / Sick Leave')+
     '<div style="text-align:center;margin:16px 0"><div style="font-size:13pt;font-weight:800;color:#0b7a75;text-transform:uppercase;letter-spacing:1px">Medical Certificate</div></div>'+
     '<table style="width:100%;border-collapse:collapse;margin-bottom:14px">'+
-    '<tr style="border-bottom:1px solid #e2e8f0"><td style="width:40%;padding:8px;font-size:9pt;font-weight:600;color:#64748b">Patient Name</td><td style="padding:8px;font-size:10pt;font-weight:700">'+(_docPt.name||fullName(_docPt))+'</td></tr>'+
-    '<tr style="border-bottom:1px solid #e2e8f0;background:#f8fafd"><td style="padding:8px;font-size:9pt;font-weight:600;color:#64748b">MRN</td><td style="padding:8px;font-size:9pt">'+(_docPt.mrn||'—')+'</td></tr>'+
+    '<tr style="border-bottom:1px solid #e2e8f0"><td style="width:40%;padding:8px;font-size:9pt;font-weight:600;color:#64748b">Patient Name</td><td style="padding:8px;font-size:10pt;font-weight:700">'+escapeHtml(_docPt.name||fullName(_docPt))+'</td></tr>'+
+    '<tr style="border-bottom:1px solid #e2e8f0;background:#f8fafd"><td style="padding:8px;font-size:9pt;font-weight:600;color:#64748b">MRN</td><td style="padding:8px;font-size:9pt">'+escapeHtml(_docPt.mrn||'—')+'</td></tr>'+
     '<tr style="border-bottom:1px solid #e2e8f0"><td style="padding:8px;font-size:9pt;font-weight:600;color:#64748b">Diagnosis</td><td style="padding:8px;font-size:9.5pt;font-weight:700">'+g('sl-dx')+'</td></tr>'+
     '<tr style="border-bottom:1px solid #e2e8f0;background:#f8fafd"><td style="padding:8px;font-size:9pt;font-weight:600;color:#64748b">Rest Period</td><td style="padding:8px;font-size:9.5pt;font-weight:700">'+g('sl-days')+' days</td></tr>'+
     '<tr style="border-bottom:1px solid #e2e8f0"><td style="padding:8px;font-size:9pt;font-weight:600;color:#64748b">From / To</td><td style="padding:8px;font-size:9pt">'+g('sl-from')+' \u2014 '+g('sl-to')+'</td></tr>'+
@@ -10878,17 +10878,17 @@ function printSickLeave() {
 function printReferral() {
   if(!_docPt){toast('Select patient','err');return;}
   if(!isPaymentCleared(_docPt)){ toast('🚫 Referral Letter blocked — payment has not been received for '+(_docPt.name||fullName(_docPt))+'. Please contact billing.','err'); return; }
-  const g=id=>document.getElementById(id)?.value||'';
-  const dn=document.getElementById('doc-doctor-name')?.value||'Doctor';
-  const dx=document.getElementById('doc-dx1')?.value||'—';
+  const g=id=>escapeHtml(document.getElementById(id)?.value||'');
+  const dn=escapeHtml(document.getElementById('doc-doctor-name')?.value||'Doctor');
+  const dx=escapeHtml(document.getElementById('doc-dx1')?.value||'—');
   const html=printHeader('Referral Letter')+
     '<p style="font-size:9.5pt;margin:0 0 4px">Date: <strong>'+today()+'</strong></p>'+
     '<p style="font-size:9.5pt;margin:0 0 12px">To: <strong>Dr. '+g('ref-to')+'</strong><br>'+(g('ref-facility')?g('ref-facility'):'')+'</p>'+
     '<p style="font-size:9.5pt">Dear Dr. '+g('ref-to')+',</p>'+
     '<p style="font-size:9.5pt">I would be grateful if you could kindly see and manage the following patient:</p>'+
     '<table style="width:100%;border-collapse:collapse;margin-bottom:14px">'+
-    '<tr style="border-bottom:1px solid #e2e8f0"><td style="width:35%;padding:7px 8px;font-size:9pt;font-weight:600;color:#64748b">Patient</td><td style="padding:7px 8px;font-size:9.5pt;font-weight:700">'+(_docPt.name||fullName(_docPt))+'</td></tr>'+
-    '<tr style="border-bottom:1px solid #e2e8f0;background:#f8fafd"><td style="padding:7px 8px;font-size:9pt;font-weight:600;color:#64748b">Age/Sex</td><td style="padding:7px 8px;font-size:9pt">'+(_docPt.age||'?')+(_docPt.age_unit||'y')+' / '+(_docPt.sex||'')+'</td></tr>'+
+    '<tr style="border-bottom:1px solid #e2e8f0"><td style="width:35%;padding:7px 8px;font-size:9pt;font-weight:600;color:#64748b">Patient</td><td style="padding:7px 8px;font-size:9.5pt;font-weight:700">'+escapeHtml(_docPt.name||fullName(_docPt))+'</td></tr>'+
+    '<tr style="border-bottom:1px solid #e2e8f0;background:#f8fafd"><td style="padding:7px 8px;font-size:9pt;font-weight:600;color:#64748b">Age/Sex</td><td style="padding:7px 8px;font-size:9pt">'+escapeHtml((_docPt.age||'?')+(_docPt.age_unit||'y'))+' / '+escapeHtml(_docPt.sex||'')+'</td></tr>'+
     '<tr style="border-bottom:1px solid #e2e8f0"><td style="padding:7px 8px;font-size:9pt;font-weight:600;color:#64748b">Diagnosis</td><td style="padding:7px 8px;font-size:9.5pt;font-weight:700">'+dx+'</td></tr>'+
     '<tr><td style="padding:7px 8px;font-size:9pt;font-weight:600;color:#64748b">Urgency</td><td style="padding:7px 8px;font-size:9.5pt;font-weight:700;color:'+(g('ref-urgency')==='Emergency'?'#b91c1c':g('ref-urgency')==='Urgent'?'#f59e0b':'#166534')+'">'+g('ref-urgency')+'</td></tr></table>'+
     '<div style="margin-bottom:12px"><div style="font-size:8pt;font-weight:700;text-transform:uppercase;color:#64748b;margin-bottom:4px">Reason for Referral</div><div style="font-size:9.5pt;line-height:1.6;white-space:pre-wrap">'+g('ref-reason')+'</div></div>'+
@@ -11378,14 +11378,14 @@ function printWorklist() {
     [...rows].filter(r=>r.style.display!=='none').map((r,i)=>{
       const c=r.querySelectorAll('td');
       return '<tr style="background:'+(i%2?'#f8fafd':'#fff')+';border-bottom:1px solid #e2e8f0">'+
-        '<td style="padding:4px 8px;font-size:9pt;font-family:monospace">'+(c[0]?.textContent||'')+'</td>'+
-        '<td style="padding:4px 8px;font-size:9pt;font-weight:600">'+(c[2]?.textContent||'')+'</td>'+
-        '<td style="padding:4px 8px;font-size:8.5pt">'+(c[3]?.textContent||'')+'</td>'+
-        '<td style="padding:4px 8px;font-size:8pt">'+(c[4]?.textContent||'')+'</td>'+
-        '<td style="padding:4px 8px;font-size:8.5pt">'+(c[6]?.textContent||'')+'</td>'+
-        '<td style="padding:4px 8px;font-size:8.5pt">'+(c[8]?.textContent||'')+'</td>'+
-        '<td style="padding:4px 8px;font-size:8pt">'+(c[9]?.textContent||'')+'</td>'+
-        '<td style="padding:4px 8px;font-size:8pt">'+(c[10]?.textContent||'')+'</td></tr>';
+        '<td style="padding:4px 8px;font-size:9pt;font-family:monospace">'+escapeHtml(c[0]?.textContent||'')+'</td>'+
+        '<td style="padding:4px 8px;font-size:9pt;font-weight:600">'+escapeHtml(c[2]?.textContent||'')+'</td>'+
+        '<td style="padding:4px 8px;font-size:8.5pt">'+escapeHtml(c[3]?.textContent||'')+'</td>'+
+        '<td style="padding:4px 8px;font-size:8pt">'+escapeHtml(c[4]?.textContent||'')+'</td>'+
+        '<td style="padding:4px 8px;font-size:8.5pt">'+escapeHtml(c[6]?.textContent||'')+'</td>'+
+        '<td style="padding:4px 8px;font-size:8.5pt">'+escapeHtml(c[8]?.textContent||'')+'</td>'+
+        '<td style="padding:4px 8px;font-size:8pt">'+escapeHtml(c[9]?.textContent||'')+'</td>'+
+        '<td style="padding:4px 8px;font-size:8pt">'+escapeHtml(c[10]?.textContent||'')+'</td></tr>';
     }).join('')+'</tbody></table>'+
     '<div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:20px;text-align:center">'+
     '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">Lab Supervisor</div>'+
@@ -11521,11 +11521,11 @@ async function printCriticalNotice(id) {
       '<div style="font-size:13pt;font-weight:900;color:#b91c1c">\ud83d\udea8 CRITICAL VALUE</div></div>'+
       '<table style="width:100%;border-collapse:collapse;margin-bottom:14px">'+
       '<tr style="border-bottom:1px solid #e2e8f0"><td style="width:40%;padding:8px;font-size:9pt;font-weight:600;color:#64748b">Patient</td><td style="padding:8px;font-size:10pt;font-weight:700">'+escapeHtml(pt.name||'—')+'</td></tr>'+
-      '<tr style="border-bottom:1px solid #e2e8f0;background:#f8fafd"><td style="padding:8px;font-size:9pt;font-weight:600;color:#64748b">MRN</td><td style="padding:8px">'+(pt.mrn||pt.lab_no||'—')+'</td></tr>'+
+      '<tr style="border-bottom:1px solid #e2e8f0;background:#f8fafd"><td style="padding:8px;font-size:9pt;font-weight:600;color:#64748b">MRN</td><td style="padding:8px">'+escapeHtml(pt.mrn||pt.lab_no||'—')+'</td></tr>'+
       '<tr style="border-bottom:1px solid #e2e8f0"><td style="padding:8px;font-size:9pt;font-weight:600;color:#64748b">Critical Value</td><td style="padding:8px;font-size:13pt;font-weight:900;color:#b91c1c">'+(c.parameter||'—')+': '+(c.value||'—')+' '+(c.unit||'')+'</td></tr>'+
       '<tr style="border-bottom:1px solid #e2e8f0;background:#f8fafd"><td style="padding:8px;font-size:9pt;font-weight:600;color:#64748b">Reference</td><td style="padding:8px;font-size:9pt">'+(c.reference||'—')+'</td></tr>'+
       '<tr style="border-bottom:1px solid #e2e8f0"><td style="padding:8px;font-size:9pt;font-weight:600;color:#64748b">Time Reported</td><td style="padding:8px;font-size:9pt">'+fmtDT(c.created_at)+'</td></tr>'+
-      '<tr><td style="padding:8px;font-size:9pt;font-weight:600;color:#64748b">Clinician Notified</td><td style="padding:8px;font-size:9pt;font-weight:700">'+(c.clinician_notified||'—')+'</td></tr></table>'+
+      '<tr><td style="padding:8px;font-size:9pt;font-weight:600;color:#64748b">Clinician Notified</td><td style="padding:8px;font-size:9pt;font-weight:700">'+escapeHtml(c.clinician_notified||'—')+'</td></tr></table>'+
       '<div style="margin-top:20px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;text-align:center">'+
       '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">Lab Technologist</div>'+
       '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">Clinician (Read-back)</div>'+
@@ -13088,7 +13088,7 @@ async function printPcrReport() {
     const rows = targets.map(t=>{
       const det=t.result==='Detected',nd=t.result==='Not Detected';
       return '<tr style="border-bottom:1px solid #f1f5fb">'+
-        '<td style="padding:5px 8px;font-size:9pt;font-weight:600">'+(t.target||'—')+'</td>'+
+        '<td style="padding:5px 8px;font-size:9pt;font-weight:600">'+escapeHtml(t.target||'—')+'</td>'+
         '<td style="padding:5px 8px;font-weight:700;color:'+(det?'#b91c1c':nd?'#166534':'#92400e')+'">'+(t.result||'—')+'</td>'+
         '<td style="padding:5px 8px;font-size:9pt">'+(t.ct_value!=null?t.ct_value+'':'—')+'</td>'+
         '<td style="padding:5px 8px;font-size:8pt;color:#64748b">'+(det?'Positive — Pathogen detected':nd?'Negative — Not detected':'Equivocal / Indeterminate')+'</td></tr>';
@@ -13175,25 +13175,25 @@ async function printHistoReport() {
     ]);
     if(!pt||!r){ toast('No results found','err'); return; }
     const ihcRows = Object.entries(r.ihc_results||{}).map(([m,v])=>
-      '<tr style="border-bottom:1px solid #f1f5fb"><td style="padding:4px 8px;font-size:9pt;font-weight:600">'+m+'</td>'+
-      '<td style="padding:4px 8px;font-weight:700;color:'+(v.result==='Positive'?'#b91c1c':v.result==='Negative'?'#166534':'#92400e')+'">'+v.result+'</td>'+
-      '<td style="padding:4px 8px;font-size:9pt">'+v.intensity+'</td>'+
+      '<tr style="border-bottom:1px solid #f1f5fb"><td style="padding:4px 8px;font-size:9pt;font-weight:600">'+escapeHtml(m)+'</td>'+
+      '<td style="padding:4px 8px;font-weight:700;color:'+(v.result==='Positive'?'#b91c1c':v.result==='Negative'?'#166534':'#92400e')+'">'+escapeHtml(v.result)+'</td>'+
+      '<td style="padding:4px 8px;font-size:9pt">'+escapeHtml(v.intensity)+'</td>'+
       '<td style="padding:4px 8px;font-size:9pt">'+(v.percent?v.percent+'%':'—')+'</td></tr>'
     ).join('');
     const sec=(label,val)=>val?'<div style="margin-bottom:12px"><div style="font-size:8pt;text-transform:uppercase;letter-spacing:.5px;color:#64748b;font-weight:700;margin-bottom:4px">'+label+'</div><div style="font-size:9.5pt;line-height:1.6;white-space:pre-wrap">'+val+'</div></div>':'';
     const html=printHeader('Histopathology Report')+
       '<div style="background:#f1f5f9;padding:10px 14px;border-radius:8px;margin-bottom:14px;display:grid;grid-template-columns:repeat(4,1fr);gap:8px">'+
-      '<div><div style="font-size:8pt;color:#64748b">Patient</div><div style="font-weight:700">'+(pt.name||fullName(pt))+'</div></div>'+
-      '<div><div style="font-size:8pt;color:#64748b">MRN</div><div>'+(pt.mrn||'—')+'</div></div>'+
-      '<div><div style="font-size:8pt;color:#64748b">Specimen Site</div><div style="font-weight:600">'+(r.specimen_site||'—')+'</div></div>'+
+      '<div><div style="font-size:8pt;color:#64748b">Patient</div><div style="font-weight:700">'+escapeHtml(pt.name||fullName(pt))+'</div></div>'+
+      '<div><div style="font-size:8pt;color:#64748b">MRN</div><div>'+escapeHtml(pt.mrn||'—')+'</div></div>'+
+      '<div><div style="font-size:8pt;color:#64748b">Specimen Site</div><div style="font-weight:600">'+escapeHtml(r.specimen_site||'—')+'</div></div>'+
       '<div><div style="font-size:8pt;color:#64748b">Date</div><div>'+fmtDate(r.analysis_date||r.created_at)+'</div></div></div>'+
-      sec('Gross Description',r.gross_description)+
-      sec('Microscopic Description',r.microscopic)+
+      sec('Gross Description',escapeHtml(r.gross_description||'')||null)+
+      sec('Microscopic Description',escapeHtml(r.microscopic||'')||null)+
       '<div style="background:#fff9f0;border-left:4px solid #b45309;padding:12px 14px;border-radius:0 8px 8px 0;margin-bottom:12px">'+
       '<div style="font-size:8pt;color:#b45309;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Diagnosis</div>'+
-      '<div style="font-size:10.5pt;font-weight:700;line-height:1.5">'+(r.diagnosis||'—')+'</div>'+
-      (r.grade?'<div style="margin-top:4px;font-size:9pt">Grade: '+r.grade+'</div>':'')+
-      (r.stage?'<div style="font-size:9pt">Stage: '+r.stage+'</div>':'')+'</div>'+
+      '<div style="font-size:10.5pt;font-weight:700;line-height:1.5">'+escapeHtml(r.diagnosis||'—')+'</div>'+
+      (r.grade?'<div style="margin-top:4px;font-size:9pt">Grade: '+escapeHtml(r.grade)+'</div>':'')+
+      (r.stage?'<div style="font-size:9pt">Stage: '+escapeHtml(r.stage)+'</div>':'')+'</div>'+
       (ihcRows?'<div style="margin-bottom:12px"><div style="font-size:8pt;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#64748b;margin-bottom:6px">IHC / Special Stains</div>'+
       '<table style="width:100%;border-collapse:collapse"><thead><tr style="background:#1e3a5a;color:#fff">'+
       '<th style="padding:5px 8px;font-size:8.5pt;text-align:left">Marker</th><th style="padding:5px 8px;font-size:8.5pt;text-align:left">Result</th>'+
@@ -13254,15 +13254,15 @@ async function printCytoReport() {
     const sec=(label,val,col)=>val?'<div style="margin-bottom:12px"><div style="font-size:8pt;text-transform:uppercase;letter-spacing:.5px;color:'+(col||'#64748b')+';font-weight:700;margin-bottom:4px">'+label+'</div><div style="font-size:9.5pt;line-height:1.6">'+val+'</div></div>':'';
     const html=printHeader('Cytology Report')+
       '<div style="background:#f1f5f9;padding:10px 14px;border-radius:8px;margin-bottom:14px;display:grid;grid-template-columns:repeat(4,1fr);gap:8px">'+
-      '<div><div style="font-size:8pt;color:#64748b">Patient</div><div style="font-weight:700">'+(pt.name||fullName(pt))+'</div></div>'+
-      '<div><div style="font-size:8pt;color:#64748b">MRN</div><div>'+(pt.mrn||'—')+'</div></div>'+
+      '<div><div style="font-size:8pt;color:#64748b">Patient</div><div style="font-weight:700">'+escapeHtml(pt.name||fullName(pt))+'</div></div>'+
+      '<div><div style="font-size:8pt;color:#64748b">MRN</div><div>'+escapeHtml(pt.mrn||'—')+'</div></div>'+
       '<div><div style="font-size:8pt;color:#64748b">Specimen</div><div style="font-weight:600">'+(r.specimen_type||'—')+'</div></div>'+
       '<div><div style="font-size:8pt;color:#64748b">Date</div><div>'+fmtDate(r.analysis_date||r.created_at)+'</div></div></div>'+
       '<div style="background:#e0f2fe;border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:9pt"><strong>Adequacy:</strong> '+(r.adequacy||'—')+'</div>'+
-      sec('Cytological Findings',r.findings)+
+      sec('Cytological Findings',escapeHtml(r.findings||''))+
       '<div style="background:#fff9f0;border-left:4px solid #0369a1;padding:12px 14px;border-radius:0 8px 8px 0;margin-bottom:12px">'+
       '<div style="font-size:8pt;color:#0369a1;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Cytological Diagnosis</div>'+
-      '<div style="font-size:10.5pt;font-weight:700;line-height:1.5">'+(r.diagnosis||'—')+'</div></div>'+
+      '<div style="font-size:10.5pt;font-weight:700;line-height:1.5">'+escapeHtml(r.diagnosis||'—')+'</div></div>'+
       (r.recommendation?'<div style="background:#f0fdf4;border-left:4px solid #166534;padding:10px 12px;border-radius:0 8px 8px 0;margin-bottom:10px;font-size:9.5pt"><strong>Recommendation:</strong> '+r.recommendation+'</div>':'')+
       (r.notes?'<div style="background:#f8fafd;border-left:3px solid #0369a1;padding:10px 12px;font-size:9pt"><strong>Comments:</strong> '+escapeHtml(r.notes)+'</div>':'')+
       '<div style="margin-top:16px;display:grid;grid-template-columns:1fr 1fr;gap:20px">'+
@@ -13971,17 +13971,17 @@ function buildDischargeSummaryHtml(pt,d){
   const L = key => t(key) || key;
   const sec = (label,val) => val ? `<div style="margin-bottom:12px">
     <div style="font-size:8pt;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#64748b;margin-bottom:3px">${label}</div>
-    <div style="font-size:9.5pt;line-height:1.6">${val}</div></div>` : '';
+    <div style="font-size:9.5pt;line-height:1.6">${escapeHtml(val)}</div></div>` : '';
   const body = printHeader(L('dis_title'))+
     '<div style="background:#f1f5f9;border-radius:8px;padding:10px 14px;margin-bottom:14px;display:grid;grid-template-columns:repeat(4,1fr);gap:8px">'+
-    `<div><div style="font-size:8pt;color:#64748b">${L('dis_patient')}</div><div style="font-weight:700">${pt.name||fullName(pt)}</div></div>`+
-    `<div><div style="font-size:8pt;color:#64748b">${L('dis_mrn')}</div><div style="font-weight:700;color:var(--teal)">${pt.mrn||'—'}</div></div>`+
+    `<div><div style="font-size:8pt;color:#64748b">${L('dis_patient')}</div><div style="font-weight:700">${escapeHtml(pt.name||fullName(pt))}</div></div>`+
+    `<div><div style="font-size:8pt;color:#64748b">${L('dis_mrn')}</div><div style="font-weight:700;color:var(--teal)">${escapeHtml(pt.mrn||'—')}</div></div>`+
     `<div><div style="font-size:8pt;color:#64748b">${L('dis_admission_date')}</div><div>${fmtDate(d.admission_date||pt.created_at)}</div></div>`+
     `<div><div style="font-size:8pt;color:#64748b">${L('dis_discharge_date')}</div><div>${fmtDate(d.discharge_date||d.created_at)}</div></div>`+
-    `<div><div style="font-size:8pt;color:#64748b">${L('dis_consultant')}</div><div>${d.doctor_name||d.prepared_by||'—'}</div></div>`+
-    `<div><div style="font-size:8pt;color:#64748b">${L('dis_ward')}</div><div>${pt.ward||'—'}</div></div>`+
+    `<div><div style="font-size:8pt;color:#64748b">${L('dis_consultant')}</div><div>${escapeHtml(d.doctor_name||d.prepared_by||'—')}</div></div>`+
+    `<div><div style="font-size:8pt;color:#64748b">${L('dis_ward')}</div><div>${escapeHtml(pt.ward||'—')}</div></div>`+
     `<div><div style="font-size:8pt;color:#64748b">${L('dis_los')}</div><div>${d.los_days||'—'} ${L('dis_los_days')}</div></div>`+
-    `<div><div style="font-size:8pt;color:#64748b">${L('dis_discharge_type')}</div><div>${d.discharge_type||'—'}</div></div></div>`+
+    `<div><div style="font-size:8pt;color:#64748b">${L('dis_discharge_type')}</div><div>${escapeHtml(d.discharge_type||'—')}</div></div></div>`+
     sec(L('dis_reason'), d.reason_for_admission||d.chief_complaint)+
     sec(L('dis_clinical'), d.clinical_findings)+
     sec(L('dis_diagnosis'), d.primary_diagnosis||d.diagnosis||d.final_diagnosis)+
@@ -14636,19 +14636,19 @@ async function saveMAR() {
 }
 
 async function printMAR() {
-  const ptName = document.getElementById('vs-pt-name')?.textContent||'—';
+  const ptName = escapeHtml(document.getElementById('vs-pt-name')?.textContent||'—');
   const rows = [...document.querySelectorAll('[id^="mar-row-"]')].map(row=>{
     const i=row.id.replace('mar-row-','');
     const status=document.getElementById('mar-status-'+i)?.value||'';
     const color={Given:'#166534',Refused:'#92400e',Omit:'#b91c1c',Hold:'#92400e',PRN:'#1d4ed8',Due:'#374151'}[status]||'';
-    return `<tr><td>${document.getElementById('mar-drug-'+i)?.value||'—'}</td>`+
-      `<td>${document.getElementById('mar-dose-'+i)?.value||'—'}</td>`+
-      `<td>${document.getElementById('mar-route-'+i)?.value||'—'}</td>`+
-      `<td>${document.getElementById('mar-freq-'+i)?.value||'—'}</td>`+
-      `<td>${document.getElementById('mar-time-'+i)?.value||'—'}</td>`+
-      `<td style="font-weight:700;color:${color}">${status}</td>`+
-      `<td>${document.getElementById('mar-reason-'+i)?.value||'—'}</td>`+
-      `<td>${document.getElementById('mar-by-'+i)?.value||'—'}</td></tr>`;
+    return `<tr><td>${escapeHtml(document.getElementById('mar-drug-'+i)?.value||'—')}</td>`+
+      `<td>${escapeHtml(document.getElementById('mar-dose-'+i)?.value||'—')}</td>`+
+      `<td>${escapeHtml(document.getElementById('mar-route-'+i)?.value||'—')}</td>`+
+      `<td>${escapeHtml(document.getElementById('mar-freq-'+i)?.value||'—')}</td>`+
+      `<td>${escapeHtml(document.getElementById('mar-time-'+i)?.value||'—')}</td>`+
+      `<td style="font-weight:700;color:${color}">${escapeHtml(status)}</td>`+
+      `<td>${escapeHtml(document.getElementById('mar-reason-'+i)?.value||'—')}</td>`+
+      `<td>${escapeHtml(document.getElementById('mar-by-'+i)?.value||'—')}</td></tr>`;
   }).join('');
   const html=printHeader('Medication Administration Record (MAR)')+
     `<div style="background:#f1f5f9;padding:10px;border-radius:8px;margin-bottom:12px;font-size:9pt"><strong>Patient:</strong> ${ptName} &nbsp;|&nbsp; <strong>Date:</strong> ${today()}</div>`+
@@ -14828,7 +14828,7 @@ async function loadRejectionLog() {
 }
 
 async function printHandoverNote() {
-  const g=id=>document.getElementById(id)?.value||'';
+  const g=id=>escapeHtml(document.getElementById(id)?.value||'');
   const html=printHeader('Ward Handover Note')+
     `<div style="background:#f1f5f9;padding:10px 14px;border-radius:8px;margin-bottom:12px;display:grid;grid-template-columns:repeat(4,1fr);gap:8px;font-size:9pt">
       <div><div style="font-size:8pt;color:#64748b">Ward</div><div style="font-weight:700">${g('ho-ward')}</div></div>
@@ -14855,7 +14855,7 @@ async function printHandoverNote() {
 
 async function printVitalsSheet() {
   const ptId=document.getElementById('vs-pt-id')?.value;
-  const ptName=document.getElementById('vs-pt-name')?.textContent||'—';
+  const ptName=escapeHtml(document.getElementById('vs-pt-name')?.textContent||'—');
   if(!ptId||!sb){toast('Load a patient first','err');return;}
   try{
     const {data}=await sb.from('vital_signs').select('*').eq('patient_id',ptId)
@@ -14870,7 +14870,7 @@ async function printVitalsSheet() {
       <td style="padding:4px 8px;font-size:9pt">${v.spo2||'—'}</td>
       <td style="padding:4px 8px;font-size:9pt;font-weight:700;color:${(v.news2_score||0)>=7?'#b91c1c':(v.news2_score||0)>=5?'#f59e0b':'#166534'}">${v.news2_score??'—'}</td>
       <td style="padding:4px 8px;font-size:9pt">${v.pain_score??'—'}</td>
-      <td style="padding:4px 8px;font-size:9pt">${v.recorded_by||'—'}</td>
+      <td style="padding:4px 8px;font-size:9pt">${escapeHtml(v.recorded_by||'—')}</td>
     </tr>`).join('');
     const html=printHeader('Vital Signs Chart')+
       `<div style="background:#f1f5f9;padding:10px;border-radius:8px;margin-bottom:12px;font-size:9pt"><strong>Patient:</strong> ${ptName}</div>`+
@@ -16293,10 +16293,10 @@ async function printPriceList() {
   let currentCat='';
   const rows=prices.map((p,n)=>{
     let catRow='';
-    if(p.category!==currentCat){currentCat=p.category;catRow='<tr style="background:#e2e8f0"><td colspan="4" style="padding:5px 8px;font-weight:700;font-size:8pt;text-transform:uppercase;letter-spacing:.4px">'+p.category+'</td></tr>';}
+    if(p.category!==currentCat){currentCat=p.category;catRow='<tr style="background:#e2e8f0"><td colspan="4" style="padding:5px 8px;font-weight:700;font-size:8pt;text-transform:uppercase;letter-spacing:.4px">'+escapeHtml(p.category)+'</td></tr>';}
     return catRow+'<tr style="border-bottom:1px solid #f1f5fb;background:'+(n%2?'#f8fafd':'#fff')+'">'+
-      '<td style="padding:4px 8px;font-size:8.5pt;font-family:monospace">'+(p.code||'—')+'</td>'+
-      '<td style="padding:4px 8px;font-size:9pt">'+(p.name||'—')+'</td>'+
+      '<td style="padding:4px 8px;font-size:8.5pt;font-family:monospace">'+escapeHtml(p.code||'—')+'</td>'+
+      '<td style="padding:4px 8px;font-size:9pt">'+escapeHtml(p.name||'—')+'</td>'+
       '<td style="padding:4px 8px;font-size:8.5pt">'+(p.category||'—')+'</td>'+
       '<td style="padding:4px 8px;font-size:9pt;text-align:right;font-weight:700">'+((p.price||0).toLocaleString('en-US',{minimumFractionDigits:2}))+' '+(p.currency||'SDG')+'</td></tr>';
   }).join('');
@@ -17525,22 +17525,22 @@ async function printRadReport() {
     const html=printHeader('Radiology Report')+
       '<div style="background:#f1f5f9;padding:10px 14px;border-radius:8px;margin-bottom:14px;display:grid;grid-template-columns:repeat(4,1fr);gap:8px;font-size:9pt">'+
       '<div><div style="font-size:8pt;color:#64748b">Patient</div><div style="font-weight:700">'+escapeHtml(pt.name||'—')+'</div></div>'+
-      '<div><div style="font-size:8pt;color:#64748b">MRN</div><div style="font-family:DM Mono,monospace">'+(pt.mrn||pt.lab_no||'—')+'</div></div>'+
-      '<div><div style="font-size:8pt;color:#64748b">Age/Sex</div><div>'+(pt.age||'?')+(pt.age_unit||'y')+' / '+(pt.sex||'')+'</div></div>'+
-      '<div><div style="font-size:8pt;color:#64748b">Ward</div><div>'+(pt.ward||'OPD')+'</div></div>'+
-      '<div><div style="font-size:8pt;color:#64748b">Study</div><div style="font-weight:700;color:#6366f1">'+(r.imaging_type||'—')+'</div></div>'+
+      '<div><div style="font-size:8pt;color:#64748b">MRN</div><div style="font-family:DM Mono,monospace">'+escapeHtml(pt.mrn||pt.lab_no||'—')+'</div></div>'+
+      '<div><div style="font-size:8pt;color:#64748b">Age/Sex</div><div>'+escapeHtml((pt.age||'?')+(pt.age_unit||'y')+' / '+(pt.sex||''))+'</div></div>'+
+      '<div><div style="font-size:8pt;color:#64748b">Ward</div><div>'+escapeHtml(pt.ward||'OPD')+'</div></div>'+
+      '<div><div style="font-size:8pt;color:#64748b">Study</div><div style="font-weight:700;color:#6366f1">'+escapeHtml(r.imaging_type||'—')+'</div></div>'+
       '<div><div style="font-size:8pt;color:#64748b">Date</div><div>'+fmtDate(r.reported_at||r.created_at)+'</div></div>'+
-      '<div><div style="font-size:8pt;color:#64748b">Urgency</div><div>'+( r.urgency||'Routine')+'</div></div>'+
-      '<div><div style="font-size:8pt;color:#64748b">Requesting Dr</div><div>'+(r.requesting_doctor||pt.doctor||'—')+'</div></div></div>'+
+      '<div><div style="font-size:8pt;color:#64748b">Urgency</div><div>'+escapeHtml(r.urgency||'Routine')+'</div></div>'+
+      '<div><div style="font-size:8pt;color:#64748b">Requesting Dr</div><div>'+escapeHtml(r.requesting_doctor||pt.doctor||'—')+'</div></div></div>'+
       (r.is_critical?'<div style="background:#fee2e2;border:2px solid #fca5a5;border-radius:8px;padding:10px 14px;margin-bottom:14px;color:#b91c1c;font-weight:700">\ud83d\udea8 CRITICAL FINDING — Immediate clinical notification required</div>':'')+
-      (r.technique?sec('Technique / Protocol',r.technique):'')+
-      sec('Findings',findings||'—')+
+      (r.technique?sec('Technique / Protocol',escapeHtml(r.technique)):'')+
+      sec('Findings',escapeHtml(findings||'—'))+
       '<div style="background:#fff9f0;border-left:4px solid #f59e0b;padding:12px 14px;border-radius:0 8px 8px 0;margin-bottom:12px">'+
       '<div style="font-size:8pt;color:#b45309;font-weight:700;text-transform:uppercase;margin-bottom:4px">Impression / Conclusion</div>'+
-      '<div style="font-size:10.5pt;font-weight:700;line-height:1.5">'+(impression||'—')+'</div></div>'+
-      (r.recommendation?sec('Recommendation',r.recommendation):'')+
+      '<div style="font-size:10.5pt;font-weight:700;line-height:1.5">'+escapeHtml(impression||'—')+'</div></div>'+
+      (r.recommendation?sec('Recommendation',escapeHtml(r.recommendation)):'')+
       '<div style="margin-top:20px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;text-align:center">'+
-      '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">'+(r.radiologist||g('rad-rep-radiologist')||'Radiologist')+'<br>Radiologist</div>'+
+      '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">'+escapeHtml(r.radiologist||g('rad-rep-radiologist')||'Radiologist')+'<br>Radiologist</div>'+
       '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">Signature &amp; Stamp</div>'+
       '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">Date: '+fmtDate(r.reported_at||today())+'</div></div>'+printFooter();
     openPrintWin(html,'Radiology Report');
@@ -20398,12 +20398,12 @@ async function printAllReports() {
           if(meta && meta[col]) {
             const m=meta[col]; const v=parseFloat(val); const flag=!isNaN(v)?(v>m.hi?'▲ H':v<m.lo?'▼ L':''):'';
             const fc=flag==='▲ H'?'#b91c1c':flag==='▼ L'?'#1d4ed8':'inherit';
-            rows += '<tr style="border-bottom:1px solid #f1f5fb"><td style="padding:3px 8px;font-size:9pt">'+m.label+'</td><td style="padding:3px 8px;font-weight:'+(flag?700:400)+';color:'+fc+'">'+val+'</td><td style="padding:3px 8px;font-size:8pt;color:#64748b">'+m.unit+'</td><td style="padding:3px 8px;font-size:8pt;color:#64748b">'+m.lo+'–'+m.hi+'</td><td style="padding:3px 8px;color:'+fc+';font-weight:700;font-size:8.5pt">'+flag+'</td></tr>';
+            rows += '<tr style="border-bottom:1px solid #f1f5fb"><td style="padding:3px 8px;font-size:9pt">'+escapeHtml(m.label)+'</td><td style="padding:3px 8px;font-weight:'+(flag?700:400)+';color:'+fc+'">'+escapeHtml(val)+'</td><td style="padding:3px 8px;font-size:8pt;color:#64748b">'+escapeHtml(m.unit)+'</td><td style="padding:3px 8px;font-size:8pt;color:#64748b">'+m.lo+'–'+m.hi+'</td><td style="padding:3px 8px;color:'+fc+';font-weight:700;font-size:8.5pt">'+flag+'</td></tr>';
           } else {
             const label=document.getElementById(id)?.closest('tr')?.querySelector('.tn')?.textContent
               || document.getElementById(id)?.closest('.fg')?.querySelector('.fl')?.textContent
               || col;
-            rows += '<tr style="border-bottom:1px solid #f1f5fb"><td style="padding:3px 8px;font-size:9pt">'+label+'</td><td style="padding:3px 8px;font-weight:600;color:#166534" colspan="4">'+val+'</td></tr>';
+            rows += '<tr style="border-bottom:1px solid #f1f5fb"><td style="padding:3px 8px;font-size:9pt">'+escapeHtml(label)+'</td><td style="padding:3px 8px;font-weight:600;color:#166534" colspan="4">'+escapeHtml(val)+'</td></tr>';
             hasRange = false;
           }
         });
@@ -20416,7 +20416,7 @@ async function printAllReports() {
         (row.is_verified?' <span style="font-size:8pt;color:#166534;font-weight:700">✓ Verified</span>':' <span style="font-size:8pt;color:#b45309;font-weight:700">⚠ Not yet verified</span>')+
         (row.is_released?' <span style="font-size:8pt;color:#0b7a75;font-weight:700">📤 Released</span>':'')+
         '</div><table style="width:100%;border-collapse:collapse">'+thead+'<tbody>'+rows+'</tbody></table>'+
-        (row.notes?'<div style="font-size:8.5pt;color:#475569;margin-top:4px"><strong>Notes:</strong> '+row.notes+'</div>':'')+
+        (row.notes?'<div style="font-size:8.5pt;color:#475569;margin-top:4px"><strong>Notes:</strong> '+escapeHtml(row.notes)+'</div>':'')+
         '</div>';
     }
     if(!sections){ toast('No saved results to print yet','err'); return; }

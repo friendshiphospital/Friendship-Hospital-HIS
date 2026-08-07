@@ -12,10 +12,10 @@ function initScript(extra) {
   return `
     localStorage.setItem('sb_url','https://mock.supabase.co');
     localStorage.setItem('sb_key','mock-anon-key');
-    localStorage.setItem('cfg_phone', ${JSON.stringify(XSS_PAYLOAD)});
-    localStorage.setItem('cfg_email', ${JSON.stringify(XSS_PAYLOAD)});
-    localStorage.setItem('cfg_footer', ${JSON.stringify(XSS_PAYLOAD)});
-    localStorage.setItem('fh_label_settings', JSON.stringify({width:${JSON.stringify(XSS_PAYLOAD)}, height:29, barcodeType:'CODE128'}));
+    localStorage.setItem('cfg_phone', window.__xssPayload);
+    localStorage.setItem('cfg_email', window.__xssPayload);
+    localStorage.setItem('cfg_footer', window.__xssPayload);
+    localStorage.setItem('fh_label_settings', JSON.stringify({width:window.__xssPayload, height:29, barcodeType:'CODE128'}));
     ${CHAINABLE_MOCK_SRC}
     window.supabase = { createClient: () => ({
       auth: { signInWithPassword: async()=>({data:{user:{id:'u1'}},error:null}), getSession: async()=>({data:{session:null}}), signOut: async()=>({error:null}) },
@@ -31,6 +31,12 @@ function initScript(extra) {
 }
 
 async function login(page, baseUrl, extra) {
+  // Hand the payload to the page as a real Playwright-serialized argument
+  // (window.__xssPayload) rather than string-interpolating it into
+  // generated JS source below — avoids ever building executable code from
+  // untrusted-looking text, even though JSON.stringify() was already a
+  // correct, safe serialization for that purpose.
+  await page.addInitScript((payload) => { window.__xssPayload = payload; }, XSS_PAYLOAD);
   await page.addInitScript(initScript(extra));
   await page.goto(baseUrl + '/index.html', { waitUntil: 'load' });
   await page.waitForSelector('#auth-screen', { state: 'visible' });
@@ -47,7 +53,14 @@ async function assertPayloadIsInert(t, label, popup) {
   const imgCount = await popup.evaluate(() => document.querySelectorAll('img').length);
   const html = await popup.content();
   t.check(label + ': no live <img> element was created from the payload', imgCount === 0);
-  t.check(label + ': the payload text is still present, safely escaped (not stripped/silently dropped)', html.includes('&lt;img') || html.includes('&amp;lt;img'));
+  // popup.content() is the browser's own re-serialized DOM, not the raw
+  // string passed to document.write() -- text-node serialization only
+  // re-encodes &, <, > (the characters that are actually unsafe to leave
+  // literal in text content), so a &quot;-escaped quote written via
+  // escapeHtml() round-trips back to a literal " character here. Check
+  // for the one entity that reliably survives serialization.
+  const expectedEscaped = '&lt;img src="x" onerror="stealCookies()" /&gt;';
+  t.check(label + ': the payload text is still present, safely escaped (not stripped/silently dropped)', html.includes(expectedEscaped));
 }
 
 module.exports = async function run(context, baseUrl) {
@@ -57,7 +70,7 @@ module.exports = async function run(context, baseUrl) {
   {
     const page = await context.newPage();
     await login(page, baseUrl, `
-      if (table === 'patients') { const c = chainable({ id:'p1', name: ${JSON.stringify(XSS_PAYLOAD)}, mrn:'522', visit_no:'201', lab_no:'301', tests_requested:['CBC (Full Blood Count)'] }, []); c.select=()=>c; c.eq=()=>c; c.single=()=>Promise.resolve({data:{id:'p1', name: ${JSON.stringify(XSS_PAYLOAD)}, mrn:'522', visit_no:'201', lab_no:'301', tests_requested:['CBC (Full Blood Count)']}, error:null}); return c; }
+      if (table === 'patients') { const c = chainable({ id:'p1', name: window.__xssPayload, mrn:'522', visit_no:'201', lab_no:'301', tests_requested:['CBC (Full Blood Count)'] }, []); c.select=()=>c; c.eq=()=>c; c.single=()=>Promise.resolve({data:{id:'p1', name: window.__xssPayload, mrn:'522', visit_no:'201', lab_no:'301', tests_requested:['CBC (Full Blood Count)']}, error:null}); return c; }
       if (table === 'results_hematology') { const c = chainable({ patient_id:'p1', wbc:5, hgb:13, plt:250, created_at:new Date().toISOString() }, []); c.select=()=>c; c.eq=()=>c; c.order=()=>c; c.limit=()=>c; c.single=()=>Promise.resolve({data:{patient_id:'p1', wbc:5, hgb:13, plt:250, created_at:new Date().toISOString()}, error:null}); return c; }
     `);
     await page.evaluate(() => { document.getElementById('hem-entry-pt-id').value = 'p1'; });
@@ -97,7 +110,8 @@ module.exports = async function run(context, baseUrl) {
     ]);
     await popup.waitForLoadState();
     const html = await popup.content();
-    t.check('openSampleLabelWindow: the poisoned label width setting is escaped, not live markup', !html.includes('<img src="x"') && (html.includes('&lt;img') || html.includes('&amp;lt;img')));
+    const expectedEscapedWidth = '&lt;img src=&quot;x&quot; onerror=&quot;stealCookies()&quot; /&gt;';
+    t.check('openSampleLabelWindow: the poisoned label width setting is escaped, not live markup', !html.includes('<img src="x"') && html.includes(expectedEscapedWidth));
     await popup.close();
     await page.close();
   }
@@ -106,7 +120,7 @@ module.exports = async function run(context, baseUrl) {
   {
     const page = await context.newPage();
     await login(page, baseUrl, `
-      if (table === 'patients') return chainable(null, [{ id:'p2', name: ${JSON.stringify(XSS_PAYLOAD)}, mrn:'522', lab_no:'301', tests_requested:['CBC (Full Blood Count)'], payment_status:'paid', priority:'Routine' }]);
+      if (table === 'patients') return chainable(null, [{ id:'p2', name: window.__xssPayload, mrn:'522', lab_no:'301', tests_requested:['CBC (Full Blood Count)'], payment_status:'paid', priority:'Routine' }]);
       if (table === 'sample_records') return chainable(null, [{ patient_id:'p2', status:'Received' }]);
     `);
     await page.evaluate(() => goPage('worklist'));
@@ -123,7 +137,7 @@ module.exports = async function run(context, baseUrl) {
   {
     const page = await context.newPage();
     await login(page, baseUrl, `
-      if (table === 'patients') { const c = chainable(null, [{ id:'p3', name: ${JSON.stringify(XSS_PAYLOAD)}, mrn:'522', payment_status:'paid', visit_destination:'lab' }]); c.select=()=>c; c.or=()=>c; c.order=()=>c; c.limit=()=>c; return c; }
+      if (table === 'patients') { const c = chainable(null, [{ id:'p3', name: window.__xssPayload, mrn:'522', payment_status:'paid', visit_destination:'lab' }]); c.select=()=>c; c.or=()=>c; c.order=()=>c; c.limit=()=>c; return c; }
       if (table === 'critical_values') return chainable(null, []);
     `);
     await page.evaluate(() => goPage('nursing'));
