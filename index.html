@@ -13133,10 +13133,17 @@ async function saveHistoEntry(verify=false) {
     gross_description:g('hi-gross')||'', microscopic:g('hi-micro')||'',
     diagnosis:g('hi-diagnosis')||'', grade:g('hi-grade')||'', stage:g('hi-stage')||'',
     ihc_results, notes:g('hi-notes')||'',
-    performed_by:currentProfile?.id, is_verified:verify,
-    verified_at:verify?new Date().toISOString():null,
+    performed_by:currentProfile?.id,
     tests:{adequacy:g('hi-adequacy')||''}
   };
+  if(verify){
+    const {data:pt}=await sb.from('patients').select('tests_requested').eq('id',ptId).maybeSingle();
+    const {data:existingRow}=await sb.from('results_histopathology').select('verified_fields').eq('patient_id',ptId).maybeSingle();
+    const check=checkHistoVerificationComplete(pt?.tests_requested,payload);
+    if(!check.complete){ toast('⚠️ Cannot verify — missing: '+check.missingLabels.join(', '),'err'); return; }
+    payload.verified_fields=[...new Set([...(existingRow?.verified_fields||[]),...check.requiredFields])];
+  }
+  payload.is_verified=verify; payload.verified_at=verify?new Date().toISOString():null;
   try {
     await sb.from('results_histopathology').upsert(payload,{onConflict:'patient_id'});
     if(verify) await updateSampleStatus(ptId,'Completed');
@@ -13203,10 +13210,17 @@ async function saveCytoEntry(verify=false) {
     diagnosis:g('cy-diagnosis-text')||g('cy-diagnosis')||'',
     recommendation:g('cy-recommendation')||'',
     notes:g('cy-notes')||'', analysis_date:g('cy-date')||today(),
-    performed_by:currentProfile?.id, is_verified:verify,
-    verified_at:verify?new Date().toISOString():null,
+    performed_by:currentProfile?.id,
     tests:{background:g('cy-background')||''}
   };
+  if(verify){
+    const {data:pt}=await sb.from('patients').select('tests_requested').eq('id',ptId).maybeSingle();
+    const {data:existingRow}=await sb.from('results_cytology').select('verified_fields').eq('patient_id',ptId).maybeSingle();
+    const check=checkCytoVerificationComplete(pt?.tests_requested,payload);
+    if(!check.complete){ toast('⚠️ Cannot verify — missing: '+check.missingLabels.join(', '),'err'); return; }
+    payload.verified_fields=[...new Set([...(existingRow?.verified_fields||[]),...check.requiredFields])];
+  }
+  payload.is_verified=verify; payload.verified_at=verify?new Date().toISOString():null;
   try {
     await sb.from('results_cytology').upsert(payload,{onConflict:'patient_id'});
     if(verify) await updateSampleStatus(ptId,'Completed');
