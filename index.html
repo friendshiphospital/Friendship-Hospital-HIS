@@ -5284,10 +5284,10 @@ html[dir="rtl"] body{direction:rtl;}
         <div class="card-body">
           <div class="g2">
             <div class="fg"><label class="fl">Specimen Type</label>
-              <select class="fc" id="mi-cult-specimen"><option>Urine</option><option>Blood</option><option>Wound Swab</option><option>Sputum</option><option>HVS</option><option>Throat Swab</option><option>CSF</option><option>Stool</option></select>
+              <select class="fc" id="mi-cult-specimen"><option></option><option>Urine</option><option>Blood</option><option>Wound Swab</option><option>Sputum</option><option>HVS</option><option>Throat Swab</option><option>CSF</option><option>Stool</option></select>
             </div>
             <div class="fg"><label class="fl">Culture Result</label>
-              <select class="fc" id="mi-cult-result"><option>No Growth</option><option>Growth after 24hr</option><option>Growth after 48hr</option><option>Growth after 72hr</option><option>Contaminated</option></select>
+              <select class="fc" id="mi-cult-result"><option></option><option>No Growth</option><option>Growth after 24hr</option><option>Growth after 48hr</option><option>Growth after 72hr</option><option>Contaminated</option></select>
             </div>
           </div>
           <div class="fg"><label class="fl">Organism Identified</label>
@@ -12036,12 +12036,12 @@ async function checkAutoVerifyEligible(pageId,deptLabel,hasCrit){
 
 // ── SHARED SAVE PIPELINE: Delta Check → Auto-Verify gate → persist ─────
 async function saveResultWithSafetyChecks(opts){
-  const {table,deptLabel,pageId,ptId,payload,hasCrit,verify,successLabel}=opts;
-  // Single shared save pipeline for every department's result entry
-  // (saveHemEntry/saveChemEntry/.../saveCytoEntry all funnel through here,
-  // as does Unified Entry's saveAllUnifiedEntry) — gating here covers all
-  // of them at once, matching this codebase's existing pattern of fixing
-  // shared behaviour at the one choke point rather than each call site.
+  const {table,deptKey,deptLabel,pageId,ptId,payload,hasCrit,verify,successLabel}=opts;
+  // Single shared save pipeline for Haematology and Chemistry (the only two
+  // departments that actually route through here — Sero/Immuno/Micro/PCR/
+  // Histo/Cyto each upsert directly in their own save*Entry(), applying the
+  // same Lab Safety Phase 1 verification-scoping inline instead, see those
+  // functions) — gating here covers both departments at their one choke point.
   if(!(await guardVisitNotLocked(ptId,'Saving a lab result'))) return;
   const doFinalize=async(finalVerify,autoVerified)=>{
     payload.is_verified=finalVerify; payload.verified_at=finalVerify?new Date().toISOString():null;
@@ -12067,6 +12067,19 @@ async function saveResultWithSafetyChecks(opts){
     const gate=await checkAutoVerifyEligible(pageId,deptLabel,hasCrit);
     if(gate.eligible){ finalVerify=true; autoVerified=true; }
   }
+  // Lab Safety Phase 1 — never let Verify (manual or auto) silently stamp a
+  // column that isn't part of what's actually ordered this visit, and never
+  // allow it at all if a currently-ordered test still has no value entered.
+  if(finalVerify){
+    const {data:pt}=await sb.from('patients').select('tests_requested').eq('id',ptId).maybeSingle();
+    const check=checkVerificationComplete(deptKey,pt?.tests_requested,payload);
+    if(!check.complete){
+      toast('⚠️ Cannot verify — missing results for: '+check.missingLabels.join(', '),'err');
+      return;
+    }
+    const {data:existingRow}=await sb.from(table).select('verified_fields').eq('patient_id',ptId).maybeSingle();
+    payload.verified_fields=[...new Set([...(existingRow?.verified_fields||[]),...check.requiredFields])];
+  }
   await doFinalize(finalVerify,autoVerified);
 }
 function refreshAutoVerifyBadge(pageId,autoVerified,verified){
@@ -12084,7 +12097,7 @@ async function saveHemEntry(verify=false) {
     neut:gn('he-neut'),lymph:gn('he-lymph'),mono:gn('he-mono'),eosi:gn('he-eosi'),baso:gn('he-baso'),neut_abs:gn('he-neut-abs'),lymph_abs:gn('he-lymph-abs'),mono_abs:gn('he-mono-abs'),eosi_abs:gn('he-eosi-abs'),baso_abs:gn('he-baso-abs'),
     pt:gn('he-pt'),inr:gn('he-inr'),aptt:gn('he-aptt'),tt:gn('he-tt'),fibg:gn('he-fibg'),ddimer:gn('he-ddimer'),esr:gn('he-esr'),
     blood_group:g('he-bg')||null,rh_factor:g('he-rh')||null,film_result:g('he-film')||null,film_comment:g('he-film-comment')||null};
-  await saveResultWithSafetyChecks({table:'results_hematology',deptLabel:'Haematology',pageId:'page-hem-entry',ptId,payload,hasCrit,verify,successLabel:'CBC'});
+  await saveResultWithSafetyChecks({table:'results_hematology',deptKey:'hem',deptLabel:'Haematology',pageId:'page-hem-entry',ptId,payload,hasCrit,verify,successLabel:'CBC'});
 }
 async function saveChemEntry(verify=false) {
   if(!sb||!document.getElementById('chem-entry-pt-id')?.value){ toast('No patient loaded','err'); return; }
@@ -12097,15 +12110,47 @@ async function saveChemEntry(verify=false) {
     fbs:gn('ce-fbs'),rbs:gn('ce-rbs'),ppbs:gn('ce-ppbs'),hba1c:gn('ce-hba1c'),ins:gn('ce-ins'),cpep:gn('ce-cpep'),
     tchol:gn('ce-tchol'),ldl:gn('ce-ldl'),hdl:gn('ce-hdl'),trig:gn('ce-trig'),
     troponin_i:gn('ce-tropi'),hs_tnt:gn('ce-hstnt'),ck:gn('ce-ck'),ckmb:gn('ce-ckmb'),nt_probnp:gn('ce-ntpro'),hs_crp:gn('ce-hsCrp'),ldh:gn('ce-ldh')};
-  await saveResultWithSafetyChecks({table:'results_chemistry',deptLabel:'Chemistry',pageId:'page-chem-entry',ptId,payload,hasCrit,verify,successLabel:'Chemistry'});
+  await saveResultWithSafetyChecks({table:'results_chemistry',deptKey:'chem',deptLabel:'Chemistry',pageId:'page-chem-entry',ptId,payload,hasCrit,verify,successLabel:'Chemistry'});
+}
+// results_serology is ONE shared row per patient_id for BOTH the Serology and
+// Immunology entry pages (Lab Safety Phase 1 scope note: Immunology is folded
+// into "Serology" here since it's the same table/row) -- so the row-level
+// is_verified flag can never just reflect whichever page happened to click
+// Verify. It must reflect BOTH departments' currently-ordered tests together;
+// otherwise verifying Sero could silently flip is_verified=true on a row
+// where an ordered Immuno test is still empty (exactly the over-broad
+// whole-row verification bug this phase fixes, just across two pages sharing
+// one row instead of across visits). checkSeroRowVerification() merges the
+// existing DB row with this save's own (partial) payload before checking, so
+// the OTHER department's already-saved values are correctly seen as present.
+async function checkSeroRowVerification(ptId, payload) {
+  const [{data:pt},{data:existingRow}]=await Promise.all([
+    sb.from('patients').select('tests_requested').eq('id',ptId).maybeSingle(),
+    sb.from('results_serology').select('*').eq('patient_id',ptId).maybeSingle()
+  ]);
+  const merged={...(existingRow||{}),...payload};
+  const checkS=checkVerificationComplete('sero',pt?.tests_requested,merged);
+  const checkI=checkVerificationComplete('immuno',pt?.tests_requested,merged);
+  return {
+    complete: checkS.complete && checkI.complete,
+    missingLabels: [...checkS.missingLabels, ...checkI.missingLabels],
+    requiredFields: [...checkS.requiredFields, ...checkI.requiredFields],
+    existingVerifiedFields: existingRow?.verified_fields||[]
+  };
 }
 async function saveSeroEntry(verify=false) {
   if(!sb||!document.getElementById('sero-entry-pt-id')?.value){ toast('No patient loaded','err'); return; }
   const ptId=document.getElementById('sero-entry-pt-id').value;
   const g=id=>document.getElementById(id)?.value||null, gn=id=>{ const v=parseFloat(document.getElementById(id)?.value); return isNaN(v)?null:v; };
-  const payload={patient_id:ptId,analyzer:g('se-analyzer')||'',analysis_date:g('se-date')||today(),notes:g('se-notes')||'',specimen:g('se-specimen'),performed_by:currentProfile?.id,is_verified:verify,verified_at:verify?new Date().toISOString():null,
+  const payload={patient_id:ptId,analyzer:g('se-analyzer')||'',analysis_date:g('se-date')||today(),notes:g('se-notes')||'',specimen:g('se-specimen'),performed_by:currentProfile?.id,
     hiv:g('se-hiv'),hbsag:g('se-hbsag'),hcv:g('se-hcv'),rpr:g('se-rpr'),tpha:g('se-tpha'),hpylori:g('se-hpylori'),brucella:g('se-brucella'),widal_o:g('se-widal-o'),widal_h:g('se-widal-h'),anti_ccp:g('se-anticcp'),
     rf:gn('se-rf'),aso:gn('se-aso'),ige:gn('se-ige'),ana:g('se-ana')};
+  if(verify){
+    const check=await checkSeroRowVerification(ptId,payload);
+    if(!check.complete){ toast('⚠️ Cannot verify — missing results for: '+check.missingLabels.join(', '),'err'); return; }
+    payload.verified_fields=[...new Set([...check.existingVerifiedFields,...check.requiredFields])];
+  }
+  payload.is_verified=verify; payload.verified_at=verify?new Date().toISOString():null;
   try { await sb.from('results_serology').upsert(payload,{onConflict:'patient_id'}); if(verify) await updateSampleStatus(ptId,'Completed'); toast(verify?'✅ Serology saved & verified':'💾 Serology saved','ok'); } catch(e){ toast(e.message,'err'); }
 }
 async function saveImmunoEntry(verify=false) {
@@ -12114,9 +12159,15 @@ async function saveImmunoEntry(verify=false) {
   const g=id=>document.getElementById(id)?.value||null, gn=id=>{ const v=parseFloat(document.getElementById(id)?.value); return isNaN(v)?null:v; };
   // Shares the same results_serology table as Serology — each save only touches its own
   // columns (partial upsert), so the two sections never clobber each other's data.
-  const payload={patient_id:ptId,analyzer:g('im-analyzer')||'',analysis_date:g('im-date')||today(),notes:g('im-notes')||'',performed_by:currentProfile?.id,is_verified:verify,verified_at:verify?new Date().toISOString():null,
+  const payload={patient_id:ptId,analyzer:g('im-analyzer')||'',analysis_date:g('im-date')||today(),notes:g('im-notes')||'',performed_by:currentProfile?.id,
     tsh:gn('se-tsh'),ft3:gn('se-ft3'),ft4:gn('se-ft4'),t3:gn('se-t3'),t4:gn('se-t4'),fsh:gn('se-fsh'),lh:gn('se-lh'),estradiol:gn('se-e2'),prog:gn('se-prog'),testosterone:gn('se-testo'),prolactin:gn('se-prol'),
     psa:gn('se-psa'),afp:gn('se-afp'),cea:gn('se-cea'),ca125:gn('se-ca125'),ca199:gn('se-ca199'),vit_d:gn('se-vitd'),vit_b12:gn('se-b12'),folate:gn('se-folate'),ferritin:gn('se-ferr'),bhcg_qual:g('se-bhcg')};
+  if(verify){
+    const check=await checkSeroRowVerification(ptId,payload);
+    if(!check.complete){ toast('⚠️ Cannot verify — missing results for: '+check.missingLabels.join(', '),'err'); return; }
+    payload.verified_fields=[...new Set([...check.existingVerifiedFields,...check.requiredFields])];
+  }
+  payload.is_verified=verify; payload.verified_at=verify?new Date().toISOString():null;
   try { await sb.from('results_serology').upsert(payload,{onConflict:'patient_id'}); if(verify) await updateSampleStatus(ptId,'Completed'); toast(verify?'✅ Immunology saved & verified':'💾 Immunology saved','ok'); } catch(e){ toast(e.message,'err'); }
 }
 async function saveMicroEntry(verify=false) {
@@ -12125,11 +12176,19 @@ async function saveMicroEntry(verify=false) {
   const g=id=>document.getElementById(id)?.value||null, gn=id=>{ const v=parseFloat(document.getElementById(id)?.value); return isNaN(v)?null:v; };
   const sensFields=['amox','amp','coamox','pip','ceft','cefaz','cipro','levo','gent','amik','mero','imi','tmp','nitro','vanc','clinda','azithro','metro'];
   const sensitivity={}; sensFields.forEach(f=>{ const v=g('sen-'+f); if(v) sensitivity[f]=v; });
-  const payload={patient_id:ptId,analyzer:g('mi-analyzer')||'',analysis_date:g('mi-date')||today(),notes:g('mi-notes')||'',received_by:g('mi-by'),performed_by:currentProfile?.id,is_verified:verify,verified_at:verify?new Date().toISOString():null,
+  const payload={patient_id:ptId,analyzer:g('mi-analyzer')||'',analysis_date:g('mi-date')||today(),notes:g('mi-notes')||'',received_by:g('mi-by'),performed_by:currentProfile?.id,
     ua_color:g('mi-ua-color'),ua_appear:g('mi-ua-appear'),ua_sg:gn('mi-ua-sg'),ua_ph:gn('mi-ua-ph'),ua_protein:g('mi-ua-protein'),ua_glucose:g('mi-ua-glucose'),ua_ketones:g('mi-ua-ketones'),ua_blood:g('mi-ua-blood'),ua_bilirubin:g('mi-ua-bili'),ua_urobilinogen:g('mi-ua-ubg'),ua_nitrite:g('mi-ua-nitrite'),ua_leuk:g('mi-ua-leuk'),ua_wbc:gn('mi-ua-wbc'),ua_rbc:gn('mi-ua-rbc'),ua_epith:gn('mi-ua-epith'),ua_bacteria:g('mi-ua-bact'),ua_cast_hyal:gn('mi-ua-cast-hyal'),ua_cast_gran:g('mi-ua-cast-gran'),ua_crystals:g('mi-ua-crystals'),ua_yeast:g('mi-ua-yeast'),
     st_color:g('mi-st-color'),st_consist:g('mi-st-consist'),st_fob:g('mi-st-fob'),st_mucus:g('mi-st-mucus'),st_blood:g('mi-st-blood'),st_wbc:gn('mi-st-wbc'),st_rbc:gn('mi-st-rbc'),st_ova:g('mi-st-ova'),st_fat:g('mi-st-fat'),st_yeast:g('mi-st-yeast'),
     specimen_type:g('mi-cult-specimen'),culture_result:g('mi-cult-result'),culture_organism:g('mi-cult-organism'),culture_count:g('mi-cult-count'),culture_notes:g('mi-cult-notes'),sensitivity,
     csf_appear:g('mi-csf-appear'),csf_wbc:gn('mi-csf-wbc'),csf_rbc:gn('mi-csf-rbc'),csf_protein:gn('mi-csf-protein'),csf_glucose:gn('mi-csf-glucose'),csf_ratio:gn('mi-csf-ratio'),csf_chloride:gn('mi-csf-chloride'),csf_culture:g('mi-csf-culture')};
+  if(verify){
+    const {data:pt}=await sb.from('patients').select('tests_requested').eq('id',ptId).maybeSingle();
+    const {data:existingRow}=await sb.from('results_microbiology').select('verified_fields').eq('patient_id',ptId).maybeSingle();
+    const check=checkMicroVerificationComplete(pt?.tests_requested,payload);
+    if(!check.complete){ toast('⚠️ Cannot verify — missing results for: '+check.missingLabels.join(', '),'err'); return; }
+    payload.verified_fields=[...new Set([...(existingRow?.verified_fields||[]),...check.requiredFields])];
+  }
+  payload.is_verified=verify; payload.verified_at=verify?new Date().toISOString():null;
   try { await sb.from('results_microbiology').upsert(payload,{onConflict:'patient_id'}); if(verify) await updateSampleStatus(ptId,'Completed'); toast(verify?'✅ Microbiology saved & verified':'💾 Microbiology saved','ok'); } catch(e){ toast(e.message,'err'); }
 }
 // ── PRINT REPORTS FOR RESULT ENTRY PAGES ─────────────
@@ -12982,11 +13041,18 @@ async function savePcrEntry(verify=false) {
   const payload = {
     patient_id:ptId, platform:g('pcr-platform')||'', analyzer:g('pcr-analyzer')||'',
     analysis_date:g('pcr-date')||today(), notes:g('pcr-notes')||'',
-    performed_by:currentProfile?.id, is_verified:verify,
-    verified_at:verify?new Date().toISOString():null,
+    performed_by:currentProfile?.id,
     target:targets[0]?.target||null, result:targets[0]?.result||null,
     ct_value:targets[0]?.ct_value||null, tests:{targets}
   };
+  if(verify){
+    const {data:pt}=await sb.from('patients').select('tests_requested').eq('id',ptId).maybeSingle();
+    const {data:existingRow}=await sb.from('results_pcr').select('verified_fields').eq('patient_id',ptId).maybeSingle();
+    const check=checkPcrVerificationComplete(pt?.tests_requested,targets);
+    if(!check.complete){ toast('⚠️ Cannot verify — missing results for: '+check.missingLabels.join(', '),'err'); return; }
+    payload.verified_fields=[...new Set([...(existingRow?.verified_fields||[]),...check.requiredFields])];
+  }
+  payload.is_verified=verify; payload.verified_at=verify?new Date().toISOString():null;
   try {
     await sb.from('results_pcr').upsert(payload,{onConflict:'patient_id'});
     if(verify) await updateSampleStatus(ptId,'Completed');
@@ -13067,10 +13133,17 @@ async function saveHistoEntry(verify=false) {
     gross_description:g('hi-gross')||'', microscopic:g('hi-micro')||'',
     diagnosis:g('hi-diagnosis')||'', grade:g('hi-grade')||'', stage:g('hi-stage')||'',
     ihc_results, notes:g('hi-notes')||'',
-    performed_by:currentProfile?.id, is_verified:verify,
-    verified_at:verify?new Date().toISOString():null,
+    performed_by:currentProfile?.id,
     tests:{adequacy:g('hi-adequacy')||''}
   };
+  if(verify){
+    const {data:pt}=await sb.from('patients').select('tests_requested').eq('id',ptId).maybeSingle();
+    const {data:existingRow}=await sb.from('results_histopathology').select('verified_fields').eq('patient_id',ptId).maybeSingle();
+    const check=checkHistoVerificationComplete(pt?.tests_requested,payload);
+    if(!check.complete){ toast('⚠️ Cannot verify — missing: '+check.missingLabels.join(', '),'err'); return; }
+    payload.verified_fields=[...new Set([...(existingRow?.verified_fields||[]),...check.requiredFields])];
+  }
+  payload.is_verified=verify; payload.verified_at=verify?new Date().toISOString():null;
   try {
     await sb.from('results_histopathology').upsert(payload,{onConflict:'patient_id'});
     if(verify) await updateSampleStatus(ptId,'Completed');
@@ -13137,10 +13210,17 @@ async function saveCytoEntry(verify=false) {
     diagnosis:g('cy-diagnosis-text')||g('cy-diagnosis')||'',
     recommendation:g('cy-recommendation')||'',
     notes:g('cy-notes')||'', analysis_date:g('cy-date')||today(),
-    performed_by:currentProfile?.id, is_verified:verify,
-    verified_at:verify?new Date().toISOString():null,
+    performed_by:currentProfile?.id,
     tests:{background:g('cy-background')||''}
   };
+  if(verify){
+    const {data:pt}=await sb.from('patients').select('tests_requested').eq('id',ptId).maybeSingle();
+    const {data:existingRow}=await sb.from('results_cytology').select('verified_fields').eq('patient_id',ptId).maybeSingle();
+    const check=checkCytoVerificationComplete(pt?.tests_requested,payload);
+    if(!check.complete){ toast('⚠️ Cannot verify — missing: '+check.missingLabels.join(', '),'err'); return; }
+    payload.verified_fields=[...new Set([...(existingRow?.verified_fields||[]),...check.requiredFields])];
+  }
+  payload.is_verified=verify; payload.verified_at=verify?new Date().toISOString():null;
   try {
     await sb.from('results_cytology').upsert(payload,{onConflict:'patient_id'});
     if(verify) await updateSampleStatus(ptId,'Completed');
@@ -19826,7 +19906,28 @@ const DEPT_LOAD_MAP = {
         if(el){ el.value=result; el.dispatchEvent(new Event('change',{bubbles:true})); }
       });
     }},
-  pcr: {table:'results_pcr', fields:{platform:'pcr-platform',analyzer:'pcr-analyzer',analysis_date:'pcr-date',notes:'pcr-notes'}},
+  pcr: {table:'results_pcr', fields:{platform:'pcr-platform',analyzer:'pcr-analyzer',analysis_date:'pcr-date',notes:'pcr-notes'},
+    // tests.targets is a jsonb array of dynamically-added target rows, not
+    // flat columns -- with no restore step here, every previously-entered
+    // target/result/Ct silently vanished from the DOM on reload (found
+    // during the Lab Safety Phase 1 audit). Worse, saving again on top of
+    // that blank table would overwrite the DB with an empty targets array,
+    // permanently losing the earlier entries. Rebuild the rows from the
+    // saved data instead of leaving the table at its blank single starter row.
+    afterLoad:(data)=>{
+      const targets=data?.tests?.targets;
+      if(!targets || !targets.length || typeof addPcrTarget!=='function') return;
+      document.querySelectorAll('#pcr-targets-body tr').forEach(r=>r.remove());
+      pcrRowCount=0;
+      targets.forEach(t=>{
+        addPcrTarget();
+        const i=pcrRowCount-1;
+        const tEl=document.getElementById('pcr-target-'+i); if(tEl) tEl.value=t.target||'';
+        const rEl=document.getElementById('pcr-result-'+i); if(rEl) rEl.value=t.result||'';
+        const cEl=document.getElementById('pcr-ct-'+i); if(cEl) cEl.value=t.ct_value??'';
+        if(typeof setPcrFlag==='function') setPcrFlag(i);
+      });
+    }},
   histo: {table:'results_histopathology', fields:{specimen_site:'hi-site',analysis_date:'hi-date',gross_description:'hi-gross',microscopic:'hi-micro',diagnosis:'hi-diagnosis',grade:'hi-grade',stage:'hi-stage',notes:'hi-notes'},
     // adequacy and the IHC marker table both save nested (tests.adequacy,
     // ihc_results), not as flat columns, so the generic field mapping above
@@ -20144,6 +20245,120 @@ const RESULT_TAGS = {
     psa:'PSA (Tumour Marker)', afp:'🔹 Tumour Marker Profile (AFP+CEA+CA125+CA19.9)|AFP (Tumour Marker)', cea:'🔹 Tumour Marker Profile (AFP+CEA+CA125+CA19.9)|CEA (Tumour Marker)', ca125:'🔹 Tumour Marker Profile (AFP+CEA+CA125+CA19.9)|CA-125', ca199:'🔹 Tumour Marker Profile (AFP+CEA+CA125+CA19.9)|CA-19.9',
     vit_d:'Vitamin D', vit_b12:'Vitamin B12', folate:'Folate', ferritin:'Ferritin' }
 };
+
+// ══════════════════════════════════════════════════════════════
+// LAB SAFETY PHASE 1 — verification scoped to what was ordered THIS visit
+// ══════════════════════════════════════════════════════════════
+// Root cause (Phase 0 audit): every results_* table has ONE row-level
+// is_verified flag. Every department's save function stamped that single
+// flag across the WHOLE row on Verify -- including columns that were
+// never part of THIS visit's order (results_* is one row per patient_id;
+// a single visit commonly has more than one lab order over its course,
+// and loadExistingResults() pre-fills the entry form from whatever the
+// row already has). Verifying a newly-ordered test therefore silently
+// also re-stamped an older, never-reviewed value as freshly verified.
+//
+// verified_fields (see migration_v2.43) is the real per-column record of
+// what's actually been verified -- each check* function below only ever
+// returns/adds fields that belong to a test genuinely in tests_requested
+// right now; nothing outside that set is ever touched. is_verified stays
+// a boolean for backward compatibility with applyResultLock() and every
+// other existing consumer, but its meaning is now "every test ordered as
+// of the most recent Verify action has a value," recomputed fresh each
+// time, never a blind carry-forward from a stale prior state.
+//
+// hem/chem/sero/immuno already have exact column-to-test tagging via
+// RESULT_TAGS (reused from printAllReports()'s stray-value filtering) --
+// completeness there means every tagged column for an ordered test has a
+// value, matching how an analyzer always reports a panel's parameters
+// together. micro/pcr/histo/cyto don't share that panel shape (free-text/
+// narrative/multi-target reports), so their checks are intentionally
+// looser -- see each helper.
+function getRequiredFieldsForDept(deptKey, testsRequested) {
+  const tags = RESULT_TAGS[deptKey]; if(!tags) return [];
+  const req = new Set((testsRequested||[]).map(t=>String(t).toLowerCase().trim()));
+  if(!req.size) return []; // nothing on record as ordered -- never block (e.g. a walk-in with no formal order)
+  return Object.keys(tags).filter(col=>tags[col].split('|').some(t=>req.has(t.toLowerCase().trim())));
+}
+function fieldLabel(deptKey, col) {
+  return (RESULT_META[deptKey] && RESULT_META[deptKey][col]?.label) || col;
+}
+// hem / chem / sero / immuno — panel departments: every tagged column for
+// an ordered test must have a value before Verify is allowed to proceed.
+function checkVerificationComplete(deptKey, testsRequested, payload) {
+  const requiredFields = getRequiredFieldsForDept(deptKey, testsRequested);
+  const missing = requiredFields.filter(col => payload[col]==null || payload[col]==='');
+  return { complete: missing.length===0, missingLabels: missing.map(col=>fieldLabel(deptKey,col)), requiredFields };
+}
+// microbiology — checked per ordered PANEL (e.g. "Urinalysis (UA)"), not
+// per individual sub-field: many UA/stool/CSF sub-results are legitimately
+// method-dependent and optional, unlike a Hem/Chem analyzer panel that
+// always reports every parameter together. Complete = at least one field
+// in the ordered panel has a value.
+const MICRO_SECTION_FIELDS = {
+  'Urinalysis (UA)': ['ua_color','ua_appear','ua_sg','ua_ph','ua_protein','ua_glucose','ua_ketones','ua_blood','ua_bilirubin','ua_urobilinogen','ua_nitrite','ua_leuk','ua_wbc','ua_rbc','ua_epith','ua_bacteria','ua_cast_hyal','ua_cast_gran','ua_crystals','ua_yeast'],
+  'Stool Routine': ['st_color','st_consist','st_mucus','st_ova','st_fat','st_yeast','st_wbc','st_rbc'],
+  'Stool Occult Blood': ['st_fob'],
+  'Urine Culture & Sensitivity': ['specimen_type','culture_result','culture_organism','culture_count'],
+  'Blood Culture': ['specimen_type','culture_result','culture_organism','culture_count'],
+  'Wound Swab C/S': ['specimen_type','culture_result','culture_organism','culture_count'],
+  'Sputum C/S': ['specimen_type','culture_result','culture_organism','culture_count'],
+  'Stool Culture': ['specimen_type','culture_result','culture_organism','culture_count'],
+  'High Vaginal Swab': ['specimen_type','culture_result','culture_organism','culture_count'],
+  'Throat Swab': ['specimen_type','culture_result','culture_organism','culture_count'],
+  'CSF Analysis': ['csf_appear','csf_wbc','csf_rbc','csf_protein','csf_glucose','csf_ratio','csf_chloride'],
+  'CSF Culture': ['csf_culture'],
+};
+function checkMicroVerificationComplete(testsRequested, payload) {
+  const req = new Set((testsRequested||[]).map(t=>String(t).toLowerCase().trim()));
+  if(!req.size) return {complete:true, missingLabels:[], requiredFields:[]};
+  const orderedSections = Object.keys(MICRO_SECTION_FIELDS).filter(t=>req.has(t.toLowerCase().trim()));
+  const missingLabels=[], requiredFields=[];
+  orderedSections.forEach(sectionTest=>{
+    const fields = MICRO_SECTION_FIELDS[sectionTest];
+    const filled = fields.filter(col=>payload[col]!=null && payload[col]!=='');
+    if(!filled.length) missingLabels.push(sectionTest);
+    else requiredFields.push(...filled);
+  });
+  return {complete:missingLabels.length===0, missingLabels, requiredFields:[...new Set(requiredFields)]};
+}
+// PCR — results_pcr.tests.targets is a jsonb array of {target,result,
+// ct_value}, not fixed columns, so verified_fields holds TARGET NAMES
+// (matched against the ordered test name), not column names. Depends on
+// the tech naming the target row the same as the ordered test, e.g.
+// "COVID-19 PCR" — a stricter design (dropdown pre-populated from the
+// order) would be a larger UI change out of scope for this narrow fix.
+function checkPcrVerificationComplete(testsRequested, targets) {
+  const req = new Set((testsRequested||[]).map(t=>String(t).toLowerCase().trim()));
+  if(!req.size) return {complete:true, missingLabels:[], requiredFields:[]};
+  const orderedPcrTests = (TEST_CATALOG.pcr||[]).filter(t=>req.has(t.toLowerCase().trim()));
+  if(!orderedPcrTests.length) return {complete:true, missingLabels:[], requiredFields:[]};
+  const missingLabels = orderedPcrTests.filter(test=>{
+    const t=(targets||[]).find(x=>x.target && x.target.toLowerCase().trim()===test.toLowerCase().trim());
+    return !t || !t.result;
+  });
+  return {complete:missingLabels.length===0, missingLabels, requiredFields:orderedPcrTests.filter(t=>!missingLabels.includes(t))};
+}
+// histopathology / cytology — one narrative report per specimen, not a
+// multi-analyte panel, so "complete" just means the diagnosis/findings
+// field is filled, not per-sub-field. histo has TEST_CATALOG entries;
+// cyto does not (Phase 0 finding), so cyto falls back to the same
+// keyword-based department match departmentsMatchingTests() already uses
+// for cyto elsewhere.
+function checkHistoVerificationComplete(testsRequested, payload) {
+  const req = new Set((testsRequested||[]).map(t=>String(t).toLowerCase().trim()));
+  const ordered = req.size && (TEST_CATALOG.histo||[]).some(t=>req.has(t.toLowerCase().trim()));
+  if(!ordered) return {complete:true, missingLabels:[], requiredFields:[]};
+  const complete = !!(payload.diagnosis && String(payload.diagnosis).trim());
+  return {complete, missingLabels: complete?[]:['Diagnosis'], requiredFields: complete?['diagnosis']:[]};
+}
+function checkCytoVerificationComplete(testsRequested, payload) {
+  const reqStr = (testsRequested||[]).map(t=>String(t).toLowerCase().trim()).join(' ');
+  const ordered = reqStr && DEPT_META.cyto.keywords.some(kw=>reqStr.includes(kw));
+  if(!ordered) return {complete:true, missingLabels:[], requiredFields:[]};
+  const complete = !!((payload.diagnosis && String(payload.diagnosis).trim()) || (payload.findings && String(payload.findings).trim()));
+  return {complete, missingLabels: complete?[]:['Diagnosis / Findings'], requiredFields: complete?['diagnosis']:[]};
+}
 
 async function printAllReports() {
   if(!_uePatientId || !sb){ toast('No patient loaded','err'); return; }
