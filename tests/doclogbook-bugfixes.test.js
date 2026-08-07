@@ -70,6 +70,17 @@ module.exports = async function run(context, baseUrl) {
     const liveVal = await page.evaluate(() => document.getElementById('vs-news2-val').textContent);
     t.check('NEWS2 bar updates live from a vitals field input, not just a pain-score click', liveVal && liveVal !== '' && liveVal !== '0');
     const expected = await page.evaluate(() => calcNEWS2());
+    // This scenario's NEWS2 is >=7 (Nursing Safety Ext. Phase 2), so
+    // saveVitals() now genuinely blocks until RRT is acknowledged --
+    // go through the real acknowledge flow (matching how a nurse actually
+    // would) rather than bypassing it, so this stays a true persistence test.
+    if (expected >= 7) {
+      await page.evaluate((score) => {
+        document.getElementById('rrt-readback-val').value = String(score);
+        document.getElementById('rrt-notified-to').value = 'Dr Test';
+        submitRrtAck();
+      }, expected);
+    }
     await page.evaluate(() => saveVitals());
     await page.waitForTimeout(150);
     const insert = await page.evaluate(() => window.__mock.vitalsInsert);

@@ -251,6 +251,8 @@ html[dir="rtl"] body{direction:rtl;}
 .sft-dot{width:8px;height:8px;border-radius:50%;background:#4ade80;box-shadow:0 0 0 0 rgba(74,222,128,.6);animation:sftpulse 1.8s infinite;}
 #shift-bar.closed-state .sft-dot{background:#f87171;animation:none;}
 @keyframes sftpulse{0%{box-shadow:0 0 0 0 rgba(74,222,128,.55)}70%{box-shadow:0 0 0 7px rgba(74,222,128,0)}100%{box-shadow:0 0 0 0 rgba(74,222,128,0)}}
+@keyframes news2pulse{0%{box-shadow:0 0 0 0 rgba(220,38,38,.6)}70%{box-shadow:0 0 0 10px rgba(220,38,38,0)}100%{box-shadow:0 0 0 0 rgba(220,38,38,0)}}
+.news2-pulse{animation:news2pulse 1.5s infinite}
 .sft-meta{display:flex;gap:18px;flex-wrap:wrap;flex:1}
 .sft-i .sft-l{font-size:.6rem;text-transform:uppercase;letter-spacing:.4px;color:rgba(255,255,255,.6)}
 .sft-i .sft-v{font-size:.82rem;font-weight:700;margin-top:1px}
@@ -1126,11 +1128,29 @@ html[dir="rtl"] body{direction:rtl;}
             </div>
             <div id="vs-balance-disp" style="margin-top:8px;padding:8px 10px;border-radius:7px;background:#f1f5f9;font-size:.78rem;font-weight:700;text-align:center">Net Balance: 0 mL</div>
           </div>
+          <!-- Turning Clock (Nursing Safety Ext. Phase 3) — timestamp-anchored
+               to the last logged repositioning, never a client-side countdown;
+               overdue is recalculated from elapsed real time on every render. -->
+          <div style="background:#f5f3ff;border-radius:8px;padding:10px 12px;margin-bottom:12px">
+            <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:#6d28d9;margin-bottom:8px">🔄 Turning Clock (every 2 hours)</div>
+            <div id="turning-status-disp" style="margin-bottom:8px"><span style="color:var(--slate);font-size:.78rem">No repositioning logged yet</span></div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+              <button class="btn btn-s btn-sm" onclick="logTurningPosition('Left')">⬅ Left</button>
+              <button class="btn btn-s btn-sm" onclick="logTurningPosition('Right')">➡ Right</button>
+              <button class="btn btn-s btn-sm" onclick="logTurningPosition('Supine')">⬆ Supine</button>
+              <button class="btn btn-s btn-sm" onclick="logTurningPosition('Prone')">⬇ Prone</button>
+            </div>
+          </div>
+          <!-- Post-Analgesia Reassessment (Nursing Safety Ext. Phase 3) —
+               populated from saveMAR() when an IV/Oral analgesic is marked
+               Given; cleared once a newer pain-score reading is saved above. -->
+          <div id="post-analgesia-status" style="margin-bottom:12px"></div>
           <!-- NEWS2 Score -->
           <div id="vs-news2-bar" style="display:none;border-radius:8px;padding:10px 12px;margin-bottom:12px;text-align:center">
             <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px">NEWS2 Score</div>
             <div id="vs-news2-val" style="font-size:1.6rem;font-weight:900">—</div>
             <div id="vs-news2-risk" style="font-size:.75rem;font-weight:700"></div>
+            <div id="vs-news2-hourly-flag" style="display:none;margin-top:6px"><span class="bdg" style="background:#fef3c7;color:#92400e">⏰ Hourly Monitoring</span></div>
           </div>
           <div class="g2">
             <div class="fg"><label class="fl">Recorded By</label><input class="fc" id="vs-by" readonly></div>
@@ -1270,6 +1290,52 @@ html[dir="rtl"] body{direction:rtl;}
           </div>
           <div id="morse-result" style="padding:10px 12px;border-radius:8px;background:#f1f5f9;font-weight:700;text-align:center;margin-top:8px">Score: —</div>
           <button class="btn btn-p" onclick="saveRiskAssessment()" style="width:100%;justify-content:center;margin-top:10px">💾 Save Risk Assessment</button>
+        </div>
+      </div>
+      <!-- SOFA Score (Nursing Safety Ext. Phase 1) — manual entry only, never
+           auto-pulled from results_chemistry/results_hematology: those tables
+           upsert one row per patient with no true visit history, so a score
+           silently computed against the wrong day's labs would be worse than
+           an obviously-missing one. CNS component reuses the GCS card above
+           instead of asking for it twice. -->
+      <div class="card">
+        <div class="card-hd"><span class="card-title" style="color:#7c2d12">🫁 SOFA Score — Sepsis-Related Organ Failure</span></div>
+        <div class="card-body">
+          <div style="background:#fffbeb;border:1.5px solid #fde68a;border-radius:7px;padding:8px 10px;margin-bottom:10px;font-size:.72rem;color:#92400e">
+            ⚠️ Manual entry only — verify every value against the current chart before scoring. Nothing here is auto-pulled from lab results.
+          </div>
+          <table class="tbl" style="font-size:.78rem">
+            <thead><tr><th>System</th><th>Value</th><th>Points</th></tr></thead>
+            <tbody>
+              <tr><td>Respiration<br><span style="font-size:.68rem;color:var(--slate)">PaO₂/FiO₂ (mmHg)</span></td>
+                <td><input class="fc" type="number" id="sofa-pf-ratio" min="0" oninput="calcSOFA()" style="width:80px">
+                  <label style="font-size:.68rem;display:block;margin-top:3px"><input type="checkbox" id="sofa-resp-support" onchange="calcSOFA()"> On vent/CPAP</label></td>
+                <td id="sofa-pt-resp" style="text-align:center;font-weight:700">—</td></tr>
+              <tr><td>Coagulation<br><span style="font-size:.68rem;color:var(--slate)">Platelets (×10³/µL)</span></td>
+                <td><input class="fc" type="number" id="sofa-platelets" min="0" oninput="calcSOFA()" style="width:80px"></td>
+                <td id="sofa-pt-coag" style="text-align:center;font-weight:700">—</td></tr>
+              <tr><td>Liver<br><span style="font-size:.68rem;color:var(--slate)">Bilirubin (µmol/L)</span></td>
+                <td><input class="fc" type="number" id="sofa-bilirubin" min="0" oninput="calcSOFA()" style="width:80px"></td>
+                <td id="sofa-pt-liver" style="text-align:center;font-weight:700">—</td></tr>
+              <tr><td>Cardiovascular<br><span style="font-size:.68rem;color:var(--slate)">MAP (mmHg) + vasopressors</span></td>
+                <td><input class="fc" type="number" id="sofa-map" min="0" placeholder="MAP" oninput="calcSOFA()" style="width:80px;margin-bottom:3px">
+                  <select class="fc" id="sofa-vasopressor" onchange="calcSOFA()" style="font-size:.7rem">
+                    <option value="none">No vasopressors</option>
+                    <option value="low">Dopamine ≤5 or any Dobutamine</option>
+                    <option value="mid">Dopamine &gt;5, or Epi/Norepi ≤0.1</option>
+                    <option value="high">Dopamine &gt;15, or Epi/Norepi &gt;0.1</option>
+                  </select></td>
+                <td id="sofa-pt-cvs" style="text-align:center;font-weight:700">—</td></tr>
+              <tr><td>CNS<br><span style="font-size:.68rem;color:var(--slate)">GCS total (from GCS card above)</span></td>
+                <td id="sofa-gcs-display" style="font-weight:700">—</td>
+                <td id="sofa-pt-cns" style="text-align:center;font-weight:700">—</td></tr>
+              <tr><td>Renal<br><span style="font-size:.68rem;color:var(--slate)">Creatinine (µmol/L) or urine (mL/24h)</span></td>
+                <td><input class="fc" type="number" id="sofa-creatinine" min="0" placeholder="Creatinine" oninput="calcSOFA()" style="width:80px;margin-bottom:3px">
+                  <input class="fc" type="number" id="sofa-urine-24h" min="0" placeholder="Urine mL/24h" oninput="calcSOFA()" style="width:80px"></td>
+                <td id="sofa-pt-renal" style="text-align:center;font-weight:700">—</td></tr>
+            </tbody>
+          </table>
+          <div id="sofa-result" style="padding:10px 12px;border-radius:8px;background:#f1f5f9;font-weight:700;text-align:center;margin-top:8px">SOFA Total: —</div>
         </div>
       </div>
     </div>
@@ -1437,7 +1503,7 @@ html[dir="rtl"] body{direction:rtl;}
             <td style="padding:8px 10px;text-align:center">—</td><td style="padding:8px 10px;text-align:center">—</td>
             <td id="fc-total-urine" style="padding:8px 10px;text-align:center;color:var(--teal)">—</td>
             <td style="padding:8px 10px;text-align:center">—</td><td style="padding:8px 10px;text-align:center">—</td><td style="padding:8px 10px;text-align:center">—</td>
-            <td id="fc-total-net" style="padding:8px 10px;text-align:center;font-size:.9rem;font-weight:900">—</td>
+            <td style="padding:8px 10px;text-align:center"><span id="fc-total-net" style="font-size:.9rem;font-weight:900">—</span><div id="fc-net-positive-badge" style="margin-top:4px"></div></td>
             <td></td>
           </tr>
         </tfoot>
@@ -4609,6 +4675,12 @@ html[dir="rtl"] body{direction:rtl;}
         <button class="btn btn-p btn-sm" onclick="saveFollowupPolicySettings()">💾 Save Follow-Up Policy</button>
         <div id="cfg-followup-policy-status" style="margin-top:7px;font-size:.78rem;color:var(--green)"></div>
       </div></div>
+      <div class="card"><div class="card-hd"><span class="card-title">💧 Nursing Safety Settings</span></div><div class="card-body">
+        <div style="font-size:.72rem;color:var(--slate);margin-bottom:8px">Nursing's 24-Hour Fluid Balance Chart visually flags a patient once their cumulative net balance crosses this threshold — a fluid-overload risk cue for renal/cardiac patients. Never applied silently to any calculation, purely a visual flag on the chart.</div>
+        <div class="fg"><label class="fl">Dangerous Net-Positive Threshold (mL/24h)</label><input class="fc" type="number" min="0" id="cfg-fluid-net-threshold" placeholder="2000"></div>
+        <button class="btn btn-p btn-sm" onclick="saveNursingSafetySettings()">💾 Save Nursing Safety Settings</button>
+        <div id="cfg-nursing-safety-status" style="margin-top:7px;font-size:.78rem;color:var(--green)"></div>
+      </div></div>
       <div class="card" id="cfg-override-pin-card" style="display:none"><div class="card-hd"><span class="card-title">🔑 My Anti-Fraud Override PIN</span></div><div class="card-body">
         <div style="font-size:.72rem;color:var(--slate);margin-bottom:8px">Lets you approve a void/refund/discount-override at the counter with a PIN instead of your full password. Stored as a bcrypt hash — never in plain text, never readable by anyone else, admin or otherwise. Requires migration_v2.12_override_pin.sql to be applied.</div>
         <div class="fg"><label class="fl">New PIN (6+ digits, numeric)</label><input class="fc" type="password" inputmode="numeric" maxlength="12" id="cfg-override-pin" placeholder="e.g. 482913"></div>
@@ -6150,6 +6222,27 @@ html[dir="rtl"] body{direction:rtl;}
   </div>
 </div>
 
+<!-- NEWS2 Rapid Response Team escalation (Nursing Safety Ext. Phase 2) —
+     same acknowledge-with-confirmation discipline as Critical Values above:
+     a real read-back (re-type the score), not a name-only prompt(). -->
+<div class="ov" id="rrt-ack-ov">
+  <div class="mo mo-sm">
+    <div class="mo-hd"><h3 style="color:var(--red)">🚨 STRIKE RAPID RESPONSE TEAM (RRT)</h3><button class="mo-x" onclick="closeOv('rrt-ack-ov')">✕</button></div>
+    <div class="mo-b">
+      <div id="rrt-ack-info" style="background:var(--red-lt);border:1.5px solid var(--red);border-radius:8px;padding:12px;margin-bottom:12px;font-size:.82rem"></div>
+      <p style="font-size:.78rem;color:var(--slate);margin-bottom:10px">NEWS2 ≥7 indicates high clinical risk requiring urgent review. Activate the Rapid Response Team / on-call doctor immediately, then confirm below.</p>
+      <div class="fg"><label class="fl">Re-type the NEWS2 score to confirm</label><input class="fc" id="rrt-readback-val" placeholder="e.g. 8"></div>
+      <div id="rrt-readback-status" style="font-size:.76rem;margin-bottom:6px"></div>
+      <div class="fg"><label class="fl">RRT / On-Call Doctor Notified</label><input class="fc" id="rrt-notified-to" placeholder="Name of person notified"></div>
+      <div class="fg"><label class="fl">Notes</label><input class="fc" id="rrt-ack-notes" placeholder="Action taken…"></div>
+    </div>
+    <div class="mo-ft">
+      <button class="btn btn-s" onclick="closeOv('rrt-ack-ov')">Cancel</button>
+      <button class="btn btn-r" onclick="submitRrtAck()">🚨 Confirm RRT Activated</button>
+    </div>
+  </div>
+</div>
+
 <!-- High-alert medication second-staff double-verification (Nursing Phase 3) -->
 <div class="ov" id="mar-verify-ov">
   <div class="mo mo-sm">
@@ -6766,6 +6859,10 @@ const CFG = {
   // requested: 7 days, free pricing.
   get followupWindowDays(){ return parseInt(localStorage.getItem('cfg_followup_window_days'),10)||7; },
   set followupWindowDays(v){ localStorage.setItem('cfg_followup_window_days', v); },
+  // Nursing Safety Ext. Phase 1 — dangerous-net-positive fluid balance
+  // threshold (mL/24h), admin-configurable per hospital policy.
+  get fluidNetPositiveThreshold(){ return parseInt(localStorage.getItem('cfg_fluid_net_positive_threshold'),10)||2000; },
+  set fluidNetPositiveThreshold(v){ localStorage.setItem('cfg_fluid_net_positive_threshold', v); },
   get followupPricingRule(){ return localStorage.getItem('cfg_followup_pricing_rule')||'free'; }, // 'free' | 'percentage' | 'fixed'
   set followupPricingRule(v){ localStorage.setItem('cfg_followup_pricing_rule', v); },
   get followupPricingValue(){ return parseFloat(localStorage.getItem('cfg_followup_pricing_value'))||0; }, // % for 'percentage', amount for 'fixed'
@@ -7697,8 +7794,15 @@ function loadSettings() {
   const bbffp=document.getElementById('cfg-bb-shelf-ffp'); if(bbffp) bbffp.value=CFG.bloodShelfFfp;
   const bbcryo=document.getElementById('cfg-bb-shelf-cryo'); if(bbcryo) bbcryo.value=CFG.bloodShelfCryo;
   const bbdonor=document.getElementById('cfg-bb-donor-collection'); if(bbdonor) bbdonor.checked=CFG.bloodDonorCollectionEnabled;
+  const fnpt=document.getElementById('cfg-fluid-net-threshold'); if(fnpt) fnpt.value=CFG.fluidNetPositiveThreshold;
   loadBedConfig();
   loadIdCounters();
+}
+function saveNursingSafetySettings(){
+  const val=parseInt(document.getElementById('cfg-fluid-net-threshold')?.value,10);
+  CFG.fluidNetPositiveThreshold=(isNaN(val)||val<=0)?2000:val;
+  const el=document.getElementById('cfg-nursing-safety-status');
+  if(el){ el.textContent='✅ Saved'; setTimeout(()=>el.textContent='',3000); }
 }
 function saveBloodBankSettings(){
   const g=(id,fallback)=>{ const v=parseInt(document.getElementById(id)?.value,10); return (isNaN(v)||v<=0)?fallback:v; };
@@ -9392,6 +9496,67 @@ function calcBalance() {
   const net=ivIn+poIn-urine-other; const el=document.getElementById('vs-balance-disp'); if(!el) return;
   el.textContent='Net Balance: '+net.toFixed(0)+' mL'; el.style.background=net>500?'#dbeafe':net<-500?'#fee2e2':'#f1f5f9'; el.style.color=net>500?'var(--blue)':net<-500?'var(--red)':'var(--ink)';
 }
+
+// ══════════════════════════════════════════════════════════════
+// TURNING CLOCK (Nursing Safety Ext. Phase 3)
+// ══════════════════════════════════════════════════════════════
+// Timestamp-anchored to the last logged repositioning (turning_position on
+// a vital_signs row) -- never a client-side setInterval counter. Overdue
+// is recalculated from real elapsed time (Date.now() - recorded_at) on
+// every render, so a page refresh or a device losing power never loses or
+// resets the clock; the anchor is whatever's actually stored in Supabase.
+const TURNING_INTERVAL_MS = 2*3600*1000;
+async function logTurningPosition(position){
+  const ptId = document.getElementById('vs-pt-id')?.value || _vsPt?.id;
+  if(!sb||!ptId){ toast('Load a patient first','err'); return; }
+  if(!(await guardVisitNotLocked(ptId,'Logging repositioning'))) return;
+  try{
+    await sb.from('vital_signs').insert({
+      patient_id:ptId, recorded_at:new Date().toISOString(),
+      turning_position:position, recorded_by:currentProfile?.full_name||'',
+      notes:'Repositioned: '+position,
+    });
+    toast('✅ Position logged: '+position,'ok');
+    loadVitals();
+  }catch(e){ toast(e.message,'err'); }
+}
+// data is loadVitals()'s already-fetched vital_signs rows (recorded_at
+// desc) -- turning_position lives on the same table, so the latest logged
+// position is just the first matching row, no extra query needed.
+function renderTurningStatus(data){
+  const el=document.getElementById('turning-status-disp'); if(!el) return;
+  const last=(data||[]).find(v=>v.turning_position);
+  if(!last){ el.innerHTML='<span style="color:var(--slate);font-size:.78rem">No repositioning logged yet</span>'; return; }
+  const elapsedMs=Date.now()-new Date(last.recorded_at).getTime();
+  const overdue=elapsedMs>=TURNING_INTERVAL_MS;
+  const mins=Math.max(0,Math.floor(elapsedMs/60000));
+  const elapsedStr=mins<60?mins+' min ago':Math.floor(mins/60)+'h '+(mins%60)+'m ago';
+  el.innerHTML='<span class="bdg" style="background:'+(overdue?'#fee2e2':'#dcfce7')+';color:'+(overdue?'#b91c1c':'#166534')+'">'+
+    (overdue?'⏰ OVERDUE — ':'')+'Last: '+escapeHtml(last.turning_position)+' ('+elapsedStr+')</span>';
+}
+
+// ══════════════════════════════════════════════════════════════
+// POST-ANALGESIA REASSESSMENT (Nursing Safety Ext. Phase 3)
+// ══════════════════════════════════════════════════════════════
+// Anchored to analgesia_administered_at, stamped by saveMAR() (below) when
+// an IV/Oral analgesic is marked Given. Clears the moment a NEWER
+// pain_score reading exists -- also timestamp-anchored, never a countdown.
+const POST_ANALGESIA_WINDOW_MS = 45*60*1000;
+function renderPostAnalgesiaStatus(data){
+  const el=document.getElementById('post-analgesia-status'); if(!el) return;
+  const lastAnalgesia=(data||[]).find(v=>v.analgesia_administered_at);
+  if(!lastAnalgesia){ el.innerHTML=''; return; }
+  const administeredAt=new Date(lastAnalgesia.analgesia_administered_at).getTime();
+  const reassessed=(data||[]).some(v=>v.pain_score!=null && new Date(v.recorded_at).getTime()>administeredAt);
+  if(reassessed){ el.innerHTML=''; return; }
+  const elapsedMs=Date.now()-administeredAt;
+  if(elapsedMs<POST_ANALGESIA_WINDOW_MS){
+    const dueAt=new Date(administeredAt+POST_ANALGESIA_WINDOW_MS);
+    el.innerHTML='<span class="bdg" style="background:#dbeafe;color:#1d4ed8">🩹 Analgesia given — reassess pain by '+dueAt.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})+'</span>';
+  } else {
+    el.innerHTML='<span class="bdg" style="background:#fee2e2;color:#b91c1c">⏰ OVERDUE — Reassess pain score (analgesia given '+Math.floor(elapsedMs/60000)+' min ago)</span>';
+  }
+}
 async function saveVitals() {
   if(!sb && navigator.onLine){ toast('Not connected','err'); return; }
   const _ptId = _vsPt?.id || document.getElementById('vs-pt-id')?.value;
@@ -9399,6 +9564,18 @@ async function saveVitals() {
   if(!(await guardVisitNotLocked(_ptId,'Recording vitals'))) return;
   if(!_vsPt) _vsPt = {id:_ptId};
   const g=id=>document.getElementById(id)?.value||null, gn=id=>{ const v=parseFloat(document.getElementById(id)?.value); return isNaN(v)?null:v; };
+  // Nursing Safety Ext. Phase 2 — a NEWS2 >=7 must actually block the save
+  // until RRT is acknowledged, not just pop a dismissible modal during
+  // typing (which already happens via calcNEWS2()'s oninput handlers, but
+  // covers the edge case of fields set without firing those events, or the
+  // modal being cancelled). Re-opens the same modal so the nurse doesn't
+  // have to go hunting for it.
+  const newsScore = calcNEWS2();
+  if(newsScore>=7 && !window._news2RrtAck){
+    toast('🚨 NEWS2 ≥7 — acknowledge the Rapid Response Team activation before saving','err');
+    openRrtAck(newsScore);
+    return;
+  }
   try {
     const result = await dbWrite('vital_signs','insert',{
       patient_id:_vsPt.id||document.getElementById('vs-pt-id')?.value,
@@ -9413,7 +9590,8 @@ async function saveVitals() {
       o2_delivery:g('vs-o2-route'), o2_flow:gn('vs-o2-flow'), fio2:gn('vs-fio2'),
       gcs_eye:parseInt(g('vs-gcs-e'))||null, gcs_verbal:parseInt(g('vs-gcs-v'))||null, gcs_motor:parseInt(g('vs-gcs-m'))||null,
       pain_score:_painScore||parseInt(document.getElementById('vs-pain')?.value)||null,
-      news2_score:calcNEWS2()||null,
+      news2_score:newsScore||null,
+      ...(window._news2RrtAck||{}),
       fluid_in_ml:(parseFloat(g('vs-iv-in'))||0)+(parseFloat(g('vs-po-in'))||0),
       fluid_out_ml:(parseFloat(g('vs-urine'))||0)+(parseFloat(g('vs-other-out'))||0),
       urine_output_ml:gn('vs-urine'), net_balance:((parseFloat(g('vs-iv-in'))||0)+(parseFloat(g('vs-po-in'))||0)-(parseFloat(g('vs-urine'))||0)-(parseFloat(g('vs-other-out'))||0)),
@@ -9428,6 +9606,10 @@ async function saveVitals() {
     });
     toast(result.queued ? '📥 Offline — vitals saved on this device, will sync later' : '✅ Vital signs saved', result.queued?'warn':'ok');
     if(!result.queued){ loadVitalsHistory(); if(window._transfusionTag) clearTransfusionVitalsTag(); }
+    // The acknowledgement belongs to THIS reading only — the next reading
+    // for the same patient must go through its own fresh RRT check, even
+    // if the score is still >=7.
+    resetNews2RrtState();
   } catch(e){ toast(e.message,'err'); }
 }
 // Blood Bank Phase 5 — tag/clear helpers for the transfusion-vitals
@@ -9503,13 +9685,20 @@ async function loadFluidChart() {
   body.innerHTML='<tr><td colspan="10" style="padding:20px;text-align:center"><div class="spinner" style="margin:0 auto"></div></td></tr>';
   try {
     const {data}=await sb.from('vital_signs').select('*').eq('patient_id',_fcPt.id).gte('recorded_at',d+'T00:00:00').lte('recorded_at',d+'T23:59:59').order('recorded_at');
-    if(!data?.length){ body.innerHTML='<tr><td colspan="10" style="padding:20px;text-align:center;color:var(--slate);font-size:.82rem">No vitals recorded on this date</td></tr>'; return; }
+    if(!data?.length){ body.innerHTML='<tr><td colspan="10" style="padding:20px;text-align:center;color:var(--slate);font-size:.82rem">No vitals recorded on this date</td></tr>'; const badge=document.getElementById('fc-net-positive-badge'); if(badge) badge.innerHTML=''; return; }
     let totIv=0,totUrine=0,totNet=0;
     body.innerHTML=data.map(v=>{ totIv+=v.fluid_in_ml||0; totUrine+=v.urine_output_ml||0; totNet+=v.net_balance||0; const netColor=(v.net_balance||0)>200?'#1d4ed8':(v.net_balance||0)<-200?'#b91c1c':'#16a34a';
       return '<tr style="border-bottom:1px solid var(--border)"><td style="padding:6px 10px;font-family:DM Mono,monospace;font-size:.77rem">'+new Date(v.recorded_at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})+'</td><td style="padding:6px 10px;text-align:center;font-size:.8rem;color:var(--blue)">'+(v.fluid_in_ml||'—')+'</td><td style="padding:6px 10px;text-align:center">—</td><td style="padding:6px 10px;text-align:center">—</td><td style="padding:6px 10px;text-align:center;font-size:.8rem;color:var(--teal)">'+(v.urine_output_ml||'—')+'</td><td style="padding:6px 10px;text-align:center">—</td><td style="padding:6px 10px;text-align:center">—</td><td style="padding:6px 10px;text-align:center">—</td><td style="padding:6px 10px;text-align:center;font-size:.8rem;font-weight:700;color:'+netColor+'">'+((v.net_balance||0)>0?'+':'')+String(v.net_balance||0)+'</td><td style="padding:6px 10px;font-size:.72rem;color:var(--slate)">'+(v.recorded_by_name||'—')+'</td></tr>';
     }).join('');
     setText('fc-total-iv',totIv||'—'); setText('fc-total-urine',totUrine||'—');
     const ne=document.getElementById('fc-total-net'); if(ne){ ne.textContent=(totNet>0?'+':'')+totNet; ne.style.color=totNet>500?'var(--blue)':totNet<-500?'var(--red)':'var(--green)'; }
+    // Nursing Safety Ext. Phase 1 — admin-configurable dangerous-net-positive
+    // flag (fluid overload risk), reusing the same .bdg badge pattern
+    // statusBadge() uses elsewhere rather than inventing new markup.
+    const npBadge=document.getElementById('fc-net-positive-badge');
+    if(npBadge) npBadge.innerHTML = totNet>CFG.fluidNetPositiveThreshold
+      ? '<span class="bdg" style="background:#fee2e2;color:#b91c1c">🚨 Net-Positive — exceeds '+CFG.fluidNetPositiveThreshold+' mL threshold</span>'
+      : '';
     drawFluidTrend(data);
   } catch(e){ body.innerHTML='<tr><td colspan="10" style="padding:14px;color:var(--red);font-size:.78rem">'+escapeHtml(e.message)+'</td></tr>'; }
 }
@@ -13440,6 +13629,8 @@ async function loadVitals() {
     const {data} = await sb.from('vital_signs')
       .select('*').eq('patient_id', ptId)
       .order('recorded_at', {ascending:false}).limit(30);
+    renderTurningStatus(data);
+    renderPostAnalgesiaStatus(data);
     if(!data?.length) { body.innerHTML='<div class="empty-state">No vitals recorded yet</div>'; return; }
     body.innerHTML = '<div style="overflow-x:auto"><table class="tbl" style="font-size:.72rem"><thead><tr>'+
       '<th>Time</th><th>BP</th><th>HR</th><th>RR</th><th>Temp</th><th>SpO₂</th><th>NEWS2</th><th>Pain</th><th>By</th></tr></thead><tbody>'+
@@ -13882,7 +14073,58 @@ function calcNEWS2() {
   else if(score>=5){ bar.style.background='#fef3c7'; valEl.style.color='#b45309'; riskEl.textContent='⚠️ MEDIUM RISK — Urgent review'; riskEl.style.color='#b45309'; }
   else if(score>=1){ bar.style.background='#fff7ed'; valEl.style.color='#92400e'; riskEl.textContent='🟡 LOW RISK — Routine monitoring'; riskEl.style.color='#92400e'; }
   else { bar.style.background='#f0fdf4'; valEl.style.color='#166534'; riskEl.textContent='🟢 NORMAL'; riskEl.style.color='#166534'; }
+
+  // Nursing Safety Ext. Phase 2 — escalation on top of the score above,
+  // never replacing it. >=7 pulses red and opens the blocking RRT
+  // acknowledge modal (once per crossing, not on every keystroke while it
+  // stays >=7); 3-6 is just a visible "hourly monitoring" flag here and on
+  // the Nursing Queue — no notification-bell integration in this pass.
+  bar.classList.toggle('news2-pulse', score>=7);
+  if(score>=7){
+    if(!window._news2RrtModalShown) openRrtAck(score);
+  } else {
+    window._news2RrtModalShown = false;
+  }
+  const hourlyEl = document.getElementById('vs-news2-hourly-flag');
+  if(hourlyEl) hourlyEl.style.display = (score>=3&&score<7) ? '' : 'none';
+
   return score;
+}
+// Reset per-patient — a fresh vitals load must not carry over a previous
+// patient's "already showed the RRT modal this session" state or stale
+// acknowledgement into the next save.
+function resetNews2RrtState(){
+  window._news2RrtModalShown = false;
+  window._news2RrtAck = null;
+}
+window._news2RrtModalShown = false;
+window._news2RrtAck = null;
+function openRrtAck(score){
+  window._news2RrtModalShown = true;
+  const ptName = document.getElementById('vs-pt-name')?.textContent || _vsPt?.name || '—';
+  const info = document.getElementById('rrt-ack-info');
+  if(info) info.innerHTML = '<strong>'+escapeHtml(ptName)+'</strong><br>NEWS2 Score: <strong style="font-size:1.1em">'+score+'</strong> — 🚨 High Risk';
+  const rb=document.getElementById('rrt-readback-val'); if(rb) rb.value='';
+  const nt=document.getElementById('rrt-notified-to'); if(nt) nt.value='';
+  const nn=document.getElementById('rrt-ack-notes'); if(nn) nn.value='';
+  const st=document.getElementById('rrt-readback-status'); if(st) st.textContent='';
+  openOv('rrt-ack-ov');
+}
+function submitRrtAck(){
+  const readback = document.getElementById('rrt-readback-val')?.value?.trim();
+  const notifiedTo = document.getElementById('rrt-notified-to')?.value?.trim();
+  const notes = document.getElementById('rrt-ack-notes')?.value?.trim();
+  const status = document.getElementById('rrt-readback-status');
+  const currentScore = document.getElementById('vs-news2-val')?.textContent?.trim();
+  if(!readback){ if(status){ status.style.color='var(--red)'; status.textContent='❌ Re-type the NEWS2 score to confirm.'; } return; }
+  if(readback!==currentScore){ if(status){ status.style.color='var(--red)'; status.textContent='❌ Score does not match — re-check and try again.'; } return; }
+  if(!notifiedTo){ toast('Enter who was notified (RRT / on-call doctor)','err'); return; }
+  window._news2RrtAck = {
+    rrt_acknowledged:true, rrt_acknowledged_by:currentProfile?.full_name||null,
+    rrt_acknowledged_at:new Date().toISOString(), rrt_notified_to:notifiedTo, rrt_notes:notes||null,
+  };
+  toast('✅ RRT activation confirmed','ok');
+  closeOv('rrt-ack-ov');
 }
 
 // Override saveVitals to include NEWS2 + MAP
@@ -13928,6 +14170,89 @@ function calcGCS() {
     el.style.background = total<=8?'#fee2e2':total<=12?'#fef9c3':'#f0fdf4';
     el.style.color = total<=8?'#b91c1c':total<=12?'#92400e':'#166534';
   }
+  if(typeof calcSOFA==='function') calcSOFA();
+}
+
+// SOFA Score (Nursing Safety Ext. Phase 1) — six organ systems, each 0-4,
+// correct clinical cutoffs per the standard SOFA definition. Manual entry
+// only (see the warning banner on the card) — CNS reuses the existing GCS
+// card's total via calcGCS() rather than asking for E/V/M a second time.
+function calcSOFA() {
+  const num = id => { const v = parseFloat(document.getElementById(id)?.value); return isNaN(v) ? null : v; };
+  const setPt = (id, pts) => { const el = document.getElementById(id); if(!el) return; el.textContent = pts==null ? '—' : pts; el.style.color = pts>=3?'#b91c1c':pts>=1?'#92400e':'#166534'; };
+
+  // Respiration — PaO2/FiO2 ratio, worse scores require respiratory support
+  const pf = num('sofa-pf-ratio');
+  const onSupport = document.getElementById('sofa-resp-support')?.checked;
+  let respPts = null;
+  if(pf!=null){
+    if(pf<100&&onSupport) respPts=4;
+    else if(pf<200&&onSupport) respPts=3;
+    else if(pf<300) respPts=2;
+    else if(pf<400) respPts=1;
+    else respPts=0;
+  }
+  setPt('sofa-pt-resp', respPts);
+
+  // Coagulation — Platelets ×10^3/µL
+  const plt = num('sofa-platelets');
+  let coagPts = null;
+  if(plt!=null){
+    if(plt<20) coagPts=4; else if(plt<50) coagPts=3; else if(plt<100) coagPts=2; else if(plt<150) coagPts=1; else coagPts=0;
+  }
+  setPt('sofa-pt-coag', coagPts);
+
+  // Liver — Bilirubin µmol/L
+  const bili = num('sofa-bilirubin');
+  let liverPts = null;
+  if(bili!=null){
+    if(bili>204) liverPts=4; else if(bili>=102) liverPts=3; else if(bili>=33) liverPts=2; else if(bili>=20) liverPts=1; else liverPts=0;
+  }
+  setPt('sofa-pt-liver', liverPts);
+
+  // Cardiovascular — MAP + vasopressor category (whichever is worse)
+  const map = num('sofa-map');
+  const vaso = document.getElementById('sofa-vasopressor')?.value||'none';
+  const vasoPts = {none:0,low:2,mid:3,high:4}[vaso]||0;
+  let cvsPts = null;
+  if(map!=null||vaso!=='none'){
+    const mapPts = map!=null ? (map<70?1:0) : 0;
+    cvsPts = Math.max(mapPts, vasoPts);
+  }
+  setPt('sofa-pt-cvs', cvsPts);
+
+  // CNS — reuse GCS total from the GCS card above, never entered twice
+  const gcsE=parseInt(document.getElementById('vs-gcs-e')?.value)||0, gcsV=parseInt(document.getElementById('vs-gcs-v')?.value)||0, gcsM=parseInt(document.getElementById('vs-gcs-m')?.value)||0;
+  const gcsTotal = gcsE+gcsV+gcsM;
+  let cnsPts = null;
+  const gcsDisp = document.getElementById('sofa-gcs-display');
+  if(gcsTotal>0){
+    if(gcsDisp) gcsDisp.textContent='GCS '+gcsTotal;
+    if(gcsTotal<6) cnsPts=4; else if(gcsTotal<=9) cnsPts=3; else if(gcsTotal<=12) cnsPts=2; else if(gcsTotal<=14) cnsPts=1; else cnsPts=0;
+  } else if(gcsDisp) gcsDisp.textContent='—';
+  setPt('sofa-pt-cns', cnsPts);
+
+  // Renal — Creatinine µmol/L or urine output mL/24h, worse of the two
+  const creat = num('sofa-creatinine');
+  const urine = num('sofa-urine-24h');
+  let renalPts = null;
+  if(creat!=null||urine!=null){
+    let creatPts = creat!=null ? (creat>440?4:creat>=300?3:creat>=171?2:creat>=110?1:0) : null;
+    let urinePts = urine!=null ? (urine<200?4:urine<500?3:0) : null;
+    renalPts = Math.max(creatPts??0, urinePts??0);
+  }
+  setPt('sofa-pt-renal', renalPts);
+
+  const parts = [respPts,coagPts,liverPts,cvsPts,cnsPts,renalPts];
+  const enteredParts = parts.filter(p=>p!=null);
+  const resultEl = document.getElementById('sofa-result');
+  if(!resultEl) return null;
+  if(!enteredParts.length){ resultEl.textContent='SOFA Total: —'; return null; }
+  const total = enteredParts.reduce((s,p)=>s+p,0);
+  resultEl.textContent='SOFA Total: '+total+' / 24 ('+enteredParts.length+' of 6 systems entered)';
+  resultEl.style.background = total>=15?'#fee2e2':total>=8?'#fef9c3':'#f0fdf4';
+  resultEl.style.color = total>=15?'#b91c1c':total>=8?'#92400e':'#166534';
+  return total;
 }
 
 // Braden Scale
@@ -13972,12 +14297,14 @@ async function saveRiskAssessment() {
   const bradenTotal = bradenIds.reduce((s,id)=>s+(parseInt(document.getElementById(id)?.value)||0),0);
   const morseIds = ['mfs-fall','mfs-dx','mfs-aid','mfs-iv','mfs-gait','mfs-mental'];
   const morseTotal = morseIds.reduce((s,id)=>s+(parseInt(document.getElementById(id)?.value)||0),0);
+  const sofaTotal = typeof calcSOFA==='function' ? calcSOFA() : null;
   try {
     await sb.from('vital_signs').insert({
       patient_id: ptId, recorded_at: new Date().toISOString(),
       braden_score: bradenTotal||null, morse_fall_score: morseTotal||null,
+      sofa_score: sofaTotal,
       recorded_by: currentProfile?.full_name||currentProfile?.id,
-      notes: 'Risk assessment: Braden='+bradenTotal+', Morse='+morseTotal
+      notes: 'Risk assessment: Braden='+bradenTotal+', Morse='+morseTotal+(sofaTotal!=null?', SOFA='+sofaTotal:'')
     });
     toast('✅ Risk assessment saved','ok');
   } catch(e){ toast(e.message,'err'); }
@@ -14066,7 +14393,7 @@ function addMarRow() {
     `<td><input class="fc" id="mar-dose-${i}" placeholder="Dose" style="padding:3px 6px;width:80px"></td>`+
     `<td><select class="fc" id="mar-route-${i}" style="padding:3px 6px"><option>PO</option><option>IV</option><option>IM</option><option>SC</option><option>SL</option><option>INH</option><option>TOP</option></select></td>`+
     `<td><select class="fc" id="mar-freq-${i}" style="padding:3px 6px"><option>Once daily</option><option>Twice daily</option><option>Three times daily</option><option>Four times daily</option><option>Every 6h</option><option>Every 8h</option><option>Every 12h</option><option>PRN</option><option>Stat</option></select></td>`+
-    `<td><input class="fc" type="time" id="mar-time-${i}" style="padding:3px 6px"></td>`+
+    `<td><input class="fc" type="time" id="mar-time-${i}" style="padding:3px 6px" oninput="marTimeStatus(${i})"><div id="mar-time-status-${i}" style="margin-top:3px"></div></td>`+
     `<td><select class="fc" id="mar-status-${i}" style="padding:3px 6px" onchange="updateMarRowUI(${i})">
       <option value="Due">Due</option><option value="Given" style="color:#166534">Given ✅</option>
       <option value="Refused" style="color:#92400e">Refused 🚫</option>
@@ -14087,6 +14414,7 @@ function updateMarRowUI(i){
   const drug=document.getElementById('mar-drug-'+i)?.value;
   const reasonEl=document.getElementById('mar-reason-'+i);
   if(reasonEl) reasonEl.style.display=['Omit','Hold','Refused'].includes(status)?'':'none';
+  marTimeStatus(i);
   const verifyCell=document.getElementById('mar-verify-cell-'+i);
   if(!verifyCell) return;
   if(status==='Given'&&isHighAlertDrug(drug)){
@@ -14134,16 +14462,49 @@ async function confirmMarVerify(){
   }catch(e){ if(status){ status.style.color='var(--red)'; status.textContent=e.message; } }
 }
 
+// MAR overdue status (Nursing Safety Ext. Phase 3) — a visible badge, not
+// an escalation. Anchored to the Time Due field (today's date + that
+// HH:MM), recalculated from real elapsed time on every call, never a
+// stored countdown. Only meaningful while a dose is still outstanding
+// (Due/PRN) — once actioned (Given/Refused/Omit/Hold) the outcome itself
+// is what matters, not whether it was on time.
+const MAR_DUE_WINDOW_MIN = 30;
+function marTimeStatus(i){
+  const cell=document.getElementById('mar-time-status-'+i); if(!cell) return;
+  const timeVal=document.getElementById('mar-time-'+i)?.value;
+  const status=document.getElementById('mar-status-'+i)?.value;
+  if(!timeVal || !['Due','PRN'].includes(status)){ cell.innerHTML=''; return; }
+  const [hh,mm]=timeVal.split(':').map(Number);
+  if(isNaN(hh)||isNaN(mm)){ cell.innerHTML=''; return; }
+  const scheduled=new Date(); scheduled.setHours(hh,mm,0,0);
+  const diffMin=(Date.now()-scheduled.getTime())/60000;
+  let label,bg,color;
+  if(diffMin<0){ label='On-time'; bg='#dcfce7'; color='#166534'; }
+  else if(diffMin<=MAR_DUE_WINDOW_MIN){ label='Due'; bg='#fef3c7'; color='#92400e'; }
+  else { label='Overdue'; bg='#fee2e2'; color='#b91c1c'; }
+  cell.innerHTML='<span class="bdg" style="background:'+bg+';color:'+color+';font-size:.64rem">'+label+'</span>';
+}
+// Analgesic keyword match against MAR's free-text drug name field, same
+// pattern as isHighAlertDrug() — case-insensitive substring, admin cannot
+// currently override this list (kept simple for this trimmed-down pass).
+const ANALGESIC_KEYWORDS=['paracetamol','acetaminophen','morphine','fentanyl','pethidine','meperidine','tramadol','ibuprofen','diclofenac','ketorolac','codeine','oxycodone','naproxen'];
+function isAnalgesic(drugName){
+  if(!drugName) return false;
+  const n=drugName.toLowerCase();
+  return ANALGESIC_KEYWORDS.some(k=>n.includes(k));
+}
 async function saveMAR() {
   const ptId = document.getElementById('vs-pt-id')?.value;
   if(!sb||!ptId){ toast('Load a patient first','err'); return; }
   if(!(await guardVisitNotLocked(ptId,'Recording a medication administration'))) return;
   const meds = [];
+  let analgesicGiven = false;
   const rows=[...document.querySelectorAll('[id^="mar-row-"]')];
   for(const row of rows){
     const i=row.id.replace('mar-row-','');
     const status=document.getElementById('mar-status-'+i)?.value;
     const drug=document.getElementById('mar-drug-'+i)?.value;
+    const route=document.getElementById('mar-route-'+i)?.value;
     const reason=document.getElementById('mar-reason-'+i)?.value?.trim();
     // No silent Omit/Hold/Refused — a reason is mandatory.
     if(['Omit','Hold','Refused'].includes(status)&&!reason){
@@ -14154,6 +14515,9 @@ async function saveMAR() {
     if(status==='Given'&&isHighAlertDrug(drug)&&!window._marSecondVerify[i]){
       toast('🚨 '+drug+' is high-alert — second staff verification required before it can be marked Given','err'); return;
     }
+    // Post-Analgesia Reassessment (Phase 3) — an IV/Oral analgesic marked
+    // Given starts the 45-minute reassessment window.
+    if(status==='Given' && (route==='IV'||route==='PO') && isAnalgesic(drug)) analgesicGiven=true;
     meds.push({
       drug, dose:document.getElementById('mar-dose-'+i)?.value,
       route:document.getElementById('mar-route-'+i)?.value,
@@ -14168,9 +14532,11 @@ async function saveMAR() {
     await sb.from('vital_signs').insert({
       patient_id:ptId, recorded_at:new Date().toISOString(),
       mar_entries:meds, recorded_by:currentProfile?.full_name,
-      notes:'MAR — '+meds.length+' medications'
+      notes:'MAR — '+meds.length+' medications',
+      ...(analgesicGiven?{analgesia_administered_at:new Date().toISOString()}:{}),
     });
     toast('✅ MAR saved','ok');
+    loadVitals();
   } catch(e){ toast(e.message,'err'); }
 }
 
@@ -14433,6 +14799,14 @@ function startVitalsClock() {
     el.textContent=now.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
     const timeInput=document.getElementById('vs-time');
     if(timeInput&&!timeInput.value) timeInput.value=now.toTimeString().slice(0,5);
+    // Turning Clock / Post-Analgesia badges are elapsed-time-from-a-stored-
+    // timestamp, not a countdown object -- this just re-renders them from
+    // the already-fetched _vitalsData on the same tick, no re-query.
+    renderTurningStatus(_vitalsData);
+    renderPostAnalgesiaStatus(_vitalsData);
+    // MAR overdue badges are likewise anchored to each row's own Time Due
+    // field, not a countdown -- just re-derived on every tick.
+    document.querySelectorAll('[id^="mar-row-"]').forEach(row=>marTimeStatus(row.id.replace('mar-row-','')));
   },1000);
 }
 
@@ -14468,8 +14842,25 @@ async function loadNursingQueue() {
       return;
     }
     const destIcon={doctor:'\ud83e\ude7a',lab:'\ud83d\udd2c',radiology:'\ud83e\udea7',admission:'\ud83d\udecf'};
+    // Nursing Safety Ext. Phase 2/3 \u2014 latest NEWS2, turning position, and
+    // analgesia/pain-reassessment state per patient, all from ONE batch
+    // query (not one per row) so the queue can flag ongoing risk even
+    // between vitals-entry sessions. Rows are ordered recorded_at desc, so
+    // the first occurrence of each field per patient is always the latest.
+    const flagsMap={};
+    const getFlags=id=>flagsMap[id]||(flagsMap[id]={});
+    try{
+      const {data:rows2}=await sb.from('vital_signs').select('patient_id,news2_score,turning_position,analgesia_administered_at,pain_score,recorded_at').in('patient_id',filtered.map(p=>p.id)).order('recorded_at',{ascending:false}).limit(500);
+      (rows2||[]).forEach(v=>{
+        const f=getFlags(v.patient_id);
+        if(v.news2_score!=null && f.news2==null) f.news2=v.news2_score;
+        if(v.turning_position && !f.turningAt) f.turningAt=v.recorded_at;
+        if(v.analgesia_administered_at && !f.analgesiaAt) f.analgesiaAt=v.analgesia_administered_at;
+        if(v.pain_score!=null && !f.lastPainAt) f.lastPainAt=v.recorded_at;
+      });
+    }catch(e){ /* alerts column degrades gracefully -- never blocks the queue itself */ }
     body.innerHTML='<div style="overflow-x:auto"><table class="tbl"><thead><tr>'+
-      '<th>MRN</th><th>Name</th><th>Age/Sex</th><th>Location</th><th>Destination</th><th>Payment</th><th>Visit</th><th>Actions</th></tr></thead><tbody>'+
+      '<th>MRN</th><th>Name</th><th>Age/Sex</th><th>Location</th><th>Destination</th><th>Payment</th><th>Visit</th><th>Alerts</th><th>Actions</th></tr></thead><tbody>'+
       filtered.map(p=>{
         const unpaid=p.payment_status==='unpaid'||p.payment_status==='insurance_pending';
         const nm=(p.name||[p.first_name,p.last_name].filter(Boolean).join(' ')||'\u2014').replace(/'/g,'\u2019');
@@ -14477,6 +14868,7 @@ async function loadNursingQueue() {
         const dest=p.visit_destination||'lab';
         const destParts2=dest.split(',').map(s=>s.trim()).filter(Boolean);
         const destIconStr=destParts2.map(d=>destIcon[d]||'\ud83c\udfe5').join('');
+        const alertHtml=nursingQueueAlertBadges(flagsMap[p.id]||{});
         return '<tr class="'+(unpaid?'pay-unpaid':'')+'" style="cursor:pointer" onclick="selectVitalsFromQueue(\''+p.id+'\',\''+nm+'\')">'+
           '<td style="font-family:DM Mono,monospace;font-size:.72rem;color:var(--teal)">'+(p.mrn||p.lab_no||'\u2014')+'</td>'+
           '<td style="font-weight:600">'+(p.name||[p.first_name,p.last_name].filter(Boolean).join(' ')||'\u2014')+'</td>'+
@@ -14485,12 +14877,36 @@ async function loadNursingQueue() {
           '<td><span style="font-size:.72rem">'+destIconStr+' '+dest+'</span></td>'+
           '<td>'+paymentTag(p.payment_status)+'</td>'+
           '<td>'+visitStatusBadge(p)+'</td>'+
+          '<td>'+(alertHtml||'<span style="font-size:.7rem;color:var(--slate)">\u2014</span>')+'</td>'+
           '<td><div class="acts">'+
             '<button class="btn btn-p btn-xs" onclick="selectVitalsFromQueue(\''+p.id+'\',\''+nm+'\');event.stopPropagation()">\ud83d\udcc8 Vitals</button>'+
             '<button class="btn btn-s btn-xs" onclick="goPage(\x27fluid-chart\x27);event.stopPropagation()">\ud83d\udca7 Fluid</button>'+
           '</div></td></tr>';
       }).join('')+'</tbody></table></div>';
   }catch(e){body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>';}
+}
+// Builds the Nursing Queue's Alerts cell from one patient's aggregated
+// flags ({news2, turningAt, analgesiaAt, lastPainAt}). NEWS2 badges are
+// Phase 2; Turning Clock and Post-Analgesia badges are Phase 3 \u2014 both
+// timestamp-anchored the same way as their vitals-tab counterparts, never
+// a stored countdown.
+function nursingQueueAlertBadges(flags){
+  let html='';
+  const span=(bg,color,text)=>'<span class="bdg" style="background:'+bg+';color:'+color+';display:inline-block;margin:1px 2px 1px 0">'+text+'</span>';
+  if(flags.news2!=null){
+    if(flags.news2>=7) html+='<span class="bdg news2-pulse" style="background:#fee2e2;color:#b91c1c;display:inline-block;margin:1px 2px 1px 0">\ud83d\udea8 NEWS2 '+flags.news2+'</span>';
+    else if(flags.news2>=3) html+=span('#fef3c7','#92400e','\u23f0 Hourly Monitoring (NEWS2 '+flags.news2+')');
+  }
+  if(flags.turningAt){
+    const elapsed=Date.now()-new Date(flags.turningAt).getTime();
+    if(elapsed>=TURNING_INTERVAL_MS) html+=span('#fee2e2','#b91c1c','\ud83d\udd04 Turning Overdue');
+  }
+  if(flags.analgesiaAt){
+    const administeredAt=new Date(flags.analgesiaAt).getTime();
+    const reassessed=flags.lastPainAt && new Date(flags.lastPainAt).getTime()>administeredAt;
+    if(!reassessed && (Date.now()-administeredAt)>=POST_ANALGESIA_WINDOW_MS) html+=span('#fee2e2','#b91c1c','\ud83e\ude79 Pain Reassessment Overdue');
+  }
+  return html;
 }
 
 function filterNursingQueue(q) {
@@ -14542,6 +14958,7 @@ function selectVitalsFromQueue(ptId, ptName) {
   const idEl=document.getElementById('vs-pt-id'); if(idEl) idEl.value=ptId;
   const nameEl=document.getElementById('vs-pt-name'); if(nameEl) nameEl.textContent=ptName;
   const banner=document.getElementById('vs-pt-banner'); if(banner) banner.style.display='';
+  resetNews2RrtState();
   loadVitals();
 }
 
