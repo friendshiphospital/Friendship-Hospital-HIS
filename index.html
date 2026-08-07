@@ -8112,10 +8112,10 @@ function exportStatsPDF(){
   openPrintWin(html, 'Statistics — '+title);
 }
 function printHeader(docType) {
-  return '<div style="border-bottom:2px solid #0b7a75;padding-bottom:10px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:flex-start"><div><div style="font-size:16pt;font-weight:800;color:#0b7a75;font-family:DM Serif Display,serif">🏥 FRIENDSHIP HOSPITAL — AL DAMAZIN</div><div style="font-size:9pt;color:#64748b;margin-top:2px">Al Damazin, Blue Nile State, Sudan</div><div style="font-size:8.5pt;color:#64748b;margin-top:1px">Tel: '+CFG.phone+'  |  Email: '+CFG.email+'</div></div><div style="text-align:right"><div style="font-size:10pt;font-weight:700;color:#1e3a5a">'+docType+'</div></div></div>';
+  return '<div style="border-bottom:2px solid #0b7a75;padding-bottom:10px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:flex-start"><div><div style="font-size:16pt;font-weight:800;color:#0b7a75;font-family:DM Serif Display,serif">🏥 FRIENDSHIP HOSPITAL — AL DAMAZIN</div><div style="font-size:9pt;color:#64748b;margin-top:2px">Al Damazin, Blue Nile State, Sudan</div><div style="font-size:8.5pt;color:#64748b;margin-top:1px">Tel: '+escapeHtml(CFG.phone)+'  |  Email: '+escapeHtml(CFG.email)+'</div></div><div style="text-align:right"><div style="font-size:10pt;font-weight:700;color:#1e3a5a">'+escapeHtml(docType)+'</div></div></div>';
 }
 function printFooter() {
-  return '<div style="border-top:1px solid #e2e8f3;margin-top:20px;padding-top:8px;font-size:8pt;color:#64748b;display:flex;justify-content:space-between"><span>'+CFG.footer+'</span><span>Printed: '+new Date().toLocaleString('en-GB')+' | By: '+(currentProfile?.full_name||'—')+'</span></div>';
+  return '<div style="border-top:1px solid #e2e8f3;margin-top:20px;padding-top:8px;font-size:8pt;color:#64748b;display:flex;justify-content:space-between"><span>'+escapeHtml(CFG.footer)+'</span><span>Printed: '+new Date().toLocaleString('en-GB')+' | By: '+escapeHtml(currentProfile?.full_name||'—')+'</span></div>';
 }
 function openPrintWin(html, title='Print') {
   const w=window.open('','_blank','width=900,height=750'); if(!w){ toast('Allow popups','warn'); return; }
@@ -12200,11 +12200,11 @@ async function saveMicroEntry(verify=false) {
 function buildLabPtBanner(pt, dateVal){
   const cell=(label,val)=>'<div><div style="font-size:8pt;color:#64748b">'+label+'</div><div style="font-weight:700">'+(val||'—')+'</div></div>';
   return '<div style="background:#f1f5f9;padding:10px 14px;border-radius:8px;margin-bottom:14px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px">'
-    + cell('Patient',pt.name||fullName(pt))
-    + cell('MRN',pt.mrn)
-    + cell('File No.',pt.visit_no)
-    + cell('Lab No.',pt.lab_no)
-    + cell('Age/Sex',(pt.age||'?')+(pt.age_unit||'')+' / '+(pt.sex||''))
+    + cell('Patient',escapeHtml(pt.name||fullName(pt)))
+    + cell('MRN',escapeHtml(pt.mrn))
+    + cell('File No.',escapeHtml(pt.visit_no))
+    + cell('Lab No.',escapeHtml(pt.lab_no))
+    + cell('Age/Sex',escapeHtml((pt.age||'?')+(pt.age_unit||'')+' / '+(pt.sex||'')))
     + cell('Date',fmtDate(dateVal))
     + '</div>';
 }
@@ -13837,7 +13837,7 @@ function openSampleLabelWindow(data, settings) {
   const w = window.open('','_blank','width=400,height=300');
   if(!w){ toast('Allow popups to print labels','warn'); return; }
   const html = `<!DOCTYPE html><html><head><style>
-    @page{size:${s.width}mm ${s.height}mm;margin:0}
+    @page{size:${escapeHtml(s.width)}mm ${escapeHtml(s.height)}mm;margin:0}
     body{font-family:'DM Mono',monospace;font-size:8pt;padding:2mm;width:${s.width-4}mm;box-sizing:border-box}
     .name{font-size:10pt;font-weight:900;margin-bottom:1mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .meta{font-size:7pt;color:#333;margin-bottom:1mm}
