@@ -87,9 +87,16 @@ function makeStatefulSupabaseMock(seed) {
     let mode = 'select';
     let payload = null;
     let onConflict = null;
+    let wantCount = false, wantHead = false;
 
     const api = {
-      select(cols) { selectStr = cols || '*'; return api; },
+      // opts.count (e.g. {count:'exact'}, optionally with head:true) -- the
+      // app uses this Postgrest pattern ~27x (checkCriticals()'s crit-badge,
+      // dashboard KPI tiles, etc.) to get a row count without necessarily
+      // fetching all the rows. head:true is honoured by returning data:null
+      // (matching real Supabase/Postgrest HEAD-request semantics) while
+      // count is still computed from the full (pre-limit) filtered set.
+      select(cols, opts) { selectStr = cols || '*'; if (opts && opts.count) { wantCount = true; wantHead = !!opts.head; } return api; },
       insert(p) { mode = 'insert'; payload = Array.isArray(p) ? p : [p]; return api; },
       update(p) { mode = 'update'; payload = p; return api; },
       upsert(p, opts) { mode = 'upsert'; payload = Array.isArray(p) ? p : [p]; onConflict = opts && opts.onConflict; return api; },
@@ -106,6 +113,13 @@ function makeStatefulSupabaseMock(seed) {
       is(col, val) { filters.push({ col, op: 'is', val }); return api; },
       not(col, _op, val) { filters.push({ col, op: 'not_is_null', val }); return api; },
       or(expr) { filters.push({ op: 'or', clauses: parseOrExpr(expr) }); return api; },
+      // .match({col: val, ...}) -- Postgrest shorthand for a batch of eq()
+      // filters in one call. Added because the app's own dbWrite() (the
+      // universal offline-resilient write path documented in CLAUDE.md)
+      // always builds its 'update' ops as .update(payload).match(opts.match),
+      // so any section exercising a real dbWrite() update needs this to
+      // reach the underlying rows at all.
+      match(obj) { Object.entries(obj || {}).forEach(([col, val]) => filters.push({ col, op: 'eq', val })); return api; },
       order(col, opts) { orderCol = col; orderAsc = !(opts && opts.ascending === false); return api; },
       limit(n) { limitN = n; return api; },
       then(resolve, reject) { return execute().then(resolve, reject); },
@@ -158,9 +172,10 @@ function makeStatefulSupabaseMock(seed) {
           return 0;
         });
       }
+      const exactCount = wantCount ? rows.length : null; // pre-limit, matching Postgrest's count:'exact'
       if (limitN != null) rows = rows.slice(0, limitN);
       rows = rows.map(r => resolveEmbeds(r, selectStr));
-      return { data: rows, error: null };
+      return { data: wantHead ? null : rows, error: null, count: exactCount };
     }
     return api;
   }
