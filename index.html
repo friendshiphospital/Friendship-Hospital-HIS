@@ -12112,13 +12112,45 @@ async function saveChemEntry(verify=false) {
     troponin_i:gn('ce-tropi'),hs_tnt:gn('ce-hstnt'),ck:gn('ce-ck'),ckmb:gn('ce-ckmb'),nt_probnp:gn('ce-ntpro'),hs_crp:gn('ce-hsCrp'),ldh:gn('ce-ldh')};
   await saveResultWithSafetyChecks({table:'results_chemistry',deptKey:'chem',deptLabel:'Chemistry',pageId:'page-chem-entry',ptId,payload,hasCrit,verify,successLabel:'Chemistry'});
 }
+// results_serology is ONE shared row per patient_id for BOTH the Serology and
+// Immunology entry pages (Lab Safety Phase 1 scope note: Immunology is folded
+// into "Serology" here since it's the same table/row) -- so the row-level
+// is_verified flag can never just reflect whichever page happened to click
+// Verify. It must reflect BOTH departments' currently-ordered tests together;
+// otherwise verifying Sero could silently flip is_verified=true on a row
+// where an ordered Immuno test is still empty (exactly the over-broad
+// whole-row verification bug this phase fixes, just across two pages sharing
+// one row instead of across visits). checkSeroRowVerification() merges the
+// existing DB row with this save's own (partial) payload before checking, so
+// the OTHER department's already-saved values are correctly seen as present.
+async function checkSeroRowVerification(ptId, payload) {
+  const [{data:pt},{data:existingRow}]=await Promise.all([
+    sb.from('patients').select('tests_requested').eq('id',ptId).maybeSingle(),
+    sb.from('results_serology').select('*').eq('patient_id',ptId).maybeSingle()
+  ]);
+  const merged={...(existingRow||{}),...payload};
+  const checkS=checkVerificationComplete('sero',pt?.tests_requested,merged);
+  const checkI=checkVerificationComplete('immuno',pt?.tests_requested,merged);
+  return {
+    complete: checkS.complete && checkI.complete,
+    missingLabels: [...checkS.missingLabels, ...checkI.missingLabels],
+    requiredFields: [...checkS.requiredFields, ...checkI.requiredFields],
+    existingVerifiedFields: existingRow?.verified_fields||[]
+  };
+}
 async function saveSeroEntry(verify=false) {
   if(!sb||!document.getElementById('sero-entry-pt-id')?.value){ toast('No patient loaded','err'); return; }
   const ptId=document.getElementById('sero-entry-pt-id').value;
   const g=id=>document.getElementById(id)?.value||null, gn=id=>{ const v=parseFloat(document.getElementById(id)?.value); return isNaN(v)?null:v; };
-  const payload={patient_id:ptId,analyzer:g('se-analyzer')||'',analysis_date:g('se-date')||today(),notes:g('se-notes')||'',specimen:g('se-specimen'),performed_by:currentProfile?.id,is_verified:verify,verified_at:verify?new Date().toISOString():null,
+  const payload={patient_id:ptId,analyzer:g('se-analyzer')||'',analysis_date:g('se-date')||today(),notes:g('se-notes')||'',specimen:g('se-specimen'),performed_by:currentProfile?.id,
     hiv:g('se-hiv'),hbsag:g('se-hbsag'),hcv:g('se-hcv'),rpr:g('se-rpr'),tpha:g('se-tpha'),hpylori:g('se-hpylori'),brucella:g('se-brucella'),widal_o:g('se-widal-o'),widal_h:g('se-widal-h'),anti_ccp:g('se-anticcp'),
     rf:gn('se-rf'),aso:gn('se-aso'),ige:gn('se-ige'),ana:g('se-ana')};
+  if(verify){
+    const check=await checkSeroRowVerification(ptId,payload);
+    if(!check.complete){ toast('⚠️ Cannot verify — missing results for: '+check.missingLabels.join(', '),'err'); return; }
+    payload.verified_fields=[...new Set([...check.existingVerifiedFields,...check.requiredFields])];
+  }
+  payload.is_verified=verify; payload.verified_at=verify?new Date().toISOString():null;
   try { await sb.from('results_serology').upsert(payload,{onConflict:'patient_id'}); if(verify) await updateSampleStatus(ptId,'Completed'); toast(verify?'✅ Serology saved & verified':'💾 Serology saved','ok'); } catch(e){ toast(e.message,'err'); }
 }
 async function saveImmunoEntry(verify=false) {
@@ -12127,9 +12159,15 @@ async function saveImmunoEntry(verify=false) {
   const g=id=>document.getElementById(id)?.value||null, gn=id=>{ const v=parseFloat(document.getElementById(id)?.value); return isNaN(v)?null:v; };
   // Shares the same results_serology table as Serology — each save only touches its own
   // columns (partial upsert), so the two sections never clobber each other's data.
-  const payload={patient_id:ptId,analyzer:g('im-analyzer')||'',analysis_date:g('im-date')||today(),notes:g('im-notes')||'',performed_by:currentProfile?.id,is_verified:verify,verified_at:verify?new Date().toISOString():null,
+  const payload={patient_id:ptId,analyzer:g('im-analyzer')||'',analysis_date:g('im-date')||today(),notes:g('im-notes')||'',performed_by:currentProfile?.id,
     tsh:gn('se-tsh'),ft3:gn('se-ft3'),ft4:gn('se-ft4'),t3:gn('se-t3'),t4:gn('se-t4'),fsh:gn('se-fsh'),lh:gn('se-lh'),estradiol:gn('se-e2'),prog:gn('se-prog'),testosterone:gn('se-testo'),prolactin:gn('se-prol'),
     psa:gn('se-psa'),afp:gn('se-afp'),cea:gn('se-cea'),ca125:gn('se-ca125'),ca199:gn('se-ca199'),vit_d:gn('se-vitd'),vit_b12:gn('se-b12'),folate:gn('se-folate'),ferritin:gn('se-ferr'),bhcg_qual:g('se-bhcg')};
+  if(verify){
+    const check=await checkSeroRowVerification(ptId,payload);
+    if(!check.complete){ toast('⚠️ Cannot verify — missing results for: '+check.missingLabels.join(', '),'err'); return; }
+    payload.verified_fields=[...new Set([...check.existingVerifiedFields,...check.requiredFields])];
+  }
+  payload.is_verified=verify; payload.verified_at=verify?new Date().toISOString():null;
   try { await sb.from('results_serology').upsert(payload,{onConflict:'patient_id'}); if(verify) await updateSampleStatus(ptId,'Completed'); toast(verify?'✅ Immunology saved & verified':'💾 Immunology saved','ok'); } catch(e){ toast(e.message,'err'); }
 }
 async function saveMicroEntry(verify=false) {
