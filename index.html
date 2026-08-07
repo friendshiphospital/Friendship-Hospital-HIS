@@ -11260,7 +11260,7 @@ function renderWlRow(p,sampleMap) {
   return '<tr class="'+(unpaid?'pay-unpaid':'')+'" '+pbg+'>'+
     '<td style="font-family:DM Mono,monospace;font-size:.7rem;font-weight:700;color:var(--teal)">'+(p.lab_no||'—')+'</td>'+
     '<td style="font-size:.72rem">'+(p.mrn||'—')+'</td>'+
-    '<td style="font-weight:600">'+(p.name||fullName(p))+'</td>'+
+    '<td style="font-weight:600">'+escapeHtml(p.name||fullName(p))+'</td>'+
     '<td style="font-size:.75rem">'+(p.age||'?')+(p.age_unit||'y')+' / '+(p.sex||'')+'</td>'+
     '<td style="font-size:.7rem;max-width:150px"><div style="display:flex;flex-wrap:wrap;gap:2px">'+
       (p.tests_requested||[]).slice(0,3).map(t=>'<span class="bdg bdg-sl" style="font-size:.64rem;padding:1px 5px">'+t+'</span>').join('')+
@@ -11276,7 +11276,7 @@ function renderWlRow(p,sampleMap) {
     '<td><div class="acts">'+
       (unpaid?'<button class="btn btn-s btn-xs" style="opacity:.5;cursor:not-allowed" title="Payment required">\ud83d\udd12 Blocked</button>':
         notReceived?'<button class="btn btn-s btn-xs" style="opacity:.5;cursor:not-allowed" title="Sample not yet received in the lab">\ud83d\udce5 Awaiting Receipt</button>':
-        '<button class="btn btn-p btn-xs" onclick="openEnterModal(\x27'+p.id+'\x27,\x27'+(p.lab_no||'')+'\x27,\x27'+((p.name||fullName(p)).replace(/'/g,''))+'\x27)">\ud83d\udcdd Enter</button>')+
+        '<button class="btn btn-p btn-xs" onclick="openEnterModal(\x27'+p.id+'\x27,\x27'+(p.lab_no||'')+'\x27,\x27'+escAttr(p.name||fullName(p))+'\x27)">\ud83d\udcdd Enter</button>')+
       '<button class="btn btn-s btn-xs" onclick="openPatientHistoryTimeline(\x27'+p.id+'\x27)" title="View this patient\x27s full history">\ud83d\udd50 History</button>'+
     '</div></td></tr>';
 }
@@ -14943,15 +14943,15 @@ async function loadNursingQueue() {
       '<th>MRN</th><th>Name</th><th>Age/Sex</th><th>Location</th><th>Destination</th><th>Payment</th><th>Visit</th><th>Alerts</th><th>Actions</th></tr></thead><tbody>'+
       filtered.map(p=>{
         const unpaid=p.payment_status==='unpaid'||p.payment_status==='insurance_pending';
-        const nm=(p.name||[p.first_name,p.last_name].filter(Boolean).join(' ')||'\u2014').replace(/'/g,'\u2019');
-        const wardBadge=p.ward?'<span class="bdg bdg-b">'+p.ward+'</span>'+(p.bed?' \u00b7 '+p.bed:''):'<span style="font-size:.7rem;color:var(--slate)">OPD/Walk-in</span>';
+        const rawName=p.name||[p.first_name,p.last_name].filter(Boolean).join(' ')||'\u2014';
+        const wardBadge=p.ward?'<span class="bdg bdg-b">'+escapeHtml(p.ward)+'</span>'+(p.bed?' \u00b7 '+escapeHtml(p.bed):''):'<span style="font-size:.7rem;color:var(--slate)">OPD/Walk-in</span>';
         const dest=p.visit_destination||'lab';
         const destParts2=dest.split(',').map(s=>s.trim()).filter(Boolean);
         const destIconStr=destParts2.map(d=>destIcon[d]||'\ud83c\udfe5').join('');
         const alertHtml=nursingQueueAlertBadges(flagsMap[p.id]||{});
-        return '<tr class="'+(unpaid?'pay-unpaid':'')+'" style="cursor:pointer" onclick="selectVitalsFromQueue(\''+p.id+'\',\''+nm+'\')">'+
-          '<td style="font-family:DM Mono,monospace;font-size:.72rem;color:var(--teal)">'+(p.mrn||p.lab_no||'\u2014')+'</td>'+
-          '<td style="font-weight:600">'+(p.name||[p.first_name,p.last_name].filter(Boolean).join(' ')||'\u2014')+'</td>'+
+        return '<tr class="'+(unpaid?'pay-unpaid':'')+'" style="cursor:pointer" onclick="selectVitalsFromQueue(\''+p.id+'\',\''+escAttr(rawName)+'\')">'+
+          '<td style="font-family:DM Mono,monospace;font-size:.72rem;color:var(--teal)">'+escapeHtml(p.mrn||p.lab_no||'\u2014')+'</td>'+
+          '<td style="font-weight:600">'+escapeHtml(rawName)+'</td>'+
           '<td>'+(p.age||'?')+(p.age_unit||'y')+' / '+(p.sex||'')+'</td>'+
           '<td>'+wardBadge+'</td>'+
           '<td><span style="font-size:.72rem">'+destIconStr+' '+dest+'</span></td>'+
@@ -14959,7 +14959,7 @@ async function loadNursingQueue() {
           '<td>'+visitStatusBadge(p)+'</td>'+
           '<td>'+(alertHtml||'<span style="font-size:.7rem;color:var(--slate)">\u2014</span>')+'</td>'+
           '<td><div class="acts">'+
-            '<button class="btn btn-p btn-xs" onclick="selectVitalsFromQueue(\''+p.id+'\',\''+nm+'\');event.stopPropagation()">\ud83d\udcc8 Vitals</button>'+
+            '<button class="btn btn-p btn-xs" onclick="selectVitalsFromQueue(\''+p.id+'\',\''+escAttr(rawName)+'\');event.stopPropagation()">\ud83d\udcc8 Vitals</button>'+
             '<button class="btn btn-s btn-xs" onclick="goPage(\x27fluid-chart\x27);event.stopPropagation()">\ud83d\udca7 Fluid</button>'+
           '</div></td></tr>';
       }).join('')+'</tbody></table></div>';
