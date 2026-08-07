@@ -9492,7 +9492,7 @@ async function searchVitalsPatient(q) {
     const f=data?.filter(a=>(a.patients?.name||fullName(a.patients)||'').toLowerCase().includes(q.toLowerCase()));
     if(!f?.length){ res.style.display='none'; return; }
     res.style.display='block';
-    res.innerHTML=f.map(a=>'<div onclick="loadVitalsForPatient(\''+a.patients?.id+'\',\''+a.id+'\',\''+(a.patients?.name||fullName(a.patients)).replace(/'/g,'')+'\',\''+a.ward+'\',\''+a.bed+'\',\''+a.admission_no+'\')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:.81rem" onmouseover="this.style.background=\\x27#f0f9ff\\x27" onmouseout="this.style.background=\\x27#fff\\x27"><strong>'+(a.patients?.name||fullName(a.patients))+'</strong> <span style="color:var(--slate);font-size:.72rem">'+a.admission_no+' · '+a.ward+'/'+a.bed+'</span></div>').join('');
+    res.innerHTML=f.map(a=>'<div onclick="loadVitalsForPatient(\''+escAttr(a.patients?.id)+'\',\''+escAttr(a.id)+'\',\''+escAttr(a.patients?.name||fullName(a.patients))+'\',\''+escAttr(a.ward)+'\',\''+escAttr(a.bed)+'\',\''+escAttr(a.admission_no)+'\')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:.81rem" onmouseover="this.style.background=\\x27#f0f9ff\\x27" onmouseout="this.style.background=\\x27#fff\\x27"><strong>'+escapeHtml(a.patients?.name||fullName(a.patients))+'</strong> <span style="color:var(--slate);font-size:.72rem">'+escapeHtml(a.admission_no)+' · '+escapeHtml(a.ward)+'/'+escapeHtml(a.bed)+'</span></div>').join('');
   } catch(e){}
 }
 function flagVital(inp,lo,hi) {
@@ -10916,7 +10916,7 @@ async function loadAppointments() {
     const fd=document.getElementById('appt-filter-date')?.value||today();
     const [{data:todayA},{data:allA}]=await Promise.all([sb.from('appointments').select('*').eq('appointment_date',today()).order('appointment_time'),sb.from('appointments').select('*').eq('appointment_date',fd).order('appointment_time')]);
     const rr=a=>'<tr><td>'+escapeHtml(a.appointment_time||'—')+'</td><td>'+escapeHtml(a.patient_name||'—')+'</td><td>'+statusBadge(a.appt_type)+'</td><td>'+escapeHtml(a.doctor||'—')+'</td><td>'+statusBadge(a.status)+'</td><td><div class="acts">'+
-      (a.phone?'<button class="btn btn-s btn-xs" onclick="sendAppointmentReminder(\''+a.id+'\',\''+escAttr(a.phone)+'\',\''+escAttr((a.patient_name||'').replace(/'/g,''))+'\',\''+a.appointment_date+'\',\''+escAttr(a.appointment_time||'')+'\')" title="Send SMS reminder">📲</button>':'')+
+      (a.phone?'<button class="btn btn-s btn-xs" onclick="sendAppointmentReminder(\''+escAttr(a.id)+'\',\''+escAttr(a.phone)+'\',\''+escAttr(a.patient_name||'')+'\',\''+escAttr(a.appointment_date)+'\',\''+escAttr(a.appointment_time||'')+'\')" title="Send SMS reminder">📲</button>':'')+
       '<button class="btn btn-s btn-xs" onclick="updateApptStatus(\''+a.id+'\',\'Arrived\')">✅</button><button class="btn btn-r btn-xs" onclick="updateApptStatus(\''+a.id+'\',\'Cancelled\')">✕</button></div></td></tr>';
     const waiting=(todayA||[]).filter(a=>a.status!=='Cancelled');
     waitBody.innerHTML=waiting.length?'<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Time</th><th>Patient</th><th>Type</th><th>Doctor</th><th>Status</th><th></th></tr></thead><tbody>'+waiting.map(rr).join('')+'</tbody></table></div>':'<div class="empty-state"><div class="empty-icon">🚶</div><div class="empty-title">No patients waiting today</div></div>';
@@ -11422,15 +11422,15 @@ async function loadAllResults() {
         const pt=ptMap[r.patient_id]||{};
         return '<tr>'+
           '<td><span class="bdg" style="background:'+(deptColors[r.dept]||'#f1f5f9')+'">'+r.dept+'</span></td>'+
-          '<td style="font-weight:600">'+(pt.name||fullName(pt)||'—')+'</td>'+
-          '<td style="font-family:DM Mono,monospace;font-size:.72rem;color:var(--teal)">'+(pt.mrn||pt.lab_no||'—')+'</td>'+
+          '<td style="font-weight:600">'+escapeHtml(pt.name||fullName(pt)||'—')+'</td>'+
+          '<td style="font-family:DM Mono,monospace;font-size:.72rem;color:var(--teal)">'+escapeHtml(pt.mrn||pt.lab_no||'—')+'</td>'+
           '<td style="font-size:.78rem">'+(pt.age||'?')+' / '+(pt.sex||'')+'</td>'+
           '<td style="font-size:.75rem">'+fmtDate(r.analysis_date||r.created_at)+'</td>'+
           '<td>'+(r.is_verified?'<span class="bdg" style="background:#dcfce7;color:#166534">\u2705 Verified</span>':'<span class="bdg" style="background:#fef9c3;color:#92400e">\u23f3 Pending</span>')+'</td>'+
           '<td><div class="acts">'+
-            '<button class="btn btn-p btn-xs" onclick="openEnterModalDept(\x27'+r.patient_id+'\x27,\x27'+r.dept+'\x27)">\ud83d\udcdd View/Edit</button>'+
-            '<button class="btn btn-s btn-xs" onclick="printResultByDept(\x27'+r.patient_id+'\x27,\x27'+r.dept+'\x27)">\ud83d\udda8</button>'+
-            (r.is_verified&&pt.phone?'<button class="btn btn-s btn-xs" onclick="sendResultReadySms(\x27'+r.patient_id+'\x27,\x27'+pt.phone+'\x27,\x27'+((pt.name||fullName(pt)||'').replace(/\x27/g,''))+'\x27)" title="Send SMS: results ready">\ud83d\udcf2</button>':'')+
+            '<button class="btn btn-p btn-xs" onclick="openEnterModalDept(\x27'+escAttr(r.patient_id)+'\x27,\x27'+escAttr(r.dept)+'\x27)">\ud83d\udcdd View/Edit</button>'+
+            '<button class="btn btn-s btn-xs" onclick="printResultByDept(\x27'+escAttr(r.patient_id)+'\x27,\x27'+escAttr(r.dept)+'\x27)">\ud83d\udda8</button>'+
+            (r.is_verified&&pt.phone?'<button class="btn btn-s btn-xs" onclick="sendResultReadySms(\x27'+escAttr(r.patient_id)+'\x27,\x27'+escAttr(pt.phone)+'\x27,\x27'+escAttr(pt.name||fullName(pt)||'')+'\x27)" title="Send SMS: results ready">\ud83d\udcf2</button>':'')+
           '</div></td></tr>';
       }).join('')+'</tbody></table></div>';
   } catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red)">'+escapeHtml(e.message)+'</div>'; }
@@ -15032,8 +15032,8 @@ async function loadNursingOrders(){
           '<td>'+escapeHtml(o.order_detail||'—')+'</td>'+
           '<td style="font-size:.7rem;color:var(--slate)">'+escapeHtml(o.ordered_by||'—')+'</td>'+
           '<td style="font-size:.7rem;color:var(--slate)">'+fmtDT(o.ordered_at)+'</td>'+
-          '<td><button class="btn btn-p btn-xs" onclick="completeNursingOrder(\''+o.id+'\')">✅ Mark Done</button>'+
-          '<button class="btn btn-s btn-xs" onclick="selectVitalsFromQueue(\''+o.patient_id+'\',\''+escapeHtml((pt.name||'').replace(/'/g,''))+'\')">📈 Vitals</button></td></tr>';
+          '<td><button class="btn btn-p btn-xs" onclick="completeNursingOrder(\''+escAttr(o.id)+'\')">✅ Mark Done</button>'+
+          '<button class="btn btn-s btn-xs" onclick="selectVitalsFromQueue(\''+escAttr(o.patient_id)+'\',\''+escAttr(pt.name||'')+'\')">📈 Vitals</button></td></tr>';
       }).join('')+'</tbody></table></div>';
   }catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>'; }
 }
