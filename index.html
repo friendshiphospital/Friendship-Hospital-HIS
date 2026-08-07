@@ -13041,11 +13041,18 @@ async function savePcrEntry(verify=false) {
   const payload = {
     patient_id:ptId, platform:g('pcr-platform')||'', analyzer:g('pcr-analyzer')||'',
     analysis_date:g('pcr-date')||today(), notes:g('pcr-notes')||'',
-    performed_by:currentProfile?.id, is_verified:verify,
-    verified_at:verify?new Date().toISOString():null,
+    performed_by:currentProfile?.id,
     target:targets[0]?.target||null, result:targets[0]?.result||null,
     ct_value:targets[0]?.ct_value||null, tests:{targets}
   };
+  if(verify){
+    const {data:pt}=await sb.from('patients').select('tests_requested').eq('id',ptId).maybeSingle();
+    const {data:existingRow}=await sb.from('results_pcr').select('verified_fields').eq('patient_id',ptId).maybeSingle();
+    const check=checkPcrVerificationComplete(pt?.tests_requested,targets);
+    if(!check.complete){ toast('⚠️ Cannot verify — missing results for: '+check.missingLabels.join(', '),'err'); return; }
+    payload.verified_fields=[...new Set([...(existingRow?.verified_fields||[]),...check.requiredFields])];
+  }
+  payload.is_verified=verify; payload.verified_at=verify?new Date().toISOString():null;
   try {
     await sb.from('results_pcr').upsert(payload,{onConflict:'patient_id'});
     if(verify) await updateSampleStatus(ptId,'Completed');
@@ -19885,7 +19892,28 @@ const DEPT_LOAD_MAP = {
         if(el){ el.value=result; el.dispatchEvent(new Event('change',{bubbles:true})); }
       });
     }},
-  pcr: {table:'results_pcr', fields:{platform:'pcr-platform',analyzer:'pcr-analyzer',analysis_date:'pcr-date',notes:'pcr-notes'}},
+  pcr: {table:'results_pcr', fields:{platform:'pcr-platform',analyzer:'pcr-analyzer',analysis_date:'pcr-date',notes:'pcr-notes'},
+    // tests.targets is a jsonb array of dynamically-added target rows, not
+    // flat columns -- with no restore step here, every previously-entered
+    // target/result/Ct silently vanished from the DOM on reload (found
+    // during the Lab Safety Phase 1 audit). Worse, saving again on top of
+    // that blank table would overwrite the DB with an empty targets array,
+    // permanently losing the earlier entries. Rebuild the rows from the
+    // saved data instead of leaving the table at its blank single starter row.
+    afterLoad:(data)=>{
+      const targets=data?.tests?.targets;
+      if(!targets || !targets.length || typeof addPcrTarget!=='function') return;
+      document.querySelectorAll('#pcr-targets-body tr').forEach(r=>r.remove());
+      pcrRowCount=0;
+      targets.forEach(t=>{
+        addPcrTarget();
+        const i=pcrRowCount-1;
+        const tEl=document.getElementById('pcr-target-'+i); if(tEl) tEl.value=t.target||'';
+        const rEl=document.getElementById('pcr-result-'+i); if(rEl) rEl.value=t.result||'';
+        const cEl=document.getElementById('pcr-ct-'+i); if(cEl) cEl.value=t.ct_value??'';
+        if(typeof setPcrFlag==='function') setPcrFlag(i);
+      });
+    }},
   histo: {table:'results_histopathology', fields:{specimen_site:'hi-site',analysis_date:'hi-date',gross_description:'hi-gross',microscopic:'hi-micro',diagnosis:'hi-diagnosis',grade:'hi-grade',stage:'hi-stage',notes:'hi-notes'},
     // adequacy and the IHC marker table both save nested (tests.adequacy,
     // ihc_results), not as flat columns, so the generic field mapping above
