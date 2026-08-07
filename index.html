@@ -2823,9 +2823,10 @@ html[dir="rtl"] body{direction:rtl;}
           <input type="hidden" id="r-existing-mrn">
           <div class="g3">
             <div class="fg"><label class="fl" data-i18n="reg_fname">First Name *</label><input class="fc" id="r-fname" placeholder="First name" oninput="regValidate()"></div>
-            <div class="fg"><label class="fl" data-i18n="reg_mname">Middle Name</label><input class="fc" id="r-mname"></div>
+            <div class="fg"><label class="fl" data-i18n="reg_mname">Middle Name</label><input class="fc" id="r-mname" oninput="regValidate()"></div>
             <div class="fg"><label class="fl" data-i18n="reg_lname">Last Name</label><input class="fc" id="r-lname" oninput="regValidate()"></div>
           </div>
+          <div id="r-name-metachar-hint" style="display:none;color:#b91c1c;font-size:.78rem;margin-top:-8px;margin-bottom:8px">⚠ Names can't contain &lt; &gt; &amp; " or ' — please remove these characters.</div>
           <div class="g4">
             <div class="fg"><label class="fl" data-i18n="reg_age">Age *</label><input class="fc" type="number" id="r-age" min="0" oninput="regValidate();updateRegRadSafetyFields()"></div>
             <div class="fg"><label class="fl" data-i18n="reg_unit">Unit</label><select class="fc" id="r-age-unit" onchange="updateRegRadSafetyFields()"><option>Years</option><option>Months</option><option>Days</option></select></div>
@@ -7380,6 +7381,14 @@ function escAttr(v){
   return String(v??'').replace(/\\/g,'\\\\').replace(/'/g,"\\'")
     .replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
+// Root-cause input validation for free-text name fields, matching
+// escapeHtml()'s own character class (& < > " ') -- display-side escaping
+// (above) stops an injected payload from ever RENDERING as markup, but a
+// name field is still the right place to reject the metacharacters
+// outright, not just contain them at every downstream display site.
+function hasHtmlMetachars(v){
+  return /[&<>"']/.test(String(v??''));
+}
 // ── TOAST ─────────────────────────────────────────────
 function toast(msg, type='') {
   const w = document.getElementById('toast-wrap');
@@ -10982,6 +10991,9 @@ async function submitRegistration() {
   if(!requireActiveShift()) return;
   const g=id=>document.getElementById(id)?.value||'';
   if(!g('r-fname')){ toast('First name required','err'); return; }
+  if(hasHtmlMetachars(g('r-fname'))||hasHtmlMetachars(g('r-mname'))||hasHtmlMetachars(g('r-lname'))||hasHtmlMetachars(g('r-kin-name'))){
+    toast('⚠️ Names can\'t contain < > & " or \' — please remove these characters and try again','err'); return;
+  }
   if(!g('r-sex')){ toast('Please select sex','err'); return; }
   const phoneDigits = g('r-phone').replace(/\D/g,'');
   if(!phoneDigits){ toast('Mobile number is required','err'); return; }
@@ -12503,9 +12515,12 @@ function clearExistingFilePatient(){
 
 function regValidate() {
   const g = id => document.getElementById(id)?.value||'';
-  const ok = g('r-fname') && g('r-sex') && g('r-age') && g('r-phone');
+  const namesClean = !hasHtmlMetachars(g('r-fname')) && !hasHtmlMetachars(g('r-mname')) && !hasHtmlMetachars(g('r-lname'));
+  const ok = g('r-fname') && g('r-sex') && g('r-age') && g('r-phone') && namesClean;
   const btn = document.getElementById('reg-step1-next');
   if(btn) btn.disabled = !ok;
+  const hint = document.getElementById('r-name-metachar-hint');
+  if(hint) hint.style.display = namesClean ? 'none' : '';
 }
 
 function calcAgeFromDob() {
