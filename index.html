@@ -5284,10 +5284,10 @@ html[dir="rtl"] body{direction:rtl;}
         <div class="card-body">
           <div class="g2">
             <div class="fg"><label class="fl">Specimen Type</label>
-              <select class="fc" id="mi-cult-specimen"><option>Urine</option><option>Blood</option><option>Wound Swab</option><option>Sputum</option><option>HVS</option><option>Throat Swab</option><option>CSF</option><option>Stool</option></select>
+              <select class="fc" id="mi-cult-specimen"><option></option><option>Urine</option><option>Blood</option><option>Wound Swab</option><option>Sputum</option><option>HVS</option><option>Throat Swab</option><option>CSF</option><option>Stool</option></select>
             </div>
             <div class="fg"><label class="fl">Culture Result</label>
-              <select class="fc" id="mi-cult-result"><option>No Growth</option><option>Growth after 24hr</option><option>Growth after 48hr</option><option>Growth after 72hr</option><option>Contaminated</option></select>
+              <select class="fc" id="mi-cult-result"><option></option><option>No Growth</option><option>Growth after 24hr</option><option>Growth after 48hr</option><option>Growth after 72hr</option><option>Contaminated</option></select>
             </div>
           </div>
           <div class="fg"><label class="fl">Organism Identified</label>
@@ -12176,11 +12176,19 @@ async function saveMicroEntry(verify=false) {
   const g=id=>document.getElementById(id)?.value||null, gn=id=>{ const v=parseFloat(document.getElementById(id)?.value); return isNaN(v)?null:v; };
   const sensFields=['amox','amp','coamox','pip','ceft','cefaz','cipro','levo','gent','amik','mero','imi','tmp','nitro','vanc','clinda','azithro','metro'];
   const sensitivity={}; sensFields.forEach(f=>{ const v=g('sen-'+f); if(v) sensitivity[f]=v; });
-  const payload={patient_id:ptId,analyzer:g('mi-analyzer')||'',analysis_date:g('mi-date')||today(),notes:g('mi-notes')||'',received_by:g('mi-by'),performed_by:currentProfile?.id,is_verified:verify,verified_at:verify?new Date().toISOString():null,
+  const payload={patient_id:ptId,analyzer:g('mi-analyzer')||'',analysis_date:g('mi-date')||today(),notes:g('mi-notes')||'',received_by:g('mi-by'),performed_by:currentProfile?.id,
     ua_color:g('mi-ua-color'),ua_appear:g('mi-ua-appear'),ua_sg:gn('mi-ua-sg'),ua_ph:gn('mi-ua-ph'),ua_protein:g('mi-ua-protein'),ua_glucose:g('mi-ua-glucose'),ua_ketones:g('mi-ua-ketones'),ua_blood:g('mi-ua-blood'),ua_bilirubin:g('mi-ua-bili'),ua_urobilinogen:g('mi-ua-ubg'),ua_nitrite:g('mi-ua-nitrite'),ua_leuk:g('mi-ua-leuk'),ua_wbc:gn('mi-ua-wbc'),ua_rbc:gn('mi-ua-rbc'),ua_epith:gn('mi-ua-epith'),ua_bacteria:g('mi-ua-bact'),ua_cast_hyal:gn('mi-ua-cast-hyal'),ua_cast_gran:g('mi-ua-cast-gran'),ua_crystals:g('mi-ua-crystals'),ua_yeast:g('mi-ua-yeast'),
     st_color:g('mi-st-color'),st_consist:g('mi-st-consist'),st_fob:g('mi-st-fob'),st_mucus:g('mi-st-mucus'),st_blood:g('mi-st-blood'),st_wbc:gn('mi-st-wbc'),st_rbc:gn('mi-st-rbc'),st_ova:g('mi-st-ova'),st_fat:g('mi-st-fat'),st_yeast:g('mi-st-yeast'),
     specimen_type:g('mi-cult-specimen'),culture_result:g('mi-cult-result'),culture_organism:g('mi-cult-organism'),culture_count:g('mi-cult-count'),culture_notes:g('mi-cult-notes'),sensitivity,
     csf_appear:g('mi-csf-appear'),csf_wbc:gn('mi-csf-wbc'),csf_rbc:gn('mi-csf-rbc'),csf_protein:gn('mi-csf-protein'),csf_glucose:gn('mi-csf-glucose'),csf_ratio:gn('mi-csf-ratio'),csf_chloride:gn('mi-csf-chloride'),csf_culture:g('mi-csf-culture')};
+  if(verify){
+    const {data:pt}=await sb.from('patients').select('tests_requested').eq('id',ptId).maybeSingle();
+    const {data:existingRow}=await sb.from('results_microbiology').select('verified_fields').eq('patient_id',ptId).maybeSingle();
+    const check=checkMicroVerificationComplete(pt?.tests_requested,payload);
+    if(!check.complete){ toast('⚠️ Cannot verify — missing results for: '+check.missingLabels.join(', '),'err'); return; }
+    payload.verified_fields=[...new Set([...(existingRow?.verified_fields||[]),...check.requiredFields])];
+  }
+  payload.is_verified=verify; payload.verified_at=verify?new Date().toISOString():null;
   try { await sb.from('results_microbiology').upsert(payload,{onConflict:'patient_id'}); if(verify) await updateSampleStatus(ptId,'Completed'); toast(verify?'✅ Microbiology saved & verified':'💾 Microbiology saved','ok'); } catch(e){ toast(e.message,'err'); }
 }
 // ── PRINT REPORTS FOR RESULT ENTRY PAGES ─────────────
