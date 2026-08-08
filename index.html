@@ -7960,7 +7960,7 @@ async function loadBedConfig() {
     const {data}=await sb.from('beds').select('*').order('ward').order('room').order('bed_number');
     if(!data?.length){ body.innerHTML='<div style="padding:12px;font-size:.78rem;color:var(--slate)">No beds configured</div>'; return; }
     body.innerHTML='<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Ward</th><th>Room</th><th>Bed</th><th>Status</th><th></th></tr></thead><tbody>'+
-      data.map(b=>'<tr><td>'+b.ward+'</td><td>'+b.room+'</td><td>'+b.bed_number+'</td><td>'+statusBadge(b.status)+'</td><td><button class="btn btn-r btn-xs" onclick="deleteBed(\x27'+b.id+'\x27)">✕</button></td></tr>').join('')+
+      data.map(b=>'<tr><td>'+escapeHtml(b.ward)+'</td><td>'+escapeHtml(b.room)+'</td><td>'+escapeHtml(b.bed_number)+'</td><td>'+statusBadge(b.status)+'</td><td><button class="btn btn-r btn-xs" onclick="deleteBed(\x27'+b.id+'\x27)">✕</button></td></tr>').join('')+
       '</tbody></table></div>';
   } catch(e){ body.innerHTML='<div style="padding:10px;color:var(--red);font-size:.78rem">'+escapeHtml(e.message)+'</div>'; }
 }
@@ -8401,11 +8401,11 @@ async function loadDeliveryLog(){
     body.innerHTML='<div style="overflow-x:auto"><table class="tbl" style="font-size:.78rem"><thead><tr><th>Time</th><th>Phone</th><th>Purpose</th><th>Message</th><th>Status</th><th>Sent By</th></tr></thead><tbody>'+
       data.map(m=>'<tr>'+
         '<td style="font-size:.72rem;color:var(--slate)">'+fmtDT(m.created_at)+'</td>'+
-        '<td style="font-family:DM Mono,monospace;font-size:.72rem">'+(m.phone||'—')+'</td>'+
-        '<td>'+(purposeLabels[m.purpose]||m.purpose||'—')+'</td>'+
-        '<td style="max-width:280px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+(m.message||'').replace(/"/g,'&quot;')+'">'+(m.message||'—')+'</td>'+
-        '<td>'+(m.status==='sent'?'<span class="bdg" style="background:#dcfce7;color:#166534">✅ Sent</span>':'<span class="bdg" style="background:#fee2e2;color:#b91c1c" title="'+(m.error||'').replace(/"/g,'&quot;')+'">❌ Failed</span>')+'</td>'+
-        '<td style="font-size:.72rem">'+(m.sent_by_name||'—')+'</td>'+
+        '<td style="font-family:DM Mono,monospace;font-size:.72rem">'+escapeHtml(m.phone||'—')+'</td>'+
+        '<td>'+escapeHtml(purposeLabels[m.purpose]||m.purpose||'—')+'</td>'+
+        '<td style="max-width:280px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+escapeHtml(m.message||'')+'">'+escapeHtml(m.message||'—')+'</td>'+
+        '<td>'+(m.status==='sent'?'<span class="bdg" style="background:#dcfce7;color:#166534">✅ Sent</span>':'<span class="bdg" style="background:#fee2e2;color:#b91c1c" title="'+escapeHtml(m.error||'')+'">❌ Failed</span>')+'</td>'+
+        '<td style="font-size:.72rem">'+escapeHtml(m.sent_by_name||'—')+'</td>'+
       '</tr>').join('')+'</tbody></table></div>';
   }catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>'; }
 }
@@ -8476,9 +8476,9 @@ async function loadDashboard() {
       sb.from('critical_values').select('id,parameter,value,created_at').order('created_at',{ascending:false}).limit(3),
     ]);
     const events=[];
-    (rptS.data||[]).forEach(p=>events.push({t:new Date(p.created_at),icon:'📋',text:'Patient registered: '+(p.name||fullName(p))}));
-    (admS.data||[]).forEach(a=>events.push({t:new Date(a.created_at),icon:'🛏',text:'Admission '+a.admission_no+' ('+a.admission_type+')'}));
-    (critS.data||[]).forEach(c=>events.push({t:new Date(c.created_at),icon:'🚨',text:'Critical: '+c.parameter+' = '+c.value}));
+    (rptS.data||[]).forEach(p=>events.push({t:new Date(p.created_at),icon:'📋',text:'Patient registered: '+escapeHtml(p.name||fullName(p))}));
+    (admS.data||[]).forEach(a=>events.push({t:new Date(a.created_at),icon:'🛏',text:'Admission '+escapeHtml(a.admission_no||'')+' ('+escapeHtml(a.admission_type||'')+')'}));
+    (critS.data||[]).forEach(c=>events.push({t:new Date(c.created_at),icon:'🚨',text:'Critical: '+escapeHtml(c.parameter||'')+' = '+escapeHtml(c.value||'')}));
     events.sort((a,b)=>b.t-a.t);
     const feed=document.getElementById('dash-activity');
     if(feed) feed.innerHTML=events.slice(0,10).map(e=>'<div class="act-item"><span class="act-icon">'+e.icon+'</span><div class="act-body"><div class="act-text">'+e.text+'</div><div class="act-time">'+fmtDT(e.t)+'</div></div></div>').join('')||'<div style="font-size:.78rem;color:var(--slate);padding:8px">No recent activity</div>';
@@ -8620,11 +8620,11 @@ function renderAdmTable(data) {
   if(!data.length){ body.innerHTML='<div class="empty-state"><div class="empty-icon">🛏</div><div class="empty-title">No admissions found</div></div>'; return; }
   const los=a=>{ if(!a.admission_date) return '—'; return Math.ceil((new Date()-new Date(a.admission_date))/(864e5))+'d'; };
   body.innerHTML='<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Adm No</th><th>Patient</th><th>Ward/Bed</th><th>Doctor</th><th>Diagnosis</th><th>LOS</th><th>Status</th><th>Actions</th></tr></thead><tbody>'+
-    data.map(a=>'<tr><td><span style="font-family:DM Mono,monospace;font-size:.75rem;font-weight:700;color:var(--teal)">'+a.admission_no+'</span></td>'+
-      '<td><div style="font-weight:600">'+(a.patients?.name||fullName(a.patients)||'—')+'</div><div style="font-size:.68rem;color:var(--slate)">'+(a.patients?.mrn||'')+' · '+(a.patients?.age||'?')+(a.patients?.age_unit||'')+' / '+(a.patients?.sex||'')+'</div></td>'+
-      '<td>'+(a.ward||'—')+'<br><span style="font-size:.68rem;color:var(--slate)">'+(a.room||'')+' '+(a.bed||'')+'</span></td>'+
-      '<td style="font-size:.79rem">'+(a.admitting_doctor||'—')+'</td>'+
-      '<td style="font-size:.78rem;max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+(a.primary_diagnosis||'—')+'</td>'+
+    data.map(a=>'<tr><td><span style="font-family:DM Mono,monospace;font-size:.75rem;font-weight:700;color:var(--teal)">'+escapeHtml(a.admission_no)+'</span></td>'+
+      '<td><div style="font-weight:600">'+escapeHtml(a.patients?.name||fullName(a.patients)||'—')+'</div><div style="font-size:.68rem;color:var(--slate)">'+escapeHtml(a.patients?.mrn||'')+' · '+(a.patients?.age||'?')+(a.patients?.age_unit||'')+' / '+(a.patients?.sex||'')+'</div></td>'+
+      '<td>'+escapeHtml(a.ward||'—')+'<br><span style="font-size:.68rem;color:var(--slate)">'+escapeHtml(a.room||'')+' '+escapeHtml(a.bed||'')+'</span></td>'+
+      '<td style="font-size:.79rem">'+escapeHtml(a.admitting_doctor||'—')+'</td>'+
+      '<td style="font-size:.78rem;max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+escapeHtml(a.primary_diagnosis||'—')+'</td>'+
       '<td style="font-size:.78rem">'+los(a)+'</td><td>'+statusBadge(a.status)+'</td>'+
       '<td><div class="acts"><button class="btn btn-s btn-xs" onclick="openAdmDetail(\x27'+a.id+'\x27)">📋</button>'+
       '<button class="btn btn-s btn-xs" onclick="openDischarge(\x27'+a.id+'\x27)">🏥</button>'+
@@ -8778,7 +8778,7 @@ function renderBedGrid() {
     const adm=b._admission;
     let info;
     if(b.status==='Occupied'||b.status==='Discharge Pending'){
-      info=adm?('<strong>'+(adm.patients?.name||'—')+'</strong><br>'+(adm.patients?.mrn||'')+' · '+(adm.admitting_doctor||'—')+'<br>'+fmtDate(adm.admission_date)):'<span style="opacity:.7">Chart unavailable</span>';
+      info=adm?('<strong>'+escapeHtml(adm.patients?.name||'—')+'</strong><br>'+escapeHtml(adm.patients?.mrn||'')+' · '+escapeHtml(adm.admitting_doctor||'—')+'<br>'+fmtDate(adm.admission_date)):'<span style="opacity:.7">Chart unavailable</span>';
     } else if(b.status==='Cleaning'||b.status==='Maintenance') {
       const mins=bedTurnaroundMinutes(b);
       info=b.status+(mins!=null?'<br><span style="font-weight:700">⏱ '+fmtMinutesElapsed(mins)+'</span>':'');
@@ -8794,8 +8794,8 @@ function renderBedGrid() {
     return '<div class="bed-tile '+cls+slaCls+isoCls+'" onclick="bedTileClick(\x27'+b.id+'\x27)">'+
       '<div class="bed-tile-menu" onclick="event.stopPropagation();openBedStatusMenu(event,\x27'+b.id+'\x27)">⋮</div>'+
       isoMarker+
-      '<div class="bed-tile-loc">'+b.ward+' · '+b.room+'</div>'+
-      '<div class="bed-tile-num">Bed '+b.bed_number+'</div>'+
+      '<div class="bed-tile-loc">'+escapeHtml(b.ward)+' · '+escapeHtml(b.room)+'</div>'+
+      '<div class="bed-tile-num">Bed '+escapeHtml(b.bed_number)+'</div>'+
       '<div class="bed-tile-info">'+info+'</div>'+
       readinessBadge+
     '</div>';
@@ -8876,7 +8876,7 @@ async function searchAdmPatients(q) {
     const {data}=await sb.from('patients').select('id,name,first_name,last_name,mrn,visit_no,age,age_unit,sex,patient_type').or('name.ilike.%'+q+'%,mrn.ilike.%'+q+'%,visit_no.ilike.%'+q+'%,phone.ilike.%'+q+'%').limit(8);
     if(!data?.length){ res.style.display='none'; return; }
     res.style.display='block';
-    res.innerHTML=data.map(p=>'<div onclick="selectAdmPatient('+JSON.stringify(p).replace(/"/g,'&quot;')+')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:.81rem" onmouseover="this.style.background=\x27#f0f9ff\x27" onmouseout="this.style.background=\x27#fff\x27"><strong>'+(p.name||fullName(p))+'</strong> <span style="color:var(--slate);font-size:.72rem">'+(p.mrn||'')+' · '+(p.age||'?')+(p.age_unit||'')+'y / '+(p.sex||'')+'</span></div>').join('');
+    res.innerHTML=data.map(p=>'<div onclick="selectAdmPatient('+JSON.stringify(p).replace(/"/g,'&quot;')+')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:.81rem" onmouseover="this.style.background=\x27#f0f9ff\x27" onmouseout="this.style.background=\x27#fff\x27"><strong>'+escapeHtml(p.name||fullName(p))+'</strong> <span style="color:var(--slate);font-size:.72rem">'+escapeHtml(p.mrn||'')+' · '+(p.age||'?')+(p.age_unit||'')+'y / '+(p.sex||'')+'</span></div>').join('');
   } catch(e){}
 }
 function selectAdmPatient(p) {
@@ -8978,9 +8978,9 @@ async function openAdmDetail(admId) {
     const pt=adm.patients;
     _admDetailCtx={admId,patId:pt?.id,name:pt?.name||fullName(pt),ward:adm.ward,room:adm.room,bed:adm.bed,admNo:adm.admission_no};
     const banner=document.getElementById('adm-detail-banner');
-    if(banner) banner.innerHTML='<div class="pb-i"><div class="pb-l">Patient</div><div class="pb-v">'+(pt?.name||fullName(pt))+'</div></div><div class="pb-i"><div class="pb-l">MRN</div><div class="pb-v">'+(pt?.mrn||'—')+'</div></div><div class="pb-i"><div class="pb-l">Age/Sex</div><div class="pb-v">'+(pt?.age||'?')+(pt?.age_unit||'')+' / '+(pt?.sex||'')+'</div></div><div class="pb-i"><div class="pb-l">Ward/Bed</div><div class="pb-v">'+(adm.ward||'—')+' / '+(adm.bed||'—')+'</div></div><div class="pb-i"><div class="pb-l">Adm No</div><div class="pb-v">'+(adm.admission_no||'—')+'</div></div><div class="pb-i"><div class="pb-l">Status</div><div class="pb-v">'+statusBadge(adm.status)+'</div></div>';
+    if(banner) banner.innerHTML='<div class="pb-i"><div class="pb-l">Patient</div><div class="pb-v">'+escapeHtml(pt?.name||fullName(pt))+'</div></div><div class="pb-i"><div class="pb-l">MRN</div><div class="pb-v">'+escapeHtml(pt?.mrn||'—')+'</div></div><div class="pb-i"><div class="pb-l">Age/Sex</div><div class="pb-v">'+(pt?.age||'?')+(pt?.age_unit||'')+' / '+(pt?.sex||'')+'</div></div><div class="pb-i"><div class="pb-l">Ward/Bed</div><div class="pb-v">'+escapeHtml(adm.ward||'—')+' / '+escapeHtml(adm.bed||'—')+'</div></div><div class="pb-i"><div class="pb-l">Adm No</div><div class="pb-v">'+escapeHtml(adm.admission_no||'—')+'</div></div><div class="pb-i"><div class="pb-l">Status</div><div class="pb-v">'+statusBadge(adm.status)+'</div></div>';
     const ov=document.getElementById('adm-detail-overview');
-    if(ov) ov.innerHTML='<div class="g2" style="padding:10px 0"><div><b>Admission Date:</b> '+fmtDT(adm.admission_date)+'</div><div><b>Type:</b> '+adm.admission_type+'</div><div><b>Doctor:</b> '+(adm.admitting_doctor||'—')+'</div><div><b>Diagnosis:</b> '+(adm.primary_diagnosis||'—')+'</div><div><b>Length of Stay:</b> <span id="adm-detail-los" style="font-weight:700;color:var(--teal)"></span></div><div><b>Notes:</b> '+(adm.notes||'—')+'</div></div>';
+    if(ov) ov.innerHTML='<div class="g2" style="padding:10px 0"><div><b>Admission Date:</b> '+fmtDT(adm.admission_date)+'</div><div><b>Type:</b> '+escapeHtml(adm.admission_type||'')+'</div><div><b>Doctor:</b> '+escapeHtml(adm.admitting_doctor||'—')+'</div><div><b>Diagnosis:</b> '+escapeHtml(adm.primary_diagnosis||'—')+'</div><div><b>Length of Stay:</b> <span id="adm-detail-los" style="font-weight:700;color:var(--teal)"></span></div><div><b>Notes:</b> '+escapeHtml(adm.notes||'—')+'</div></div>';
     updateAdmDetailLos(adm.admission_date);
     if(_admDetailLosTimer) clearInterval(_admDetailLosTimer);
     _admDetailLosTimer=setInterval(()=>updateAdmDetailLos(adm.admission_date),30000);
@@ -9018,7 +9018,7 @@ async function loadAdmDetailMeds(admId,patId) {
     const {data}=await sb.from('vital_signs').select('recorded_at,mar_entries,recorded_by').eq('admission_id',admId).not('mar_entries','is',null).order('recorded_at',{ascending:false}).limit(5);
     const rows=(data||[]).flatMap(v=>(Array.isArray(v.mar_entries)?v.mar_entries:[]).map(m=>({...m,_recorded_at:v.recorded_at,_by:v.recorded_by})));
     const list=rows.length?('<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Drug</th><th>Dose</th><th>Route</th><th>Status</th><th>Time</th></tr></thead><tbody>'+
-      rows.slice(0,8).map(m=>'<tr><td>'+(m.drug||'—')+'</td><td>'+(m.dose||'—')+'</td><td>'+(m.route||'—')+'</td><td>'+statusBadge(m.status||'—')+'</td><td>'+fmtDT(m._recorded_at)+'</td></tr>').join('')+
+      rows.slice(0,8).map(m=>'<tr><td>'+escapeHtml(m.drug||'—')+'</td><td>'+escapeHtml(m.dose||'—')+'</td><td>'+escapeHtml(m.route||'—')+'</td><td>'+statusBadge(m.status||'—')+'</td><td>'+fmtDT(m._recorded_at)+'</td></tr>').join('')+
       '</tbody></table></div>'):'<div style="padding:10px 0;font-size:.78rem;color:var(--slate)">No MAR entries recorded yet for this admission</div>';
     el.innerHTML=list+'<button class="btn btn-p" style="margin-top:10px" onclick="openMarForAdmPatient()">💊 Open Full MAR in Nursing</button>';
   } catch(e){ el.innerHTML='<div style="padding:10px;color:var(--red);font-size:.78rem">'+escapeHtml(e.message)+'</div>'; }
@@ -9038,7 +9038,7 @@ function openMarForAdmPatient() {
 async function loadAdmDetailTransfer(admId,ward,room,bed) {
   const el=document.getElementById('adm-detail-transfer'); if(!el||!sb) return;
   el.innerHTML='<div style="padding:6px 0">'+
-    '<div style="font-size:.78rem;color:var(--slate);margin-bottom:10px">Current bed: <strong>'+(ward||'—')+' / '+(room||'—')+' / '+(bed||'—')+'</strong></div>'+
+    '<div style="font-size:.78rem;color:var(--slate);margin-bottom:10px">Current bed: <strong>'+escapeHtml(ward||'—')+' / '+escapeHtml(room||'—')+' / '+escapeHtml(bed||'—')+'</strong></div>'+
     '<div class="g3">'+
       '<div class="fg"><label class="fl">New Ward</label><select class="fc" id="xfer-ward" onchange="loadTransferRooms()"><option value="">Select…</option></select></div>'+
       '<div class="fg"><label class="fl">New Room</label><select class="fc" id="xfer-room" onchange="loadTransferBeds()"><option>—</option></select></div>'+
@@ -9065,7 +9065,7 @@ async function loadTransferRooms() {
   try {
     const {data}=await sb.from('beds').select('room').eq('ward',ward).eq('status','Available').order('room');
     const rooms=[...new Set((data||[]).map(b=>b.room))];
-    rs.innerHTML=rooms.map(r=>'<option>'+r+'</option>').join('')||'<option>—</option>';
+    rs.innerHTML=rooms.map(r=>'<option>'+escapeHtml(r)+'</option>').join('')||'<option>—</option>';
   } catch(e){}
   loadTransferBeds();
 }
@@ -9074,7 +9074,7 @@ async function loadTransferBeds() {
   const bs=document.getElementById('xfer-bed'); if(!ward||!room||!bs||!sb) return;
   try {
     const {data}=await sb.from('beds').select('bed_number').eq('ward',ward).eq('room',room).eq('status','Available').order('bed_number');
-    bs.innerHTML=(data||[]).map(b=>'<option>'+b.bed_number+'</option>').join('')||'<option>—</option>';
+    bs.innerHTML=(data||[]).map(b=>'<option>'+escapeHtml(b.bed_number)+'</option>').join('')||'<option>—</option>';
   } catch(e){}
 }
 async function loadTransferHistory(admId) {
@@ -9083,7 +9083,7 @@ async function loadTransferHistory(admId) {
     const {data}=await sb.from('bed_transfers').select('*').eq('admission_id',admId).order('transferred_at',{ascending:false});
     if(!data?.length){ el.innerHTML='<div style="font-size:.75rem;color:var(--slate)">No transfers recorded</div>'; return; }
     el.innerHTML='<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>From</th><th>To</th><th>Reason</th><th>By</th><th>Time</th></tr></thead><tbody>'+
-      data.map(x=>'<tr><td>'+x.from_ward+' / '+x.from_room+' / '+x.from_bed+'</td><td>'+x.to_ward+' / '+x.to_room+' / '+x.to_bed+'</td><td style="font-size:.75rem">'+(x.reason||'—')+'</td><td>'+(x.transferred_by_name||'—')+'</td><td>'+fmtDT(x.transferred_at)+'</td></tr>').join('')+
+      data.map(x=>'<tr><td>'+escapeHtml(x.from_ward)+' / '+escapeHtml(x.from_room)+' / '+escapeHtml(x.from_bed)+'</td><td>'+escapeHtml(x.to_ward)+' / '+escapeHtml(x.to_room)+' / '+escapeHtml(x.to_bed)+'</td><td style="font-size:.75rem">'+escapeHtml(x.reason||'—')+'</td><td>'+escapeHtml(x.transferred_by_name||'—')+'</td><td>'+fmtDT(x.transferred_at)+'</td></tr>').join('')+
       '</tbody></table></div>';
   } catch(e){ el.innerHTML='<div style="font-size:.75rem;color:var(--red)">'+escapeHtml(e.message)+'</div>'; }
 }
@@ -9239,7 +9239,7 @@ async function loadOTSchedule() {
     setText('ots-total',all.length); setText('ots-done',all.filter(a=>a.status==='Completed').length);
     setText('ots-inprog',all.filter(a=>a.status==='In Progress').length); setText('ots-emerg',all.filter(a=>a.operation_type==='Emergency').length);
     if(!all.length){ body.innerHTML='<div class="empty-state"><div class="empty-icon">🔪</div><div class="empty-title">No operations scheduled</div></div>'; return; }
-    body.innerHTML=all.map(b=>'<div class="ot-time-card"><div class="ot-time-slot">'+(b.start_time||'—')+'</div><div class="ot-info"><div class="ot-op">'+(b.operation_name||'—')+'</div><div class="ot-meta">'+(b.patients?.name||fullName(b.patients)||'—')+' · '+(b.surgeon||'—')+' · '+(b.theatre_room||'—')+'</div><div class="ot-meta">Anaest: '+(b.anaesthetist||'—')+' · '+(b.anaesthesia_type||'—')+' · ASA '+(b.asa_class||'—')+'</div></div><div>'+statusBadge(b.status)+'</div><div class="ot-acts">'+
+    body.innerHTML=all.map(b=>'<div class="ot-time-card"><div class="ot-time-slot">'+escapeHtml(b.start_time||'—')+'</div><div class="ot-info"><div class="ot-op">'+escapeHtml(b.operation_name||'—')+'</div><div class="ot-meta">'+escapeHtml(b.patients?.name||fullName(b.patients)||'—')+' · '+escapeHtml(b.surgeon||'—')+' · '+escapeHtml(b.theatre_room||'—')+'</div><div class="ot-meta">Anaest: '+escapeHtml(b.anaesthetist||'—')+' · '+escapeHtml(b.anaesthesia_type||'—')+' · ASA '+escapeHtml(b.asa_class||'—')+'</div></div><div>'+statusBadge(b.status)+'</div><div class="ot-acts">'+
       '<button class="btn btn-s btn-xs" onclick="openWhoChecklist(\''+b.id+'\')">☑ WHO Checklist</button>'+
       (b.status==='Scheduled'?'<button class="btn btn-p btn-xs" onclick="startOperation(\''+b.id+'\')">▶ Start</button>':'')+
       (b.status==='In Progress'?'<button class="btn btn-p btn-xs" style="background:var(--green)" onclick="openPostop(\''+b.id+'\')">✅ Done</button>':'')+
@@ -9417,7 +9417,7 @@ async function searchOtPatients(q) {
     const f=data?.filter(a=>(a.patients?.name||fullName(a.patients)||'').toLowerCase().includes(q.toLowerCase())||(a.admission_no||'').toLowerCase().includes(q.toLowerCase()));
     if(!f?.length){ res.style.display='none'; return; }
     res.style.display='block';
-    res.innerHTML=f.map(a=>'<div onclick="selectOtPatient('+JSON.stringify({patient_id:a.patient_id,admission_id:a.id,name:a.patients?.name||fullName(a.patients),ward:a.ward,bed:a.bed,admission_no:a.admission_no}).replace(/"/g,'&quot;')+')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:.81rem" onmouseover="this.style.background=\\x27#f0f9ff\\x27" onmouseout="this.style.background=\\x27#fff\\x27"><strong>'+(a.patients?.name||fullName(a.patients))+'</strong> <span style="color:var(--slate);font-size:.72rem">'+a.admission_no+' · '+a.ward+'/'+a.bed+'</span></div>').join('');
+    res.innerHTML=f.map(a=>'<div onclick="selectOtPatient('+JSON.stringify({patient_id:a.patient_id,admission_id:a.id,name:a.patients?.name||fullName(a.patients),ward:a.ward,bed:a.bed,admission_no:a.admission_no}).replace(/"/g,'&quot;')+')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:.81rem" onmouseover="this.style.background=\\x27#f0f9ff\\x27" onmouseout="this.style.background=\\x27#fff\\x27"><strong>'+escapeHtml(a.patients?.name||fullName(a.patients))+'</strong> <span style="color:var(--slate);font-size:.72rem">'+escapeHtml(a.admission_no)+' · '+escapeHtml(a.ward)+'/'+escapeHtml(a.bed)+'</span></div>').join('');
   } catch(e){}
 }
 function selectOtPatient(p) {
@@ -9778,11 +9778,11 @@ async function loadDoctorQueue() {
         ' onmouseover="this.style.borderColor=\x27var(--teal)\x27;this.style.background=\x27var(--teal-lt)\x27"'+
         ' onmouseout="this.style.borderColor=\x27var(--border)\x27;this.style.background=\x27#fff\x27">'+
         '<div style="display:flex;align-items:center;justify-content:space-between;gap:6px">'+
-        '<span style="font-weight:700;font-size:.84rem">'+(p.name||fullName(p))+'</span>'+
+        '<span style="font-weight:700;font-size:.84rem">'+escapeHtml(p.name||fullName(p))+'</span>'+
         (ready?'<span class="bdg" style="background:#dcfce7;color:#166534" title="Lab/Radiology result ready for review">\ud83d\udd14 Result Ready</span>':'')+
         paymentTag(p.payment_status)+'</div>'+
-        '<div style="font-size:.69rem;color:var(--slate);margin-top:3px">'+(p.mrn||'')+' · '+(p.age||'?')+(p.age_unit||'y')+'/'+(p.sex||'?')+' · '+(p.diagnosis||'—')+'</div>'+
-        '<div style="font-size:.68rem;margin-top:2px;color:var(--teal);font-weight:600">'+(p.visit_destination?'\u2192 '+p.visit_destination:'')+' '+(p.priority&&p.priority!=='Routine'?'· '+p.priority:'')+'</div>'+
+        '<div style="font-size:.69rem;color:var(--slate);margin-top:3px">'+escapeHtml(p.mrn||'')+' · '+(p.age||'?')+(p.age_unit||'y')+'/'+(p.sex||'?')+' · '+escapeHtml(p.diagnosis||'—')+'</div>'+
+        '<div style="font-size:.68rem;margin-top:2px;color:var(--teal);font-weight:600">'+(p.visit_destination?'\u2192 '+escapeHtml(p.visit_destination):'')+' '+(p.priority&&p.priority!=='Routine'?'· '+escapeHtml(p.priority):'')+'</div>'+
         '<div style="font-size:.66rem;margin-top:2px;color:var(--slate)">Registered '+fmtDT(p.created_at)+'</div>'+
         '<div style="margin-top:4px">'+visitStatusBadge(p)+'</div></div>';
     }).join('');
@@ -11469,11 +11469,11 @@ async function loadCriticals() {
       const tc=elapsed!=null&&elapsed>30&&!c.is_acknowledged?'color:#b91c1c;font-weight:700':'';
       return '<tr style="'+(c.is_acknowledged?'':'background:#fff1f2')+'">'+
         '<td style="font-size:.72rem;'+tc+'">'+fmtDT(c.created_at)+(elapsed!=null&&!c.is_acknowledged?'<div style="font-size:.65rem;color:#b91c1c">'+elapsed+' min ago</div>':'')+'</td>'+
-        '<td style="font-weight:600">'+escapeHtml(pt.name||'—')+'<div style="font-size:.68rem;color:var(--slate)">'+(pt.mrn||pt.lab_no||'')+(pt.ward?' \u00b7 '+pt.ward:'')+'</div></td>'+
-        '<td style="font-size:.78rem">'+(c.department||'—')+'</td>'+
-        '<td style="font-weight:700;color:#b91c1c">'+(c.parameter||'—')+': <span style="font-size:.9rem">'+(c.value||'—')+'</span> '+(c.unit||'')+'<div style="font-size:.68rem;color:#92400e">Ref: '+(c.reference||'—')+'</div></td>'+
-        '<td style="font-size:.72rem">'+(c.notified_by||'—')+'</td>'+
-        '<td style="font-size:.72rem">'+(c.clinician_notified||pt.doctor||'—')+'</td>'+
+        '<td style="font-weight:600">'+escapeHtml(pt.name||'—')+'<div style="font-size:.68rem;color:var(--slate)">'+escapeHtml(pt.mrn||pt.lab_no||'')+(pt.ward?' \u00b7 '+escapeHtml(pt.ward):'')+'</div></td>'+
+        '<td style="font-size:.78rem">'+escapeHtml(c.department||'—')+'</td>'+
+        '<td style="font-weight:700;color:#b91c1c">'+escapeHtml(c.parameter||'—')+': <span style="font-size:.9rem">'+escapeHtml(c.value||'—')+'</span> '+escapeHtml(c.unit||'')+'<div style="font-size:.68rem;color:#92400e">Ref: '+escapeHtml(c.reference||'—')+'</div></td>'+
+        '<td style="font-size:.72rem">'+escapeHtml(c.notified_by||'—')+'</td>'+
+        '<td style="font-size:.72rem">'+escapeHtml(c.clinician_notified||pt.doctor||'—')+'</td>'+
         '<td>'+(c.is_acknowledged?'<span class="bdg" style="background:#dcfce7;color:#166534">\u2705 Ack</span>':'<span class="bdg" style="background:#fee2e2;color:#b91c1c">\u26a0\ufe0f Pending</span>')+'</td>'+
         '<td><div class="acts">'+
           (!c.is_acknowledged?'<button class="btn btn-p btn-xs" onclick="openCritAck(\x27'+c.id+'\x27)">\u2705 Ack</button>':'')+
@@ -11562,7 +11562,7 @@ async function searchPtHistory(q) {
     const {data}=await sb.from('patients').select('id,name,first_name,last_name,mrn,lab_no,age,age_unit,sex,phone').or('name.ilike.%'+q+'%,mrn.ilike.%'+q+'%,lab_no.ilike.%'+q+'%,phone.ilike.%'+q+'%').limit(8);
     if(!data?.length){ res.style.display='none'; return; }
     res.style.display='block';
-    res.innerHTML=data.map(p=>'<div onclick="selectPthPatient('+JSON.stringify(p).replace(/"/g,'&quot;')+')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:.81rem" onmouseover="this.style.background=\\x27#f0f9ff\\x27" onmouseout="this.style.background=\\x27#fff\\x27"><strong>'+(p.name||fullName(p))+'</strong> <span style="color:var(--slate);font-size:.72rem">'+(p.mrn||p.lab_no||'')+' · '+(p.age||'?')+(p.age_unit||'')+' / '+(p.sex||'')+'</span></div>').join('');
+    res.innerHTML=data.map(p=>'<div onclick="selectPthPatient('+JSON.stringify(p).replace(/"/g,'&quot;')+')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:.81rem" onmouseover="this.style.background=\\x27#f0f9ff\\x27" onmouseout="this.style.background=\\x27#fff\\x27"><strong>'+escapeHtml(p.name||fullName(p))+'</strong> <span style="color:var(--slate);font-size:.72rem">'+escapeHtml(p.mrn||p.lab_no||'')+' · '+(p.age||'?')+(p.age_unit||'')+' / '+(p.sex||'')+'</span></div>').join('');
   } catch(e){}
 }
 // Admin-only. Deletes a person entirely — every visit sharing their MRN,
@@ -12238,7 +12238,7 @@ async function printHemReport() {
       sect('White Cell Differential',[row('Neutrophils',r.neut,'%',50,70,CBC),row('Lymphocytes',r.lymph,'%',20,40,CBC),row('Monocytes',r.mono,'%',2,10,CBC),row('Eosinophils',r.eosi,'%',1,6,CBC),row('Basophils',r.baso,'%',0,1,CBC),row('Neutrophils Abs.',r.neut_abs,'×10³/µL',1.8,7.7,CBC),row('Lymphocytes Abs.',r.lymph_abs,'×10³/µL',1.0,4.8,CBC)])+
       sect('Coagulation',[row('PT',r.pt,'sec',11,14,'PT / INR'),row('INR',r.inr,'',0.8,1.2,'PT / INR'),row('aPTT',r.aptt,'sec',25,35,'aPTT'),row('TT',r.tt,'sec',10,17,'PT / INR|aPTT'),row('D-Dimer',r.ddimer,'mg/L FEU',0,0.5,'D-Dimer')])+
       sect('ESR & Blood Group',[(wanted('ESR')&&r.esr!=null)?row('ESR',r.esr,'mm/hr',0,20,'ESR'):'', (wanted('Blood Group & Rh|Cross-Match')&&r.blood_group)?'<tr><td style="padding:4px 8px">Blood Group</td><td style="padding:4px 8px;font-weight:700;color:#0b7a75;font-size:11pt">'+r.blood_group+' '+(r.rh_factor||'')+'</td><td colspan="3"></td></tr>':''])+
-      sect('Peripheral Blood Film',[(wanted('Blood Film')&&r.film_result)?'<tr><td style="padding:4px 8px">Blood Film</td><td colspan="3" style="padding:4px 8px">'+r.film_result+'</td><td></td></tr>':'']);
+      sect('Peripheral Blood Film',[(wanted('Blood Film')&&r.film_result)?'<tr><td style="padding:4px 8px">Blood Film</td><td colspan="3" style="padding:4px 8px">'+escapeHtml(r.film_result)+'</td><td></td></tr>':'']);
     if(!body){ toast('⚠️ No saved results match this patient\'s requested tests — click Save Results first','err'); return; }
     const html=printHeader('Haematology Report — CBC')+ptB+'<table style="width:100%;border-collapse:collapse"><thead><tr style="background:#1e3a5a;color:#fff"><th style="padding:6px 8px;font-size:8.5pt;text-align:left">Parameter</th><th style="padding:6px 8px;font-size:8.5pt;text-align:left">Result</th><th style="padding:6px 8px;font-size:8.5pt;text-align:left">Unit</th><th style="padding:6px 8px;font-size:8.5pt;text-align:left">Reference</th><th style="padding:6px 8px;font-size:8.5pt;text-align:left">Flag</th></tr></thead><tbody>'+body+
       '</tbody></table>'+(r.notes?'<div style="background:#f8fafd;border-left:3px solid #0b7a75;padding:10px 12px;margin-top:12px;font-size:9pt"><strong>Comments:</strong> '+escapeHtml(r.notes)+'</div>':'')+
@@ -12352,7 +12352,7 @@ async function searchExistingFilePatient(q){
     data.forEach(p=>{ if(!byMrn[p.mrn]) byMrn[p.mrn]=p; });
     const unique=Object.values(byMrn);
     box.style.display='block';
-    box.innerHTML=unique.map(p=>'<div onclick="selectExistingFilePatient(\''+p.mrn+'\')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:.8rem" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'"><div style="font-weight:700">'+(p.name||fullName(p))+' · MRN '+p.mrn+'</div><div style="font-size:.7rem;color:var(--slate)">'+(p.phone||'—')+' · '+(p.age||'?')+(p.age_unit||'y')+' / '+(p.sex||'')+(p.visit_no?' · Last visit: '+p.visit_no:'')+'</div></div>').join('');
+    box.innerHTML=unique.map(p=>'<div onclick="selectExistingFilePatient(\''+escAttr(p.mrn)+'\')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:.8rem" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'"><div style="font-weight:700">'+escapeHtml(p.name||fullName(p))+' · MRN '+escapeHtml(p.mrn)+'</div><div style="font-size:.7rem;color:var(--slate)">'+escapeHtml(p.phone||'—')+' · '+(p.age||'?')+(p.age_unit||'y')+' / '+(p.sex||'')+(p.visit_no?' · Last visit: '+escapeHtml(p.visit_no):'')+'</div></div>').join('');
   }catch(e){}
 }
 // Jumps to a specific patient's visit on the Patient History Timeline page,
@@ -12479,7 +12479,7 @@ async function selectExistingFilePatient(mrn){
         const dx=v.diagnosis||'—'; const dxShort=dx.length>30?dx.slice(0,30)+'…':dx;
         const link=canViewHistory?'<a href="javascript:void(0)" onclick="openPatientHistoryTimeline(\''+v.id+'\')" style="color:var(--teal);font-weight:600;white-space:nowrap;flex-shrink:0">View →</a>':'';
         return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:3px 0;border-bottom:1px solid var(--border)">'
-          +'<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+fmtDate(v.created_at)+' '+dest+' <span style="color:var(--slate)">'+dxShort+'</span></span>'+link+'</div>';
+          +'<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+fmtDate(v.created_at)+' '+dest+' <span style="color:var(--slate)">'+escapeHtml(dxShort)+'</span></span>'+link+'</div>';
       }).join('');
       histBox.innerHTML='<div style="font-weight:700;margin-bottom:4px">📋 '+data.length+' previous visit(s)'+(data.length>5?' (showing 5 most recent)':'')+'</div>'+rows;
     }
@@ -13353,7 +13353,7 @@ async function printMicroReportFull() {
     const req=new Set((pt.tests_requested||[]).map(t=>String(t).toLowerCase().trim()));
     const wanted=(tag)=>!req.size || tag.split('|').some(t=>req.has(t.toLowerCase().trim()));
     const ptB=buildLabPtBanner(pt, r.analysis_date||r.created_at);
-    const mrow=(name,val,ref)=>'<tr style="border-bottom:1px solid #f1f5fb"><td style="padding:3px 8px;font-size:9pt">'+name+'</td><td style="padding:3px 8px;font-size:9pt">'+(val??'—')+'</td><td style="padding:3px 8px;font-size:8pt;color:#64748b">'+(ref||'')+'</td></tr>';
+    const mrow=(name,val,ref)=>'<tr style="border-bottom:1px solid #f1f5fb"><td style="padding:3px 8px;font-size:9pt">'+name+'</td><td style="padding:3px 8px;font-size:9pt">'+escapeHtml(val??'—')+'</td><td style="padding:3px 8px;font-size:8pt;color:#64748b">'+escapeHtml(ref||'')+'</td></tr>';
     const sh=l=>'<tr style="background:#f0fdf4"><td colspan="3" style="padding:4px 8px;font-weight:700;font-size:8pt;text-transform:uppercase;letter-spacing:.5px;color:#15803d">'+l+'</td></tr>';
     const sect=(label,rows)=>{ const body=rows.filter(Boolean).join(''); return body?sh(label)+body:''; };
     const CULTURE_TAG='Urine Culture & Sensitivity|Blood Culture|Wound Swab C/S|Sputum C/S|Stool Culture|High Vaginal Swab|Throat Swab|CSF Culture';
@@ -13411,12 +13411,12 @@ async function loadInfectionFlags() {
       const badge = f.active ? '<span class="bdg" style="background:#fee2e2;color:#b91c1c">Active</span>' : '<span class="bdg bdg-sl">Resolved</span>';
       const typeBadge = {Contact:'#fee2e2',Droplet:'#dbeafe',Airborne:'#fef3c7',Enteric:'#dcfce7'}[f.flag_type]||'#f1f5f9';
       return '<tr>'+
-        '<td style="padding:7px 10px;font-weight:600">'+(pt?.name||'Unknown')+'<div style="font-size:.68rem;color:var(--slate)">'+(pt?.mrn||'')+'</div></td>'+
-        '<td style="padding:7px 10px;font-size:.8rem">'+(pt?.ward||'—')+'</td>'+
-        '<td style="padding:7px 10px"><span style="background:'+typeBadge+';padding:2px 8px;border-radius:20px;font-size:.72rem;font-weight:700">'+(f.flag_type||'—')+'</span></td>'+
-        '<td style="padding:7px 10px;font-size:.8rem">'+(f.organism||'—')+'</td>'+
-        '<td style="padding:7px 10px;font-size:.78rem">'+(f.precautions||'—')+'</td>'+
-        '<td style="padding:7px 10px;font-size:.78rem">'+(f.flagged_by||'—')+'</td>'+
+        '<td style="padding:7px 10px;font-weight:600">'+escapeHtml(pt?.name||'Unknown')+'<div style="font-size:.68rem;color:var(--slate)">'+escapeHtml(pt?.mrn||'')+'</div></td>'+
+        '<td style="padding:7px 10px;font-size:.8rem">'+escapeHtml(pt?.ward||'—')+'</td>'+
+        '<td style="padding:7px 10px"><span style="background:'+typeBadge+';padding:2px 8px;border-radius:20px;font-size:.72rem;font-weight:700">'+escapeHtml(f.flag_type||'—')+'</span></td>'+
+        '<td style="padding:7px 10px;font-size:.8rem">'+escapeHtml(f.organism||'—')+'</td>'+
+        '<td style="padding:7px 10px;font-size:.78rem">'+escapeHtml(f.precautions||'—')+'</td>'+
+        '<td style="padding:7px 10px;font-size:.78rem">'+escapeHtml(f.flagged_by||'—')+'</td>'+
         '<td style="padding:7px 10px;font-size:.75rem;color:var(--slate)">'+fmtDate(f.flagged_at)+'</td>'+
         '<td style="padding:7px 10px">'+badge+'</td>'+
         '<td style="padding:7px 10px">'+
@@ -13458,7 +13458,7 @@ async function loadHandoverNotes() {
     container.innerHTML = data.map(h=>`
       <div class="card" style="margin-bottom:12px">
         <div class="card-hd">
-          <span class="card-title">${h.ward} Ward — ${h.shift||'Unknown'} Shift</span>
+          <span class="card-title">${escapeHtml(h.ward)} Ward — ${escapeHtml(h.shift||'Unknown')} Shift</span>
           <div style="display:flex;align-items:center;gap:10px">
             <span style="font-size:.75rem;color:var(--slate)">${fmtDate(h.handover_date||h.created_at)}</span>
             ${h.patient_count!=null?'<span class="bdg bdg-b">'+h.patient_count+' patients</span>':''}
@@ -13466,19 +13466,19 @@ async function loadHandoverNotes() {
         </div>
         <div class="card-body">
           <div class="g2" style="margin-bottom:10px">
-            <div style="font-size:.78rem"><span style="color:var(--slate);font-weight:600">Handing Over:</span> ${h.handing_over||'—'}</div>
-            <div style="font-size:.78rem"><span style="color:var(--slate);font-weight:600">Receiving:</span> ${h.receiving||'—'}</div>
+            <div style="font-size:.78rem"><span style="color:var(--slate);font-weight:600">Handing Over:</span> ${escapeHtml(h.handing_over||'—')}</div>
+            <div style="font-size:.78rem"><span style="color:var(--slate);font-weight:600">Receiving:</span> ${escapeHtml(h.receiving||'—')}</div>
           </div>
           ${(h.situation||h.background||h.assessment||h.recommendation)?'<div style="background:#f0f9ff;border-radius:8px;padding:10px 12px;margin-bottom:10px">'+
             '<div style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:#0369a1;margin-bottom:6px">SBAR</div>'+
-            (h.situation?'<div style="font-size:.78rem;margin-bottom:4px"><strong>S:</strong> '+h.situation+'</div>':'')+
-            (h.background?'<div style="font-size:.78rem;margin-bottom:4px"><strong>B:</strong> '+h.background+'</div>':'')+
-            (h.assessment?'<div style="font-size:.78rem;margin-bottom:4px"><strong>A:</strong> '+h.assessment+'</div>':'')+
-            (h.recommendation?'<div style="font-size:.78rem"><strong>R:</strong> '+h.recommendation+'</div>':'')+
+            (h.situation?'<div style="font-size:.78rem;margin-bottom:4px"><strong>S:</strong> '+escapeHtml(h.situation)+'</div>':'')+
+            (h.background?'<div style="font-size:.78rem;margin-bottom:4px"><strong>B:</strong> '+escapeHtml(h.background)+'</div>':'')+
+            (h.assessment?'<div style="font-size:.78rem;margin-bottom:4px"><strong>A:</strong> '+escapeHtml(h.assessment)+'</div>':'')+
+            (h.recommendation?'<div style="font-size:.78rem"><strong>R:</strong> '+escapeHtml(h.recommendation)+'</div>':'')+
           '</div>':''}
-          ${h.critical_patients?'<div style="margin-bottom:8px"><div style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:var(--red);margin-bottom:3px">Critical / High-Dependency Patients</div><div style="background:#fef2f2;border-radius:7px;padding:8px 10px;font-size:.8rem;line-height:1.6;white-space:pre-wrap">'+h.critical_patients+'</div></div>':''}
-          ${h.pending_tasks?'<div style="margin-bottom:8px"><div style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:var(--blue);margin-bottom:3px">Pending Tasks / Outstanding Orders</div><div style="background:#eff6ff;border-radius:7px;padding:8px 10px;font-size:.8rem;line-height:1.6;white-space:pre-wrap">'+h.pending_tasks+'</div></div>':''}
-          ${h.notes?'<div style="background:var(--bg);border-radius:7px;padding:10px 12px;font-size:.82rem;line-height:1.6;white-space:pre-wrap">'+h.notes+'</div>':'<div style="color:var(--slate);font-size:.8rem">No notes recorded.</div>'}
+          ${h.critical_patients?'<div style="margin-bottom:8px"><div style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:var(--red);margin-bottom:3px">Critical / High-Dependency Patients</div><div style="background:#fef2f2;border-radius:7px;padding:8px 10px;font-size:.8rem;line-height:1.6;white-space:pre-wrap">'+escapeHtml(h.critical_patients)+'</div></div>':''}
+          ${h.pending_tasks?'<div style="margin-bottom:8px"><div style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:var(--blue);margin-bottom:3px">Pending Tasks / Outstanding Orders</div><div style="background:#eff6ff;border-radius:7px;padding:8px 10px;font-size:.8rem;line-height:1.6;white-space:pre-wrap">'+escapeHtml(h.pending_tasks)+'</div></div>':''}
+          ${h.notes?'<div style="background:var(--bg);border-radius:7px;padding:10px 12px;font-size:.82rem;line-height:1.6;white-space:pre-wrap">'+escapeHtml(h.notes)+'</div>':'<div style="color:var(--slate);font-size:.8rem">No notes recorded.</div>'}
         </div>
       </div>`).join('');
   } catch(e){ container.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>'; }
@@ -13921,8 +13921,8 @@ async function loadPatientHistory(ptId) {
       html += '<div style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:var(--slate);margin-bottom:6px">Previous Consultations</div>';
       html += cons.map(c=>`<div style="border-left:3px solid var(--teal);padding:8px 12px;margin-bottom:8px;background:var(--bg);border-radius:0 8px 8px 0">
         <div style="font-size:.72rem;color:var(--slate)">${fmtDate(c.consultation_date||c.created_at)}</div>
-        <div style="font-weight:700;font-size:.82rem">${c.primary_diagnosis||'—'}</div>
-        <div style="font-size:.78rem;color:var(--ink2)">${c.chief_complaint||''}</div>
+        <div style="font-weight:700;font-size:.82rem">${escapeHtml(c.primary_diagnosis||'—')}</div>
+        <div style="font-size:.78rem;color:var(--ink2)">${escapeHtml(c.chief_complaint||'')}</div>
       </div>`).join('');
     }
     if(vitals?.length) {
@@ -14115,10 +14115,10 @@ async function searchDocPatient(q) {
     // Render clickable results
     box.innerHTML = '<table class="tbl"><thead><tr><th>MRN</th><th>Name</th><th>Age/Sex</th><th>Diagnosis</th><th>Payment</th></tr></thead><tbody>'+
       data.map(p => `<tr class="${p.payment_status==='unpaid'||p.payment_status==='insurance_pending'?'pay-unpaid':''}" style="cursor:pointer" onclick="selectDocPatient('${p.id}')">
-        <td style="font-family:DM Mono,monospace;font-size:.72rem;color:var(--teal)">${p.mrn||'—'}</td>
-        <td style="font-weight:600">${p.name||fullName(p)}</td>
+        <td style="font-family:DM Mono,monospace;font-size:.72rem;color:var(--teal)">${escapeHtml(p.mrn||'—')}</td>
+        <td style="font-weight:600">${escapeHtml(p.name||fullName(p))}</td>
         <td>${p.age||'?'}${p.age_unit||''} / ${p.sex||''}</td>
-        <td style="font-size:.78rem">${p.diagnosis||'—'}</td>
+        <td style="font-size:.78rem">${escapeHtml(p.diagnosis||'—')}</td>
         <td>${paymentTag(p.payment_status)}</td>
       </tr>`).join('')+'</tbody></table>';
   } catch(e){ console.error(e); }
@@ -14741,7 +14741,7 @@ async function searchReceivePatient(q) {
     const matches=data.filter(p=>collectedIds.has(p.id));
     if(!matches.length){ box.style.display='block'; box.innerHTML='<div style="padding:8px 12px;font-size:.78rem;color:var(--slate)">No collected samples match — sample may not be marked Collected yet</div>'; return; }
     box.style.display='block';
-    box.innerHTML=matches.map(p=>'<div onclick="selectReceivePt(\''+p.id+'\')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:.8rem" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'"><div style="font-weight:700">'+(p.name||fullName(p))+'</div><div style="font-size:.7rem;color:var(--slate)">'+(p.mrn||p.lab_no||'—')+'</div></div>').join('');
+    box.innerHTML=matches.map(p=>'<div onclick="selectReceivePt(\''+p.id+'\')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:.8rem" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'"><div style="font-weight:700">'+escapeHtml(p.name||fullName(p))+'</div><div style="font-size:.7rem;color:var(--slate)">'+escapeHtml(p.mrn||p.lab_no||'—')+'</div></div>').join('');
   }catch(e){}
 }
 async function selectReceivePt(ptId){
@@ -14789,9 +14789,9 @@ async function loadSampleQueueFull() {
     body.innerHTML='<div style="overflow-x:auto"><table class="tbl"><thead><tr>'+
       '<th>Lab No</th><th>Patient</th><th>Specimen</th><th>Status</th><th>Payment</th><th>Collected</th><th>Received</th><th>Actions</th></tr></thead><tbody>'+
       data.map(s=>`<tr class="${s.patients?.payment_status==='unpaid'?'pay-unpaid':''}">
-        <td style="font-family:DM Mono,monospace;font-size:.72rem;color:var(--teal)">${s.patients?.lab_no||s.patients?.mrn||'—'}</td>
-        <td style="font-weight:600">${s.patients?.name||'—'}</td>
-        <td style="font-size:.78rem">${s.specimen_type||'—'}</td>
+        <td style="font-family:DM Mono,monospace;font-size:.72rem;color:var(--teal)">${escapeHtml(s.patients?.lab_no||s.patients?.mrn||'—')}</td>
+        <td style="font-weight:600">${escapeHtml(s.patients?.name||'—')}</td>
+        <td style="font-size:.78rem">${escapeHtml(s.specimen_type||'—')}</td>
         <td>${statusBadge(s.status)}</td>
         <td>${paymentTag(s.patients?.payment_status)}</td>
         <td style="font-size:.72rem">${fmtDT(s.collected_at)}</td>
@@ -14818,11 +14818,11 @@ async function loadRejectionLog() {
       '<th>Date</th><th>Lab No</th><th>Patient</th><th>Specimen</th><th>Reason</th><th>By</th></tr></thead><tbody>'+
       data.map(s=>`<tr>
         <td style="font-size:.72rem">${fmtDate(s.created_at)}</td>
-        <td style="font-family:DM Mono,monospace;font-size:.72rem;color:var(--teal)">${s.patients?.lab_no||'—'}</td>
-        <td style="font-weight:600">${s.patients?.name||'—'}</td>
-        <td style="font-size:.78rem">${s.specimen_type||'—'}</td>
-        <td style="font-size:.78rem;color:#b91c1c">${s.rejection_reason||s.notes||'—'}</td>
-        <td style="font-size:.72rem">${s.collected_by||'—'}</td>
+        <td style="font-family:DM Mono,monospace;font-size:.72rem;color:var(--teal)">${escapeHtml(s.patients?.lab_no||'—')}</td>
+        <td style="font-weight:600">${escapeHtml(s.patients?.name||'—')}</td>
+        <td style="font-size:.78rem">${escapeHtml(s.specimen_type||'—')}</td>
+        <td style="font-size:.78rem;color:#b91c1c">${escapeHtml(s.rejection_reason||s.notes||'—')}</td>
+        <td style="font-size:.72rem">${escapeHtml(s.collected_by||'—')}</td>
       </tr>`).join('')+'</tbody></table></div>';
   }catch(e){}
 }
@@ -15082,13 +15082,13 @@ async function loadRecentHandovers() {
     if(!data?.length){body.innerHTML='<div class="empty-state">No handovers yet</div>';return;}
     body.innerHTML=data.map(h=>`<div style="border-left:3px solid var(--teal);padding:8px 12px;margin-bottom:8px;background:var(--bg);border-radius:0 8px 8px 0">
       <div style="display:flex;justify-content:space-between">
-        <span style="font-weight:700;font-size:.82rem">${h.ward} — ${h.shift||'?'} shift${h.critical_patients?' <span class="bdg bdg-r" style="margin-left:4px">⚠️ Critical</span>':''}</span>
+        <span style="font-weight:700;font-size:.82rem">${escapeHtml(h.ward)} — ${escapeHtml(h.shift||'?')} shift${h.critical_patients?' <span class="bdg bdg-r" style="margin-left:4px">⚠️ Critical</span>':''}</span>
         <span style="font-size:.7rem;color:var(--slate)">${fmtDT(h.created_at)}</span>
       </div>
       <div style="font-size:.75rem;color:var(--slate);margin-top:2px">
-        ${h.handing_over||'—'} → ${h.receiving||'—'}${h.patient_count!=null?' · '+h.patient_count+' pts':''}
+        ${escapeHtml(h.handing_over||'—')} → ${escapeHtml(h.receiving||'—')}${h.patient_count!=null?' · '+h.patient_count+' pts':''}
       </div>
-      ${h.notes?'<div style="font-size:.78rem;margin-top:4px;white-space:pre-wrap">'+h.notes.slice(0,120)+(h.notes.length>120?'…':'')+'</div>':''}
+      ${h.notes?'<div style="font-size:.78rem;margin-top:4px;white-space:pre-wrap">'+escapeHtml(h.notes.slice(0,120))+(h.notes.length>120?'…':'')+'</div>':''}
     </div>`).join('');
   }catch(e){}
 }
@@ -15214,8 +15214,8 @@ async function searchBillPatient(q) {
     box.innerHTML = data.map(p=>
       '<div onclick="selectBillPatient('+JSON.stringify(p).replace(/"/g,'&quot;')+')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:.8rem" '+
       'onmouseover="this.style.background=\x27var(--teal-lt)\x27" onmouseout="this.style.background=\x27\x27">'+
-      '<div style="font-weight:700">'+(p.name||fullName(p))+'</div>'+
-      '<div style="font-size:.7rem;color:var(--slate)">'+(p.mrn||p.lab_no||'—')+' · '+(p.age||'?')+(p.age_unit||'y')+' / '+(p.sex||'')+' · '+paymentTag(p.payment_status)+'</div>'+
+      '<div style="font-weight:700">'+escapeHtml(p.name||fullName(p))+'</div>'+
+      '<div style="font-size:.7rem;color:var(--slate)">'+escapeHtml(p.mrn||p.lab_no||'—')+' · '+(p.age||'?')+(p.age_unit||'y')+' / '+(p.sex||'')+' · '+paymentTag(p.payment_status)+'</div>'+
       '</div>'
     ).join('');
   } catch(e){}
@@ -16155,8 +16155,8 @@ function renderPricePicker(prices) {
     prices.map(p=>'<div onclick="addPriceToInvoice('+JSON.stringify(p).replace(/"/g,'&quot;')+')" '+
       'style="border:1.5px solid var(--border);border-radius:8px;padding:8px 12px;cursor:pointer;transition:all .12s;display:flex;align-items:center;justify-content:space-between" '+
       'onmouseover="this.style.borderColor=\x27var(--teal)\x27;this.style.background=\x27var(--teal-lt)\x27" onmouseout="this.style.borderColor=\x27var(--border)\x27;this.style.background=\x27\x27">'+
-      '<div><div style="font-size:.78rem;font-weight:600">'+(p.name||'—')+'</div>'+
-      '<div><span class="bdg" style="background:'+(catColors[p.category]||'#f1f5f9')+';font-size:.62rem">'+(p.category||'')+'</span></div></div>'+
+      '<div><div style="font-size:.78rem;font-weight:600">'+escapeHtml(p.name||'—')+'</div>'+
+      '<div><span class="bdg" style="background:'+(catColors[p.category]||'#f1f5f9')+';font-size:.62rem">'+escapeHtml(p.category||'')+'</span></div></div>'+
       '<div style="font-weight:700;color:var(--teal);font-size:.84rem;white-space:nowrap">'+((p.price||0).toLocaleString())+' SDG</div>'+
       '</div>'
     ).join('')+'</div>';
@@ -16209,13 +16209,13 @@ function renderPriceTable(prices) {
     if(p.category!==currentCat){
       currentCat=p.category;
       html+='<tr style="background:#f1f5f9"><td colspan="5" style="padding:6px 10px;font-weight:700;font-size:.72rem;text-transform:uppercase;letter-spacing:.4px;color:var(--slate)">'+
-        '<span class="bdg" style="background:'+(catColors[p.category]||'#f1f5f9')+'">'+p.category.toUpperCase()+'</span></td></tr>';
+        '<span class="bdg" style="background:'+(catColors[p.category]||'#f1f5f9')+'">'+escapeHtml(p.category.toUpperCase())+'</span></td></tr>';
     }
     html+='<tr id="price-row-'+p.id+'">'+
-      '<td style="font-family:DM Mono,monospace;font-size:.7rem;color:var(--teal)">'+(p.code||'—')+'</td>'+
-      '<td style="font-weight:500">'+(p.name||'—')+'</td>'+
-      '<td><span class="bdg" style="background:'+(catColors[p.category]||'#f1f5f9')+';font-size:.65rem">'+(p.category||'—')+'</span></td>'+
-      '<td style="text-align:right;font-weight:700;color:var(--teal)">'+((p.price||0).toLocaleString('en-US',{minimumFractionDigits:2}))+' '+(p.currency||'SDG')+'</td>'+
+      '<td style="font-family:DM Mono,monospace;font-size:.7rem;color:var(--teal)">'+escapeHtml(p.code||'—')+'</td>'+
+      '<td style="font-weight:500">'+escapeHtml(p.name||'—')+'</td>'+
+      '<td><span class="bdg" style="background:'+(catColors[p.category]||'#f1f5f9')+';font-size:.65rem">'+escapeHtml(p.category||'—')+'</span></td>'+
+      '<td style="text-align:right;font-weight:700;color:var(--teal)">'+((p.price||0).toLocaleString('en-US',{minimumFractionDigits:2}))+' '+escapeHtml(p.currency||'SDG')+'</td>'+
       '<td><div class="acts">'+
         '<button class="btn btn-s btn-xs" onclick="editPrice(\''+p.id+'\')">✏️</button>'+
         '<button class="btn btn-r btn-xs" onclick="deletePrice(\''+p.id+'\')">✕</button>'+
@@ -16821,12 +16821,12 @@ async function loadStaff() {
     body.innerHTML='<div style="overflow-x:auto"><table class="tbl" id="stf-table"><thead><tr>'+
       '<th>Name</th><th>Role</th><th>Department</th><th>Phone</th><th>Email</th><th>Status</th><th>Hire Date</th><th>Actions</th></tr></thead><tbody>'+
       data.map(s=>'<tr id="stf-row-'+s.id+'">'+
-        '<td style="font-weight:600">'+(s.full_name||s.name||'—')+'</td>'+
-        '<td><span class="bdg" style="background:'+(roleColors[s.role]||'#f1f5f9')+';font-size:.68rem">'+(roleLabels[s.role]||s.role||'—')+'</span></td>'+
-        '<td style="font-size:.78rem">'+(s.department||'—')+'</td>'+
-        '<td style="font-size:.75rem">'+(s.phone||'—')+'</td>'+
-        '<td style="font-size:.72rem">'+(s.email||'—')+'</td>'+
-        '<td>'+(s.status==='active'?'<span class="bdg" style="background:#dcfce7;color:#166534">\u2705 Active</span>':s.status==='on_leave'?'<span class="bdg" style="background:#fef9c3;color:#92400e">\u23f8 On Leave</span>':'<span class="bdg bdg-sl">'+(s.status||'—')+'</span>')+'</td>'+
+        '<td style="font-weight:600">'+escapeHtml(s.full_name||s.name||'—')+'</td>'+
+        '<td><span class="bdg" style="background:'+(roleColors[s.role]||'#f1f5f9')+';font-size:.68rem">'+escapeHtml(roleLabels[s.role]||s.role||'—')+'</span></td>'+
+        '<td style="font-size:.78rem">'+escapeHtml(s.department||'—')+'</td>'+
+        '<td style="font-size:.75rem">'+escapeHtml(s.phone||'—')+'</td>'+
+        '<td style="font-size:.72rem">'+escapeHtml(s.email||'—')+'</td>'+
+        '<td>'+(s.status==='active'?'<span class="bdg" style="background:#dcfce7;color:#166534">\u2705 Active</span>':s.status==='on_leave'?'<span class="bdg" style="background:#fef9c3;color:#92400e">\u23f8 On Leave</span>':'<span class="bdg bdg-sl">'+escapeHtml(s.status||'—')+'</span>')+'</td>'+
         '<td style="font-size:.72rem">'+(s.hire_date?fmtDate(s.hire_date):'—')+'</td>'+
         '<td><div class="acts">'+
           '<button class="btn btn-s btn-xs" onclick="editStaff(\''+s.id+'\')">✏️</button>'+
@@ -16996,11 +16996,11 @@ async function loadDoctors() {
     if(!data?.length){body.innerHTML='<div class="empty-state"><div class="empty-icon">🩺</div><div class="empty-title">No doctors registered</div></div>';return;}
     body.innerHTML='<div style="overflow-x:auto"><table class="tbl" id="dr-table"><thead><tr><th>Name</th><th>Specialty</th><th>Phone</th><th>Email</th><th>License</th><th>Actions</th></tr></thead><tbody>'+
       data.map(d=>'<tr>'+
-        '<td style="font-weight:600">Dr. '+(d.name||d.full_name||'—')+'</td>'+
-        '<td style="font-size:.78rem"><span class="bdg bdg-b">'+(d.specialty||d.specialization||'—')+'</span></td>'+
-        '<td style="font-size:.75rem">'+(d.phone||'—')+'</td>'+
-        '<td style="font-size:.72rem">'+(d.email||'—')+'</td>'+
-        '<td style="font-size:.72rem;font-family:DM Mono,monospace">'+(d.license_no||d.license||'—')+'</td>'+
+        '<td style="font-weight:600">Dr. '+escapeHtml(d.name||d.full_name||'—')+'</td>'+
+        '<td style="font-size:.78rem"><span class="bdg bdg-b">'+escapeHtml(d.specialty||d.specialization||'—')+'</span></td>'+
+        '<td style="font-size:.75rem">'+escapeHtml(d.phone||'—')+'</td>'+
+        '<td style="font-size:.72rem">'+escapeHtml(d.email||'—')+'</td>'+
+        '<td style="font-size:.72rem;font-family:DM Mono,monospace">'+escapeHtml(d.license_no||d.license||'—')+'</td>'+
         '<td><div class="acts">'+
           '<button class="btn btn-s btn-xs" onclick="editDoctor(\''+d.id+'\')">✏️</button>'+
           '<button class="btn btn-r btn-xs" onclick="deleteDoctor(\''+d.id+'\')">✕</button>'+
@@ -17255,8 +17255,8 @@ async function searchRadPatient(q) {
     box.innerHTML=data.map(p=>
       '<div onclick="selectRadPatient('+JSON.stringify(p).replace(/"/g,'&quot;')+')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:.8rem" '+
       'onmouseover="this.style.background=\x27var(--teal-lt)\x27" onmouseout="this.style.background=\x27\x27">'+
-      '<div style="font-weight:700">'+(p.name||fullName(p))+'</div>'+
-      '<div style="font-size:.7rem;color:var(--slate)">'+(p.mrn||p.lab_no||'—')+' \u00b7 '+(p.age||'?')+(p.age_unit||'y')+' / '+(p.sex||'')+' '+paymentTag(p.payment_status)+'</div>'+
+      '<div style="font-weight:700">'+escapeHtml(p.name||fullName(p))+'</div>'+
+      '<div style="font-size:.7rem;color:var(--slate)">'+escapeHtml(p.mrn||p.lab_no||'—')+' \u00b7 '+(p.age||'?')+(p.age_unit||'y')+' / '+(p.sex||'')+' '+paymentTag(p.payment_status)+'</div>'+
       '</div>'
     ).join('');
   } catch(e){}
@@ -17353,7 +17353,7 @@ async function loadRadRequests() {
           '<div style="font-size:.68rem;color:var(--slate)">'+(pt.mrn||pt.lab_no||'')+' \u00b7 '+(pt.age||'?')+(pt.age_unit||'y')+' / '+(pt.sex||'')+' '+(pt.ward?'\u00b7 '+pt.ward:'')+'</div></td>'+
           '<td style="font-size:.78rem;font-weight:600">'+(r.imaging_type||'—')+(r.is_critical?' <span class="bdg" style="background:#b91c1c;color:#fff">🚨 CRITICAL</span>':'')+'</td>'+
           '<td>'+(r.urgency==='STAT'?'<span class="bdg" style="background:#fef2f2;color:#b91c1c;border:1.5px solid #fca5a5">\u26a1 STAT</span>':statusBadge(r.urgency))+'</td>'+
-          '<td style="font-size:.75rem">'+(r.requesting_doctor||'—')+'</td>'+
+          '<td style="font-size:.75rem">'+escapeHtml(r.requesting_doctor||'—')+'</td>'+
           '<td>'+paymentTag(pt.payment_status)+(r.payment_deferred?' <span class="bdg" style="background:#fef2f2;color:#b91c1c;border:1.5px solid #fca5a5">\u26a0 Payment Deferred \u2014 STAT</span>':'')+'</td>'+
           '<td>'+statusBadge(r.status)+'</td>'+
           '<td>'+visitStatusBadge(pt)+'</td>'+
@@ -17376,7 +17376,7 @@ async function loadPendingForReport() {
       'onclick="openRadReport(\''+r.id+'\')" '+
       'onmouseover="this.style.borderColor=\x27var(--teal)\x27;this.style.background=\x27var(--teal-lt)\x27" onmouseout="this.style.borderColor=\x27var(--border)\x27;this.style.background=\x27\x27">'+
       '<div style="display:flex;align-items:center;justify-content:space-between">'+
-      '<span style="font-weight:700;font-size:.82rem">'+(r.patients?.name||'—')+'</span>'+
+      '<span style="font-weight:700;font-size:.82rem">'+escapeHtml(r.patients?.name||'—')+'</span>'+
       (r.urgency==='STAT'?'<span class="bdg" style="background:#fef2f2;color:#b91c1c;font-size:.65rem">\u26a1 STAT</span>':'')+
       '</div>'+
       '<div style="font-size:.75rem;color:var(--teal);font-weight:600;margin-top:2px">'+(r.imaging_type||'—')+'</div>'+
@@ -17560,11 +17560,11 @@ async function loadReportedStudies() {
       '<th>Date</th><th>Patient</th><th>Study</th><th>Radiologist</th><th>Impression</th><th>Status</th><th>Actions</th></tr></thead><tbody>'+
       data.map(r=>'<tr>'+
         '<td style="font-size:.72rem;color:var(--slate)">'+fmtDate(r.reported_at||r.created_at)+'</td>'+
-        '<td style="font-weight:600;font-size:.82rem">'+(r.patients?.name||'—')+'<div style="font-size:.68rem;color:var(--slate)">'+(r.patients?.mrn||'')+'</div></td>'+
+        '<td style="font-weight:600;font-size:.82rem">'+escapeHtml(r.patients?.name||'—')+'<div style="font-size:.68rem;color:var(--slate)">'+escapeHtml(r.patients?.mrn||'')+'</div></td>'+
         '<td style="font-size:.78rem;font-weight:600">'+(r.imaging_type||'—')+(r.is_critical?' <span class="bdg" style="background:#b91c1c;color:#fff">🚨 CRITICAL</span>':'')+'</td>'+
-        '<td style="font-size:.75rem">'+(r.radiologist||'—')+'</td>'+
-        '<td style="font-size:.75rem;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(r.impression||'—')+'</td>'+
-        '<td>'+statusBadge(r.status)+(r.status==='Verified'&&r.verified_by_name?'<div style="font-size:.65rem;color:var(--slate);margin-top:2px">by '+r.verified_by_name+' · '+fmtDT(r.verified_at)+'</div>':'')+'</td>'+
+        '<td style="font-size:.75rem">'+escapeHtml(r.radiologist||'—')+'</td>'+
+        '<td style="font-size:.75rem;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escapeHtml(r.impression||'—')+'</td>'+
+        '<td>'+statusBadge(r.status)+(r.status==='Verified'&&r.verified_by_name?'<div style="font-size:.65rem;color:var(--slate);margin-top:2px">by '+escapeHtml(r.verified_by_name)+' · '+fmtDT(r.verified_at)+'</div>':'')+'</td>'+
         '<td><div class="acts">'+
           '<button class="btn btn-s btn-xs" onclick="openRadReport(\''+r.id+'\')">📝</button>'+
           '<button class="btn btn-s btn-xs" onclick="printRadReportById(\''+r.id+'\')">🖨</button>'+
@@ -18465,16 +18465,16 @@ async function loadQcLots(){
           lots.map(l=>{
             const expired = l.expiry_date && new Date(l.expiry_date) < new Date();
             return '<tr'+(expired?' class="pay-unpaid"':'')+'>'+
-              '<td style="font-family:DM Mono,monospace;color:var(--teal)">'+(l.lot_no||'—')+'</td>'+
-              '<td style="font-weight:600">'+(l.control_name||'—')+'</td>'+
-              '<td>'+(l.section||'—')+'</td><td>'+(l.level||'—')+'</td>'+
+              '<td style="font-family:DM Mono,monospace;color:var(--teal)">'+escapeHtml(l.lot_no||'—')+'</td>'+
+              '<td style="font-weight:600">'+escapeHtml(l.control_name||'—')+'</td>'+
+              '<td>'+escapeHtml(l.section||'—')+'</td><td>'+escapeHtml(l.level||'—')+'</td>'+
               '<td>'+(l.target_mean??'—')+'</td><td>'+(l.target_sd??'—')+'</td>'+
               '<td style="'+(expired?'color:#b91c1c;font-weight:700':'')+'">'+(l.expiry_date||'—')+(expired?' ⚠️':'')+'</td>'+
               '<td><button class="btn btn-r btn-xs" onclick="deactivateQcLot(\''+l.id+'\')">✕</button></td></tr>';
           }).join('')+'</tbody></table></div>';
       }
     }
-    const opts='<option value="">Select lot…</option>'+lots.map(l=>'<option value="'+l.id+'">'+(l.lot_no||'')+' — '+(l.control_name||'')+' ('+(l.level||'')+')</option>').join('');
+    const opts='<option value="">Select lot…</option>'+lots.map(l=>'<option value="'+l.id+'">'+escapeHtml(l.lot_no||'')+' — '+escapeHtml(l.control_name||'')+' ('+escapeHtml(l.level||'')+')</option>').join('');
     if(selLot) selLot.innerHTML=opts;
     if(chartLot) chartLot.innerHTML=opts;
   }catch(e){ if(body) body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>'; }
@@ -19072,7 +19072,7 @@ async function loadDonorRegistry() {
     const {data}=await sb.from('blood_donors').select('*').order('created_at',{ascending:false}).limit(50);
     if(!data?.length){ body.innerHTML='<div class="empty-state"><div class="empty-icon">🩺</div><div class="empty-title">No donors registered yet</div></div>'; return; }
     body.innerHTML='<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Donor No</th><th>Name</th><th>Group</th><th>Phone</th></tr></thead><tbody>'+
-      data.map(d=>'<tr><td style="font-family:DM Mono,monospace;font-weight:700;color:var(--teal)">'+escapeHtml(d.donor_no)+'</td><td>'+escapeHtml(d.full_name)+'</td><td>'+(d.blood_group||'?')+(d.rh_factor==='Positive'?'+':d.rh_factor==='Negative'?'−':'')+'</td><td style="font-size:.75rem">'+(d.phone||'—')+'</td></tr>').join('')+
+      data.map(d=>'<tr><td style="font-family:DM Mono,monospace;font-weight:700;color:var(--teal)">'+escapeHtml(d.donor_no)+'</td><td>'+escapeHtml(d.full_name)+'</td><td>'+escapeHtml(d.blood_group||'?')+(d.rh_factor==='Positive'?'+':d.rh_factor==='Negative'?'−':'')+'</td><td style="font-size:.75rem">'+escapeHtml(d.phone||'—')+'</td></tr>').join('')+
       '</tbody></table></div>';
   } catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.78rem">'+escapeHtml(e.message)+'</div>'; }
 }
@@ -19688,7 +19688,7 @@ async function searchUnreceivePatient(q){
     if(!box) return;
     if(!matches.length){ box.style.display='block'; box.innerHTML='<div style="padding:8px 12px;font-size:.78rem;color:var(--slate)">No received samples match — sample may not be marked Received yet</div>'; return; }
     box.style.display='block';
-    box.innerHTML=matches.map(p=>'<div onclick="selectUnreceivePt(\''+p.id+'\')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:.8rem" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'"><div style="font-weight:700">'+(p.name||fullName(p))+'</div><div style="font-size:.7rem;color:var(--slate)">'+(p.mrn||p.lab_no||'—')+'</div></div>').join('');
+    box.innerHTML=matches.map(p=>'<div onclick="selectUnreceivePt(\''+p.id+'\')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:.8rem" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'"><div style="font-weight:700">'+escapeHtml(p.name||fullName(p))+'</div><div style="font-size:.7rem;color:var(--slate)">'+escapeHtml(p.mrn||p.lab_no||'—')+'</div></div>').join('');
   }catch(e){}
 }
 async function selectUnreceivePt(ptId){
@@ -19749,7 +19749,7 @@ async function searchSamplePatient(q){
     const{data}=await sb.from('patients').select('id,name,first_name,last_name,mrn,lab_no,age,age_unit,sex,payment_status').or('name.ilike.%'+q+'%,mrn.ilike.%'+q+'%,lab_no.ilike.%'+q+'%,phone.ilike.%'+q+'%').limit(8);
     if(!box)return;if(!data?.length){box.style.display='none';return;}
     box.style.display='block';
-    box.innerHTML=data.map(p=>'<div onclick="selectScPt(\x27'+p.id+'\x27)" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:.8rem" onmouseover="this.style.background=\x27var(--teal-lt)\x27" onmouseout="this.style.background=\x27\x27"><div style="font-weight:700">'+(p.name||fullName(p))+'</div><div style="font-size:.7rem;color:var(--slate)">'+(p.mrn||p.lab_no||'—')+'</div></div>').join('');
+    box.innerHTML=data.map(p=>'<div onclick="selectScPt(\x27'+p.id+'\x27)" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:.8rem" onmouseover="this.style.background=\x27var(--teal-lt)\x27" onmouseout="this.style.background=\x27\x27"><div style="font-weight:700">'+escapeHtml(p.name||fullName(p))+'</div><div style="font-size:.7rem;color:var(--slate)">'+escapeHtml(p.mrn||p.lab_no||'—')+'</div></div>').join('');
   }catch(e){}
 }
 // Worklist "Enter" button — opens every department relevant to this
@@ -20432,7 +20432,7 @@ async function searchReportPatient(q){
     const{data}=await sb.from('patients').select('id,name,first_name,last_name,mrn,lab_no,age,age_unit,sex,phone').or('name.ilike.%'+q+'%,mrn.ilike.%'+q+'%,lab_no.ilike.%'+q+'%,phone.ilike.%'+q+'%').limit(8);
     if(!box)return;if(!data?.length){box.style.display='none';return;}
     box.style.display='block';
-    box.innerHTML=data.map(p=>'<div onclick="selectRptPatient('+JSON.stringify(p).replace(/"/g,'&quot;')+')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:.8rem" onmouseover="this.style.background=\x27var(--teal-lt)\x27" onmouseout="this.style.background=\x27\x27"><div style="font-weight:700">'+(p.name||fullName(p))+'</div><div style="font-size:.7rem;color:var(--slate)">'+(p.mrn||p.lab_no||'—')+'</div></div>').join('');
+    box.innerHTML=data.map(p=>'<div onclick="selectRptPatient('+JSON.stringify(p).replace(/"/g,'&quot;')+')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:.8rem" onmouseover="this.style.background=\x27var(--teal-lt)\x27" onmouseout="this.style.background=\x27\x27"><div style="font-weight:700">'+escapeHtml(p.name||fullName(p))+'</div><div style="font-size:.7rem;color:var(--slate)">'+escapeHtml(p.mrn||p.lab_no||'—')+'</div></div>').join('');
   }catch(e){}
 }
 function selectRptPatient(p){
