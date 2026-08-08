@@ -7299,6 +7299,204 @@ var TEST_CATALOG = {
   histo:['Biopsy (Histopathology)','Liver Biopsy','Bone Marrow Biopsy','Lymph Node Biopsy','Skin Biopsy','Renal Biopsy'],
 };
 
+// ══════════════════════════════════════════════════════════════
+// PRICING — shared, code-based lookup (fixes CBC/LFT showing "-" in
+// the Registration invoice, and the same class of bug anywhere else
+// an ordered item is priced against price_list).
+//
+// Root cause: buildAutoInvoiceLines() (Registration) and
+// chargeForNewOrder() (Doctor's post-registration lab/radiology
+// orders) each implemented their OWN price_list lookup, one filtered
+// by category+name, the other by name only — and both matched by the
+// free-text display name, which is fragile (a name edited on the
+// Price List page, a typo, or price_list simply never having a
+// matching row all silently produce the same invisible "-"). The
+// seed data itself (seedDefaultPrices()) also carried two separate,
+// overlapping lab catalogs under the same category — an older one
+// with names that don't match TEST_CATALOG at all (e.g. "CBC —
+// Complete Blood Count") sitting alongside a newer one that does
+// (e.g. "CBC (Full Blood Count)") — exactly the kind of ambiguity
+// that lets an admin edit/delete the "duplicate-looking" correct row.
+//
+// Fix: every orderable item's display name is mapped here to the
+// STABLE price_list.code it corresponds to. All lookups now go
+// through resolvePricedLines() below, which resolves codes first and
+// queries price_list by code (`.in('code', codes)`), not by name —
+// so renaming a price_list row's display name (e.g. for a nicer
+// invoice label) can never silently break pricing again. An item
+// with no code mapping, or whose code has no matching price_list row
+// at all, is marked `priced:false` rather than defaulting to 0 — see
+// the "never ambiguous" handling in buildRegInvoicePreview()/
+// regShowSuccess() and chargeForNewOrder().
+const LAB_PRICE_CODE = {
+  "CBC (Full Blood Count)":"LC001",
+  "Haemoglobin Only":"LC002",
+  "WBC Count":"LC003",
+  "Platelet Count":"LC004",
+  "Reticulocyte Count":"LC005",
+  "ESR":"LC006",
+  "Blood Film":"LC007",
+  "PT / INR":"LC008",
+  "aPTT":"LC009",
+  "D-Dimer":"LC010",
+  "Fibrinogen":"LC011",
+  "Blood Group & Rh":"LC012",
+  "Cross-Match":"LC013",
+  "LFT (Liver Function)":"LC014",
+  "RFT (Renal Function)":"LC015",
+  "Lipid Profile":"LC016",
+  "HbA1c":"LC017",
+  "Fasting Blood Sugar":"LC018",
+  "Random Blood Sugar":"LC019",
+  "2hr Post Prandial":"LC020",
+  "Serum Electrolytes":"LC021",
+  "Calcium":"LC022",
+  "Phosphorus":"LC023",
+  "Magnesium":"LC024",
+  "Iron Studies":"LC025",
+  "Cardiac Enzymes":"LC026",
+  "Troponin I":"LC027",
+  "hs-CRP":"LC028",
+  "LDH":"LC029",
+  "Lipase":"LC030",
+  "Amylase":"LC031",
+  "🔹 Thyroid Profile (TSH+FT3+FT4)":"LC032",
+  "🔹 Fertility Profile (FSH+LH+E2+Prog+Testo+Prolactin)":"LC033",
+  "🔹 Tumour Marker Profile (AFP+CEA+CA125+CA19.9)":"LC034",
+  "TSH":"LC035",
+  "Free T3":"LC036",
+  "Free T4":"LC037",
+  "Total T3":"LC038",
+  "Total T4":"LC039",
+  "FSH":"LC040",
+  "LH":"LC041",
+  "Estradiol":"LC042",
+  "Progesterone":"LC043",
+  "Testosterone":"LC044",
+  "Prolactin":"LC045",
+  "Cortisol":"LC046",
+  "Insulin":"LC047",
+  "C-Peptide":"LC048",
+  "Pregnancy Test (βHCG)":"LC049",
+  "PSA (Tumour Marker)":"LC050",
+  "AFP (Tumour Marker)":"LC051",
+  "CEA (Tumour Marker)":"LC052",
+  "CA-125":"LC053",
+  "CA-19.9":"LC054",
+  "Vitamin D":"LC055",
+  "Vitamin B12":"LC056",
+  "Folate":"LC057",
+  "Ferritin":"LC058",
+  "HIV Ag/Ab":"LC059",
+  "HBsAg":"LC060",
+  "HCV Ab":"LC061",
+  "RPR/VDRL":"LC062",
+  "TPHA":"LC063",
+  "Brucella Ab":"LC064",
+  "H. Pylori Ag":"LC065",
+  "Widal Test":"LC066",
+  "ANA":"LC067",
+  "Anti-CCP":"LC068",
+  "RF":"LC069",
+  "ASO":"LC070",
+  "IgE Total":"LC071",
+  "Urinalysis (UA)":"LC072",
+  "Urine Culture & Sensitivity":"LC073",
+  "Stool Routine":"LC074",
+  "Stool Occult Blood":"LC075",
+  "Stool Culture":"LC076",
+  "Blood Culture":"LC077",
+  "Wound Swab C/S":"LC078",
+  "Sputum C/S":"LC079",
+  "CSF Analysis":"LC080",
+  "CSF Culture":"LC081",
+  "High Vaginal Swab":"LC082",
+  "Throat Swab":"LC083",
+  "COVID-19 PCR":"LC084",
+  "Influenza A/B PCR":"LC085",
+  "HBV DNA":"LC086",
+  "HCV RNA":"LC087",
+  "HIV Viral Load":"LC088",
+  "CMV PCR":"LC089",
+  "EBV PCR":"LC090",
+  "TB-PCR":"LC091",
+  "Chlamydia PCR":"LC092",
+  "Biopsy (Histopathology)":"LC093",
+  "Liver Biopsy":"LC094",
+  "Bone Marrow Biopsy":"LC095",
+  "Lymph Node Biopsy":"LC096",
+  "Skin Biopsy":"LC097",
+  "Renal Biopsy":"LC098",
+};
+const RAD_PRICE_CODE = {
+  "X-Ray — Chest PA":"RAD001",
+  "X-Ray — Chest AP (portable)":"RAD002",
+  "X-Ray — Abdomen (erect + supine)":"RAD003",
+  "X-Ray — Pelvis (AP)":"RAD004",
+  "X-Ray — Skull (AP + Lateral)":"RAD005",
+  "X-Ray — Cervical Spine":"RAD006",
+  "X-Ray — Thoracic Spine":"RAD007",
+  "X-Ray — Lumbar Spine":"RAD008",
+  "X-Ray — Upper Extremity (per view)":"RAD009",
+  "X-Ray — Lower Extremity (per view)":"RAD010",
+  "Ultrasound — Abdomen & Pelvis":"RAD011",
+  "Ultrasound — Pelvis (transvaginal)":"RAD012",
+  "Ultrasound — Obstetric (antenatal scan)":"RAD013",
+  "Ultrasound — Thyroid":"RAD014",
+  "Ultrasound — Breast":"RAD015",
+  "Ultrasound — Soft Tissue (per site)":"RAD016",
+  "Ultrasound — Doppler (vascular)":"RAD017",
+  "CT Scan — Head (plain)":"RAD018",
+  "CT Scan — Head (with contrast)":"RAD019",
+  "CT Scan — Chest":"RAD020",
+  "CT Scan — Abdomen & Pelvis (plain)":"RAD021",
+  "CT Scan — Abdomen & Pelvis (with contrast)":"RAD022",
+  "MRI — Brain (plain)":"RAD023",
+  "MRI — Brain (with contrast)":"RAD024",
+  "MRI — Spine":"RAD025",
+  "MRI — Musculoskeletal (per joint)":"RAD026",
+  "Echocardiogram (Echo)":"RAD027",
+  "ECG / 12-lead":"RAD028",
+  "Mammography (bilateral)":"RAD029",
+  "DEXA Scan (bone density)":"RAD030",
+};
+const FLAT_FEE_PRICE_CODE = { 'Registration Fee':'REG001', 'Consultation Fee':'CON000', 'Admission Fee (one-time)':'ADM008' };
+// Combined, category-scoped view so callers can resolve a (name,category) pair
+// without caring which specific catalog it came from.
+const PRICE_CODE_MAP = { lab: LAB_PRICE_CODE, radiology: RAD_PRICE_CODE, consultation: FLAT_FEE_PRICE_CODE, registration: FLAT_FEE_PRICE_CODE, admission: FLAT_FEE_PRICE_CODE };
+function resolvePriceCode(name, category) {
+  const map = PRICE_CODE_MAP[category];
+  return (map && map[name]) || null;
+}
+// Single shared price-lookup used by every module that bills an ordered
+// item against price_list (Registration, Doctor Consultation's post-
+// registration lab/radiology orders, and any future caller). Resolves
+// each item's stable price_list.code first, then does ONE batched query
+// by code — never by the item's free-text display name. Returns line
+// items with an explicit `priced` flag: false means "no code mapping, or
+// the code has no matching price_list row" — the caller must never treat
+// that the same as a genuine 0 price.
+async function resolvePricedLines(items) {
+  // priceKey lets a caller give a line a dynamic display name (e.g. "Admission
+  // — Elective (initial fee)") while still resolving its price by the fixed
+  // catalog key ("Admission Fee (one-time)") that PRICE_CODE_MAP actually knows.
+  const withCodes = items.map(i => ({ ...i, _code: resolvePriceCode(i.priceKey||i.name, i.category) }));
+  const codes = [...new Set(withCodes.filter(i=>i._code).map(i=>i._code))];
+  let priceByCode = {};
+  if (codes.length && sb) {
+    try {
+      const {data} = await sb.from('price_list').select('code,price').in('code', codes);
+      (data||[]).forEach(p => { priceByCode[p.code] = p.price; });
+    } catch(e) {}
+  }
+  return withCodes.map(i => {
+    const qty = i.qty || 1;
+    const hasPrice = i._code != null && priceByCode[i._code] != null;
+    const unit = hasPrice ? priceByCode[i._code] : 0;
+    return { name: i.name, category: i.category, qty, unit_price: unit, total_price: unit*qty, priced: hasPrice, code: i._code };
+  });
+}
+
 // Standard blood-collection tube colour coding (BD Vacutainer convention,
 // widely recognised internationally) plus non-blood specimen containers.
 const TUBE_TYPES = {
@@ -11099,7 +11297,11 @@ async function submitRegistration() {
     // Auto-create ONE invoice covering every selected destination (lab + radiology + doctor + admission + registration)
     const invNo = genOfflineId('INV');
     const lineItems = await buildAutoInvoiceLines(tests, destList);
-    const subTotal = lineItems.reduce((s,i)=>s+(i.total_price||0),0);
+    // Unpriced items (priced:false) still appear on the saved invoice's own
+    // line_items for the record, but never contribute to what's actually
+    // charged -- matching the same never-silently-zero rule the registration
+    // preview enforces (see buildRegInvoicePreview()).
+    const subTotal = lineItems.reduce((s,i)=>s+(i.priced!==false?(i.total_price||0):0),0);
     // Follow-up pricing (Phase 5) — only ever applied after the receptionist
     // actively confirmed it in checkAndApplyFollowUpPricing() above, never
     // silently. 'fixed' is expressed as a discount so net_amount lands on
@@ -12601,64 +12803,25 @@ async function buildAutoInvoiceLines(tests, destinations) {
   const dests = destinations instanceof Set ? [...destinations]
     : Array.isArray(destinations) ? destinations
     : (destinations||'').split(',').map(s=>s.trim()).filter(Boolean);
-  const lines = [];
-  // Flat/fixed fees (Consultation, Admission, Registration) are looked up from the
-  // editable price_list first, same as lab/radiology below, so editing them on the
-  // Price List page actually changes what registration charges. The literal numbers
-  // here are only the fallback used if price_list has no matching row.
-  const flatFeeDefaults = { 'Consultation Fee': 500, 'Admission Fee (one-time)': 1000, 'Registration Fee': 50 };
-  let flatFeePrices = {};
-  if(sb) {
-    try {
-      const {data:flatPrices} = await sb.from('price_list').select('name,price').in('name', Object.keys(flatFeeDefaults));
-      (flatPrices||[]).forEach(p => { flatFeePrices[p.name] = p.price; });
-    } catch(e){}
-  }
-  const flatFee = (name) => (flatFeePrices[name] != null ? flatFeePrices[name] : flatFeeDefaults[name]);
-  // Consultation fee
-  if(dests.includes('doctor')) {
-    const price = flatFee('Consultation Fee');
-    lines.push({name:'Consultation Fee', category:'consultation', qty:1, unit_price:price, total_price:price});
-  }
-  // Radiology request fee — price the actual imaging study selected, fall back to a flat assessment fee
+  // Every item this registration bills — resolved by resolvePricedLines() in
+  // ONE batched, code-based query (see the PRICING block near TEST_CATALOG).
+  const wanted = [];
+  if(dests.includes('doctor')) wanted.push({name:'Consultation Fee', category:'consultation'});
   if(dests.includes('radiology')) {
-    const imagingType = document.getElementById('r-rad-type')?.value;
-    let priced = false;
-    if(imagingType && sb) {
-      try {
-        const {data:radPrice} = await sb.from('price_list').select('name,price').eq('name',imagingType).eq('category','radiology').maybeSingle();
-        if(radPrice) { lines.push({name:radPrice.name, category:'radiology', qty:1, unit_price:radPrice.price||0, total_price:radPrice.price||0}); priced=true; }
-      } catch(e){}
-    }
-    if(!priced) lines.push({name:imagingType||'Radiology — Initial Assessment', category:'radiology', qty:1, unit_price:800, total_price:800});
+    const imagingType = document.getElementById('r-rad-type')?.value || null;
+    if(imagingType) wanted.push({name:imagingType, category:'radiology'});
   }
-  // Admission — deposit/admin fee (final ward/bed charges are billed from the Admission page)
   if(dests.includes('admission')) {
-    const price = flatFee('Admission Fee (one-time)');
-    lines.push({name:'Admission — '+(document.getElementById('r-adm-type')?.value||'Elective')+' (initial fee)', category:'admission', qty:1, unit_price:price, total_price:price});
+    wanted.push({name:'Admission — '+(document.getElementById('r-adm-type')?.value||'Elective')+' (initial fee)', priceKey:'Admission Fee (one-time)', category:'admission'});
   }
-  // Registration fee — always charged once, regardless of how many destinations are selected
-  { const price = flatFee('Registration Fee'); lines.push({name:'Registration Fee', category:'registration', qty:1, unit_price:price, total_price:price}); }
-  // Lab test prices — looked up for real so the preview and the final invoice always match
-  if(tests.length > 0 && sb) {
-    try {
-      const {data:prices} = await sb.from('price_list')
-        .select('name,price,category')
-        .in('name', tests)
-        .eq('category','lab');
-      (prices||[]).forEach(p => {
-        lines.push({name:p.name, category:'lab', qty:1, unit_price:p.price||0, total_price:p.price||0});
-      });
-      // Add tests not in price list with 0 price
-      tests.forEach(t => {
-        if(!lines.find(l=>l.name===t))
-          lines.push({name:t, category:'lab', qty:1, unit_price:0, total_price:0});
-      });
-    } catch(e) {
-      tests.forEach(t => lines.push({name:t, category:'lab', qty:1, unit_price:0, total_price:0}));
-    }
-  }
-  return lines;
+  wanted.push({name:'Registration Fee', category:'registration'});
+  tests.forEach(t => wanted.push({name:t, category:'lab'}));
+  // An unrecognised imaging type (or any other item with no price_list
+  // match) is never given a guessed placeholder price -- it comes back
+  // from resolvePricedLines() as priced:false and the caller (see
+  // buildRegInvoicePreview()) is responsible for flagging it visibly and
+  // excluding it from the total, rather than fabricating a number here.
+  return await resolvePricedLines(wanted);
 }
 
 async function buildRegInvoicePreview() {
@@ -12668,12 +12831,21 @@ async function buildRegInvoicePreview() {
   if(!linesEl) return;
   linesEl.innerHTML = '<div style="color:var(--slate);font-size:.78rem">Calculating…</div>';
   const lines = await buildAutoInvoiceLines(tests, _regDestinations);
-  const total = lines.reduce((s,l)=>s+(l.total_price||0), 0);
-  linesEl.innerHTML = lines.length ? lines.map(l =>
+  // priced:false items never contribute to the total — a "-" that both means
+  // "genuinely free" and "we don't know the price" is exactly the ambiguity
+  // that let the CBC/LFT bug reach a real invoice unnoticed. An unpriced item
+  // is called out by name here AND excluded from what the total quietly sums.
+  const unpriced = lines.filter(l=>l.priced===false);
+  const total = lines.reduce((s,l)=>s+(l.priced!==false?(l.total_price||0):0), 0);
+  linesEl.innerHTML = (lines.length ? lines.map(l =>
     '<div style="display:flex;justify-content:space-between;margin-bottom:4px">'+
-    '<span style="color:var(--ink2)">'+l.name+'</span>'+
-    '<span style="font-weight:600">'+(l.total_price>0?l.total_price.toFixed(2)+' SDG':'—')+'</span></div>'
-  ).join('') : '<div style="color:var(--slate);font-size:.78rem">Select a visit destination to see charges</div>';
+    '<span style="color:var(--ink2)">'+escapeHtml(l.name)+'</span>'+
+    (l.priced===false
+      ? '<span style="font-weight:600;color:var(--red)">⚠ Price not set</span>'
+      : '<span style="font-weight:600">'+l.total_price.toFixed(2)+' SDG</span>')+
+    '</div>'
+  ).join('') : '<div style="color:var(--slate);font-size:.78rem">Select a visit destination to see charges</div>')
+  + (unpriced.length ? '<div style="margin-top:8px;padding:8px 10px;background:#fef2f2;border:1.5px solid #fca5a5;border-radius:8px;color:#b91c1c;font-size:.74rem;font-weight:600">⚠ '+unpriced.length+' item(s) have no price set in the Price List and are NOT included in the total below — contact admin before proceeding.</div>' : '');
   if(totalEl) totalEl.textContent = total.toFixed(2)+' '+(CFG?.currency||'SDG');
 }
 
@@ -12918,17 +13090,16 @@ function buildPaymentDeferralFields(deferred){
 async function chargeForNewOrder(pt, items, invoiceType) {
   if(!sb || !pt?.id || !items?.length) return;
   try {
-    const names = items.map(i=>i.name).filter(Boolean);
-    let priceMap = {};
-    if(names.length){
-      const {data:prices} = await sb.from('price_list').select('name,price').in('name', names);
-      (prices||[]).forEach(p=>{ priceMap[p.name]=p.price; });
-    }
-    const lineItems = items.map(i=>{
-      const qty = i.qty||1, unit = priceMap[i.name]||0;
-      return { name:i.name, category:i.category, qty, unit_price:unit, total_price:unit*qty };
-    });
-    const subTotal = lineItems.reduce((s,l)=>s+(l.total_price||0),0);
+    const lineItems = await resolvePricedLines(items);
+    // Same never-silently-zero rule as Registration's invoice (see
+    // resolvePricedLines() near TEST_CATALOG): an item with no matching
+    // price_list row is kept on the invoice's own line_items for the
+    // record, but contributes nothing to what's actually charged, and the
+    // ordering clinician gets a visible toast rather than a quietly
+    // undercounted bill.
+    const unpriced = lineItems.filter(l=>!l.priced);
+    if(unpriced.length) toast('⚠ '+unpriced.length+' item(s) have no price set — contact admin. Order placed, but not fully billed: '+unpriced.map(l=>l.name).join(', '),'warn');
+    const subTotal = lineItems.reduce((s,l)=>s+(l.priced?(l.total_price||0):0),0);
     const isWaived = pt.payment_status==='waived';
     await dbWrite('invoices','insert',{
       patient_id:pt.id, patient_name:pt.name||fullName(pt), lab_no:pt.lab_no,

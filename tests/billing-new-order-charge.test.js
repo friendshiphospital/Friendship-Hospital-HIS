@@ -20,7 +20,7 @@ function initScript() {
     localStorage.setItem('sb_key','mock-anon-key');
     ${CHAINABLE_MOCK_SRC}
     window.__mock = { invoiceInserts: [], patientUpdates: [] };
-    const priceRows = [{ name:'ESR', price:1500 }, { name:'X-Ray — Chest PA', price:3000 }];
+    const priceRows = [{ code:'LC006', name:'ESR', price:1500 }, { code:'RAD001', name:'X-Ray — Chest PA', price:3000 }];
     window.supabase = { createClient: () => ({
       auth: { signInWithPassword: async()=>({data:{user:{id:'u1'}},error:null}), getSession: async()=>({data:{session:null}}), signOut: async()=>({error:null}) },
       from: (table) => {
