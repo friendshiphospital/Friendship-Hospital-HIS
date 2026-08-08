@@ -17,8 +17,9 @@ function initScript() {
     localStorage.setItem('sb_key','mock-anon-key');
     ${CHAINABLE_MOCK_SRC}
     const labPrices = [
-      { name:'CBC (Full Blood Count)', price:3000, category:'lab' },
-      { name:'Haemoglobin Only', price:1000, category:'lab' },
+      { code:'LC001', name:'CBC (Full Blood Count)', price:3000, category:'lab' },
+      { code:'LC002', name:'Haemoglobin Only', price:1000, category:'lab' },
+      { code:'REG001', name:'Registration Fee', price:500, category:'registration' },
     ];
     window.supabase = { createClient: () => ({
       auth: { signInWithPassword: async()=>({data:{user:{id:'u1'}},error:null}), getSession: async()=>({data:{session:null}}), signOut: async()=>({error:null}) },
@@ -63,7 +64,7 @@ module.exports = async function run(context, baseUrl) {
   t.check('CBC (Full Blood Count) resolves a real price (3000), not 0/"—"', cbcLine?.total_price === 3000);
   t.check('Haemoglobin Only resolves a real price (1000), not 0/"—"', hgbLine?.total_price === 1000);
   const total = lines.reduce((s, l) => s + (l.total_price || 0), 0);
-  t.check('the invoice total actually includes the lab test prices, not just registration fee', total >= 3000 + 1000 + 50);
+  t.check('the invoice total actually includes the lab test prices, not just registration fee', total >= 3000 + 1000 + 500);
 
   // --- Every TEST_CATALOG name has a canonical price_list entry with a matching name ---
   const auditResult = await page.evaluate(() => {

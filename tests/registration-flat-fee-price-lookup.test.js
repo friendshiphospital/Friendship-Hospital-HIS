@@ -3,12 +3,12 @@
 // tests and radiology studies, but Consultation Fee, Admission Fee, and
 // Registration Fee were hardcoded flat numbers (500 / 1000 / 50) that never
 // consulted price_list at all -- so editing them on the Price List page had
-// zero effect on what registration actually charged. Confirmed as a real
-// bug (not just a gap): the price seed itself already ships "Registration
-// Fee" at 500, while the hardcoded fallback charged 50 -- a stale mismatch
-// that could only happen because the lookup never ran. Now all three flat
-// fees are looked up first, falling back to their historical hardcoded
-// values only when price_list has no matching row.
+// zero effect on what registration actually charged. All three flat fees
+// are now resolved through the shared code-based resolvePricedLines()
+// lookup, same as lab/radiology. A missing price_list row is never papered
+// over with a fabricated fallback number -- the line comes back
+// priced:false/total_price:0 and buildRegInvoicePreview() surfaces it as a
+// blocking "Price not set" warning instead.
 const { CHAINABLE_MOCK_SRC } = require('./helpers/chainable-mock');
 const { makeSuite } = require('./helpers/test-kit');
 
@@ -53,9 +53,9 @@ module.exports = async function run(context, baseUrl) {
   {
     const page = await context.newPage();
     await page.addInitScript(initScript([
-      { name: 'Consultation Fee', price: 2200 },
-      { name: 'Admission Fee (one-time)', price: 3300 },
-      { name: 'Registration Fee', price: 500 },
+      { code: 'CON000', name: 'Consultation Fee', price: 2200 },
+      { code: 'ADM008', name: 'Admission Fee (one-time)', price: 3300 },
+      { code: 'REG001', name: 'Registration Fee', price: 500 },
     ]));
     await login(page, baseUrl);
     const lines = await page.evaluate(async () => buildAutoInvoiceLines([], new Set(['doctor', 'admission'])));
@@ -65,10 +65,11 @@ module.exports = async function run(context, baseUrl) {
     t.check('Consultation Fee uses the price_list value (2200), not the hardcoded 500', consult?.total_price === 2200);
     t.check('Admission fee line uses the price_list value (3300), not the hardcoded 1000', admission?.total_price === 3300);
     t.check('Registration Fee uses the price_list value (500), not the hardcoded 50', registration?.total_price === 500);
+    t.check('all three flat fees are marked priced:true', consult?.priced === true && admission?.priced === true && registration?.priced === true);
     await page.close();
   }
 
-  // --- price_list has no matching rows -- must fall back to the historical hardcoded values, not 0/undefined ---
+  // --- price_list has no matching rows -- must NEVER fabricate a fallback price, must flag as unpriced instead ---
   {
     const page = await context.newPage();
     await page.addInitScript(initScript([]));
@@ -77,9 +78,10 @@ module.exports = async function run(context, baseUrl) {
     const consult = lines.find(l => l.name === 'Consultation Fee');
     const admission = lines.find(l => l.category === 'admission');
     const registration = lines.find(l => l.name === 'Registration Fee');
-    t.check('no price_list row -> Consultation Fee falls back to 500, not 0', consult?.total_price === 500);
-    t.check('no price_list row -> Admission fee falls back to 1000, not 0', admission?.total_price === 1000);
-    t.check('no price_list row -> Registration Fee falls back to 50, not 0', registration?.total_price === 50);
+    t.check('no price_list row -> Consultation Fee is flagged priced:false, not a fabricated fallback number', consult?.priced === false);
+    t.check('no price_list row -> Admission fee is flagged priced:false, not a fabricated fallback number', admission?.priced === false);
+    t.check('no price_list row -> Registration Fee is flagged priced:false, not a fabricated fallback number', registration?.priced === false);
+    t.check('unpriced flat fees never carry a nonzero total_price', consult?.total_price === 0 && admission?.total_price === 0 && registration?.total_price === 0);
     await page.close();
   }
 
