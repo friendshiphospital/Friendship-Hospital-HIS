@@ -133,10 +133,21 @@ module.exports = async function run(context, baseUrl) {
     const approveNowVisible = await page.evaluate(() => document.getElementById('val-approve-btn').style.display !== 'none');
     t.check('the Approve button unlocks once review is confirmed', approveNowVisible);
 
+    // --- Two-person sign-off: the SAME account that performed Review must not be able to Approve ---
+    const updatesBeforeSameAccountAttempt = await page.evaluate(() => window.__mock.resultUpdates.length);
     await page.click('#val-approve-btn');
     await page.waitForTimeout(200);
-    const approveStamped = await page.evaluate(() => window.__mock.resultUpdates.some(u => u.approved_by_name === 'Quality Officer Test'));
-    t.check('confirming approval stamps approved_by_name and approved_at', approveStamped);
+    const updatesAfterSameAccountAttempt = await page.evaluate(() => window.__mock.resultUpdates.length);
+    t.check('approving with the SAME account that performed Review is blocked (no new update written)', updatesAfterSameAccountAttempt === updatesBeforeSameAccountAttempt);
+
+    // Switch to a different account within the same session (no reload) --
+    // matches how the app itself distinguishes reviewer from approver, via
+    // currentProfile.id, not a fresh login.
+    await page.evaluate(() => { currentProfile = { ...currentProfile, id: 'u2', full_name: 'Lab Director Test' }; currentUser = { ...currentUser, id: 'u2' }; });
+    await page.click('#val-approve-btn');
+    await page.waitForTimeout(200);
+    const approveStamped = await page.evaluate(() => window.__mock.resultUpdates.some(u => u.approved_by_name === 'Lab Director Test'));
+    t.check('confirming approval by a DIFFERENT account than Review stamps approved_by_name and approved_at', approveStamped);
 
     // --- Print report ---
     await page.evaluate(() => { window.open = () => ({ document: { write: () => {}, close: () => {} }, focus: () => {} }); });
