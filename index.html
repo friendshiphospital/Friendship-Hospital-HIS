@@ -11280,6 +11280,20 @@ async function updateApptStatus(id,status) {
 // ── REGISTER PATIENT ──────────────────────────────────
 function initRegForm() {
   Object.entries(TEST_CATALOG).forEach(([tab,tests])=>{ const el=document.getElementById('tc-panel-'+tab); if(!el) return; el.innerHTML=tests.map(t=>'<label class="tc-item"><input type="checkbox" class="test-chk" value="'+t+'" onchange="updateTestSummary()"> '+t+'</label>').join(''); });
+  // _regDestinations is a persistent global, not reset by anything except
+  // clearRegForm() ("Register Another Patient") -- entering Register any
+  // other way (sidebar, launcher tile, global search, browser back/forward)
+  // used to leave a previous registration's destination selection and
+  // section highlighting stale for the next patient. initRegForm() runs on
+  // every goPage('register'), so resetting here (not just the test
+  // checkboxes) means Register always starts clean regardless of how the
+  // user got there.
+  _regDestinations = new Set();
+  document.querySelectorAll('.dest-card').forEach(c=>c.classList.remove('selected'));
+  const destInput=document.getElementById('r-destination'); if(destInput) destInput.value='';
+  ['reg-doctor-section','reg-tests-section','reg-radiology-section','reg-admission-section'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.style.display='none';
+  });
 }
 function switchTestTab(tab,btn) {
   Object.keys(TEST_CATALOG).forEach(t=>{ const el=document.getElementById('tc-panel-'+t); if(el) el.style.display=t===tab?'grid':'none'; });
