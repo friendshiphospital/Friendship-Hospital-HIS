@@ -2244,7 +2244,9 @@ html[dir="rtl"] body{direction:rtl;}
       <!-- ── TAB: HISTORY ── -->
       <div id="doc-tab-history" class="card" style="display:none;border-radius:0 10px 10px 10px">
         <div class="card-body">
+          <div style="font-size:.68rem;color:var(--slate);background:#f8fafd;border:1px solid var(--border);border-radius:6px;padding:6px 10px;margin-bottom:10px">📖 Read-only summary across every past visit under this patient's MRN — consultations, prescriptions, radiology and lab results from all departments. This never affects the Orders/Rx/Notes tabs for today's visit.</div>
           <div id="doc-history-body"><div class="empty-state">Select a patient to view history</div></div>
+          <div id="doc-history-detail"></div>
         </div>
       </div>
     </div>
@@ -2636,6 +2638,25 @@ html[dir="rtl"] body{direction:rtl;}
     <div class="mo-ft">
       <button class="btn btn-s" onclick="closeOv('delta-alert-ov')">Cancel Save</button>
       <button class="btn btn-r" onclick="confirmDeltaOverride()">✅ Confirm &amp; Save (Manual Sign-off)</button>
+    </div>
+  </div>
+</div>
+
+<!-- Lab Worklist "Quick History" — a fast, in-context multi-visit summary
+     (Item C, same shared history logic as Consultation's History tab), kept
+     visually and functionally distinct from "Full Timeline" (which
+     navigates away to the dedicated Patient History Timeline page). -->
+<div class="ov" id="wl-quick-history-ov">
+  <div class="mo mo-lg">
+    <div class="mo-hd"><h3>🕐 Quick History — <span id="wl-qh-name"></span></h3><button class="mo-x" onclick="closeOv('wl-quick-history-ov')">✕</button></div>
+    <div class="mo-b">
+      <div style="font-size:.68rem;color:var(--slate);background:#f8fafd;border:1px solid var(--border);border-radius:6px;padding:6px 10px;margin-bottom:10px">📖 Read-only quick view across every past visit under this patient's MRN. For the full interactive Timeline (trends, filters, admin actions), use "Open Full Timeline" below.</div>
+      <div id="wl-qh-body"><div class="empty-state">Loading…</div></div>
+      <div id="wl-qh-detail"></div>
+    </div>
+    <div class="mo-ft">
+      <button class="btn btn-s" onclick="closeOv('wl-quick-history-ov')">Close</button>
+      <button class="btn btn-p" onclick="wlQuickHistoryOpenFullTimeline()">📊 Open Full Timeline →</button>
     </div>
   </div>
 </div>
@@ -11312,28 +11333,57 @@ function updateTestSummary() {
 // anything itself — always asks via confirm() and returns null if declined
 // or nothing matches, so the caller's normal, undiscounted invoice path
 // runs unless a receptionist actively opts in.
-async function checkAndApplyFollowUpPricing(mrn){
+//
+// opts.wasManualMatch is true only when `mrn` came from the receptionist
+// clicking a duplicate-phone/search match (r-existing-mrn). When it's false
+// (a brand-new mrn was just minted for this registration) and opts.phone is
+// given, also check whether that phone number belongs to a DIFFERENT,
+// already-known mrn with an open follow-up — this is how a returning
+// patient who was registered as "new" (nobody clicked the match) doesn't
+// silently lose their follow-up pricing. Same confirm-before-acting rule
+// applies; this never merges identities on its own.
+async function checkAndApplyFollowUpPricing(mrn, opts){
   if(!sb||!mrn) return null;
   try{
-    const {data:openFollowUps}=await sb.from('follow_ups').select('*').eq('patient_mrn',mrn).eq('used',false);
-    if(!openFollowUps?.length) return null;
-    const today=new Date(); today.setHours(0,0,0,0);
-    const windowMs=CFG.followupWindowDays*864e5;
-    const relevant=openFollowUps.filter(f=>{
-      if(!f.target_date) return false;
-      const target=new Date(f.target_date+'T00:00:00');
-      return Math.abs(target-today)<=windowMs;
-    });
-    if(!relevant.length) return null;
-    relevant.sort((a,b)=>Math.abs(new Date(a.target_date)-today)-Math.abs(new Date(b.target_date)-today));
-    const fu=relevant[0];
+    const findRelevant=(rows)=>{
+      if(!rows?.length) return null;
+      const today=new Date(); today.setHours(0,0,0,0);
+      const windowMs=CFG.followupWindowDays*864e5;
+      const relevant=rows.filter(f=>{
+        if(!f.target_date) return false;
+        const target=new Date(f.target_date+'T00:00:00');
+        return Math.abs(target-today)<=windowMs;
+      });
+      if(!relevant.length) return null;
+      relevant.sort((a,b)=>Math.abs(new Date(a.target_date)-today)-Math.abs(new Date(b.target_date)-today));
+      return relevant[0];
+    };
     const ruleLabel=CFG.followupPricingRule==='percentage'?CFG.followupPricingValue+'% discounted'
       :CFG.followupPricingRule==='fixed'?'fixed-price ('+CFG.followupPricingValue+' '+CFG.currency+')'
       :'free';
-    const apply=confirm('This patient has a follow-up scheduled by '+(fu.scheduled_by_name||'a doctor')+
-      (fu.reason?' for "'+fu.reason+'"':'')+', due '+fu.target_date+
-      ' — apply '+ruleLabel+' follow-up pricing to this registration?');
-    return apply?{followUpId:fu.id}:null;
+    const {data:openFollowUps}=await sb.from('follow_ups').select('*').eq('patient_mrn',mrn).eq('used',false);
+    const fu=findRelevant(openFollowUps);
+    if(fu){
+      const apply=confirm('This patient has a follow-up scheduled by '+(fu.scheduled_by_name||'a doctor')+
+        (fu.reason?' for "'+fu.reason+'"':'')+', due '+fu.target_date+
+        ' — apply '+ruleLabel+' follow-up pricing to this registration?');
+      return apply?{followUpId:fu.id}:null;
+    }
+    if(!opts?.wasManualMatch && opts?.phone){
+      const {data:otherPatients}=await sb.from('patients_master').select('mrn').eq('phone',opts.phone).neq('mrn',mrn);
+      const otherMrns=[...new Set((otherPatients||[]).map(p=>p.mrn).filter(Boolean))];
+      if(otherMrns.length){
+        const {data:phoneFollowUps}=await sb.from('follow_ups').select('*').in('patient_mrn',otherMrns).eq('used',false);
+        const fu2=findRelevant(phoneFollowUps);
+        if(fu2){
+          const apply=confirm('⚠️ A patient with this phone number has an open follow-up under MRN '+fu2.patient_mrn+
+            ' scheduled by '+(fu2.scheduled_by_name||'a doctor')+(fu2.reason?' for "'+fu2.reason+'"':'')+', due '+fu2.target_date+
+            ' — is this the same patient? Apply '+ruleLabel+' follow-up pricing to this registration?');
+          return apply?{followUpId:fu2.id}:null;
+        }
+      }
+    }
+    return null;
   }catch(e){ return null; }
 }
 async function submitRegistration() {
@@ -11382,10 +11432,12 @@ async function submitRegistration() {
       // registry in sync with the correction.
       try{ await sb?.from('patients_master').update(masterFields).eq('mrn',mrn); }catch(e){}
     }
-    // Deliberate, confirmed prompt only — never a silent discount. A brand
-    // new mrn (no prior visit) can never match an open follow_up, so this
-    // is a safe no-op for genuinely new patients.
-    const followUpMatch = await checkAndApplyFollowUpPricing(mrn);
+    // Deliberate, confirmed prompt only — never a silent discount. Pass
+    // whether this mrn came from an explicit duplicate-match click
+    // (existingMrn) plus the entered phone, so a brand-new mrn can still be
+    // matched against an open follow-up under a DIFFERENT known mrn sharing
+    // this phone number (see checkAndApplyFollowUpPricing's phone fallback).
+    const followUpMatch = await checkAndApplyFollowUpPricing(mrn, {wasManualMatch:!!existingMrn, phone:g('r-phone')});
     // Per-visit File Number, Lab No., Radiology No. — generated fresh every
     // time, even for a returning patient. Wrapped in a retry loop: if the
     // insert still hits a unique-constraint collision (23505) despite the
@@ -11642,8 +11694,53 @@ function renderWlRow(p,sampleMap) {
       (unpaid?'<button class="btn btn-s btn-xs" style="opacity:.5;cursor:not-allowed" title="Payment required">\ud83d\udd12 Blocked</button>':
         notReceived?'<button class="btn btn-s btn-xs" style="opacity:.5;cursor:not-allowed" title="Sample not yet received in the lab">\ud83d\udce5 Awaiting Receipt</button>':
         '<button class="btn btn-p btn-xs" onclick="openEnterModal(\x27'+p.id+'\x27,\x27'+(p.lab_no||'')+'\x27,\x27'+escAttr(p.name||fullName(p))+'\x27)">\ud83d\udcdd Enter</button>')+
-      '<button class="btn btn-s btn-xs" onclick="openPatientHistoryTimeline(\x27'+p.id+'\x27)" title="View this patient\x27s full history">\ud83d\udd50 History</button>'+
+      '<button class="btn btn-s btn-xs" onclick="openWlQuickHistory(\x27'+p.id+'\x27)" title="Quick view \u2014 this patient\x27s history across all visits, without leaving the Worklist">\ud83d\udd50 Quick History</button>'+
+      '<button class="btn btn-s btn-xs" onclick="openPatientHistoryTimeline(\x27'+p.id+'\x27)" title="Open the full Patient History Timeline page (trends, filters, admin actions)">\ud83d\udcca Full Timeline</button>'+
     '</div></td></tr>';
+}
+// Lab Worklist "Quick History" (Item C) \u2014 a fast, in-context multi-visit
+// summary reusing the exact same shared history logic as Consultation's
+// History tab (fetchPatientHistoryEvents/renderHistoryEventDetail, see
+// their definitions above), rather than a third reimplementation. Distinct
+// from "Full Timeline" (openPatientHistoryTimeline), which still navigates
+// away to the dedicated pt-history page for trends/filters/admin actions \u2014
+// both entry points stay, clearly separated by label and icon, so it's
+// obvious which one does what.
+let _wlQhEvents=[];
+let _wlQhPatientId=null;
+async function openWlQuickHistory(patientId){
+  if(!sb||!patientId) return;
+  _wlQhPatientId=patientId;
+  const nameEl=document.getElementById('wl-qh-name');
+  const body=document.getElementById('wl-qh-body');
+  const detailEl=document.getElementById('wl-qh-detail');
+  if(nameEl) nameEl.textContent='';
+  if(detailEl) detailEl.innerHTML='';
+  if(body) body.innerHTML='<div class="spin-center"><div class="spinner"></div>Loading\u2026</div>';
+  openOv('wl-quick-history-ov');
+  try {
+    const {data:pt}=await sb.from('patients').select('id,mrn,name,first_name,last_name,created_at').eq('id',patientId).maybeSingle();
+    if(nameEl) nameEl.textContent=pt?(pt.name||fullName(pt)):'';
+    const result=await fetchPatientHistoryEvents(pt||{id:patientId});
+    _wlQhEvents=result.events;
+    if(!body) return;
+    if(!_wlQhEvents.length){ body.innerHTML='<div class="empty-state">No previous history found</div>'; return; }
+    body.innerHTML='<div style="font-size:.68rem;color:var(--slate);margin-bottom:8px">'+_wlQhEvents.length+' event(s) across '+result.counts.visits+' visit(s) \u2014 click any entry to expand</div>'+
+      _wlQhEvents.map((e,i)=>'<div onclick="showWlQuickHistoryDetail('+i+')" class="tl-item" style="border-left-color:'+e.color+';cursor:pointer"><span style="font-size:1.1rem;flex-shrink:0">'+e.icon+'</span><div style="flex:1;min-width:0"><div style="font-size:.8rem;font-weight:700;color:var(--ink)">'+e.title+'</div><div style="font-size:.71rem;color:var(--slate);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+e.detail+'</div></div><div style="font-size:.68rem;color:var(--slate);flex-shrink:0">'+fmtDT(e.t)+'</div></div>').join('');
+  } catch(e){
+    console.error(e);
+    if(body) body.innerHTML='<div class="empty-state"><div class="empty-icon">\u26a0\ufe0f</div><div class="empty-title">Could not load history</div><div style="font-size:.8rem;color:var(--slate);margin-top:4px">'+escapeHtml(e.message||'Unknown error')+'</div></div>';
+  }
+}
+function showWlQuickHistoryDetail(idx){
+  const e=_wlQhEvents[idx]; if(!e) return;
+  const el=document.getElementById('wl-qh-detail'); if(!el) return;
+  el.innerHTML='<div style="margin-top:10px;border-top:2px dashed var(--border);padding-top:10px">'+renderHistoryEventDetail(e)+'</div>';
+}
+function wlQuickHistoryOpenFullTimeline(){
+  const id=_wlQhPatientId; if(!id) return;
+  closeOv('wl-quick-history-ov');
+  openPatientHistoryTimeline(id);
 }
 function toggleWlSourceSort(){
   window._wlSourceSort = window._wlSourceSort==='asc' ? 'desc' : window._wlSourceSort==='desc' ? null : 'asc';
@@ -11980,75 +12077,101 @@ function pthFormatResultRow(r){
     .map(([k,v])=>k.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase())+': '+escapeHtml(v));
   return (parts.length?parts.join(' · '):'No values recorded')+(r.notes?' | Note: '+escapeHtml(r.notes):'');
 }
+// Shared history-fetching core — reused by the full Patient History Timeline
+// page (loadPthTimeline, below) AND the read-only inline multi-visit history
+// panels on Consultation (loadPatientHistory) and the Lab Worklist
+// (loadWorklistHistoryPanel), rather than each reimplementing the same
+// MRN-merge query set. A follow-up/re-registration under the same MRN
+// creates a genuinely NEW patients row (see
+// submitRegistration()/checkAndApplyFollowUpPricing()) rather than reusing
+// the old one — so a patient's clinical history is spread across MULTIPLE
+// patient_id rows sharing one mrn. Resolve every patients.id sharing this
+// MRN first (falls back to just the given row if there's no MRN — e.g. a
+// walk-in) and query every related table with .in(...) instead of
+// .eq(...), merging every visit's events into one combined, sorted list.
+// Every query is independently caught (falls back to an empty result
+// rather than rejecting) so ONE failing table -- an RLS policy that denies
+// this role, a migration not yet applied, anything -- can never take the
+// whole Promise.all down with it or leave a caller stuck on a spinner
+// forever; callers still see everything else that DID load.
+async function fetchPatientHistoryEvents(pt){
+  const ptId=pt?.id;
+  const resultTableNames=Object.keys(PTH_RESULT_TABLES);
+  let allIdsForMrn=[ptId];
+  let allRowsForMrn=[pt];
+  if(pt?.mrn){
+    const {data:mrnRows}=await sb.from('patients').select('id,created_at,tests_requested,priority,diagnosis,visit_status').eq('mrn',pt.mrn).then(r=>r,()=>({data:null}));
+    if(mrnRows?.length){ allIdsForMrn=mrnRows.map(r=>r.id); allRowsForMrn=mrnRows; }
+  }
+  const [adms,crits,rads,invs,consents,hemHist,chemHist,consults,rxs,...resultRows]=await Promise.all([
+    sb.from('admissions').select('*').in('patient_id',allIdsForMrn).order('admission_date',{ascending:false}).then(r=>r,()=>({data:[]})),
+    sb.from('critical_values').select('*').in('patient_id',allIdsForMrn).order('created_at',{ascending:false}).then(r=>r,()=>({data:[]})),
+    sb.from('radiology_requests').select('*').in('patient_id',allIdsForMrn).order('created_at',{ascending:false}).then(r=>r,()=>({data:[]})),
+    sb.from('invoices').select('*').in('patient_id',allIdsForMrn).order('created_at',{ascending:false}).then(r=>r,()=>({data:[]})),
+    sb.from('consent_forms').select('*').in('patient_id',allIdsForMrn).order('consent_date',{ascending:false}).then(r=>r,()=>({data:[]})),
+    // Trend history reads the append-only twin tables (migration_v2.17) —
+    // results_hematology/results_chemistry hold at most one row per
+    // patient, so trend charts can never show more than one point off
+    // them directly.
+    sb.from('results_hematology_history').select('hgb,wbc,plt,analysis_date,is_verified').in('patient_id',allIdsForMrn).order('analysis_date').then(r=>r,()=>({data:[]})),
+    sb.from('results_chemistry_history').select('creat,urea,fbs,alt,ast,alp,ggt,analysis_date,is_verified').in('patient_id',allIdsForMrn).order('analysis_date').then(r=>r,()=>({data:[]})),
+    sb.from('doctor_consultations').select('*').in('patient_id',allIdsForMrn).order('consultation_date',{ascending:false}).then(r=>r,()=>({data:[]})),
+    sb.from('prescriptions').select('*').in('patient_id',allIdsForMrn).order('prescribed_date',{ascending:false}).then(r=>r,()=>({data:[]})),
+    ...resultTableNames.map(t=>sb.from(t).select('*').in('patient_id',allIdsForMrn).then(r=>r,()=>({data:[]}))),
+  ]);
+  const events=[];
+  allRowsForMrn.forEach(p=>{
+    if(!p) return;
+    const closed=p.visit_status==='Visit Complete';
+    events.push({t:new Date(p.created_at),type:'lab',icon:closed?'🔒':'📋',title:'Patient Registered'+(closed?' (Visit Complete)':''),detail:'Tests: '+escapeHtml((p.tests_requested||[]).join(', ')||'—'),color:closed?'#64748b':'var(--teal)',data:p});
+  });
+  (adms.data||[]).forEach(a=>events.push({t:new Date(a.admission_date),type:'admission',icon:'🛏',title:'Admitted — '+escapeHtml(a.ward||''),detail:escapeHtml(a.primary_diagnosis||'—')+' | Dr. '+escapeHtml(a.admitting_doctor||'—')+' | '+escapeHtml(a.status),color:'var(--blue)',data:a}));
+  (crits.data||[]).forEach(c=>events.push({t:new Date(c.created_at),type:'lab',icon:'🚨',title:'Critical: '+escapeHtml(c.parameter),detail:'Value: '+escapeHtml(c.value)+' | '+(c.is_acknowledged?'Acknowledged':'⚠️ Unacknowledged'),color:'var(--red)',data:c}));
+  (rads.data||[]).forEach(r=>events.push({t:new Date(r.created_at),type:'radiology',icon:'🩻',title:escapeHtml(r.imaging_type||'Radiology'),detail:escapeHtml(r.urgency||'')+' | '+escapeHtml(r.status||'Requested'),color:'var(--sero)',data:r}));
+  (invs.data||[]).forEach(i=>events.push({t:new Date(i.created_at),type:'billing',icon:'💰',title:'Invoice '+escapeHtml(i.invoice_no||''),detail:((i.net_amount||0).toFixed(2))+' '+escapeHtml(i.currency||CFG.currency)+' | '+escapeHtml(i.payment_status),color:'var(--amber)',data:i}));
+  (consents.data||[]).forEach(c=>events.push({t:new Date(c.consent_date||c.created_at),type:'consent',icon:'📝',title:'Consent — '+escapeHtml(c.consent_type||'—'),detail:escapeHtml(c.procedure_description||'—')+' | Signed by '+escapeHtml(c.signee_name||'—')+' | Dr. '+escapeHtml(c.performed_by_name||'—'),color:'#0e7490',data:c}));
+  (consults.data||[]).forEach(c=>events.push({t:new Date(c.consultation_date||c.created_at),type:'consultation',icon:'🩺',title:'Doctor Visit'+(c.visit_type?' — '+escapeHtml(c.visit_type):''),detail:(c.primary_diagnosis?'Dx: '+escapeHtml(c.primary_diagnosis)+' — ':'')+escapeHtml(c.chief_complaint||'—')+(c.consulting_doctor?' | Dr. '+escapeHtml(c.consulting_doctor):''),color:'#7c3aed',data:c}));
+  (rxs.data||[]).forEach(r=>{
+    const items=Array.isArray(r.items)?r.items:[];
+    events.push({t:new Date(r.prescribed_date||r.created_at),type:'prescription',icon:'💊',title:'Prescription'+(r.prescribed_by?' — Dr. '+escapeHtml(r.prescribed_by):''),detail:items.length?items.map(it=>escapeHtml(it.drug||it.name||'')).filter(Boolean).join(', '):'No items recorded',color:'#0369a1',data:r});
+  });
+  resultTableNames.forEach((tname,i)=>{
+    const meta=PTH_RESULT_TABLES[tname];
+    (resultRows[i]?.data||[]).forEach(r=>events.push({t:new Date(r.analysis_date||r.created_at||pt?.created_at||Date.now()),type:'lab',icon:meta.icon,title:meta.label+' Result'+(r.is_verified?' ✓ Verified':' (unverified)'),detail:pthFormatResultRow(r),color:'var(--teal)',data:r}));
+  });
+  events.sort((a,b)=>b.t-a.t);
+  return {
+    events, allRowsForMrn, allIdsForMrn,
+    hemHistory:hemHist.data||[], chemHistory:chemHist.data||[],
+    counts:{visits:allRowsForMrn.length, admissions:(adms.data||[]).length, criticals:(crits.data||[]).length, radiology:(rads.data||[]).length, invoices:(invs.data||[]).length},
+  };
+}
+// Shared per-event detail renderer — reused by the full Timeline page
+// (showPthDetail) and the inline quick-view panels (Consultation History
+// tab, Lab Worklist quick history) so there's one place that knows how to
+// turn an event into a readable detail view, instead of a second scheme.
+function renderHistoryEventDetail(e){
+  if(!e) return '<div class="empty-state">No event selected</div>';
+  const d=e.data;
+  let html='<div style="border-left:4px solid '+e.color+';padding-left:12px;margin-bottom:12px"><div style="font-size:1.1rem">'+e.icon+' <strong>'+e.title+'</strong></div><div style="font-size:.75rem;color:var(--slate);margin-top:3px">'+fmtDT(e.t)+'</div></div>';
+  const kvTable=rows=>'<table style="width:100%;border-collapse:collapse">'+rows.filter(([,v])=>v).map(([k,v])=>'<tr style="border-bottom:1px solid var(--border)"><td style="padding:5px 8px;font-size:.75rem;color:var(--slate);width:40%">'+k+'</td><td style="padding:5px 8px;font-size:.8rem;font-weight:600;white-space:pre-wrap">'+escapeHtml(v)+'</td></tr>').join('')+'</table>';
+  if(e.type==='admission'){ html+=kvTable([['Admission No',d.admission_no],['Ward/Bed',(d.ward||'—')+' / '+(d.bed||'—')],['Doctor',d.admitting_doctor],['Diagnosis',d.primary_diagnosis],['Status',d.status],['Admitted',fmtDT(d.admission_date)],['Discharged',d.discharge_date?fmtDT(d.discharge_date):'Still admitted']]); }
+  else if(e.type==='consultation'){ html+=kvTable([['Chief Complaint',d.chief_complaint],['Primary Diagnosis',d.primary_diagnosis],['Secondary Diagnosis',d.secondary_diagnosis],['Management Plan',d.management_plan],['Disposition',d.disposition],['Follow-up',d.followup],['Doctor',d.consulting_doctor]]); }
+  else if(e.type==='billing'){ html+='<div style="margin-bottom:8px;display:flex;justify-content:space-between;font-size:.82rem"><span>Invoice: <strong>'+escapeHtml(d.invoice_no||'—')+'</strong></span><span>'+escapeHtml(d.payment_status?.toUpperCase()||'')+'</span></div>'; const items=d.line_items||[]; html+=items.length?'<table style="width:100%;border-collapse:collapse">'+items.slice(0,8).map(i=>'<tr style="border-bottom:1px solid var(--border)"><td style="padding:4px 8px;font-size:.78rem">'+escapeHtml(i.name)+'</td><td style="padding:4px 8px;text-align:right;font-size:.78rem;font-weight:600">'+((i.total_price||0).toFixed(2))+'</td></tr>').join('')+'<tr style="background:var(--teal-lt)"><td style="padding:5px 8px;font-weight:700">Total</td><td style="padding:5px 8px;text-align:right;font-weight:800;color:var(--teal)">'+((d.net_amount||0).toFixed(2))+' '+escapeHtml(d.currency||CFG.currency)+'</td></tr></table>':'<div style="font-size:.78rem;color:var(--slate)">No line items</div>'; }
+  else if(e.type==='radiology'){ html+=kvTable([['Imaging Type',d.imaging_type],['Urgency',d.urgency],['Status',d.status],['Indication',d.indication],['Clinical History',d.history],['Radiologist',d.radiologist],['Technique',d.technique],['Findings / Report',d.report],['Impression',d.impression],['Recommendation',d.recommendation]]); }
+  else if(e.type==='prescription'){ const items=Array.isArray(d.items)?d.items:[]; html+=items.length?'<table style="width:100%;border-collapse:collapse">'+items.map(it=>'<tr style="border-bottom:1px solid var(--border)"><td style="padding:5px 8px;font-size:.78rem;font-weight:600">'+escapeHtml(it.drug||it.name||'—')+'</td><td style="padding:5px 8px;font-size:.73rem;color:var(--slate)">'+escapeHtml([it.dose,it.route,it.freq,it.duration].filter(Boolean).join(' · ')||'—')+'</td></tr>').join('')+'</table>':'<div style="font-size:.78rem;color:var(--slate)">No items recorded</div>'; if(d.notes) html+='<div style="margin-top:8px;font-size:.78rem;color:var(--ink2)">Note: '+escapeHtml(d.notes)+'</div>'; }
+  else { html+='<div style="font-size:.82rem;color:var(--ink);background:#f8fafd;padding:10px;border-radius:8px">'+e.detail+'</div>'; }
+  return html;
+}
 async function loadPthTimeline() {
   if(!sb||!_pthPt) return;
   const tl=document.getElementById('pth-timeline'); if(tl) tl.innerHTML='<div class="spin-center"><div class="spinner"></div>Loading…</div>';
   try {
-    const from=document.getElementById('pth-from')?.value||new Date(Date.now()-365*864e5).toISOString().slice(0,10);
-    const to=document.getElementById('pth-to')?.value||today();
-    const ptId=_pthPt.id;
-    const resultTableNames=Object.keys(PTH_RESULT_TABLES);
-    // A follow-up/re-registration under the same MRN creates a genuinely
-    // NEW patients row (see submitRegistration()/checkAndApplyFollowUpPricing())
-    // rather than reusing the old one — so a patient's clinical history is
-    // spread across MULTIPLE patient_id rows sharing one mrn. Every query
-    // below used to filter by ONLY the single row that was clicked into,
-    // so "History" on a fresh re-registration showed nothing at all even
-    // though a completed prior visit existed under the same file number.
-    // Resolve every patients.id sharing this MRN first (falls back to just
-    // the clicked row if there's no MRN — e.g. a walk-in) and query with
-    // .in(...) instead of .eq(...) everywhere, merging every visit's
-    // events into one combined timeline.
-    let allIdsForMrn=[ptId];
-    let allRowsForMrn=[_pthPt];
-    if(_pthPt.mrn){
-      const {data:mrnRows}=await sb.from('patients').select('id,created_at,tests_requested,priority,diagnosis,visit_status').eq('mrn',_pthPt.mrn).then(r=>r,()=>({data:null}));
-      if(mrnRows?.length){ allIdsForMrn=mrnRows.map(r=>r.id); allRowsForMrn=mrnRows; }
-    }
-    // Every query below is independently caught (falls back to an empty
-    // result rather than rejecting) so ONE failing table -- an RLS policy
-    // that denies this role, a migration not yet applied, anything -- can
-    // never take the whole Promise.all down with it. Before this, a single
-    // rejection here left the timeline stuck on its "Loading…" spinner
-    // forever (the outer catch only logged to console, never updated the
-    // UI), which read to the user as "History — nothing appears" even
-    // though most of the data was perfectly reachable.
-    const [adms,crits,rads,invs,consents,hemHist,chemHist,consults,...resultRows]=await Promise.all([
-      sb.from('admissions').select('*').in('patient_id',allIdsForMrn).order('admission_date',{ascending:false}).then(r=>r,()=>({data:[]})),
-      sb.from('critical_values').select('*').in('patient_id',allIdsForMrn).order('created_at',{ascending:false}).then(r=>r,()=>({data:[]})),
-      sb.from('radiology_requests').select('*').in('patient_id',allIdsForMrn).order('created_at',{ascending:false}).then(r=>r,()=>({data:[]})),
-      sb.from('invoices').select('*').in('patient_id',allIdsForMrn).order('created_at',{ascending:false}).then(r=>r,()=>({data:[]})),
-      sb.from('consent_forms').select('*').in('patient_id',allIdsForMrn).order('consent_date',{ascending:false}).then(r=>r,()=>({data:[]})),
-      // Trend history reads the append-only twin tables (migration_v2.17) —
-      // results_hematology/results_chemistry hold at most one row per
-      // patient, so trend charts can never show more than one point off
-      // them directly.
-      sb.from('results_hematology_history').select('hgb,wbc,plt,analysis_date,is_verified').in('patient_id',allIdsForMrn).order('analysis_date').then(r=>r,()=>({data:[]})),
-      sb.from('results_chemistry_history').select('creat,urea,fbs,alt,ast,alp,ggt,analysis_date,is_verified').in('patient_id',allIdsForMrn).order('analysis_date').then(r=>r,()=>({data:[]})),
-      sb.from('doctor_consultations').select('*').in('patient_id',allIdsForMrn).order('consultation_date',{ascending:false}).then(r=>r,()=>({data:[]})),
-      ...resultTableNames.map(t=>sb.from(t).select('*').in('patient_id',allIdsForMrn).then(r=>r,()=>({data:[]}))),
-    ]);
-    _pthHemHistory=hemHist.data||[];
-    _pthChemHistory=chemHist.data||[];
-    const events=[];
-    allRowsForMrn.forEach(pt=>{
-      if(!pt) return;
-      const closed=pt.visit_status==='Visit Complete';
-      events.push({t:new Date(pt.created_at),type:'lab',icon:closed?'🔒':'📋',title:'Patient Registered'+(closed?' (Visit Complete)':''),detail:'Tests: '+escapeHtml((pt.tests_requested||[]).join(', ')||'—'),color:closed?'#64748b':'var(--teal)',data:pt});
-    });
-    (adms.data||[]).forEach(a=>events.push({t:new Date(a.admission_date),type:'admission',icon:'🛏',title:'Admitted — '+escapeHtml(a.ward||''),detail:escapeHtml(a.primary_diagnosis||'—')+' | Dr. '+escapeHtml(a.admitting_doctor||'—')+' | '+escapeHtml(a.status),color:'var(--blue)',data:a}));
-    (crits.data||[]).forEach(c=>events.push({t:new Date(c.created_at),type:'lab',icon:'🚨',title:'Critical: '+escapeHtml(c.parameter),detail:'Value: '+escapeHtml(c.value)+' | '+(c.is_acknowledged?'Acknowledged':'⚠️ Unacknowledged'),color:'var(--red)',data:c}));
-    (rads.data||[]).forEach(r=>events.push({t:new Date(r.created_at),type:'radiology',icon:'🩻',title:escapeHtml(r.imaging_type||'Radiology'),detail:escapeHtml(r.urgency||'')+' | '+escapeHtml(r.status||'Requested'),color:'var(--sero)',data:r}));
-    (invs.data||[]).forEach(i=>events.push({t:new Date(i.created_at),type:'billing',icon:'💰',title:'Invoice '+escapeHtml(i.invoice_no||''),detail:((i.net_amount||0).toFixed(2))+' '+escapeHtml(i.currency||CFG.currency)+' | '+escapeHtml(i.payment_status),color:'var(--amber)',data:i}));
-    (consents.data||[]).forEach(c=>events.push({t:new Date(c.consent_date||c.created_at),type:'consent',icon:'📝',title:'Consent — '+escapeHtml(c.consent_type||'—'),detail:escapeHtml(c.procedure_description||'—')+' | Signed by '+escapeHtml(c.signee_name||'—')+' | Dr. '+escapeHtml(c.performed_by_name||'—'),color:'#0e7490',data:c}));
-    (consults.data||[]).forEach(c=>events.push({t:new Date(c.consultation_date||c.created_at),type:'consultation',icon:'🩺',title:'Doctor Visit'+(c.visit_type?' — '+escapeHtml(c.visit_type):''),detail:(c.primary_diagnosis?'Dx: '+escapeHtml(c.primary_diagnosis)+' — ':'')+escapeHtml(c.chief_complaint||'—')+(c.consulting_doctor?' | Dr. '+escapeHtml(c.consulting_doctor):''),color:'#7c3aed',data:c}));
-    resultTableNames.forEach((tname,i)=>{
-      const meta=PTH_RESULT_TABLES[tname];
-      (resultRows[i]?.data||[]).forEach(r=>events.push({t:new Date(r.analysis_date||r.created_at||_pthPt?.created_at||Date.now()),type:'lab',icon:meta.icon,title:meta.label+' Result'+(r.is_verified?' ✓ Verified':' (unverified)'),detail:pthFormatResultRow(r),color:'var(--teal)',data:r}));
-    });
-    events.sort((a,b)=>b.t-a.t);
-    _pthAllEvents=events;
-    setText('pths-visits',allRowsForMrn.length); setText('pths-admissions',(adms.data||[]).length); setText('pths-criticals',(crits.data||[]).length); setText('pths-radiology',(rads.data||[]).length); setText('pths-invoices',(invs.data||[]).length);
+    const result=await fetchPatientHistoryEvents(_pthPt);
+    _pthHemHistory=result.hemHistory;
+    _pthChemHistory=result.chemHistory;
+    _pthAllEvents=result.events;
+    setText('pths-visits',result.counts.visits); setText('pths-admissions',result.counts.admissions); setText('pths-criticals',result.counts.criticals); setText('pths-radiology',result.counts.radiology); setText('pths-invoices',result.counts.invoices);
     renderPthTimeline();
     if(_pthHemHistory.length||_pthChemHistory.length){ document.getElementById('pth-trends-card').style.display=''; renderPthTrend(); }
   } catch(e){ console.error(e); if(tl) tl.innerHTML='<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-title">Could not load history</div><div style="font-size:.8rem;color:var(--slate);margin-top:4px">'+escapeHtml(e.message||'Unknown error')+'</div></div>'; }
@@ -12065,12 +12188,7 @@ function renderPthTimeline() {
 function showPthDetail(idx) {
   const e=_pthAllEvents[idx]; if(!e) return;
   const el=document.getElementById('pth-detail'); if(!el) return;
-  const d=e.data; let html='<div style="border-left:4px solid '+e.color+';padding-left:12px;margin-bottom:12px"><div style="font-size:1.1rem">'+e.icon+' <strong>'+e.title+'</strong></div><div style="font-size:.75rem;color:var(--slate);margin-top:3px">'+fmtDT(e.t)+'</div></div>';
-  if(e.type==='admission'){ html+='<table style="width:100%;border-collapse:collapse">'+[['Admission No',d.admission_no],['Ward/Bed',(d.ward||'—')+' / '+(d.bed||'—')],['Doctor',d.admitting_doctor],['Diagnosis',d.primary_diagnosis],['Status',d.status],['Admitted',fmtDT(d.admission_date)],['Discharged',d.discharge_date?fmtDT(d.discharge_date):'Still admitted']].map(([k,v])=>'<tr style="border-bottom:1px solid var(--border)"><td style="padding:5px 8px;font-size:.75rem;color:var(--slate);width:40%">'+k+'</td><td style="padding:5px 8px;font-size:.8rem;font-weight:600">'+escapeHtml(v||'—')+'</td></tr>').join('')+'</table>'; }
-  else if(e.type==='consultation'){ html+='<table style="width:100%;border-collapse:collapse">'+[['Chief Complaint',d.chief_complaint],['Primary Diagnosis',d.primary_diagnosis],['Secondary Diagnosis',d.secondary_diagnosis],['Management Plan',d.management_plan],['Disposition',d.disposition],['Follow-up',d.followup],['Doctor',d.consulting_doctor]].filter(([k,v])=>v).map(([k,v])=>'<tr style="border-bottom:1px solid var(--border)"><td style="padding:5px 8px;font-size:.75rem;color:var(--slate);width:40%">'+k+'</td><td style="padding:5px 8px;font-size:.8rem;font-weight:600">'+escapeHtml(v)+'</td></tr>').join('')+'</table>'; }
-  else if(e.type==='billing'){ html+='<div style="margin-bottom:8px;display:flex;justify-content:space-between;font-size:.82rem"><span>Invoice: <strong>'+escapeHtml(d.invoice_no||'—')+'</strong></span><span>'+escapeHtml(d.payment_status?.toUpperCase()||'')+'</span></div>'; const items=d.line_items||[]; html+=items.length?'<table style="width:100%;border-collapse:collapse">'+items.slice(0,8).map(i=>'<tr style="border-bottom:1px solid var(--border)"><td style="padding:4px 8px;font-size:.78rem">'+escapeHtml(i.name)+'</td><td style="padding:4px 8px;text-align:right;font-size:.78rem;font-weight:600">'+((i.total_price||0).toFixed(2))+'</td></tr>').join('')+'<tr style="background:var(--teal-lt)"><td style="padding:5px 8px;font-weight:700">Total</td><td style="padding:5px 8px;text-align:right;font-weight:800;color:var(--teal)">'+((d.net_amount||0).toFixed(2))+' '+escapeHtml(d.currency||CFG.currency)+'</td></tr></table>':'<div style="font-size:.78rem;color:var(--slate)">No line items</div>'; }
-  else { html+='<div style="font-size:.82rem;color:var(--ink);background:#f8fafd;padding:10px;border-radius:8px">'+e.detail+'</div>'; }
-  el.innerHTML=html;
+  el.innerHTML=renderHistoryEventDetail(e);
 }
 function renderPthTrend() {
   const canvas=document.getElementById('pth-trend-canvas'); if(!canvas) return;
@@ -12309,23 +12427,45 @@ async function runDeltaCheck(table,ptId,payload){
   if(!sb||!ptId) return [];
   const fields=Object.keys(DELTA_RULES).filter(f=>DELTA_RULES[f].table===table && payload[f]!=null);
   if(!fields.length) return [];
+  // A follow-up/re-registration under the same MRN gets a genuinely NEW
+  // patients row every visit (see submitRegistration()/
+  // checkAndApplyFollowUpPricing()) — scoping every lookup below to ONLY
+  // ptId meant a repeat visit's first result entry could never find a
+  // "previous" row to compare against, so Delta Check silently produced
+  // zero breaches every time on exactly the patients where it matters most.
+  // Resolve every patients.id sharing this patient's mrn first (same
+  // MRN-merge pattern as fetchPatientHistoryEvents()/loadPthTimeline()),
+  // falling back to just ptId if there's no mrn (e.g. a walk-in), and
+  // compare against the most recent PRIOR result across all of them.
+  let allIdsForMrn=[ptId];
+  try{
+    const {data:pt}=await sb.from('patients').select('mrn').eq('id',ptId).maybeSingle();
+    if(pt?.mrn){
+      const {data:mrnRows}=await sb.from('patients').select('id').eq('mrn',pt.mrn);
+      if(mrnRows?.length) allIdsForMrn=mrnRows.map(r=>r.id);
+    }
+  }catch(e){ /* fall back to just this visit's own id */ }
   // Compare against the history table's most recent prior SAVE (recorded_at
-  // desc), not the current-panel row about to be overwritten by this same
-  // save — see migration_v2.17_lab_result_history.sql. Falls back to the
-  // current-panel table (the old behaviour) if this patient has no history
-  // rows yet — pre-migration data, or a deployment that hasn't applied
-  // migration_v2.17 yet, where the history select below will error.
+  // desc) across every visit sharing this mrn — see
+  // migration_v2.17_lab_result_history.sql. Falls back to the current-panel
+  // table (the old behaviour, now also merged across the mrn) if none of
+  // these patients have history rows yet — pre-migration data, or a
+  // deployment that hasn't applied migration_v2.17 yet.
   const histTable=RESULT_HISTORY_TABLE[table];
   let prevRow=null;
   if(histTable){
     try{
-      const {data}=await sb.from(histTable).select(fields.join(',')+',analysis_date').eq('patient_id',ptId).order('recorded_at',{ascending:false}).limit(1).maybeSingle();
+      const {data}=await sb.from(histTable).select(fields.join(',')+',analysis_date').in('patient_id',allIdsForMrn).order('recorded_at',{ascending:false}).limit(1).maybeSingle();
       prevRow=data;
     }catch(e){ /* history table missing/unreachable — fall back below */ }
   }
   try{
     if(!prevRow){
-      const {data}=await sb.from(table).select(fields.join(',')+',analysis_date').eq('patient_id',ptId).maybeSingle();
+      // Ordered by analysis_date desc so the most recent visit's row wins —
+      // whether that's an earlier save for THIS same visit (an edit, still a
+      // meaningful "previous value" to delta against) or a genuinely prior
+      // visit's row under the same mrn.
+      const {data}=await sb.from(table).select(fields.join(',')+',analysis_date').in('patient_id',allIdsForMrn).order('analysis_date',{ascending:false}).limit(1).maybeSingle();
       prevRow=data;
     }
     if(!prevRow) return [];
@@ -12410,29 +12550,37 @@ async function saveResultWithSafetyChecks(opts){
   // same Lab Safety Phase 1 verification-scoping inline instead, see those
   // functions) — gating here covers both departments at their one choke point.
   if(!(await guardVisitNotLocked(ptId,'Saving a lab result'))) return;
-  const doFinalize=async(finalVerify,autoVerified)=>{
+  // checkAutoVerifyEligible() already computes a specific reason string
+  // (e.g. "No passing QC on file for Haematology") whenever it's not
+  // eligible, but that reason used to be discarded here — the tech only
+  // ever saw a generic "pending tech sign-off" toast with no explanation
+  // of why Auto-Verify didn't trigger. Threaded through doFinalize now so
+  // both the toast and the status badge can surface it.
+  const doFinalize=async(finalVerify,autoVerified,autoVerifyReason)=>{
     payload.is_verified=finalVerify; payload.verified_at=finalVerify?new Date().toISOString():null;
     try{
       await sb.from(table).upsert(payload,{onConflict:'patient_id'});
       await logResultHistory(table,payload);
       if(hasCrit) await logCriticalValues(ptId,payload,deptLabel);
       if(finalVerify) await updateSampleStatus(ptId,'Completed');
-      toast(autoVerified?'🟢 '+successLabel+' auto-verified & released':(finalVerify?'✅ '+successLabel+' saved & verified':'💾 '+successLabel+' saved — pending tech sign-off'),'ok');
-      refreshAutoVerifyBadge(pageId,autoVerified,finalVerify);
+      const pendingMsg='💾 '+successLabel+' saved — pending tech sign-off'+(autoVerifyReason?' (Auto-Verify skipped: '+autoVerifyReason+')':'');
+      toast(autoVerified?'🟢 '+successLabel+' auto-verified & released':(finalVerify?'✅ '+successLabel+' saved & verified':pendingMsg),'ok');
+      refreshAutoVerifyBadge(pageId,autoVerified,finalVerify,autoVerifyReason);
     }catch(e){ toast(e.message,'err'); }
   };
   const breaches=await runDeltaCheck(table,ptId,payload);
   if(breaches.length){
     showDeltaAlertModal(breaches, async(reasonCode,reasonNote)=>{
       await logDeltaBreaches(breaches,ptId,table,deptLabel,reasonCode,reasonNote);
-      await doFinalize(false,false); // a delta breach always forces manual sign-off, never auto-verified
+      await doFinalize(false,false,'Delta Check breach requires manual review'); // a delta breach always forces manual sign-off, never auto-verified
     });
     return;
   }
-  let finalVerify=verify, autoVerified=false;
+  let finalVerify=verify, autoVerified=false, autoVerifyReason='';
   if(CFG.autoVerifyEnabled){
     const gate=await checkAutoVerifyEligible(pageId,deptLabel,hasCrit);
     if(gate.eligible){ finalVerify=true; autoVerified=true; }
+    else { autoVerifyReason=gate.reason; }
   }
   // Lab Safety Phase 1 — never let Verify (manual or auto) silently stamp a
   // column that isn't part of what's actually ordered this visit, and never
@@ -12447,11 +12595,12 @@ async function saveResultWithSafetyChecks(opts){
     const {data:existingRow}=await sb.from(table).select('verified_fields').eq('patient_id',ptId).maybeSingle();
     payload.verified_fields=[...new Set([...(existingRow?.verified_fields||[]),...check.requiredFields])];
   }
-  await doFinalize(finalVerify,autoVerified);
+  await doFinalize(finalVerify,autoVerified,autoVerifyReason);
 }
-function refreshAutoVerifyBadge(pageId,autoVerified,verified){
+function refreshAutoVerifyBadge(pageId,autoVerified,verified,reason){
   const el=document.querySelector('#'+pageId+' .av-status-badge'); if(!el) return;
-  el.innerHTML=autoVerified?'<span class="bdg bdg-g">🟢 Auto-Verified</span>':(verified?'<span class="bdg bdg-t">✅ Manually Verified</span>':'<span class="bdg bdg-a">🟡 Pending Tech Sign-off</span>');
+  el.innerHTML=autoVerified?'<span class="bdg bdg-g">🟢 Auto-Verified</span>':(verified?'<span class="bdg bdg-t">✅ Manually Verified</span>':
+    '<span class="bdg bdg-a"'+(reason?' title="Auto-Verify skipped: '+escAttr(reason)+'"':'')+'>🟡 Pending Tech Sign-off'+(reason?' <span style="font-weight:400;opacity:.85">('+escapeHtml(reason)+')</span>':'')+'</span>');
 }
 
 async function saveHemEntry(verify=false) {
@@ -14258,48 +14407,46 @@ function printSampleLabel() {
 // prior visit's consultations/labs here, even though that's exactly what
 // "History" is for. Resolves every patients.id sharing this patient's MRN
 // first and queries every table with .in(...) across all of them.
+// Rebuilt (Item B, real-clinical-use follow-up patient fixes) as a genuine
+// multi-visit clinical summary — the old version only ever showed the last
+// 10 consultations, a Haematology-only unverified count, and 5 vitals, with
+// no radiology, no medications, no other lab department, and nothing
+// clickable. Reuses fetchPatientHistoryEvents() (the same MRN-merge query
+// set proven correct on the Patient History Timeline page) so past visits
+// under this patient's MRN are ALWAYS included, not just the row that was
+// clicked into, and renderHistoryEventDetail() for the expand view rather
+// than a second detail-rendering scheme. Strictly read-only: this never
+// writes into the CURRENT visit's own Orders/Rx/Notes fields — the only
+// autofill from patient data on selection happens earlier in
+// selectDocPatient(), and only from the CURRENT visit's own p.diagnosis.
+let _docHistoryEvents=[];
 async function loadPatientHistory(ptId) {
-  if(!sb||!ptId) return;
+  const container=document.getElementById('doc-history-body');
+  const detailEl=document.getElementById('doc-history-detail');
+  if(detailEl) detailEl.innerHTML='';
+  if(!sb||!ptId){ if(container) container.innerHTML='<div class="empty-state">Select a patient to view history</div>'; return; }
+  if(container) container.innerHTML='<div class="spin-center"><div class="spinner"></div>Loading…</div>';
   try {
-    const {data:pt}=await sb.from('patients').select('mrn').eq('id',ptId).maybeSingle();
-    let allIdsForMrn=[ptId];
-    if(pt?.mrn){
-      const {data:mrnRows}=await sb.from('patients').select('id').eq('mrn',pt.mrn);
-      if(mrnRows?.length) allIdsForMrn=mrnRows.map(r=>r.id);
-    }
-    const [{data:cons},{data:labs},{data:vitals}] = await Promise.all([
-      sb.from('doctor_consultations').select('*').in('patient_id',allIdsForMrn).order('consultation_date',{ascending:false}).limit(10),
-      sb.from('results_hematology').select('created_at,is_verified').in('patient_id',allIdsForMrn).limit(5),
-      sb.from('vital_signs').select('*').in('patient_id',allIdsForMrn).order('recorded_at',{ascending:false}).limit(5),
-    ]);
-    const container = document.getElementById('doc-history-body');
+    const {data:pt}=await sb.from('patients').select('id,mrn,created_at').eq('id',ptId).maybeSingle();
+    const result=await fetchPatientHistoryEvents(pt||{id:ptId});
+    _docHistoryEvents=result.events;
     if(!container) return;
-    if(!cons?.length && !labs?.length) {
-      container.innerHTML='<div class="empty-state">No previous history found</div>'; return;
-    }
-    let html = '';
-    if(cons?.length) {
-      html += '<div style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:var(--slate);margin-bottom:6px">Previous Consultations</div>';
-      html += cons.map(c=>`<div style="border-left:3px solid var(--teal);padding:8px 12px;margin-bottom:8px;background:var(--bg);border-radius:0 8px 8px 0">
-        <div style="font-size:.72rem;color:var(--slate)">${fmtDate(c.consultation_date||c.created_at)}</div>
-        <div style="font-weight:700;font-size:.82rem">${escapeHtml(c.primary_diagnosis||'—')}</div>
-        <div style="font-size:.78rem;color:var(--ink2)">${escapeHtml(c.chief_complaint||'')}</div>
-      </div>`).join('');
-    }
-    if(vitals?.length) {
-      const last = vitals[0];
-      html += '<div style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:var(--slate);margin:10px 0 6px">Last Vitals ('+fmtDate(last.recorded_at)+')</div>';
-      html += `<div style="background:var(--bg);border-radius:8px;padding:10px;font-size:.78rem;display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
-        <div><div style="color:var(--slate);font-size:.68rem">BP</div><div style="font-weight:700">${last.systolic||'—'}/${last.diastolic||'—'}</div></div>
-        <div><div style="color:var(--slate);font-size:.68rem">HR</div><div style="font-weight:700">${last.heart_rate||'—'}</div></div>
-        <div><div style="color:var(--slate);font-size:.68rem">Temp</div><div style="font-weight:700">${last.temperature||'—'}°C</div></div>
-        <div><div style="color:var(--slate);font-size:.68rem">SpO₂</div><div style="font-weight:700">${last.spo2||'—'}%</div></div>
-        <div><div style="color:var(--slate);font-size:.68rem">NEWS2</div><div style="font-weight:700">${last.news2_score??'—'}</div></div>
-        <div><div style="color:var(--slate);font-size:.68rem">Pain</div><div style="font-weight:700">${last.pain_score??'—'}/10</div></div>
-      </div>`;
-    }
-    container.innerHTML = html;
-  } catch(e){ console.error(e); }
+    if(!_docHistoryEvents.length){ container.innerHTML='<div class="empty-state">No previous history found</div>'; return; }
+    container.innerHTML='<div style="font-size:.68rem;color:var(--slate);margin-bottom:8px">'+_docHistoryEvents.length+' event(s) across '+result.counts.visits+' visit(s) — click any entry to expand</div>'+
+      _docHistoryEvents.map((e,i)=>'<div onclick="showDocHistoryDetail('+i+')" class="tl-item" style="border-left-color:'+e.color+';cursor:pointer"><span style="font-size:1.1rem;flex-shrink:0">'+e.icon+'</span><div style="flex:1;min-width:0"><div style="font-size:.8rem;font-weight:700;color:var(--ink)">'+e.title+'</div><div style="font-size:.71rem;color:var(--slate);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+e.detail+'</div></div><div style="font-size:.68rem;color:var(--slate);flex-shrink:0">'+fmtDT(e.t)+'</div></div>').join('');
+  } catch(e){
+    console.error(e);
+    if(container) container.innerHTML='<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-title">Could not load history</div><div style="font-size:.8rem;color:var(--slate);margin-top:4px">'+escapeHtml(e.message||'Unknown error')+'</div></div>';
+  }
+}
+// Kept in its own container, separate from #doc-history-body's list and
+// entirely separate from every current-visit form field, so expanding a
+// past event can never pre-fill/overwrite anything being entered for THIS
+// visit's Orders/Rx/Notes.
+function showDocHistoryDetail(idx){
+  const e=_docHistoryEvents[idx]; if(!e) return;
+  const el=document.getElementById('doc-history-detail'); if(!el) return;
+  el.innerHTML='<div style="margin-top:10px;border-top:2px dashed var(--border);padding-top:10px">'+renderHistoryEventDetail(e)+'</div>';
 }
 
 // ── 6. printDischarge ─────────────────────────────────────
