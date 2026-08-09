@@ -4028,6 +4028,7 @@ html[dir="rtl"] body{direction:rtl;}
     <div class="card" style="margin-bottom:14px">
       <div class="card-hd">
         <span class="card-title">🩸 Blood Unit Inventory</span>
+        <span id="bb-expiry-alert" style="display:none;font-size:.7rem;font-weight:700;color:#b91c1c;background:#fff1f2;padding:2px 8px;border-radius:10px;margin-left:8px"></span>
         <span style="font-size:.68rem;color:var(--slate)">FEFO — earliest-expiring compatible units are always used/offered first</span>
       </div>
       <div class="card-body">
@@ -4832,7 +4833,7 @@ html[dir="rtl"] body{direction:rtl;}
             <thead><tr><th>Parameter</th><th>Result</th><th>Unit</th><th>Reference Range</th><th>Flag</th></tr></thead>
             <tbody data-test="CBC (Full Blood Count)|Haemoglobin Only|WBC Count|Platelet Count">
               <tr class="sec-hdr"><td colspan="5">Red Cell Parameters</td></tr>
-              <tr data-test="CBC (Full Blood Count)|WBC Count"><td class="tn">WBC — White Blood Cells</td><td><input id="he-wbc" type="number" step="0.1" class="fc" style="padding:4px 7px" oninput="flagHem(this,4.0,10.0,'he-wbc-flag')"></td><td>×10³/µL</td><td>4.0 – 10.0</td><td id="he-wbc-flag"></td></tr>
+              <tr data-test="CBC (Full Blood Count)|WBC Count"><td class="tn">WBC — White Blood Cells</td><td><input id="he-wbc" type="number" step="0.1" class="fc" style="padding:4px 7px" oninput="flagHem(this,4.0,10.0,'he-wbc-flag',true)"></td><td>×10³/µL</td><td>4.0 – 10.0</td><td id="he-wbc-flag"></td></tr>
               <tr data-test="CBC (Full Blood Count)"><td class="tn">RBC — Red Blood Cells</td><td><input id="he-rbc" type="number" step="0.01" class="fc" style="padding:4px 7px" oninput="flagHem(this,4.2,5.4,'he-rbc-flag')"></td><td>×10⁶/µL</td><td>M: 4.5–5.9 / F: 3.9–5.2</td><td id="he-rbc-flag"></td></tr>
               <tr data-test="CBC (Full Blood Count)|Haemoglobin Only"><td class="tn">HGB — Haemoglobin</td><td><input id="he-hgb" type="number" step="0.1" class="fc" style="padding:4px 7px" oninput="flagHem(this,12.0,17.5,'he-hgb-flag',true)"></td><td>g/dL</td><td>M: 13.5–17.5 / F: 12.0–15.5</td><td id="he-hgb-flag"></td></tr>
               <tr data-test="CBC (Full Blood Count)"><td class="tn">HCT — Haematocrit</td><td><input id="he-hct" type="number" step="0.1" class="fc" style="padding:4px 7px" oninput="flagHem(this,37,52,'he-hct-flag')"></td><td>%</td><td>M: 41–53 / F: 36–46</td><td id="he-hct-flag"></td></tr>
@@ -6855,6 +6856,7 @@ const CFG = {
   // so a site can tune what counts as "overdue" without editing code.
   get unpaidAlertHours(){ return parseFloat(localStorage.getItem('cfg_unpaid_alert_hours'))||72; },
   get admissionAlertHours(){ return parseFloat(localStorage.getItem('cfg_admission_alert_hours'))||4; },
+  get bloodExpiryAlertDays(){ return parseFloat(localStorage.getItem('cfg_blood_expiry_alert_days'))||7; },
   // SMS provider (Phase 8) — the gateway URL and API key live server-side
   // only now, as Supabase Edge Function secrets (see supabase/functions/
   // send-sms), not in localStorage — a Bearer token sitting in client
@@ -6927,12 +6929,12 @@ const BLOOD_SHELF_LIFE_CFG_KEY={'Whole Blood':'bloodShelfWholeBlood','Packed RBC
 const ROLE_PAGES = {
   admin:['dashboard','admission','theatre','consultation','nursing','fluid-chart','appointments','infection','handover','register','worklist','samples','set-printer','hem-entry','chem-entry','sero-entry','immuno-entry','micro-entry','pcr-entry','histo-entry','cyto-entry','unified-entry','allresults','criticals','reports','print-reports-hub','rad-print','billing','prices','pt-history','labhistory','tat','inventory','bloodbank','qc','validation','staff','doctors','radiology','analyzer','delivery','settings','statistics'],
   doctor:['dashboard','admission','theatre','consultation','nursing','fluid-chart','allresults','criticals','radiology','bloodbank','pt-history'],
-  nurse:['dashboard','nursing','fluid-chart','admission','criticals','bloodbank','pt-history','inventory'],
+  nurse:['dashboard','nursing','fluid-chart','admission','criticals','bloodbank','pt-history','inventory','handover','infection','samples'],
   lab_tech:['dashboard','worklist','samples','set-printer','hem-entry','chem-entry','sero-entry','immuno-entry','micro-entry','pcr-entry','histo-entry','cyto-entry','unified-entry','allresults','criticals','reports','tat','inventory','delivery','qc','validation','labhistory','bloodbank','pt-history'],
   lab_supervisor:['register','worklist','samples','set-printer','hem-entry','chem-entry','sero-entry','immuno-entry','micro-entry','unified-entry','allresults','criticals','reports','qc','validation','labhistory','tat','inventory','delivery','staff','bloodbank','pt-history'],
   receptionist:['register','appointments','billing','prices','worklist','dashboard','infection','print-reports-hub','reports','rad-print'],
   cashier:['billing','prices'],
-  theatre_nurse:['theatre','nursing','fluid-chart','criticals','pt-history','inventory'],
+  theatre_nurse:['theatre','nursing','fluid-chart','criticals','pt-history','inventory','admission'],
   radiologist:['radiology','dashboard','pt-history','inventory'],
 };
 
@@ -7659,7 +7661,7 @@ async function doLogin() {
     if(error) throw error;
     currentUser = data.user;
     const linked = await loadProfile();
-    if(!linked) { await denyUnlinkedAccount(); throw new Error(STAFF_NOT_LINKED_MSG); }
+    if(!linked) { const msg=_profileDenyMsg; await denyUnlinkedAccount(); throw new Error(msg); }
     showApp();
   } catch(e) {
     showAuthMsg(e.message||'Login failed','err');
@@ -7679,14 +7681,31 @@ function showAuthMsg(msg,type) {
 // Returns true if currentProfile was populated from a real staff row,
 // false if the caller should deny access.
 const STAFF_NOT_LINKED_MSG = "Your account isn't set up correctly — no staff record is linked to this login. Contact an administrator.";
+// Set by loadProfile() alongside its boolean return, so callers can show a
+// message that actually explains WHY access was denied (no linked staff
+// row vs. a suspended/inactive/on-leave account) instead of always the
+// generic "not linked" text.
+let _profileDenyMsg = STAFF_NOT_LINKED_MSG;
 async function loadProfile() {
   if(!currentUser) return false;
   try {
     const {data} = await sb.from('staff').select('*').eq('user_id',currentUser.id).maybeSingle();
-    if(!data) { currentProfile = null; return false; }
+    if(!data) { currentProfile = null; _profileDenyMsg = STAFF_NOT_LINKED_MSG; return false; }
+    // staff.status was previously written and shown on the Staff List badge
+    // but never actually checked anywhere access is granted -- a
+    // "deactivated" account kept full, indefinite access. Fails closed the
+    // same way an unlinked account already does: any explicitly-set status
+    // other than 'active' is refused (an absent/null status, e.g. on a
+    // legacy row predating this column, is treated as active rather than
+    // locking out accounts this fix was never meant to touch).
+    if(data.status && data.status!=='active') {
+      currentProfile = null;
+      _profileDenyMsg = 'Your staff account is currently marked "'+data.status.replace('_',' ')+'" and cannot sign in. Contact an administrator.';
+      return false;
+    }
     currentProfile = data;
     return true;
-  } catch(e) { currentProfile = null; return false; }
+  } catch(e) { currentProfile = null; _profileDenyMsg = STAFF_NOT_LINKED_MSG; return false; }
 }
 // Shared cleanup for "authenticated with Supabase, but not a valid staff
 // account" — signs out so no authenticated session is left sitting around
@@ -7710,8 +7729,9 @@ async function restoreSession() {
     currentUser = session.user;
     const linked = await loadProfile();
     if(linked) { showApp(); return; }
+    const msg=_profileDenyMsg;
     await denyUnlinkedAccount();
-    showAuthMsg(STAFF_NOT_LINKED_MSG,'err');
+    showAuthMsg(msg,'err');
   } catch(e) {
     await denyUnlinkedAccount();
     showAuthMsg(STAFF_NOT_LINKED_MSG,'err');
@@ -7785,6 +7805,13 @@ async function doLogout() {
   document.getElementById('auth-screen').style.display='flex';
   document.getElementById('auth-email').value='';
   document.getElementById('auth-pass').value='';
+  // doLogin() disables #auth-btn and swaps its text to "Signing in..." at
+  // the start of every attempt but only resets it in the failure branch --
+  // a SUCCESSFUL login left it disabled forever, so on a shared tab the
+  // next person to sign in after a logout found Sign In permanently
+  // unclickable (this page is never reloaded on logout).
+  const btn=document.getElementById('auth-btn');
+  if(btn){ btn.disabled=false; btn.innerHTML='Sign In'; }
 }
 function updateTopbarDate() {
   const el=document.getElementById('topbar-date');
@@ -7795,7 +7822,19 @@ function updateTopbarDate() {
 function goPage(p) {
   if(currentProfile) {
     const role=currentProfile.role||'receptionist', allowed=ROLE_PAGES[role]||[];
-    if(!allowed.includes(p)&&role!=='admin'){ toast('Access denied','err'); return; }
+    if(!allowed.includes(p)&&role!=='admin'){
+      toast('Access denied','err');
+      // Returning here used to skip this function's own DOM-clearing logic
+      // further down -- on a shared tab, if a previous user's page was left
+      // active (e.g. session A logs out, session B logs in and is denied a
+      // page reached via a stale "Continue where you left off" shortcut or
+      // similar), that page stayed visibly active underneath. Always clear
+      // it and fall back to a safe, always-accessible default instead of
+      // leaving whatever was on screen untouched.
+      document.querySelectorAll('.page').forEach(el=>el.classList.remove('active'));
+      goHome();
+      return;
+    }
   }
   // The bed-grid Realtime subscription (Phase 5a) is scoped to this one
   // page — tear it down the moment we navigate away so it never keeps
@@ -8383,15 +8422,16 @@ async function checkCriticals() {
 // highlighting; no new column was needed, just surfacing it here too
 // instead of it only being visible to someone already on that page).
 // Both time thresholds are configurable from Settings rather than hardcoded.
-let _notifState={crits:[],unpaid:[],pendingAdm:[],lowStock:[],deferredDue:[],resultsReady:[]};
+let _notifState={crits:[],unpaid:[],pendingAdm:[],lowStock:[],deferredDue:[],resultsReady:[],bloodExpiry:[]};
 async function refreshNotifications(){
   if(!sb) return;
   try{
     const now=Date.now();
     const unpaidCutoff=new Date(now-CFG.unpaidAlertHours*3600000).toISOString();
     const admCutoff=new Date(now-CFG.admissionAlertHours*3600000).toISOString();
+    const bloodExpiryCutoff=new Date(now+CFG.bloodExpiryAlertDays*86400000).toISOString().slice(0,10);
 
-    const [critRes,invRes,admCandRes,invItemsRes,deferredLabRes,deferredRadRes]=await Promise.all([
+    const [critRes,invRes,admCandRes,invItemsRes,deferredLabRes,deferredRadRes,bloodExpRes]=await Promise.all([
       sb.from('critical_values').select('id,patient_id,parameter,value,department,created_at,patients(name,mrn)').eq('is_acknowledged',false).order('created_at',{ascending:false}).limit(20),
       sb.from('invoices').select('id,invoice_no,patient_name,net_amount,total_amount,currency,payment_status,created_at').in('payment_status',['unpaid','insurance_pending']).lte('created_at',unpaidCutoff).order('created_at',{ascending:true}).limit(20),
       sb.from('patients').select('id,name,first_name,last_name,mrn,visit_destination,created_at').ilike('visit_destination','%admission%').lte('created_at',admCutoff).order('created_at',{ascending:true}).limit(40),
@@ -8404,6 +8444,11 @@ async function refreshNotifications(){
       // like the generic "Unpaid Invoices" category above.
       sb.from('sample_records').select('patient_id,status,payment_deferred,patients(name,mrn,lab_no,payment_status)').eq('payment_deferred',true).eq('status','Released').limit(20),
       sb.from('radiology_requests').select('id,patient_id,imaging_type,status,payment_deferred,patients(name,mrn,lab_no,payment_status)').eq('payment_deferred',true).eq('status','Reported').limit(20),
+      // Blood units already expired or expiring within CFG.bloodExpiryAlertDays
+      // (default 7) — 'Available' only, matching the FEFO pool units are
+      // actually issued from; Issued/Discarded/Quarantined units aren't
+      // stock at risk of going to waste unattended.
+      sb.from('blood_units').select('id,unit_no,blood_group,rh_factor,component_type,expiry_date').eq('status','Available').lte('expiry_date',bloodExpiryCutoff).order('expiry_date',{ascending:true}).limit(20),
     ]);
 
     const crits=critRes.data||[], unpaid=invRes.data||[], admCandidates=admCandRes.data||[];
@@ -8451,62 +8496,91 @@ async function refreshNotifications(){
       }
     }
 
-    _notifState={crits,unpaid,pendingAdm,lowStock,deferredDue,resultsReady};
-    const total=crits.length+unpaid.length+pendingAdm.length+lowStock.length+deferredDue.length+resultsReady.length;
+    const bloodExpiry=bloodExpRes.data||[];
+    _notifState={crits,unpaid,pendingAdm,lowStock,deferredDue,resultsReady,bloodExpiry};
+    const total=crits.length+unpaid.length+pendingAdm.length+lowStock.length+deferredDue.length+resultsReady.length+bloodExpiry.length;
     const countEl=document.getElementById('notif-bell-count');
     if(countEl){ countEl.style.display=total>0?'block':'none'; countEl.textContent=total>99?'99+':total; }
     renderNotifList();
   }catch(e){ /* best-effort — a failed notification refresh shouldn't interrupt anything else */ }
 }
+// Same access-gating pattern the Register page's existing-patient search
+// already uses (canViewHistory there) -- a category is only clickable if
+// the current role's ROLE_PAGES actually includes the page it jumps to,
+// so clicking a bell item can never dead-end on "Access denied" for a
+// role that was never going to be allowed there anyway. Rows still show
+// (informational), they just lose the click when inaccessible.
+function notifCanReach(page){
+  const role=currentProfile?.role;
+  return role==='admin'||(ROLE_PAGES[role]||[]).includes(page);
+}
+function notifRow(clickable,onclickJs,innerHtml){
+  return '<div'+(clickable?' onclick="'+onclickJs+'"':'')+
+    ' style="padding:8px 12px;border-bottom:1px solid var(--border);cursor:'+(clickable?'pointer':'default')+'"'+
+    (clickable?' onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'"':'')+
+    '>'+innerHtml+'</div>';
+}
 function renderNotifList(){
   const list=document.getElementById('notif-list'); if(!list) return;
-  const {crits,unpaid,pendingAdm,lowStock,deferredDue,resultsReady}=_notifState;
-  if(!crits.length && !unpaid.length && !pendingAdm.length && !lowStock.length && !(deferredDue&&deferredDue.length) && !(resultsReady&&resultsReady.length)){
-    list.innerHTML='<div style="padding:16px;text-align:center;color:var(--slate);font-size:.78rem">✅ Nothing needs attention</div>';
+  const {crits,unpaid,pendingAdm,lowStock,deferredDue,resultsReady,bloodExpiry}=_notifState;
+  if(!crits.length && !unpaid.length && !pendingAdm.length && !lowStock.length && !(deferredDue&&deferredDue.length) && !(resultsReady&&resultsReady.length) && !(bloodExpiry&&bloodExpiry.length)){
+    list.innerHTML='<div style="padding:16px;text-align:center;color:var(--slate);font-size:.78rem">\u2705 Nothing needs attention</div>';
     return;
   }
+  const canConsultation=notifCanReach('consultation'), canBilling=notifCanReach('billing'),
+    canCriticals=notifCanReach('criticals'), canAdmission=notifCanReach('admission'), canInventory=notifCanReach('inventory'),
+    canBloodbank=notifCanReach('bloodbank');
   let html='';
   if(resultsReady&&resultsReady.length){
     html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;color:#166534;background:#f0fdf4">\ud83d\udd14 Results Ready ('+resultsReady.length+')</div>';
-    html+=resultsReady.map(p=>'<div onclick="notifJumpToPatientResults(\''+p.id+'\')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'">'+
+    html+=resultsReady.map(p=>notifRow(canConsultation,"notifJumpToPatientResults('"+p.id+"')",
       '<div style="font-weight:700;font-size:.8rem">'+escapeHtml(p.name||fullName(p))+' <span style="font-weight:400;color:var(--slate);font-size:.68rem">'+escapeHtml(p.mrn||p.lab_no||'')+'</span></div>'+
-      '<div style="font-size:.72rem;color:#166534">Lab/Radiology result ready for review</div></div>').join('');
+      '<div style="font-size:.72rem;color:#166534">Lab/Radiology result ready for review</div>')).join('');
   }
   if(deferredDue&&deferredDue.length){
     html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;color:#b91c1c;background:#fff1f2">\u26a0 Deferred Payments Now Due ('+deferredDue.length+')</div>';
     html+=deferredDue.map(d=>{
       const pt=d.patients||{};
-      return '<div onclick="notifJumpToDeferredPayment(\''+d.patient_id+'\')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'">'+
-        '<div style="font-weight:700;font-size:.8rem">'+escapeHtml(pt.name||'—')+' <span style="font-weight:400;color:var(--slate);font-size:.68rem">'+escapeHtml(pt.mrn||pt.lab_no||'')+'</span></div>'+
-        '<div style="font-size:.72rem;color:#b91c1c">'+escapeHtml(d.kind)+' \u2014 '+escapeHtml(d.label||'')+' ready \u00b7 payment was deferred (STAT) \u00b7 still '+(pt.payment_status==='insurance_pending'?'insurance pending':'unpaid')+'</div></div>';
+      return notifRow(canBilling,"notifJumpToDeferredPayment('"+d.patient_id+"')",
+        '<div style="font-weight:700;font-size:.8rem">'+escapeHtml(pt.name||'\u2014')+' <span style="font-weight:400;color:var(--slate);font-size:.68rem">'+escapeHtml(pt.mrn||pt.lab_no||'')+'</span></div>'+
+        '<div style="font-size:.72rem;color:#b91c1c">'+escapeHtml(d.kind)+' \u2014 '+escapeHtml(d.label||'')+' ready \u00b7 payment was deferred (STAT) \u00b7 still '+(pt.payment_status==='insurance_pending'?'insurance pending':'unpaid')+'</div>');
     }).join('');
   }
   if(crits.length){
-    html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;color:#b91c1c;background:#fff1f2">🚨 Unacknowledged Criticals ('+crits.length+')</div>';
+    html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;color:#b91c1c;background:#fff1f2">\ud83d\udea8 Unacknowledged Criticals ('+crits.length+')</div>';
     html+=crits.map(c=>{
       const pt=c.patients||{};
-      return '<div onclick="notifJumpToCritical()" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'">'+
-        '<div style="font-weight:700;font-size:.8rem">'+escapeHtml(pt.name||'—')+' <span style="font-weight:400;color:var(--slate);font-size:.68rem">'+escapeHtml(pt.mrn||'')+'</span></div>'+
-        '<div style="font-size:.72rem;color:#b91c1c">'+escapeHtml(c.parameter||'')+' = '+escapeHtml(c.value||'')+' · '+fmtDT(c.created_at)+'</div></div>';
+      return notifRow(canCriticals,'notifJumpToCritical()',
+        '<div style="font-weight:700;font-size:.8rem">'+escapeHtml(pt.name||'\u2014')+' <span style="font-weight:400;color:var(--slate);font-size:.68rem">'+escapeHtml(pt.mrn||'')+'</span></div>'+
+        '<div style="font-size:.72rem;color:#b91c1c">'+escapeHtml(c.parameter||'')+' = '+escapeHtml(c.value||'')+' \u00b7 '+fmtDT(c.created_at)+'</div>');
     }).join('');
   }
   if(unpaid.length){
-    html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;color:#92400e;background:#fffbeb">💰 Unpaid Invoices ('+unpaid.length+')</div>';
-    html+=unpaid.map(i=>'<div onclick="notifJumpToInvoice(\''+i.id+'\')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'">'+
-      '<div style="font-weight:700;font-size:.8rem">'+escapeHtml(i.invoice_no||'—')+' <span style="font-weight:400;color:var(--slate);font-size:.68rem">'+escapeHtml(i.patient_name||'')+'</span></div>'+
-      '<div style="font-size:.72rem;color:#92400e">'+((i.net_amount??i.total_amount??0).toFixed(2))+' '+escapeHtml(i.currency||CFG.currency)+' · overdue since '+fmtDT(i.created_at)+'</div></div>').join('');
+    html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;color:#92400e;background:#fffbeb">\ud83d\udcb0 Unpaid Invoices ('+unpaid.length+')</div>';
+    html+=unpaid.map(i=>notifRow(canBilling,"notifJumpToInvoice('"+i.id+"')",
+      '<div style="font-weight:700;font-size:.8rem">'+escapeHtml(i.invoice_no||'\u2014')+' <span style="font-weight:400;color:var(--slate);font-size:.68rem">'+escapeHtml(i.patient_name||'')+'</span></div>'+
+      '<div style="font-size:.72rem;color:#92400e">'+((i.net_amount??i.total_amount??0).toFixed(2))+' '+escapeHtml(i.currency||CFG.currency)+' \u00b7 overdue since '+fmtDT(i.created_at)+'</div>')).join('');
   }
   if(pendingAdm.length){
-    html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;color:#1d4ed8;background:#eff6ff">🛏 Pending Admissions ('+pendingAdm.length+')</div>';
-    html+=pendingAdm.map(p=>'<div onclick="notifJumpToAdmission(\''+p.id+'\')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'">'+
+    html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;color:#1d4ed8;background:#eff6ff">\ud83d\udecf Pending Admissions ('+pendingAdm.length+')</div>';
+    html+=pendingAdm.map(p=>notifRow(canAdmission,"notifJumpToAdmission('"+p.id+"')",
       '<div style="font-weight:700;font-size:.8rem">'+escapeHtml(p.name||fullName(p))+' <span style="font-weight:400;color:var(--slate);font-size:.68rem">'+escapeHtml(p.mrn||'')+'</span></div>'+
-      '<div style="font-size:.72rem;color:#1d4ed8">Routed to Admission · waiting since '+fmtDT(p.created_at)+'</div></div>').join('');
+      '<div style="font-size:.72rem;color:#1d4ed8">Routed to Admission \u00b7 waiting since '+fmtDT(p.created_at)+'</div>')).join('');
   }
   if(lowStock.length){
-    html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;color:#6d28d9;background:#f5f3ff">📦 Low Stock ('+lowStock.length+')</div>';
-    html+=lowStock.map(it=>'<div onclick="notifJumpToInventory()" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'">'+
-      '<div style="font-weight:700;font-size:.8rem">'+escapeHtml(it.item_name||'—')+'</div>'+
-      '<div style="font-size:.72rem;color:#6d28d9">'+(it.current_stock??0)+' '+escapeHtml(it.unit||'')+' left · reorder threshold '+(it.min_level??0)+'</div></div>').join('');
+    html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;color:#6d28d9;background:#f5f3ff">\ud83d\udce6 Low Stock ('+lowStock.length+')</div>';
+    html+=lowStock.map(it=>notifRow(canInventory,'notifJumpToInventory()',
+      '<div style="font-weight:700;font-size:.8rem">'+escapeHtml(it.item_name||'\u2014')+'</div>'+
+      '<div style="font-size:.72rem;color:#6d28d9">'+(it.current_stock??0)+' '+escapeHtml(it.unit||'')+' left \u00b7 reorder threshold '+(it.min_level??0)+'</div>')).join('');
+  }
+  if(bloodExpiry&&bloodExpiry.length){
+    html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;color:#b91c1c;background:#fff1f2">\ud83e\ude78 Blood Units Expiring/Expired ('+bloodExpiry.length+')</div>';
+    html+=bloodExpiry.map(u=>{
+      const exp=computeExpiryStatus(u.expiry_date);
+      return notifRow(canBloodbank,'notifJumpToBloodBank()',
+        '<div style="font-weight:700;font-size:.8rem">'+escapeHtml(u.unit_no||'\u2014')+' <span style="font-weight:400;color:var(--slate);font-size:.68rem">'+escapeHtml(u.blood_group||'')+(u.rh_factor==='Positive'?'+':u.rh_factor==='Negative'?'\u2212':'')+' \u00b7 '+escapeHtml(u.component_type||'')+'</span></div>'+
+        '<div style="font-size:.72rem;color:#b91c1c">'+(exp.days<0?'Expired':'Expires in '+exp.days+'d')+' \u00b7 '+fmtDate(u.expiry_date)+'</div>');
+    }).join('');
   }
   list.innerHTML=html;
 }
@@ -8539,6 +8613,10 @@ async function notifJumpToAdmission(patientId){
 function notifJumpToInventory(){
   closeNotifPanel();
   goPage('inventory');
+}
+function notifJumpToBloodBank(){
+  closeNotifPanel();
+  goPage('bloodbank');
 }
 async function notifJumpToDeferredPayment(patientId){
   closeNotifPanel();
@@ -8650,17 +8728,28 @@ async function loadDashboard() {
   if(!sb) return;
   try {
     const td=today();
-    const [ptR,statsR,vhR,vcR,crR,disR]=await Promise.all([
+    const [ptR,statsR,vhR,vcR,crR,disR,unpaidR,insR,payR,radPendR]=await Promise.all([
       sb.from('patients').select('id',{count:'exact'}).gte('created_at',td+'T00:00:00'),
       computeBedOccupancyStats(),
       sb.from('results_hematology').select('id',{count:'exact'}).eq('is_verified',true).gte('created_at',td+'T00:00:00'),
       sb.from('results_chemistry').select('id',{count:'exact'}).eq('is_verified',true).gte('created_at',td+'T00:00:00'),
       sb.from('critical_values').select('id',{count:'exact'}).eq('is_acknowledged',false),
       sb.from('admissions').select('id',{count:'exact'}).eq('status','Discharged').gte('discharge_date',td+'T00:00:00'),
+      // Billing stats row — same payment_status values Billing itself
+      // filters/sums by (see setBillFilter()/loadBilling()).
+      sb.from('invoices').select('id',{count:'exact'}).eq('payment_status','unpaid'),
+      sb.from('invoices').select('id',{count:'exact'}).eq('payment_status','insurance_pending'),
+      sb.from('payments').select('amount,voided').gte('created_at',td+'T00:00:00'),
+      sb.from('radiology_requests').select('id',{count:'exact'}).not('status','in','(Reported,Verified)'),
     ]);
     setText('ds-today',ptR.count||0); setText('ds-critical',crR.count||0);
     setText('ds-verified',(vhR.count||0)+(vcR.count||0));
     setText('ds-pending',Math.max(0,(ptR.count||0)-((vhR.count||0)+(vcR.count||0))));
+    setText('ds-unpaid',unpaidR.count||0);
+    setText('ds-insurance',insR.count||0);
+    const revenueToday=(payR.data||[]).filter(p=>!p.voided).reduce((s,p)=>s+parseFloat(p.amount||0),0);
+    setText('ds-revenue',revenueToday.toFixed(2));
+    setText('ds-rad-pending',radPendR.count||0);
     const activeAdm=statsR.activeAdm;
     setText('ds-admissions',statsR.active);
     setText('ds-theatre',activeAdm.filter(a=>a.ward==='Theatre').length);
@@ -8672,18 +8761,33 @@ async function loadDashboard() {
     const wards=['Medical','Surgical','ICU','Maternity','Paediatric','Private'];
     const wardTotal={}, wardOcc={};
     wards.forEach(w=>{ wardTotal[w]=0; wardOcc[w]=0; });
-    beds.forEach(b=>{ if(wardTotal[b.ward]!==undefined) wardTotal[b.ward]++; if(b.status==='Occupied'&&wardOcc[b.ward]!==undefined) wardOcc[b.ward]++; });
-    activeAdm.forEach(a=>{ if(wardOcc[a.ward]!==undefined) wardOcc[a.ward]=Math.max(wardOcc[a.ward],1); });
+    // Bed count (denominator) still legitimately comes from the beds table
+    // — that's real inventory. Occupancy (numerator) previously came from
+    // beds.status==='Occupied', only floored to "at least 1" via active
+    // admissions -- so a ward with 3 active admissions but only 1 bed
+    // marked Occupied (e.g. stale/unsynced bed status) silently
+    // under-reported. Now counts actual active admissions per ward
+    // directly, the same way the separate "In Theatre" KPI tile above
+    // already does it (activeAdm.filter(a=>a.ward==='Theatre').length).
+    beds.forEach(b=>{ if(wardTotal[b.ward]!==undefined) wardTotal[b.ward]++; });
+    activeAdm.forEach(a=>{ if(wardOcc[a.ward]!==undefined) wardOcc[a.ward]++; });
     const wg=document.getElementById('dash-ward-grid');
     if(wg) wg.innerHTML=wards.map(w=>{
       const occ=wardOcc[w]||0, total=wardTotal[w]||0, pct=total>0?Math.round(occ/total*100):0;
       const col=pct>=90?'#b91c1c':pct>=70?'#d97706':'#16a34a';
       return '<div class="ward-card" onclick="setAdmFilter(\x27'+w+'\x27,null);goPage(\'admission\')"><div class="ward-name">'+w+'</div><div class="ward-occ">'+occ+'<span> / '+total+'</span></div><div class="ward-bar"><div class="ward-bar-fill" style="width:'+pct+'%;background:'+col+'"></div></div><div style="font-size:.63rem;color:var(--slate);margin-top:3px">'+pct+'% occupied</div></div>';
     }).join('');
-    const [rptS,admS,critS]=await Promise.all([
+    const [rptS,admS,critS,unpaidPtS,statOrdS]=await Promise.all([
       sb.from('patients').select('id,name,first_name,last_name,created_at').order('created_at',{ascending:false}).limit(5),
       sb.from('admissions').select('id,admission_no,created_at,admission_type').order('created_at',{ascending:false}).limit(4),
       sb.from('critical_values').select('id,parameter,value,created_at').order('created_at',{ascending:false}).limit(3),
+      // Unpaid / Blocked Patients panel — same payment_status values every
+      // other unpaid-patient view in this app already keys off.
+      sb.from('patients').select('id,name,first_name,last_name,mrn,payment_status,created_at').in('payment_status',['unpaid','insurance_pending']).order('created_at',{ascending:false}).limit(10),
+      // STAT/Urgent Orders panel — same doctor_orders 'Pending' status
+      // loadNursingOrders() already reads for its own pending-orders list,
+      // here filtered to just the high-priority ones across every order type.
+      sb.from('doctor_orders').select('id,order_type,order_detail,priority,ordered_by,ordered_at,patients(name,mrn)').eq('status','Pending').in('priority',['STAT','Urgent']).order('ordered_at',{ascending:false}).limit(10),
     ]);
     const events=[];
     (rptS.data||[]).forEach(p=>events.push({t:new Date(p.created_at),icon:'📋',text:'Patient registered: '+escapeHtml(p.name||fullName(p))}));
@@ -8692,6 +8796,14 @@ async function loadDashboard() {
     events.sort((a,b)=>b.t-a.t);
     const feed=document.getElementById('dash-activity');
     if(feed) feed.innerHTML=events.slice(0,10).map(e=>'<div class="act-item"><span class="act-icon">'+e.icon+'</span><div class="act-body"><div class="act-text">'+e.text+'</div><div class="act-time">'+fmtDT(e.t)+'</div></div></div>').join('')||'<div style="font-size:.78rem;color:var(--slate);padding:8px">No recent activity</div>';
+    const unpaidList=document.getElementById('dash-unpaid-list');
+    if(unpaidList) unpaidList.innerHTML=(unpaidPtS.data||[]).length
+      ? unpaidPtS.data.map(p=>'<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);font-size:.78rem"><span style="font-weight:600">'+escapeHtml(p.name||fullName(p))+'<span style="color:var(--slate);font-weight:400"> '+escapeHtml(p.mrn||'')+'</span></span>'+paymentTag(p.payment_status)+'</div>').join('')
+      : '<div style="font-size:.78rem;color:var(--slate);padding:4px 0">No unpaid or blocked patients</div>';
+    const statList=document.getElementById('dash-stat-list');
+    if(statList) statList.innerHTML=(statOrdS.data||[]).length
+      ? statOrdS.data.map(o=>{ const pt=o.patients||{}; return '<div style="padding:6px 0;border-bottom:1px solid var(--border);font-size:.78rem"><div style="display:flex;justify-content:space-between"><span style="font-weight:600">'+escapeHtml(pt.name||'—')+'<span style="color:var(--slate);font-weight:400"> '+escapeHtml(pt.mrn||'')+'</span></span><span class="bdg" style="background:#fef2f2;color:#b91c1c">'+escapeHtml(o.priority||'')+'</span></div><div style="color:var(--slate);font-size:.72rem">'+escapeHtml(o.order_type||'')+': '+escapeHtml(o.order_detail||'')+'</div></div>'; }).join('')
+      : '<div style="font-size:.78rem;color:var(--slate);padding:4px 0">No STAT/urgent orders awaiting action</div>';
   } catch(e){ console.error(e); }
 }
 
@@ -9809,7 +9921,7 @@ async function saveVitals() {
       o2_delivery:g('vs-o2-route'), o2_flow:gn('vs-o2-flow'), fio2:gn('vs-fio2'),
       gcs_eye:parseInt(g('vs-gcs-e'))||null, gcs_verbal:parseInt(g('vs-gcs-v'))||null, gcs_motor:parseInt(g('vs-gcs-m'))||null,
       pain_score:_painScore||parseInt(document.getElementById('vs-pain')?.value)||null,
-      news2_score:newsScore||null,
+      news2_score:newsScore??null,
       ...(window._news2RrtAck||{}),
       fluid_in_ml:(parseFloat(g('vs-iv-in'))||0)+(parseFloat(g('vs-po-in'))||0),
       fluid_out_ml:(parseFloat(g('vs-urine'))||0)+(parseFloat(g('vs-other-out'))||0),
@@ -9951,6 +10063,26 @@ async function printFluidChart() {
 }
 
 // ── CONSULTATION ──────────────────────────────────────
+// Shared card template for #doc-queue-body -- used by both the normal
+// queue listing and searchDocPatient(), so there's exactly one place that
+// builds a clickable patient card and exactly one place that decides what
+// gets passed to selectDocPatient() (the full patient object, matching
+// every other card-render call site in the app -- never a bare id string).
+function renderDocQueueCard(p, ready) {
+  const unpaid=p.payment_status==='unpaid'||p.payment_status==='insurance_pending';
+  return '<div onclick="selectDocPatient('+JSON.stringify(p).replace(/"/g,'&quot;')+')" class="doc-queue-card'+(unpaid?' pay-unpaid':'')+
+    '" style="padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;cursor:pointer;margin-bottom:6px;transition:all .12s"'+
+    ' onmouseover="this.style.borderColor=\x27var(--teal)\x27;this.style.background=\x27var(--teal-lt)\x27"'+
+    ' onmouseout="this.style.borderColor=\x27var(--border)\x27;this.style.background=\x27#fff\x27">'+
+    '<div style="display:flex;align-items:center;justify-content:space-between;gap:6px">'+
+    '<span style="font-weight:700;font-size:.84rem">'+escapeHtml(p.name||fullName(p))+'</span>'+
+    (ready?'<span class="bdg" style="background:#dcfce7;color:#166534" title="Lab/Radiology result ready for review">🔔 Result Ready</span>':'')+
+    paymentTag(p.payment_status)+'</div>'+
+    '<div style="font-size:.69rem;color:var(--slate);margin-top:3px">'+escapeHtml(p.mrn||'')+' · '+(p.age||'?')+(p.age_unit||'y')+'/'+(p.sex||'?')+' · '+escapeHtml(p.diagnosis||'—')+'</div>'+
+    '<div style="font-size:.68rem;margin-top:2px;color:var(--teal);font-weight:600">'+(p.visit_destination?'→ '+escapeHtml(p.visit_destination):'')+' '+(p.priority&&p.priority!=='Routine'?'· '+escapeHtml(p.priority):'')+'</div>'+
+    '<div style="font-size:.66rem;margin-top:2px;color:var(--slate)">Registered '+fmtDT(p.created_at)+'</div>'+
+    '<div style="margin-top:4px">'+visitStatusBadge(p)+'</div></div>';
+}
 async function loadDoctorQueue() {
   const body = document.getElementById('doc-queue-body');
   if(!body||!sb) return;
@@ -9980,22 +10112,7 @@ async function loadDoctorQueue() {
       sb.from('radiology_requests').select('patient_id').in('patient_id',ids).in('status',['Reported','Verified']),
     ]);
     const readyIds=new Set([...(doneSamples||[]).map(s=>s.patient_id),...(doneRad||[]).map(r=>r.patient_id)]);
-    body.innerHTML = data.map(p => {
-      const unpaid=p.payment_status==='unpaid'||p.payment_status==='insurance_pending';
-      const ready=readyIds.has(p.id);
-      return '<div onclick="selectDocPatient('+JSON.stringify(p).replace(/"/g,'&quot;')+')" class="doc-queue-card'+(unpaid?' pay-unpaid':'')+
-        '" style="padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;cursor:pointer;margin-bottom:6px;transition:all .12s"'+
-        ' onmouseover="this.style.borderColor=\x27var(--teal)\x27;this.style.background=\x27var(--teal-lt)\x27"'+
-        ' onmouseout="this.style.borderColor=\x27var(--border)\x27;this.style.background=\x27#fff\x27">'+
-        '<div style="display:flex;align-items:center;justify-content:space-between;gap:6px">'+
-        '<span style="font-weight:700;font-size:.84rem">'+escapeHtml(p.name||fullName(p))+'</span>'+
-        (ready?'<span class="bdg" style="background:#dcfce7;color:#166534" title="Lab/Radiology result ready for review">\ud83d\udd14 Result Ready</span>':'')+
-        paymentTag(p.payment_status)+'</div>'+
-        '<div style="font-size:.69rem;color:var(--slate);margin-top:3px">'+escapeHtml(p.mrn||'')+' · '+(p.age||'?')+(p.age_unit||'y')+'/'+(p.sex||'?')+' · '+escapeHtml(p.diagnosis||'—')+'</div>'+
-        '<div style="font-size:.68rem;margin-top:2px;color:var(--teal);font-weight:600">'+(p.visit_destination?'\u2192 '+escapeHtml(p.visit_destination):'')+' '+(p.priority&&p.priority!=='Routine'?'· '+escapeHtml(p.priority):'')+'</div>'+
-        '<div style="font-size:.66rem;margin-top:2px;color:var(--slate)">Registered '+fmtDT(p.created_at)+'</div>'+
-        '<div style="margin-top:4px">'+visitStatusBadge(p)+'</div></div>';
-    }).join('');
+    body.innerHTML = data.map(p => renderDocQueueCard(p, readyIds.has(p.id))).join('');
   } catch(e){ body.innerHTML='<div style="padding:10px;color:var(--red);font-size:.78rem">'+escapeHtml(e.message)+'</div>'; }
 }
 
@@ -10008,6 +10125,14 @@ function setDocFilter(filter,btn) {
 
 function selectDocPatient(p) {
   _docPt=p;
+  // Defense in depth: _currentAdmId is a shared global set by opening ANY
+  // patient's admission drawer elsewhere in the app and was never reset on
+  // a Consultation patient switch, which let a stale admission id leak
+  // onto a different patient's consent form (saveConsentForm() now
+  // resolves its own admission id fresh instead of trusting this global,
+  // but clearing it here too means nothing else reachable from
+  // Consultation can accidentally inherit a previous patient's value).
+  _currentAdmId = null;
   advanceVisitStatus(p.id,'With Doctor');
   loadConsultationSignOffState(p.id);
   const unpaid=p.payment_status==='unpaid'||p.payment_status==='insurance_pending';
@@ -11155,6 +11280,20 @@ async function updateApptStatus(id,status) {
 // ── REGISTER PATIENT ──────────────────────────────────
 function initRegForm() {
   Object.entries(TEST_CATALOG).forEach(([tab,tests])=>{ const el=document.getElementById('tc-panel-'+tab); if(!el) return; el.innerHTML=tests.map(t=>'<label class="tc-item"><input type="checkbox" class="test-chk" value="'+t+'" onchange="updateTestSummary()"> '+t+'</label>').join(''); });
+  // _regDestinations is a persistent global, not reset by anything except
+  // clearRegForm() ("Register Another Patient") -- entering Register any
+  // other way (sidebar, launcher tile, global search, browser back/forward)
+  // used to leave a previous registration's destination selection and
+  // section highlighting stale for the next patient. initRegForm() runs on
+  // every goPage('register'), so resetting here (not just the test
+  // checkboxes) means Register always starts clean regardless of how the
+  // user got there.
+  _regDestinations = new Set();
+  document.querySelectorAll('.dest-card').forEach(c=>c.classList.remove('selected'));
+  const destInput=document.getElementById('r-destination'); if(destInput) destInput.value='';
+  ['reg-doctor-section','reg-tests-section','reg-radiology-section','reg-admission-section'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.style.display='none';
+  });
 }
 function switchTestTab(tab,btn) {
   Object.keys(TEST_CATALOG).forEach(t=>{ const el=document.getElementById('tc-panel-'+t); if(el) el.style.display=t===tab?'grid':'none'; });
@@ -11874,11 +12013,12 @@ async function loadPthTimeline() {
     // forever (the outer catch only logged to console, never updated the
     // UI), which read to the user as "History — nothing appears" even
     // though most of the data was perfectly reachable.
-    const [adms,crits,rads,invs,hemHist,chemHist,consults,...resultRows]=await Promise.all([
+    const [adms,crits,rads,invs,consents,hemHist,chemHist,consults,...resultRows]=await Promise.all([
       sb.from('admissions').select('*').in('patient_id',allIdsForMrn).order('admission_date',{ascending:false}).then(r=>r,()=>({data:[]})),
       sb.from('critical_values').select('*').in('patient_id',allIdsForMrn).order('created_at',{ascending:false}).then(r=>r,()=>({data:[]})),
       sb.from('radiology_requests').select('*').in('patient_id',allIdsForMrn).order('created_at',{ascending:false}).then(r=>r,()=>({data:[]})),
       sb.from('invoices').select('*').in('patient_id',allIdsForMrn).order('created_at',{ascending:false}).then(r=>r,()=>({data:[]})),
+      sb.from('consent_forms').select('*').in('patient_id',allIdsForMrn).order('consent_date',{ascending:false}).then(r=>r,()=>({data:[]})),
       // Trend history reads the append-only twin tables (migration_v2.17) —
       // results_hematology/results_chemistry hold at most one row per
       // patient, so trend charts can never show more than one point off
@@ -11900,6 +12040,7 @@ async function loadPthTimeline() {
     (crits.data||[]).forEach(c=>events.push({t:new Date(c.created_at),type:'lab',icon:'🚨',title:'Critical: '+escapeHtml(c.parameter),detail:'Value: '+escapeHtml(c.value)+' | '+(c.is_acknowledged?'Acknowledged':'⚠️ Unacknowledged'),color:'var(--red)',data:c}));
     (rads.data||[]).forEach(r=>events.push({t:new Date(r.created_at),type:'radiology',icon:'🩻',title:escapeHtml(r.imaging_type||'Radiology'),detail:escapeHtml(r.urgency||'')+' | '+escapeHtml(r.status||'Requested'),color:'var(--sero)',data:r}));
     (invs.data||[]).forEach(i=>events.push({t:new Date(i.created_at),type:'billing',icon:'💰',title:'Invoice '+escapeHtml(i.invoice_no||''),detail:((i.net_amount||0).toFixed(2))+' '+escapeHtml(i.currency||CFG.currency)+' | '+escapeHtml(i.payment_status),color:'var(--amber)',data:i}));
+    (consents.data||[]).forEach(c=>events.push({t:new Date(c.consent_date||c.created_at),type:'consent',icon:'📝',title:'Consent — '+escapeHtml(c.consent_type||'—'),detail:escapeHtml(c.procedure_description||'—')+' | Signed by '+escapeHtml(c.signee_name||'—')+' | Dr. '+escapeHtml(c.performed_by_name||'—'),color:'#0e7490',data:c}));
     (consults.data||[]).forEach(c=>events.push({t:new Date(c.consultation_date||c.created_at),type:'consultation',icon:'🩺',title:'Doctor Visit'+(c.visit_type?' — '+escapeHtml(c.visit_type):''),detail:(c.primary_diagnosis?'Dx: '+escapeHtml(c.primary_diagnosis)+' — ':'')+escapeHtml(c.chief_complaint||'—')+(c.consulting_doctor?' | Dr. '+escapeHtml(c.consulting_doctor):''),color:'#7c3aed',data:c}));
     resultTableNames.forEach((tname,i)=>{
       const meta=PTH_RESULT_TABLES[tname];
@@ -12610,20 +12751,27 @@ async function globalSearch(q){
         box.style.display='block'; return;
       }
       let html='';
+      // Same role-gating as the notification bell (notifCanReach) -- a
+      // result is only clickable if the current role's ROLE_PAGES actually
+      // includes the page it jumps to (pt-history for patients, billing
+      // for invoices), so e.g. a receptionist (no pt-history) or cashier
+      // sees a patient match but can't dead-end on "Access denied"
+      // clicking it.
+      const canPtHistory=notifCanReach('pt-history'), canBilling=notifCanReach('billing');
       if(pts.length){
         html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:var(--slate);background:var(--bg)">Patients</div>';
         html+=pts.map(p=>{
           const labHit=p.lab_no && p.lab_no.toLowerCase().includes(term.toLowerCase());
-          return '<div onclick="jumpToPatient(\''+p.id+'\')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'">'+
+          return notifRow(canPtHistory,"jumpToPatient('"+p.id+"')",
             '<div style="font-weight:700;font-size:.82rem">'+escapeHtml(p.name||fullName(p))+(labHit?' <span style="font-weight:400;font-size:.68rem;color:var(--teal)">· Lab '+escapeHtml(p.lab_no)+'</span>':'')+'</div>'+
-            '<div style="font-size:.7rem;color:var(--slate)">'+escapeHtml(p.mrn||'—')+' · '+escapeHtml(p.visit_no||p.lab_no||'—')+' · '+escapeHtml(p.phone||'—')+'</div></div>';
+            '<div style="font-size:.7rem;color:var(--slate)">'+escapeHtml(p.mrn||'—')+' · '+escapeHtml(p.visit_no||p.lab_no||'—')+' · '+escapeHtml(p.phone||'—')+'</div>');
         }).join('');
       }
       if(invs.length){
         html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:var(--slate);background:var(--bg)">Invoices</div>';
-        html+=invs.map(i=>'<div onclick="jumpToInvoice(\''+i.id+'\')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'">'+
+        html+=invs.map(i=>notifRow(canBilling,"jumpToInvoice('"+i.id+"')",
           '<div style="font-weight:700;font-size:.82rem">'+escapeHtml(i.invoice_no||'—')+'</div>'+
-          '<div style="font-size:.7rem;color:var(--slate)">'+escapeHtml(i.patient_name||'—')+' · '+((i.net_amount??i.total_amount??0).toFixed(2))+' '+escapeHtml(i.currency||CFG.currency)+' · '+escapeHtml(i.payment_status||'')+'</div></div>').join('');
+          '<div style="font-size:.7rem;color:var(--slate)">'+escapeHtml(i.patient_name||'—')+' · '+((i.net_amount??i.total_amount??0).toFixed(2))+' '+escapeHtml(i.currency||CFG.currency)+' · '+escapeHtml(i.payment_status||'')+'</div>')).join('');
       }
       box.innerHTML=html; box.style.display='block';
     }catch(e){ box.style.display='none'; }
@@ -13717,6 +13865,18 @@ const INSTRUMENT_FIELD_MAP = {
   CREATININE:{table:'results_chemistry',field:'creat',targetInput:'ce-creat',label:'Creatinine'},
 };
 function mapInstrumentField(testCode){ return INSTRUMENT_FIELD_MAP[(testCode||'').trim().toUpperCase()]||null; }
+// Which TEST_CATALOG order(s) would actually cover each mapped analyte --
+// used by mapAndImportInstrumentResult() to refuse importing a result the
+// loaded patient was never even ordered for.
+const INSTRUMENT_FIELD_TESTS = {
+  hgb:['CBC (Full Blood Count)','Haemoglobin Only'],
+  wbc:['CBC (Full Blood Count)','WBC Count'],
+  plt:['CBC (Full Blood Count)','Platelet Count'],
+  na:['Serum Electrolytes'],
+  k:['Serum Electrolytes'],
+  fbs:['Fasting Blood Sugar','Random Blood Sugar','2hr Post Prandial'],
+  creat:['RFT (Renal Function)'],
+};
 
 // ASTM E1394/LIS2-A2: pipe-delimited records, one per line (real
 // transmissions use a control-character frame around each line, but the
@@ -13872,7 +14032,25 @@ async function mapAndImportInstrumentResult(i){
   if(!map){ toast('No known mapping for "'+m.test_parameter+'" — enter it manually in the result form','err'); return; }
   const pageId=map.table==='results_hematology'?'page-hem-entry':'page-chem-entry';
   const ptIdField=map.table==='results_hematology'?'hem-entry-pt-id':'chem-entry-pt-id';
-  if(!document.getElementById(ptIdField)?.value){ toast('Load the matching patient in '+(map.table==='results_hematology'?'Haematology':'Chemistry')+' entry first','err'); return; }
+  const ptId=document.getElementById(ptIdField)?.value;
+  if(!ptId){ toast('Load the matching patient in '+(map.table==='results_hematology'?'Haematology':'Chemistry')+' entry first','err'); return; }
+  // Identity cross-check: neither this function nor ingestInstrumentResults()
+  // previously checked the message's own sample barcode/patient identifier
+  // against the patient actually loaded on screen, or against what that
+  // patient was actually ordered for -- the only gate was "is SOME patient
+  // loaded". Both are queried fresh rather than trusting cached state, since
+  // this is the one place a wrong-patient result gets written.
+  let pt=null;
+  try{ const {data}=await sb.from('patients').select('lab_no,mrn,tests_requested').eq('id',ptId).maybeSingle(); pt=data; }catch(e){}
+  if(m.sample_barcode && pt?.lab_no && m.sample_barcode.trim().toUpperCase()!==String(pt.lab_no).trim().toUpperCase()){
+    toast('❌ Sample barcode mismatch — this message is for sample "'+m.sample_barcode+'", not the loaded patient (Lab No: '+pt.lab_no+'). Import blocked — enter it manually only if you are certain this is correct.','err');
+    return;
+  }
+  const acceptableTests=INSTRUMENT_FIELD_TESTS[map.field]||[];
+  if(acceptableTests.length && !(pt?.tests_requested||[]).some(t=>acceptableTests.includes(t))){
+    toast('❌ The loaded patient has no ordered test covering "'+map.label+'" — import blocked. Enter it manually only if you are certain this is correct.','err');
+    return;
+  }
   const input=document.getElementById(map.targetInput);
   if(!input){ toast('Target field not found on the entry form','err'); return; }
   input.value=m.raw_value;
@@ -14216,6 +14394,19 @@ function clearConsentSignature(){
   _consentHasSignature=false;
   const st=document.getElementById('con-sig-status'); if(st){ st.textContent='Sign above using mouse or touch'; st.style.color='var(--slate)'; }
 }
+// Resolves a patient's current active admission id fresh from the DB, the
+// same way loadDischargeTabAdmission() already does it correctly -- used
+// by saveConsentForm() instead of trusting the shared _currentAdmId
+// global, which is set by opening ANY patient's admission drawer and was
+// never reset on a Consultation patient switch (a stale value could get
+// silently recorded against the WRONG patient's consent form).
+async function resolveActiveAdmissionId(patientId) {
+  if(!sb||!patientId) return null;
+  try {
+    const {data:adm} = await sb.from('admissions').select('id').eq('patient_id',patientId).eq('status','Active').order('admission_date',{ascending:false}).limit(1).maybeSingle();
+    return adm?.id||null;
+  } catch(e){ return null; }
+}
 async function saveConsentForm(){
   if(!sb){ toast('Not connected','err'); return; }
   const ptId=_docPt?.id; if(!ptId){ toast('Select a patient first','err'); return; }
@@ -14225,9 +14416,10 @@ async function saveConsentForm(){
   if(!signeeName){ toast('Enter the patient/guardian name','err'); return; }
   if(!_consentHasSignature){ toast('A signature is required before saving','err'); return; }
   const canvas=document.getElementById('con-sig-pad');
+  const admissionId = await resolveActiveAdmissionId(ptId);
   try{
     await sb.from('consent_forms').insert({
-      patient_id:ptId, admission_id:_currentAdmId||null,
+      patient_id:ptId, admission_id:admissionId,
       consent_type:g('con-type')||document.getElementById('con-type')?.value,
       consent_date:g('con-date')||today(),
       procedure_description:procedure, risks_explained:g('con-risks')||null,
@@ -14282,29 +14474,26 @@ async function printConsentForm(id){
 }
 
 // ── 7. searchDocPatient ───────────────────────────────────
+// Routes through the same #doc-queue-body list (and the same
+// renderDocQueueCard() card template / selectDocPatient(fullObject) call)
+// that the normal queue uses -- there used to be a second, independent
+// rendering path here targeting a #doc-search-results element that was
+// never actually in the DOM, silently falling back to #doc-queue-body but
+// passing selectDocPatient() a bare id string instead of the full patient
+// object every other card-render site passes, which broke every
+// downstream feature keyed off _docPt.* (Consent, Orders, Rx, ...).
 async function searchDocPatient(q) {
-  if(!q||q.length<2||!sb) {
-    document.getElementById('doc-search-results') && (document.getElementById('doc-search-results').style.display='none');
-    return;
-  }
+  const body = document.getElementById('doc-queue-body');
+  if(!q||q.length<2||!sb) { loadDoctorQueue(); return; }
+  if(!body) return;
   try {
     const {data} = await sb.from('patients')
-      .select('id,name,first_name,last_name,mrn,age,age_unit,sex,payment_status,doctor,diagnosis')
+      .select('id,name,first_name,last_name,mrn,lab_no,tests_requested,age,age_unit,sex,priority,diagnosis,doctor,source,ward,payment_status,visit_destination,visit_status,created_at')
       .or(`name.ilike.%${q}%,mrn.ilike.%${q}%,first_name.ilike.%${q}%,last_name.ilike.%${q}%`)
       .order('created_at',{ascending:false}).limit(10);
-    const box = document.getElementById('doc-search-results') || document.getElementById('doc-queue-body');
-    if(!box) return;
-    if(!data?.length){ box.innerHTML='<div class="empty-state">No patients found</div>'; return; }
-    // Render clickable results
-    box.innerHTML = '<table class="tbl"><thead><tr><th>MRN</th><th>Name</th><th>Age/Sex</th><th>Diagnosis</th><th>Payment</th></tr></thead><tbody>'+
-      data.map(p => `<tr class="${p.payment_status==='unpaid'||p.payment_status==='insurance_pending'?'pay-unpaid':''}" style="cursor:pointer" onclick="selectDocPatient('${p.id}')">
-        <td style="font-family:DM Mono,monospace;font-size:.72rem;color:var(--teal)">${escapeHtml(p.mrn||'—')}</td>
-        <td style="font-weight:600">${escapeHtml(p.name||fullName(p))}</td>
-        <td>${p.age||'?'}${p.age_unit||''} / ${p.sex||''}</td>
-        <td style="font-size:.78rem">${escapeHtml(p.diagnosis||'—')}</td>
-        <td>${paymentTag(p.payment_status)}</td>
-      </tr>`).join('')+'</tbody></table>';
-  } catch(e){ console.error(e); }
+    if(!data?.length){ body.innerHTML='<div class="empty-state">No patients found</div>'; return; }
+    body.innerHTML = data.map(p => renderDocQueueCard(p, false)).join('');
+  } catch(e){ body.innerHTML='<div style="padding:10px;color:var(--red);font-size:.78rem">'+escapeHtml(e.message)+'</div>'; }
 }
 
 // ── NURSING — NEW FUNCTIONS ───────────────────────────────
@@ -14319,14 +14508,32 @@ function calcMAP() {
 }
 
 function calcNEWS2() {
-  const sys = parseFloat(document.getElementById('vs-sys')?.value)||0;
-  const rr = parseFloat(document.getElementById('vs-rr')?.value)||0;
-  const spo2 = parseFloat(document.getElementById('vs-spo2')?.value)||0;
-  const temp = parseFloat(document.getElementById('vs-temp')?.value)||0;
-  const hr = parseFloat(document.getElementById('vs-hr')?.value)||0;
+  const sysRaw = document.getElementById('vs-sys')?.value;
+  const rrRaw = document.getElementById('vs-rr')?.value;
+  const spo2Raw = document.getElementById('vs-spo2')?.value;
+  const tempRaw = document.getElementById('vs-temp')?.value;
+  const hrRaw = document.getElementById('vs-hr')?.value;
   const o2 = document.getElementById('vs-o2-route')?.value||'';
-  const pain = parseFloat(document.getElementById('vs-pain')?.value)||0;
-  if(!sys&&!rr&&!spo2) return;
+  const bar = document.getElementById('vs-news2-bar');
+  // NEWS2 needs all 5 core physiological parameters entered before it's
+  // meaningful to score -- treating a still-blank field as a literal 0
+  // falls in the single most severe band for both RR and SpO2, which
+  // triggered a false Rapid Response Team alarm while a nurse was still
+  // filling the form top-to-bottom. Not-yet-scored just hides the bar and
+  // makes sure any earlier (also premature) RRT modal is dismissed.
+  const requiredRaw = [sysRaw, rrRaw, spo2Raw, tempRaw, hrRaw];
+  if(requiredRaw.some(v => v===undefined || v===null || v.trim()==='')) {
+    if(bar) bar.style.display='none';
+    const hourlyEl = document.getElementById('vs-news2-hourly-flag');
+    if(hourlyEl) hourlyEl.style.display='none';
+    if(window._news2RrtModalShown){ window._news2RrtModalShown=false; closeOv('rrt-ack-ov'); }
+    return;
+  }
+  const sys = parseFloat(sysRaw);
+  const rr = parseFloat(rrRaw);
+  const spo2 = parseFloat(spo2Raw);
+  const temp = parseFloat(tempRaw);
+  const hr = parseFloat(hrRaw);
   let score = 0;
   // RR
   if(rr<=8||rr>=25) score+=3; else if(rr<=11) score+=1; else if(rr>=21) score+=2;
@@ -14341,7 +14548,6 @@ function calcNEWS2() {
   // Temp
   if(temp<=35) score+=3; else if(temp<=36) score+=1; else if(temp>=39) score+=1; else if(temp>=38.1) score+=1;
 
-  const bar = document.getElementById('vs-news2-bar');
   const valEl = document.getElementById('vs-news2-val');
   const riskEl = document.getElementById('vs-news2-risk');
   if(!bar) return;
@@ -14360,8 +14566,12 @@ function calcNEWS2() {
   bar.classList.toggle('news2-pulse', score>=7);
   if(score>=7){
     if(!window._news2RrtModalShown) openRrtAck(score);
-  } else {
+  } else if(window._news2RrtModalShown){
+    // Score dropped back below the RRT threshold -- the modal that opened
+    // for the earlier high score is now stale and must actually close, not
+    // just be re-armed to potentially reopen next time.
     window._news2RrtModalShown = false;
+    closeOv('rrt-ack-ov');
   }
   const hourlyEl = document.getElementById('vs-news2-hourly-flag');
   if(hourlyEl) hourlyEl.style.display = (score>=3&&score<7) ? '' : 'none';
@@ -17109,18 +17319,16 @@ function clearStaffForm() {
 
 function renderPermissionsMatrix() {
   const body=document.getElementById('perm-matrix-body'); if(!body) return;
-  // Role access definitions
-  const roleAccess={
-    admin:['dashboard','register','appointments','billing','prices','admission','theatre','consultation','nursing','fluid-chart','handover','infection','worklist','samples','unified-entry','hem-entry','chem-entry','sero-entry','micro-entry','pcr-entry','histo-entry','cyto-entry','allresults','criticals','reports','qc','validation','labhistory','tat','inventory','staff','doctors','radiology','analyzer','delivery','settings','pt-history'],
-    doctor:['dashboard','consultation','nursing','fluid-chart','admission','theatre','radiology','pt-history','labhistory'],
-    nurse:['dashboard','nursing','fluid-chart','admission','handover','infection','samples'],
-    lab_tech:['dashboard','worklist','samples','unified-entry','hem-entry','chem-entry','sero-entry','micro-entry','pcr-entry','histo-entry','cyto-entry','allresults','criticals','reports','tat','inventory','delivery','qc','validation','labhistory'],
-    lab_supervisor:['dashboard','worklist','samples','unified-entry','hem-entry','chem-entry','sero-entry','micro-entry','pcr-entry','histo-entry','cyto-entry','allresults','criticals','reports','tat','inventory','delivery','qc','validation','labhistory','staff'],
-    receptionist:['dashboard','register','appointments','billing','prices','worklist','infection'],
-    cashier:['dashboard','billing','prices','register','appointments'],
-    theatre_nurse:['dashboard','theatre','nursing','admission','fluid-chart','inventory'],
-    radiologist:['dashboard','radiology','pt-history','inventory'],
-  };
+  // Derived directly from the real ROLE_PAGES gating array at render time
+  // (previously a separate, hardcoded roleAccess object here had drifted
+  // from ROLE_PAGES in both directions -- e.g. showing Cashier as having
+  // Register access when it doesn't, and Theatre Nurse as lacking Critical
+  // Values when it has it -- so this matrix could no longer be trusted as
+  // documentation of actual access). admin bypasses ROLE_PAGES entirely at
+  // runtime (see goPage()/filterSidebar()), so it's shown with access to
+  // everything here too, matching that real behavior rather than whatever
+  // ROLE_PAGES.admin happens to literally list.
+  const hasAccess = (role,page) => role==='admin' ? true : (ROLE_PAGES[role]||[]).includes(page);
   const modules=[
     {label:'🏥 Reception',pages:['register','appointments']},
     {label:'💰 Billing',pages:['billing','prices']},
@@ -17138,7 +17346,7 @@ function renderPermissionsMatrix() {
     html+='<tr style="background:#f1f5f9"><td colspan="10" style="padding:5px 10px;font-weight:700;font-size:.72rem;text-transform:uppercase;letter-spacing:.4px;color:var(--slate)">'+mod.label+'</td></tr>';
     mod.pages.forEach(page=>{
       html+='<tr style="border-bottom:1px solid var(--border)"><td style="padding:5px 10px;font-size:.78rem">'+(pageLabels[page]||page)+'</td>'+
-        roles.map(r=>'<td style="text-align:center;padding:5px 4px">'+(roleAccess[r]?.includes(page)?'<span style="color:#166534;font-size:1rem">\u2705</span>':'<span style="color:#e2e8f0;font-size:1rem">\u2012</span>')+'</td>').join('')+
+        roles.map(r=>'<td style="text-align:center;padding:5px 4px">'+(hasAccess(r,page)?'<span style="color:#166534;font-size:1rem">\u2705</span>':'<span style="color:#e2e8f0;font-size:1rem">\u2012</span>')+'</td>').join('')+
         '</tr>';
     });
   });
@@ -18253,6 +18461,19 @@ async function saveAndCalculateValidation(){
   if(!sb||!_valCurrentStudy) return;
   const study=_valCurrentStudy;
   try{
+    // Immutability guard (CAP/ISO 15189): once a study's result has been
+    // Approved, its raw validation_samples ARE the audit trail behind that
+    // sign-off. Recalculating used to unconditionally delete-then-insert
+    // them on every Save & Calculate, silently and permanently destroying
+    // the original replicate data with no confirmation and no locked
+    // state. Queried fresh here rather than trusting a possibly-stale
+    // _valCurrentResult, since this is the one place that data gets
+    // destroyed.
+    const {data:latestResults}=await sb.from('validation_results').select('approved_at').eq('study_id',study.id).order('calculated_at',{ascending:false}).limit(1);
+    if(latestResults?.[0]?.approved_at){
+      toast('❌ This study is already Approved — its raw sample data is locked and cannot be recalculated. Start a new study instead.','err');
+      return;
+    }
     if(study.protocol_type==='EP15-A3'){
       if(!_valPastedRuns.length){ toast('Paste run data first','err'); return; }
       const result=calculateEP15(_valPastedRuns,study.claimed_cv_pct,study.tea_limit);
@@ -18481,6 +18702,16 @@ function drawBlandAltmanChart(ep09){
 async function signValidationResult(stage){
   if(!sb||!_valCurrentResult) return;
   if(stage==='approve'&&!_valCurrentResult.verified_at){ toast('Quality Manager review must be confirmed first','err'); return; }
+  // Two-person sign-off is the entire point of Review/Approve as separate
+  // stages (CAP/ISO 15189) -- without this check, one lab_tech account
+  // could confirm both clicks and the UI would still label them as if a
+  // Quality Manager and Laboratory Director acted separately. Baseline
+  // enforcement: Approve must come from a different account than whichever
+  // one performed Review.
+  if(stage==='approve'&&_valCurrentResult.verified_by&&_valCurrentResult.verified_by===currentProfile?.id){
+    toast('❌ Approve must be confirmed by a different account than the one that performed Review','err');
+    return;
+  }
   const field=stage==='verify'
     ?{verified_by:currentProfile?.id, verified_by_name:currentProfile?.full_name||'', verified_at:new Date().toISOString()}
     :{approved_by:currentProfile?.id, approved_by_name:currentProfile?.full_name||'', approved_at:new Date().toISOString()};
@@ -18921,11 +19152,23 @@ async function submitDiscardBatch(){
   if(!reasonCode){ toast('Select a reason code','err'); return; }
   if(!notes){ toast('Details are required — no silent discards','err'); return; }
   try{
+    // Keep reagent_inventory.current_stock in lockstep with the batch being
+    // discarded, the same pattern already proven correct in
+    // receiveBatchStock() (+qty on receipt) and dispenseFromInventoryFefo()
+    // (-qty on dispense, clamped at 0) -- this used to only write the audit
+    // trail and never touch current_stock at all, so a fully-discarded
+    // batch's item could still show as fully stocked and silently suppress
+    // the low-stock alert.
+    const [{data:batch},{data:it}]=await Promise.all([
+      sb.from('inventory_batches').select('quantity').eq('id',_invDiscardBatchId).maybeSingle(),
+      sb.from('reagent_inventory').select('current_stock').eq('id',_invDiscardItemId).maybeSingle(),
+    ]);
     await sb.from('inventory_batches').update({
       is_active:false, discard_reason_code:reasonCode, discard_notes:notes,
       discarded_by:currentProfile?.id, discarded_by_name:currentProfile?.full_name||'',
       discarded_at:new Date().toISOString(),
     }).eq('id',_invDiscardBatchId);
+    if(batch?.quantity) await sb.from('reagent_inventory').update({current_stock:Math.max(0,(it?.current_stock||0)-batch.quantity)}).eq('id',_invDiscardItemId);
     toast('🗑 Batch discarded — '+reasonCode,'ok');
     closeOv('inv-discard-ov');
     loadInventory();
@@ -19019,6 +19262,20 @@ async function loadBloodUnits() {
     _bbUnits=data||[];
     renderBloodUnitTable(_bbUnits);
   } catch(e){ body.innerHTML='<div style="padding:14px;color:var(--red);font-size:.78rem">'+escapeHtml(e.message)+'</div>'; }
+  updateBloodExpiryAlert();
+}
+// Simple aggregate count of Available units already expired or expiring
+// within CFG.bloodExpiryAlertDays -- same query/threshold the notification
+// bell's bloodExpiry category uses, run independently of whatever
+// status/component/group filter the unit table itself is currently showing.
+async function updateBloodExpiryAlert(){
+  const el=document.getElementById('bb-expiry-alert'); if(!el||!sb) return;
+  try{
+    const cutoff=new Date(Date.now()+CFG.bloodExpiryAlertDays*86400000).toISOString().slice(0,10);
+    const {count}=await sb.from('blood_units').select('id',{count:'exact',head:true}).eq('status','Available').lte('expiry_date',cutoff);
+    if(count>0){ el.style.display=''; el.textContent='⚠ '+count+' expiring/expired'; }
+    else el.style.display='none';
+  }catch(e){}
 }
 function setBbStatusFilter(status,btn) {
   _bbStatusFilter=status;
