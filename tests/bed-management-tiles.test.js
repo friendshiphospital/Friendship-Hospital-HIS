@@ -88,13 +88,15 @@ module.exports = async function run(context, baseUrl) {
     await page.close();
   }
 
-  // --- TEST 5: a role with only theatre access (theatre_nurse) sees the theatre tile but not the bed-management tile ---
+  // --- TEST 5: theatre_nurse sees both the theatre tile and the bed-management tile ---
+  // ROLE_PAGES.theatre_nurse now includes 'admission' (CLAUDE.md documents
+  // Admissions for Theatre Nurse; this was previously a doc/code mismatch).
   {
     const page = await context.newPage();
     await page.addInitScript(initScript('theatre_nurse'));
     await login(page, baseUrl);
     const visible = await page.evaluate(() => visibleModulesForRole());
-    t.check('theatre_nurse (no admission page grant) does not see the admissions tile', !visible.includes('admissions'));
+    t.check('theatre_nurse (has admission page grant) sees the admissions tile', visible.includes('admissions'));
     t.check('theatre_nurse still sees the theatre tile', visible.includes('theatre'));
     await page.close();
   }
