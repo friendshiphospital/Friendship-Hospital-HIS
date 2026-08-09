@@ -18526,6 +18526,16 @@ function drawBlandAltmanChart(ep09){
 async function signValidationResult(stage){
   if(!sb||!_valCurrentResult) return;
   if(stage==='approve'&&!_valCurrentResult.verified_at){ toast('Quality Manager review must be confirmed first','err'); return; }
+  // Two-person sign-off is the entire point of Review/Approve as separate
+  // stages (CAP/ISO 15189) -- without this check, one lab_tech account
+  // could confirm both clicks and the UI would still label them as if a
+  // Quality Manager and Laboratory Director acted separately. Baseline
+  // enforcement: Approve must come from a different account than whichever
+  // one performed Review.
+  if(stage==='approve'&&_valCurrentResult.verified_by&&_valCurrentResult.verified_by===currentProfile?.id){
+    toast('❌ Approve must be confirmed by a different account than the one that performed Review','err');
+    return;
+  }
   const field=stage==='verify'
     ?{verified_by:currentProfile?.id, verified_by_name:currentProfile?.full_name||'', verified_at:new Date().toISOString()}
     :{approved_by:currentProfile?.id, approved_by_name:currentProfile?.full_name||'', approved_at:new Date().toISOString()};
