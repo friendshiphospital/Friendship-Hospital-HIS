@@ -19024,11 +19024,23 @@ async function submitDiscardBatch(){
   if(!reasonCode){ toast('Select a reason code','err'); return; }
   if(!notes){ toast('Details are required — no silent discards','err'); return; }
   try{
+    // Keep reagent_inventory.current_stock in lockstep with the batch being
+    // discarded, the same pattern already proven correct in
+    // receiveBatchStock() (+qty on receipt) and dispenseFromInventoryFefo()
+    // (-qty on dispense, clamped at 0) -- this used to only write the audit
+    // trail and never touch current_stock at all, so a fully-discarded
+    // batch's item could still show as fully stocked and silently suppress
+    // the low-stock alert.
+    const [{data:batch},{data:it}]=await Promise.all([
+      sb.from('inventory_batches').select('quantity').eq('id',_invDiscardBatchId).maybeSingle(),
+      sb.from('reagent_inventory').select('current_stock').eq('id',_invDiscardItemId).maybeSingle(),
+    ]);
     await sb.from('inventory_batches').update({
       is_active:false, discard_reason_code:reasonCode, discard_notes:notes,
       discarded_by:currentProfile?.id, discarded_by_name:currentProfile?.full_name||'',
       discarded_at:new Date().toISOString(),
     }).eq('id',_invDiscardBatchId);
+    if(batch?.quantity) await sb.from('reagent_inventory').update({current_stock:Math.max(0,(it?.current_stock||0)-batch.quantity)}).eq('id',_invDiscardItemId);
     toast('🗑 Batch discarded — '+reasonCode,'ok');
     closeOv('inv-discard-ov');
     loadInventory();
