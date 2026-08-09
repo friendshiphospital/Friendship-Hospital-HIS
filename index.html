@@ -43,7 +43,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);font
 
 /* AUTH */
 #auth-screen{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--ink) 0%,var(--ink2) 55%,var(--ink3) 100%);z-index:9999;}
-.auth-card{background:#fff;border-radius:18px;width:100%;max-width:420px;padding:36px 32px;box-shadow:0 24px 80px rgba(0,0,0,.35);}
+.auth-card{background:#fff url('assets/branding/login-bg-glow.png') no-repeat top left/cover;border-radius:18px;width:100%;max-width:420px;padding:36px 32px;box-shadow:0 24px 80px rgba(0,0,0,.35);}
 .auth-logo{text-align:center;margin-bottom:18px;}
 .auth-logo h1{font-family:'DM Serif Display',serif;font-size:1.5rem;color:var(--ink);margin-top:7px;}
 .auth-logo p{font-size:.76rem;color:var(--slate);margin-top:2px;}
@@ -101,7 +101,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);font
    one of the existing .page divs — it isn't part of the ROLE_PAGES/goPage
    page system at all, since it's the thing you navigate FROM, not a
    destination page. */
-#launcher-screen{display:none;position:fixed;inset:0;background:linear-gradient(160deg,var(--bg) 0%,#eaf2f7 100%);z-index:250;overflow-y:auto;}
+#launcher-screen{display:none;position:fixed;inset:0;background:url('assets/branding/login-bg-glow.png') no-repeat top left/45% auto,linear-gradient(160deg,var(--bg) 0%,#eaf2f7 100%);z-index:250;overflow-y:auto;}
 #launcher-screen.show{display:block;}
 .launcher-topbar{display:flex;justify-content:space-between;align-items:center;padding:16px 24px;}
 .launcher-topbar .lt-brand{font-family:'DM Serif Display',serif;color:var(--ink2);font-size:1rem;}
