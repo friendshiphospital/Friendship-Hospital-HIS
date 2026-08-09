@@ -11976,11 +11976,12 @@ async function loadPthTimeline() {
     // forever (the outer catch only logged to console, never updated the
     // UI), which read to the user as "History — nothing appears" even
     // though most of the data was perfectly reachable.
-    const [adms,crits,rads,invs,hemHist,chemHist,consults,...resultRows]=await Promise.all([
+    const [adms,crits,rads,invs,consents,hemHist,chemHist,consults,...resultRows]=await Promise.all([
       sb.from('admissions').select('*').in('patient_id',allIdsForMrn).order('admission_date',{ascending:false}).then(r=>r,()=>({data:[]})),
       sb.from('critical_values').select('*').in('patient_id',allIdsForMrn).order('created_at',{ascending:false}).then(r=>r,()=>({data:[]})),
       sb.from('radiology_requests').select('*').in('patient_id',allIdsForMrn).order('created_at',{ascending:false}).then(r=>r,()=>({data:[]})),
       sb.from('invoices').select('*').in('patient_id',allIdsForMrn).order('created_at',{ascending:false}).then(r=>r,()=>({data:[]})),
+      sb.from('consent_forms').select('*').in('patient_id',allIdsForMrn).order('consent_date',{ascending:false}).then(r=>r,()=>({data:[]})),
       // Trend history reads the append-only twin tables (migration_v2.17) —
       // results_hematology/results_chemistry hold at most one row per
       // patient, so trend charts can never show more than one point off
@@ -12002,6 +12003,7 @@ async function loadPthTimeline() {
     (crits.data||[]).forEach(c=>events.push({t:new Date(c.created_at),type:'lab',icon:'🚨',title:'Critical: '+escapeHtml(c.parameter),detail:'Value: '+escapeHtml(c.value)+' | '+(c.is_acknowledged?'Acknowledged':'⚠️ Unacknowledged'),color:'var(--red)',data:c}));
     (rads.data||[]).forEach(r=>events.push({t:new Date(r.created_at),type:'radiology',icon:'🩻',title:escapeHtml(r.imaging_type||'Radiology'),detail:escapeHtml(r.urgency||'')+' | '+escapeHtml(r.status||'Requested'),color:'var(--sero)',data:r}));
     (invs.data||[]).forEach(i=>events.push({t:new Date(i.created_at),type:'billing',icon:'💰',title:'Invoice '+escapeHtml(i.invoice_no||''),detail:((i.net_amount||0).toFixed(2))+' '+escapeHtml(i.currency||CFG.currency)+' | '+escapeHtml(i.payment_status),color:'var(--amber)',data:i}));
+    (consents.data||[]).forEach(c=>events.push({t:new Date(c.consent_date||c.created_at),type:'consent',icon:'📝',title:'Consent — '+escapeHtml(c.consent_type||'—'),detail:escapeHtml(c.procedure_description||'—')+' | Signed by '+escapeHtml(c.signee_name||'—')+' | Dr. '+escapeHtml(c.performed_by_name||'—'),color:'#0e7490',data:c}));
     (consults.data||[]).forEach(c=>events.push({t:new Date(c.consultation_date||c.created_at),type:'consultation',icon:'🩺',title:'Doctor Visit'+(c.visit_type?' — '+escapeHtml(c.visit_type):''),detail:(c.primary_diagnosis?'Dx: '+escapeHtml(c.primary_diagnosis)+' — ':'')+escapeHtml(c.chief_complaint||'—')+(c.consulting_doctor?' | Dr. '+escapeHtml(c.consulting_doctor):''),color:'#7c3aed',data:c}));
     resultTableNames.forEach((tname,i)=>{
       const meta=PTH_RESULT_TABLES[tname];
