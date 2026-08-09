@@ -9809,7 +9809,7 @@ async function saveVitals() {
       o2_delivery:g('vs-o2-route'), o2_flow:gn('vs-o2-flow'), fio2:gn('vs-fio2'),
       gcs_eye:parseInt(g('vs-gcs-e'))||null, gcs_verbal:parseInt(g('vs-gcs-v'))||null, gcs_motor:parseInt(g('vs-gcs-m'))||null,
       pain_score:_painScore||parseInt(document.getElementById('vs-pain')?.value)||null,
-      news2_score:newsScore||null,
+      news2_score:newsScore??null,
       ...(window._news2RrtAck||{}),
       fluid_in_ml:(parseFloat(g('vs-iv-in'))||0)+(parseFloat(g('vs-po-in'))||0),
       fluid_out_ml:(parseFloat(g('vs-urine'))||0)+(parseFloat(g('vs-other-out'))||0),
@@ -14319,14 +14319,32 @@ function calcMAP() {
 }
 
 function calcNEWS2() {
-  const sys = parseFloat(document.getElementById('vs-sys')?.value)||0;
-  const rr = parseFloat(document.getElementById('vs-rr')?.value)||0;
-  const spo2 = parseFloat(document.getElementById('vs-spo2')?.value)||0;
-  const temp = parseFloat(document.getElementById('vs-temp')?.value)||0;
-  const hr = parseFloat(document.getElementById('vs-hr')?.value)||0;
+  const sysRaw = document.getElementById('vs-sys')?.value;
+  const rrRaw = document.getElementById('vs-rr')?.value;
+  const spo2Raw = document.getElementById('vs-spo2')?.value;
+  const tempRaw = document.getElementById('vs-temp')?.value;
+  const hrRaw = document.getElementById('vs-hr')?.value;
   const o2 = document.getElementById('vs-o2-route')?.value||'';
-  const pain = parseFloat(document.getElementById('vs-pain')?.value)||0;
-  if(!sys&&!rr&&!spo2) return;
+  const bar = document.getElementById('vs-news2-bar');
+  // NEWS2 needs all 5 core physiological parameters entered before it's
+  // meaningful to score -- treating a still-blank field as a literal 0
+  // falls in the single most severe band for both RR and SpO2, which
+  // triggered a false Rapid Response Team alarm while a nurse was still
+  // filling the form top-to-bottom. Not-yet-scored just hides the bar and
+  // makes sure any earlier (also premature) RRT modal is dismissed.
+  const requiredRaw = [sysRaw, rrRaw, spo2Raw, tempRaw, hrRaw];
+  if(requiredRaw.some(v => v===undefined || v===null || v.trim()==='')) {
+    if(bar) bar.style.display='none';
+    const hourlyEl = document.getElementById('vs-news2-hourly-flag');
+    if(hourlyEl) hourlyEl.style.display='none';
+    if(window._news2RrtModalShown){ window._news2RrtModalShown=false; closeOv('rrt-ack-ov'); }
+    return;
+  }
+  const sys = parseFloat(sysRaw);
+  const rr = parseFloat(rrRaw);
+  const spo2 = parseFloat(spo2Raw);
+  const temp = parseFloat(tempRaw);
+  const hr = parseFloat(hrRaw);
   let score = 0;
   // RR
   if(rr<=8||rr>=25) score+=3; else if(rr<=11) score+=1; else if(rr>=21) score+=2;
@@ -14341,7 +14359,6 @@ function calcNEWS2() {
   // Temp
   if(temp<=35) score+=3; else if(temp<=36) score+=1; else if(temp>=39) score+=1; else if(temp>=38.1) score+=1;
 
-  const bar = document.getElementById('vs-news2-bar');
   const valEl = document.getElementById('vs-news2-val');
   const riskEl = document.getElementById('vs-news2-risk');
   if(!bar) return;
@@ -14360,8 +14377,12 @@ function calcNEWS2() {
   bar.classList.toggle('news2-pulse', score>=7);
   if(score>=7){
     if(!window._news2RrtModalShown) openRrtAck(score);
-  } else {
+  } else if(window._news2RrtModalShown){
+    // Score dropped back below the RRT threshold -- the modal that opened
+    // for the earlier high score is now stale and must actually close, not
+    // just be re-armed to potentially reopen next time.
     window._news2RrtModalShown = false;
+    closeOv('rrt-ack-ov');
   }
   const hourlyEl = document.getElementById('vs-news2-hourly-flag');
   if(hourlyEl) hourlyEl.style.display = (score>=3&&score<7) ? '' : 'none';
