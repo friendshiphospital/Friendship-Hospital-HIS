@@ -11312,28 +11312,57 @@ function updateTestSummary() {
 // anything itself — always asks via confirm() and returns null if declined
 // or nothing matches, so the caller's normal, undiscounted invoice path
 // runs unless a receptionist actively opts in.
-async function checkAndApplyFollowUpPricing(mrn){
+//
+// opts.wasManualMatch is true only when `mrn` came from the receptionist
+// clicking a duplicate-phone/search match (r-existing-mrn). When it's false
+// (a brand-new mrn was just minted for this registration) and opts.phone is
+// given, also check whether that phone number belongs to a DIFFERENT,
+// already-known mrn with an open follow-up — this is how a returning
+// patient who was registered as "new" (nobody clicked the match) doesn't
+// silently lose their follow-up pricing. Same confirm-before-acting rule
+// applies; this never merges identities on its own.
+async function checkAndApplyFollowUpPricing(mrn, opts){
   if(!sb||!mrn) return null;
   try{
-    const {data:openFollowUps}=await sb.from('follow_ups').select('*').eq('patient_mrn',mrn).eq('used',false);
-    if(!openFollowUps?.length) return null;
-    const today=new Date(); today.setHours(0,0,0,0);
-    const windowMs=CFG.followupWindowDays*864e5;
-    const relevant=openFollowUps.filter(f=>{
-      if(!f.target_date) return false;
-      const target=new Date(f.target_date+'T00:00:00');
-      return Math.abs(target-today)<=windowMs;
-    });
-    if(!relevant.length) return null;
-    relevant.sort((a,b)=>Math.abs(new Date(a.target_date)-today)-Math.abs(new Date(b.target_date)-today));
-    const fu=relevant[0];
+    const findRelevant=(rows)=>{
+      if(!rows?.length) return null;
+      const today=new Date(); today.setHours(0,0,0,0);
+      const windowMs=CFG.followupWindowDays*864e5;
+      const relevant=rows.filter(f=>{
+        if(!f.target_date) return false;
+        const target=new Date(f.target_date+'T00:00:00');
+        return Math.abs(target-today)<=windowMs;
+      });
+      if(!relevant.length) return null;
+      relevant.sort((a,b)=>Math.abs(new Date(a.target_date)-today)-Math.abs(new Date(b.target_date)-today));
+      return relevant[0];
+    };
     const ruleLabel=CFG.followupPricingRule==='percentage'?CFG.followupPricingValue+'% discounted'
       :CFG.followupPricingRule==='fixed'?'fixed-price ('+CFG.followupPricingValue+' '+CFG.currency+')'
       :'free';
-    const apply=confirm('This patient has a follow-up scheduled by '+(fu.scheduled_by_name||'a doctor')+
-      (fu.reason?' for "'+fu.reason+'"':'')+', due '+fu.target_date+
-      ' — apply '+ruleLabel+' follow-up pricing to this registration?');
-    return apply?{followUpId:fu.id}:null;
+    const {data:openFollowUps}=await sb.from('follow_ups').select('*').eq('patient_mrn',mrn).eq('used',false);
+    const fu=findRelevant(openFollowUps);
+    if(fu){
+      const apply=confirm('This patient has a follow-up scheduled by '+(fu.scheduled_by_name||'a doctor')+
+        (fu.reason?' for "'+fu.reason+'"':'')+', due '+fu.target_date+
+        ' — apply '+ruleLabel+' follow-up pricing to this registration?');
+      return apply?{followUpId:fu.id}:null;
+    }
+    if(!opts?.wasManualMatch && opts?.phone){
+      const {data:otherPatients}=await sb.from('patients_master').select('mrn').eq('phone',opts.phone).neq('mrn',mrn);
+      const otherMrns=[...new Set((otherPatients||[]).map(p=>p.mrn).filter(Boolean))];
+      if(otherMrns.length){
+        const {data:phoneFollowUps}=await sb.from('follow_ups').select('*').in('patient_mrn',otherMrns).eq('used',false);
+        const fu2=findRelevant(phoneFollowUps);
+        if(fu2){
+          const apply=confirm('⚠️ A patient with this phone number has an open follow-up under MRN '+fu2.patient_mrn+
+            ' scheduled by '+(fu2.scheduled_by_name||'a doctor')+(fu2.reason?' for "'+fu2.reason+'"':'')+', due '+fu2.target_date+
+            ' — is this the same patient? Apply '+ruleLabel+' follow-up pricing to this registration?');
+          return apply?{followUpId:fu2.id}:null;
+        }
+      }
+    }
+    return null;
   }catch(e){ return null; }
 }
 async function submitRegistration() {
@@ -11382,10 +11411,12 @@ async function submitRegistration() {
       // registry in sync with the correction.
       try{ await sb?.from('patients_master').update(masterFields).eq('mrn',mrn); }catch(e){}
     }
-    // Deliberate, confirmed prompt only — never a silent discount. A brand
-    // new mrn (no prior visit) can never match an open follow_up, so this
-    // is a safe no-op for genuinely new patients.
-    const followUpMatch = await checkAndApplyFollowUpPricing(mrn);
+    // Deliberate, confirmed prompt only — never a silent discount. Pass
+    // whether this mrn came from an explicit duplicate-match click
+    // (existingMrn) plus the entered phone, so a brand-new mrn can still be
+    // matched against an open follow-up under a DIFFERENT known mrn sharing
+    // this phone number (see checkAndApplyFollowUpPricing's phone fallback).
+    const followUpMatch = await checkAndApplyFollowUpPricing(mrn, {wasManualMatch:!!existingMrn, phone:g('r-phone')});
     // Per-visit File Number, Lab No., Radiology No. — generated fresh every
     // time, even for a returning patient. Wrapped in a retry loop: if the
     // insert still hits a unique-constraint collision (23505) despite the
