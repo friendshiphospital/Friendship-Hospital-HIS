@@ -51,7 +51,6 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);font
 .auth-partner-logo{margin-top:14px;padding-top:14px;border-top:1px solid var(--border);}
 .auth-partner-logo img{height:64px;width:auto;opacity:.92;}
 .auth-credit{text-align:center;font-size:.66rem;color:var(--slate);margin-top:16px;}
-.auth-credit img{height:13px;width:auto;vertical-align:-2px;margin-right:3px;opacity:.8;}
 .auth-conn{text-align:center;font-size:.7rem;color:var(--slate);margin-bottom:14px;display:flex;align-items:center;justify-content:center;gap:5px;}
 .auth-dot{width:8px;height:8px;border-radius:50%;background:#94a3b8;flex-shrink:0;transition:background .3s;}
 .auth-dot.ok{background:#16a34a;}.auth-dot.err{background:var(--red);}
@@ -121,7 +120,6 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);font
 .launcher-partner-logo{display:flex;align-items:center;gap:12px;}
 .launcher-partner-logo img{height:20px;width:auto;opacity:.5;}
 .launcher-credit{text-align:center;font-size:.68rem;color:var(--slate);padding:0 22px 26px;}
-.launcher-credit img{height:14px;width:auto;vertical-align:-2px;margin-right:3px;opacity:.75;}
 /* MAIN */
 #main{margin-left:var(--sw);flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden;}
 .topbar{height:var(--hh);flex-shrink:0;background:var(--card);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 22px;gap:10px;z-index:200;}
@@ -457,6 +455,7 @@ html[dir="rtl"] body{direction:rtl;}
       <button type="submit" class="auth-submit" id="auth-btn" data-i18n="login_signin">Sign In</button>
     </form>
     <div class="auth-msg" id="auth-msg"></div>
+    <div class="auth-credit">Powered by Elmohajir Medical Technology</div>
     <div class="auth-cfg-row" onclick="toggleCfg()">⚙️ Supabase Configuration <span id="cfg-arrow">▸</span></div>
     <div class="auth-cfg-body" id="auth-cfg-body">
       <div class="auth-field"><label>Supabase URL</label><input id="cfg-url" placeholder="https://xxxx.supabase.co"></div>
@@ -489,6 +488,7 @@ html[dir="rtl"] body{direction:rtl;}
       <div class="lc-v" id="launcher-continue-label">—</div>
     </button>
     <div class="launcher-grid" id="launcher-grid"></div>
+    <div class="launcher-credit">Powered by Elmohajir Medical Technology</div>
   </div>
   <nav id="sidebar">
     <div class="sb-brand">
