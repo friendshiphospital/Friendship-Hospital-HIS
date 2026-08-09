@@ -8720,8 +8720,16 @@ async function loadDashboard() {
     const wards=['Medical','Surgical','ICU','Maternity','Paediatric','Private'];
     const wardTotal={}, wardOcc={};
     wards.forEach(w=>{ wardTotal[w]=0; wardOcc[w]=0; });
-    beds.forEach(b=>{ if(wardTotal[b.ward]!==undefined) wardTotal[b.ward]++; if(b.status==='Occupied'&&wardOcc[b.ward]!==undefined) wardOcc[b.ward]++; });
-    activeAdm.forEach(a=>{ if(wardOcc[a.ward]!==undefined) wardOcc[a.ward]=Math.max(wardOcc[a.ward],1); });
+    // Bed count (denominator) still legitimately comes from the beds table
+    // — that's real inventory. Occupancy (numerator) previously came from
+    // beds.status==='Occupied', only floored to "at least 1" via active
+    // admissions -- so a ward with 3 active admissions but only 1 bed
+    // marked Occupied (e.g. stale/unsynced bed status) silently
+    // under-reported. Now counts actual active admissions per ward
+    // directly, the same way the separate "In Theatre" KPI tile above
+    // already does it (activeAdm.filter(a=>a.ward==='Theatre').length).
+    beds.forEach(b=>{ if(wardTotal[b.ward]!==undefined) wardTotal[b.ward]++; });
+    activeAdm.forEach(a=>{ if(wardOcc[a.ward]!==undefined) wardOcc[a.ward]++; });
     const wg=document.getElementById('dash-ward-grid');
     if(wg) wg.innerHTML=wards.map(w=>{
       const occ=wardOcc[w]||0, total=wardTotal[w]||0, pct=total>0?Math.round(occ/total*100):0;
