@@ -43,11 +43,14 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);font
 
 /* AUTH */
 #auth-screen{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--ink) 0%,var(--ink2) 55%,var(--ink3) 100%);z-index:9999;}
-.auth-card{background:#fff;border-radius:18px;width:100%;max-width:420px;padding:36px 32px;box-shadow:0 24px 80px rgba(0,0,0,.35);}
+.auth-card{background:#fff url('assets/branding/login-bg-glow.png') no-repeat top left/cover;border-radius:18px;width:100%;max-width:420px;padding:36px 32px;box-shadow:0 24px 80px rgba(0,0,0,.35);}
 .auth-logo{text-align:center;margin-bottom:18px;}
 .auth-logo h1{font-family:'DM Serif Display',serif;font-size:1.5rem;color:var(--ink);margin-top:7px;}
 .auth-logo p{font-size:.76rem;color:var(--slate);margin-top:2px;}
 .auth-ver{display:inline-block;margin-top:6px;background:var(--teal-lt);color:var(--teal);font-size:.6rem;font-weight:700;padding:2px 9px;border-radius:20px;letter-spacing:.5px;text-transform:uppercase;}
+.auth-partner-logo{margin-top:14px;padding-top:14px;border-top:1px solid var(--border);}
+.auth-partner-logo img{height:64px;width:auto;opacity:.92;}
+.auth-credit{text-align:center;font-size:.66rem;color:var(--slate);margin-top:16px;}
 .auth-conn{text-align:center;font-size:.7rem;color:var(--slate);margin-bottom:14px;display:flex;align-items:center;justify-content:center;gap:5px;}
 .auth-dot{width:8px;height:8px;border-radius:50%;background:#94a3b8;flex-shrink:0;transition:background .3s;}
 .auth-dot.ok{background:#16a34a;}.auth-dot.err{background:var(--red);}
@@ -98,7 +101,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);font
    one of the existing .page divs — it isn't part of the ROLE_PAGES/goPage
    page system at all, since it's the thing you navigate FROM, not a
    destination page. */
-#launcher-screen{display:none;position:fixed;inset:0;background:linear-gradient(160deg,var(--bg) 0%,#eaf2f7 100%);z-index:250;overflow-y:auto;}
+#launcher-screen{display:none;position:fixed;inset:0;background:url('assets/branding/login-bg-glow.png') no-repeat top left/45% auto,linear-gradient(160deg,var(--bg) 0%,#eaf2f7 100%);z-index:250;overflow-y:auto;}
 #launcher-screen.show{display:block;}
 .launcher-topbar{display:flex;justify-content:space-between;align-items:center;padding:16px 24px;}
 .launcher-topbar .lt-brand{font-family:'DM Serif Display',serif;color:var(--ink2);font-size:1rem;}
@@ -114,6 +117,9 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);font
 .launcher-tile:hover{transform:translateY(-3px);box-shadow:0 12px 28px rgba(11,122,117,.15);border-color:var(--teal2);}
 .launcher-tile .lt-ic{font-size:2.2rem;margin-bottom:9px;}
 .launcher-tile .lt-lbl{font-size:.86rem;font-weight:700;color:var(--ink2);}
+.launcher-partner-logo{display:flex;align-items:center;gap:12px;}
+.launcher-partner-logo img{height:20px;width:auto;opacity:.5;}
+.launcher-credit{text-align:center;font-size:.68rem;color:var(--slate);padding:0 22px 26px;}
 /* MAIN */
 #main{margin-left:var(--sw);flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden;}
 .topbar{height:var(--hh);flex-shrink:0;background:var(--card);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 22px;gap:10px;z-index:200;}
@@ -440,6 +446,7 @@ html[dir="rtl"] body{direction:rtl;}
       <h1>Friendship Hospital</h1>
       <p>Al Damazin · Blue Nile State · Sudan</p>
       <span class="auth-ver">HIS v2.7</span>
+      <div class="auth-partner-logo"><img src="assets/branding/elmohajir-logo.png" alt="Elmohajir Medical Technology"></div>
     </div>
     <div class="auth-conn"><div class="auth-dot" id="auth-dot"></div><span id="auth-conn-text">Checking connection…</span></div>
     <form id="auth-form" autocomplete="on" onsubmit="event.preventDefault();doLogin();">
@@ -448,6 +455,7 @@ html[dir="rtl"] body{direction:rtl;}
       <button type="submit" class="auth-submit" id="auth-btn" data-i18n="login_signin">Sign In</button>
     </form>
     <div class="auth-msg" id="auth-msg"></div>
+    <div class="auth-credit">Powered by Elmohajir Medical Technology</div>
     <div class="auth-cfg-row" onclick="toggleCfg()">⚙️ Supabase Configuration <span id="cfg-arrow">▸</span></div>
     <div class="auth-cfg-body" id="auth-cfg-body">
       <div class="auth-field"><label>Supabase URL</label><input id="cfg-url" placeholder="https://xxxx.supabase.co"></div>
@@ -466,7 +474,10 @@ html[dir="rtl"] body{direction:rtl;}
   <div id="launcher-screen">
     <div class="launcher-topbar">
       <div class="lt-brand">🏥 Friendship Hospital — Al Damazin</div>
-      <button class="btn btn-s btn-sm" onclick="doLogout()">⏻ Sign Out</button>
+      <div class="launcher-partner-logo">
+        <img src="assets/branding/elmohajir-logo.png" alt="Elmohajir Medical Technology">
+        <button class="btn btn-s btn-sm" onclick="doLogout()">⏻ Sign Out</button>
+      </div>
     </div>
     <div class="launcher-hd">
       <h1 id="launcher-greeting">Welcome</h1>
@@ -477,6 +488,7 @@ html[dir="rtl"] body{direction:rtl;}
       <div class="lc-v" id="launcher-continue-label">—</div>
     </button>
     <div class="launcher-grid" id="launcher-grid"></div>
+    <div class="launcher-credit">Powered by Elmohajir Medical Technology</div>
   </div>
   <nav id="sidebar">
     <div class="sb-brand">
