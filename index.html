@@ -4028,6 +4028,7 @@ html[dir="rtl"] body{direction:rtl;}
     <div class="card" style="margin-bottom:14px">
       <div class="card-hd">
         <span class="card-title">🩸 Blood Unit Inventory</span>
+        <span id="bb-expiry-alert" style="display:none;font-size:.7rem;font-weight:700;color:#b91c1c;background:#fff1f2;padding:2px 8px;border-radius:10px;margin-left:8px"></span>
         <span style="font-size:.68rem;color:var(--slate)">FEFO — earliest-expiring compatible units are always used/offered first</span>
       </div>
       <div class="card-body">
@@ -6855,6 +6856,7 @@ const CFG = {
   // so a site can tune what counts as "overdue" without editing code.
   get unpaidAlertHours(){ return parseFloat(localStorage.getItem('cfg_unpaid_alert_hours'))||72; },
   get admissionAlertHours(){ return parseFloat(localStorage.getItem('cfg_admission_alert_hours'))||4; },
+  get bloodExpiryAlertDays(){ return parseFloat(localStorage.getItem('cfg_blood_expiry_alert_days'))||7; },
   // SMS provider (Phase 8) — the gateway URL and API key live server-side
   // only now, as Supabase Edge Function secrets (see supabase/functions/
   // send-sms), not in localStorage — a Bearer token sitting in client
@@ -8420,15 +8422,16 @@ async function checkCriticals() {
 // highlighting; no new column was needed, just surfacing it here too
 // instead of it only being visible to someone already on that page).
 // Both time thresholds are configurable from Settings rather than hardcoded.
-let _notifState={crits:[],unpaid:[],pendingAdm:[],lowStock:[],deferredDue:[],resultsReady:[]};
+let _notifState={crits:[],unpaid:[],pendingAdm:[],lowStock:[],deferredDue:[],resultsReady:[],bloodExpiry:[]};
 async function refreshNotifications(){
   if(!sb) return;
   try{
     const now=Date.now();
     const unpaidCutoff=new Date(now-CFG.unpaidAlertHours*3600000).toISOString();
     const admCutoff=new Date(now-CFG.admissionAlertHours*3600000).toISOString();
+    const bloodExpiryCutoff=new Date(now+CFG.bloodExpiryAlertDays*86400000).toISOString().slice(0,10);
 
-    const [critRes,invRes,admCandRes,invItemsRes,deferredLabRes,deferredRadRes]=await Promise.all([
+    const [critRes,invRes,admCandRes,invItemsRes,deferredLabRes,deferredRadRes,bloodExpRes]=await Promise.all([
       sb.from('critical_values').select('id,patient_id,parameter,value,department,created_at,patients(name,mrn)').eq('is_acknowledged',false).order('created_at',{ascending:false}).limit(20),
       sb.from('invoices').select('id,invoice_no,patient_name,net_amount,total_amount,currency,payment_status,created_at').in('payment_status',['unpaid','insurance_pending']).lte('created_at',unpaidCutoff).order('created_at',{ascending:true}).limit(20),
       sb.from('patients').select('id,name,first_name,last_name,mrn,visit_destination,created_at').ilike('visit_destination','%admission%').lte('created_at',admCutoff).order('created_at',{ascending:true}).limit(40),
@@ -8441,6 +8444,11 @@ async function refreshNotifications(){
       // like the generic "Unpaid Invoices" category above.
       sb.from('sample_records').select('patient_id,status,payment_deferred,patients(name,mrn,lab_no,payment_status)').eq('payment_deferred',true).eq('status','Released').limit(20),
       sb.from('radiology_requests').select('id,patient_id,imaging_type,status,payment_deferred,patients(name,mrn,lab_no,payment_status)').eq('payment_deferred',true).eq('status','Reported').limit(20),
+      // Blood units already expired or expiring within CFG.bloodExpiryAlertDays
+      // (default 7) — 'Available' only, matching the FEFO pool units are
+      // actually issued from; Issued/Discarded/Quarantined units aren't
+      // stock at risk of going to waste unattended.
+      sb.from('blood_units').select('id,unit_no,blood_group,rh_factor,component_type,expiry_date').eq('status','Available').lte('expiry_date',bloodExpiryCutoff).order('expiry_date',{ascending:true}).limit(20),
     ]);
 
     const crits=critRes.data||[], unpaid=invRes.data||[], admCandidates=admCandRes.data||[];
@@ -8488,8 +8496,9 @@ async function refreshNotifications(){
       }
     }
 
-    _notifState={crits,unpaid,pendingAdm,lowStock,deferredDue,resultsReady};
-    const total=crits.length+unpaid.length+pendingAdm.length+lowStock.length+deferredDue.length+resultsReady.length;
+    const bloodExpiry=bloodExpRes.data||[];
+    _notifState={crits,unpaid,pendingAdm,lowStock,deferredDue,resultsReady,bloodExpiry};
+    const total=crits.length+unpaid.length+pendingAdm.length+lowStock.length+deferredDue.length+resultsReady.length+bloodExpiry.length;
     const countEl=document.getElementById('notif-bell-count');
     if(countEl){ countEl.style.display=total>0?'block':'none'; countEl.textContent=total>99?'99+':total; }
     renderNotifList();
@@ -8513,13 +8522,14 @@ function notifRow(clickable,onclickJs,innerHtml){
 }
 function renderNotifList(){
   const list=document.getElementById('notif-list'); if(!list) return;
-  const {crits,unpaid,pendingAdm,lowStock,deferredDue,resultsReady}=_notifState;
-  if(!crits.length && !unpaid.length && !pendingAdm.length && !lowStock.length && !(deferredDue&&deferredDue.length) && !(resultsReady&&resultsReady.length)){
+  const {crits,unpaid,pendingAdm,lowStock,deferredDue,resultsReady,bloodExpiry}=_notifState;
+  if(!crits.length && !unpaid.length && !pendingAdm.length && !lowStock.length && !(deferredDue&&deferredDue.length) && !(resultsReady&&resultsReady.length) && !(bloodExpiry&&bloodExpiry.length)){
     list.innerHTML='<div style="padding:16px;text-align:center;color:var(--slate);font-size:.78rem">\u2705 Nothing needs attention</div>';
     return;
   }
   const canConsultation=notifCanReach('consultation'), canBilling=notifCanReach('billing'),
-    canCriticals=notifCanReach('criticals'), canAdmission=notifCanReach('admission'), canInventory=notifCanReach('inventory');
+    canCriticals=notifCanReach('criticals'), canAdmission=notifCanReach('admission'), canInventory=notifCanReach('inventory'),
+    canBloodbank=notifCanReach('bloodbank');
   let html='';
   if(resultsReady&&resultsReady.length){
     html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;color:#166534;background:#f0fdf4">\ud83d\udd14 Results Ready ('+resultsReady.length+')</div>';
@@ -8563,6 +8573,15 @@ function renderNotifList(){
       '<div style="font-weight:700;font-size:.8rem">'+escapeHtml(it.item_name||'\u2014')+'</div>'+
       '<div style="font-size:.72rem;color:#6d28d9">'+(it.current_stock??0)+' '+escapeHtml(it.unit||'')+' left \u00b7 reorder threshold '+(it.min_level??0)+'</div>')).join('');
   }
+  if(bloodExpiry&&bloodExpiry.length){
+    html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;color:#b91c1c;background:#fff1f2">\ud83e\ude78 Blood Units Expiring/Expired ('+bloodExpiry.length+')</div>';
+    html+=bloodExpiry.map(u=>{
+      const exp=computeExpiryStatus(u.expiry_date);
+      return notifRow(canBloodbank,'notifJumpToBloodBank()',
+        '<div style="font-weight:700;font-size:.8rem">'+escapeHtml(u.unit_no||'\u2014')+' <span style="font-weight:400;color:var(--slate);font-size:.68rem">'+escapeHtml(u.blood_group||'')+(u.rh_factor==='Positive'?'+':u.rh_factor==='Negative'?'\u2212':'')+' \u00b7 '+escapeHtml(u.component_type||'')+'</span></div>'+
+        '<div style="font-size:.72rem;color:#b91c1c">'+(exp.days<0?'Expired':'Expires in '+exp.days+'d')+' \u00b7 '+fmtDate(u.expiry_date)+'</div>');
+    }).join('');
+  }
   list.innerHTML=html;
 }
 function toggleNotifPanel(){
@@ -8594,6 +8613,10 @@ async function notifJumpToAdmission(patientId){
 function notifJumpToInventory(){
   closeNotifPanel();
   goPage('inventory');
+}
+function notifJumpToBloodBank(){
+  closeNotifPanel();
+  goPage('bloodbank');
 }
 async function notifJumpToDeferredPayment(patientId){
   closeNotifPanel();
@@ -19195,6 +19218,20 @@ async function loadBloodUnits() {
     _bbUnits=data||[];
     renderBloodUnitTable(_bbUnits);
   } catch(e){ body.innerHTML='<div style="padding:14px;color:var(--red);font-size:.78rem">'+escapeHtml(e.message)+'</div>'; }
+  updateBloodExpiryAlert();
+}
+// Simple aggregate count of Available units already expired or expiring
+// within CFG.bloodExpiryAlertDays -- same query/threshold the notification
+// bell's bloodExpiry category uses, run independently of whatever
+// status/component/group filter the unit table itself is currently showing.
+async function updateBloodExpiryAlert(){
+  const el=document.getElementById('bb-expiry-alert'); if(!el||!sb) return;
+  try{
+    const cutoff=new Date(Date.now()+CFG.bloodExpiryAlertDays*86400000).toISOString().slice(0,10);
+    const {count}=await sb.from('blood_units').select('id',{count:'exact',head:true}).eq('status','Available').lte('expiry_date',cutoff);
+    if(count>0){ el.style.display=''; el.textContent='⚠ '+count+' expiring/expired'; }
+    else el.style.display='none';
+  }catch(e){}
 }
 function setBbStatusFilter(status,btn) {
   _bbStatusFilter=status;
