@@ -7820,7 +7820,19 @@ function updateTopbarDate() {
 function goPage(p) {
   if(currentProfile) {
     const role=currentProfile.role||'receptionist', allowed=ROLE_PAGES[role]||[];
-    if(!allowed.includes(p)&&role!=='admin'){ toast('Access denied','err'); return; }
+    if(!allowed.includes(p)&&role!=='admin'){
+      toast('Access denied','err');
+      // Returning here used to skip this function's own DOM-clearing logic
+      // further down -- on a shared tab, if a previous user's page was left
+      // active (e.g. session A logs out, session B logs in and is denied a
+      // page reached via a stale "Continue where you left off" shortcut or
+      // similar), that page stayed visibly active underneath. Always clear
+      // it and fall back to a safe, always-accessible default instead of
+      // leaving whatever was on screen untouched.
+      document.querySelectorAll('.page').forEach(el=>el.classList.remove('active'));
+      goHome();
+      return;
+    }
   }
   // The bed-grid Realtime subscription (Phase 5a) is scoped to this one
   // page — tear it down the moment we navigate away so it never keeps
