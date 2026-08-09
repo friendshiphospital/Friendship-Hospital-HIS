@@ -8687,17 +8687,28 @@ async function loadDashboard() {
   if(!sb) return;
   try {
     const td=today();
-    const [ptR,statsR,vhR,vcR,crR,disR]=await Promise.all([
+    const [ptR,statsR,vhR,vcR,crR,disR,unpaidR,insR,payR,radPendR]=await Promise.all([
       sb.from('patients').select('id',{count:'exact'}).gte('created_at',td+'T00:00:00'),
       computeBedOccupancyStats(),
       sb.from('results_hematology').select('id',{count:'exact'}).eq('is_verified',true).gte('created_at',td+'T00:00:00'),
       sb.from('results_chemistry').select('id',{count:'exact'}).eq('is_verified',true).gte('created_at',td+'T00:00:00'),
       sb.from('critical_values').select('id',{count:'exact'}).eq('is_acknowledged',false),
       sb.from('admissions').select('id',{count:'exact'}).eq('status','Discharged').gte('discharge_date',td+'T00:00:00'),
+      // Billing stats row — same payment_status values Billing itself
+      // filters/sums by (see setBillFilter()/loadBilling()).
+      sb.from('invoices').select('id',{count:'exact'}).eq('payment_status','unpaid'),
+      sb.from('invoices').select('id',{count:'exact'}).eq('payment_status','insurance_pending'),
+      sb.from('payments').select('amount,voided').gte('created_at',td+'T00:00:00'),
+      sb.from('radiology_requests').select('id',{count:'exact'}).not('status','in','(Reported,Verified)'),
     ]);
     setText('ds-today',ptR.count||0); setText('ds-critical',crR.count||0);
     setText('ds-verified',(vhR.count||0)+(vcR.count||0));
     setText('ds-pending',Math.max(0,(ptR.count||0)-((vhR.count||0)+(vcR.count||0))));
+    setText('ds-unpaid',unpaidR.count||0);
+    setText('ds-insurance',insR.count||0);
+    const revenueToday=(payR.data||[]).filter(p=>!p.voided).reduce((s,p)=>s+parseFloat(p.amount||0),0);
+    setText('ds-revenue',revenueToday.toFixed(2));
+    setText('ds-rad-pending',radPendR.count||0);
     const activeAdm=statsR.activeAdm;
     setText('ds-admissions',statsR.active);
     setText('ds-theatre',activeAdm.filter(a=>a.ward==='Theatre').length);
@@ -8717,10 +8728,17 @@ async function loadDashboard() {
       const col=pct>=90?'#b91c1c':pct>=70?'#d97706':'#16a34a';
       return '<div class="ward-card" onclick="setAdmFilter(\x27'+w+'\x27,null);goPage(\'admission\')"><div class="ward-name">'+w+'</div><div class="ward-occ">'+occ+'<span> / '+total+'</span></div><div class="ward-bar"><div class="ward-bar-fill" style="width:'+pct+'%;background:'+col+'"></div></div><div style="font-size:.63rem;color:var(--slate);margin-top:3px">'+pct+'% occupied</div></div>';
     }).join('');
-    const [rptS,admS,critS]=await Promise.all([
+    const [rptS,admS,critS,unpaidPtS,statOrdS]=await Promise.all([
       sb.from('patients').select('id,name,first_name,last_name,created_at').order('created_at',{ascending:false}).limit(5),
       sb.from('admissions').select('id,admission_no,created_at,admission_type').order('created_at',{ascending:false}).limit(4),
       sb.from('critical_values').select('id,parameter,value,created_at').order('created_at',{ascending:false}).limit(3),
+      // Unpaid / Blocked Patients panel — same payment_status values every
+      // other unpaid-patient view in this app already keys off.
+      sb.from('patients').select('id,name,first_name,last_name,mrn,payment_status,created_at').in('payment_status',['unpaid','insurance_pending']).order('created_at',{ascending:false}).limit(10),
+      // STAT/Urgent Orders panel — same doctor_orders 'Pending' status
+      // loadNursingOrders() already reads for its own pending-orders list,
+      // here filtered to just the high-priority ones across every order type.
+      sb.from('doctor_orders').select('id,order_type,order_detail,priority,ordered_by,ordered_at,patients(name,mrn)').eq('status','Pending').in('priority',['STAT','Urgent']).order('ordered_at',{ascending:false}).limit(10),
     ]);
     const events=[];
     (rptS.data||[]).forEach(p=>events.push({t:new Date(p.created_at),icon:'📋',text:'Patient registered: '+escapeHtml(p.name||fullName(p))}));
@@ -8729,6 +8747,14 @@ async function loadDashboard() {
     events.sort((a,b)=>b.t-a.t);
     const feed=document.getElementById('dash-activity');
     if(feed) feed.innerHTML=events.slice(0,10).map(e=>'<div class="act-item"><span class="act-icon">'+e.icon+'</span><div class="act-body"><div class="act-text">'+e.text+'</div><div class="act-time">'+fmtDT(e.t)+'</div></div></div>').join('')||'<div style="font-size:.78rem;color:var(--slate);padding:8px">No recent activity</div>';
+    const unpaidList=document.getElementById('dash-unpaid-list');
+    if(unpaidList) unpaidList.innerHTML=(unpaidPtS.data||[]).length
+      ? unpaidPtS.data.map(p=>'<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);font-size:.78rem"><span style="font-weight:600">'+escapeHtml(p.name||fullName(p))+'<span style="color:var(--slate);font-weight:400"> '+escapeHtml(p.mrn||'')+'</span></span>'+paymentTag(p.payment_status)+'</div>').join('')
+      : '<div style="font-size:.78rem;color:var(--slate);padding:4px 0">No unpaid or blocked patients</div>';
+    const statList=document.getElementById('dash-stat-list');
+    if(statList) statList.innerHTML=(statOrdS.data||[]).length
+      ? statOrdS.data.map(o=>{ const pt=o.patients||{}; return '<div style="padding:6px 0;border-bottom:1px solid var(--border);font-size:.78rem"><div style="display:flex;justify-content:space-between"><span style="font-weight:600">'+escapeHtml(pt.name||'—')+'<span style="color:var(--slate);font-weight:400"> '+escapeHtml(pt.mrn||'')+'</span></span><span class="bdg" style="background:#fef2f2;color:#b91c1c">'+escapeHtml(o.priority||'')+'</span></div><div style="color:var(--slate);font-size:.72rem">'+escapeHtml(o.order_type||'')+': '+escapeHtml(o.order_detail||'')+'</div></div>'; }).join('')
+      : '<div style="font-size:.78rem;color:var(--slate);padding:4px 0">No STAT/urgent orders awaiting action</div>';
   } catch(e){ console.error(e); }
 }
 
