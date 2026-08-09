@@ -9951,6 +9951,26 @@ async function printFluidChart() {
 }
 
 // ── CONSULTATION ──────────────────────────────────────
+// Shared card template for #doc-queue-body -- used by both the normal
+// queue listing and searchDocPatient(), so there's exactly one place that
+// builds a clickable patient card and exactly one place that decides what
+// gets passed to selectDocPatient() (the full patient object, matching
+// every other card-render call site in the app -- never a bare id string).
+function renderDocQueueCard(p, ready) {
+  const unpaid=p.payment_status==='unpaid'||p.payment_status==='insurance_pending';
+  return '<div onclick="selectDocPatient('+JSON.stringify(p).replace(/"/g,'&quot;')+')" class="doc-queue-card'+(unpaid?' pay-unpaid':'')+
+    '" style="padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;cursor:pointer;margin-bottom:6px;transition:all .12s"'+
+    ' onmouseover="this.style.borderColor=\x27var(--teal)\x27;this.style.background=\x27var(--teal-lt)\x27"'+
+    ' onmouseout="this.style.borderColor=\x27var(--border)\x27;this.style.background=\x27#fff\x27">'+
+    '<div style="display:flex;align-items:center;justify-content:space-between;gap:6px">'+
+    '<span style="font-weight:700;font-size:.84rem">'+escapeHtml(p.name||fullName(p))+'</span>'+
+    (ready?'<span class="bdg" style="background:#dcfce7;color:#166534" title="Lab/Radiology result ready for review">🔔 Result Ready</span>':'')+
+    paymentTag(p.payment_status)+'</div>'+
+    '<div style="font-size:.69rem;color:var(--slate);margin-top:3px">'+escapeHtml(p.mrn||'')+' · '+(p.age||'?')+(p.age_unit||'y')+'/'+(p.sex||'?')+' · '+escapeHtml(p.diagnosis||'—')+'</div>'+
+    '<div style="font-size:.68rem;margin-top:2px;color:var(--teal);font-weight:600">'+(p.visit_destination?'→ '+escapeHtml(p.visit_destination):'')+' '+(p.priority&&p.priority!=='Routine'?'· '+escapeHtml(p.priority):'')+'</div>'+
+    '<div style="font-size:.66rem;margin-top:2px;color:var(--slate)">Registered '+fmtDT(p.created_at)+'</div>'+
+    '<div style="margin-top:4px">'+visitStatusBadge(p)+'</div></div>';
+}
 async function loadDoctorQueue() {
   const body = document.getElementById('doc-queue-body');
   if(!body||!sb) return;
@@ -9980,22 +10000,7 @@ async function loadDoctorQueue() {
       sb.from('radiology_requests').select('patient_id').in('patient_id',ids).in('status',['Reported','Verified']),
     ]);
     const readyIds=new Set([...(doneSamples||[]).map(s=>s.patient_id),...(doneRad||[]).map(r=>r.patient_id)]);
-    body.innerHTML = data.map(p => {
-      const unpaid=p.payment_status==='unpaid'||p.payment_status==='insurance_pending';
-      const ready=readyIds.has(p.id);
-      return '<div onclick="selectDocPatient('+JSON.stringify(p).replace(/"/g,'&quot;')+')" class="doc-queue-card'+(unpaid?' pay-unpaid':'')+
-        '" style="padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;cursor:pointer;margin-bottom:6px;transition:all .12s"'+
-        ' onmouseover="this.style.borderColor=\x27var(--teal)\x27;this.style.background=\x27var(--teal-lt)\x27"'+
-        ' onmouseout="this.style.borderColor=\x27var(--border)\x27;this.style.background=\x27#fff\x27">'+
-        '<div style="display:flex;align-items:center;justify-content:space-between;gap:6px">'+
-        '<span style="font-weight:700;font-size:.84rem">'+escapeHtml(p.name||fullName(p))+'</span>'+
-        (ready?'<span class="bdg" style="background:#dcfce7;color:#166534" title="Lab/Radiology result ready for review">\ud83d\udd14 Result Ready</span>':'')+
-        paymentTag(p.payment_status)+'</div>'+
-        '<div style="font-size:.69rem;color:var(--slate);margin-top:3px">'+escapeHtml(p.mrn||'')+' · '+(p.age||'?')+(p.age_unit||'y')+'/'+(p.sex||'?')+' · '+escapeHtml(p.diagnosis||'—')+'</div>'+
-        '<div style="font-size:.68rem;margin-top:2px;color:var(--teal);font-weight:600">'+(p.visit_destination?'\u2192 '+escapeHtml(p.visit_destination):'')+' '+(p.priority&&p.priority!=='Routine'?'· '+escapeHtml(p.priority):'')+'</div>'+
-        '<div style="font-size:.66rem;margin-top:2px;color:var(--slate)">Registered '+fmtDT(p.created_at)+'</div>'+
-        '<div style="margin-top:4px">'+visitStatusBadge(p)+'</div></div>';
-    }).join('');
+    body.innerHTML = data.map(p => renderDocQueueCard(p, readyIds.has(p.id))).join('');
   } catch(e){ body.innerHTML='<div style="padding:10px;color:var(--red);font-size:.78rem">'+escapeHtml(e.message)+'</div>'; }
 }
 
@@ -14282,29 +14287,26 @@ async function printConsentForm(id){
 }
 
 // ── 7. searchDocPatient ───────────────────────────────────
+// Routes through the same #doc-queue-body list (and the same
+// renderDocQueueCard() card template / selectDocPatient(fullObject) call)
+// that the normal queue uses -- there used to be a second, independent
+// rendering path here targeting a #doc-search-results element that was
+// never actually in the DOM, silently falling back to #doc-queue-body but
+// passing selectDocPatient() a bare id string instead of the full patient
+// object every other card-render site passes, which broke every
+// downstream feature keyed off _docPt.* (Consent, Orders, Rx, ...).
 async function searchDocPatient(q) {
-  if(!q||q.length<2||!sb) {
-    document.getElementById('doc-search-results') && (document.getElementById('doc-search-results').style.display='none');
-    return;
-  }
+  const body = document.getElementById('doc-queue-body');
+  if(!q||q.length<2||!sb) { loadDoctorQueue(); return; }
+  if(!body) return;
   try {
     const {data} = await sb.from('patients')
-      .select('id,name,first_name,last_name,mrn,age,age_unit,sex,payment_status,doctor,diagnosis')
+      .select('id,name,first_name,last_name,mrn,lab_no,tests_requested,age,age_unit,sex,priority,diagnosis,doctor,source,ward,payment_status,visit_destination,visit_status,created_at')
       .or(`name.ilike.%${q}%,mrn.ilike.%${q}%,first_name.ilike.%${q}%,last_name.ilike.%${q}%`)
       .order('created_at',{ascending:false}).limit(10);
-    const box = document.getElementById('doc-search-results') || document.getElementById('doc-queue-body');
-    if(!box) return;
-    if(!data?.length){ box.innerHTML='<div class="empty-state">No patients found</div>'; return; }
-    // Render clickable results
-    box.innerHTML = '<table class="tbl"><thead><tr><th>MRN</th><th>Name</th><th>Age/Sex</th><th>Diagnosis</th><th>Payment</th></tr></thead><tbody>'+
-      data.map(p => `<tr class="${p.payment_status==='unpaid'||p.payment_status==='insurance_pending'?'pay-unpaid':''}" style="cursor:pointer" onclick="selectDocPatient('${p.id}')">
-        <td style="font-family:DM Mono,monospace;font-size:.72rem;color:var(--teal)">${escapeHtml(p.mrn||'—')}</td>
-        <td style="font-weight:600">${escapeHtml(p.name||fullName(p))}</td>
-        <td>${p.age||'?'}${p.age_unit||''} / ${p.sex||''}</td>
-        <td style="font-size:.78rem">${escapeHtml(p.diagnosis||'—')}</td>
-        <td>${paymentTag(p.payment_status)}</td>
-      </tr>`).join('')+'</tbody></table>';
-  } catch(e){ console.error(e); }
+    if(!data?.length){ body.innerHTML='<div class="empty-state">No patients found</div>'; return; }
+    body.innerHTML = data.map(p => renderDocQueueCard(p, false)).join('');
+  } catch(e){ body.innerHTML='<div style="padding:10px;color:var(--red);font-size:.78rem">'+escapeHtml(e.message)+'</div>'; }
 }
 
 // ── NURSING — NEW FUNCTIONS ───────────────────────────────
