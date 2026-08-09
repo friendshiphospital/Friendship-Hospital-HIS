@@ -8495,55 +8495,73 @@ async function refreshNotifications(){
     renderNotifList();
   }catch(e){ /* best-effort — a failed notification refresh shouldn't interrupt anything else */ }
 }
+// Same access-gating pattern the Register page's existing-patient search
+// already uses (canViewHistory there) -- a category is only clickable if
+// the current role's ROLE_PAGES actually includes the page it jumps to,
+// so clicking a bell item can never dead-end on "Access denied" for a
+// role that was never going to be allowed there anyway. Rows still show
+// (informational), they just lose the click when inaccessible.
+function notifCanReach(page){
+  const role=currentProfile?.role;
+  return role==='admin'||(ROLE_PAGES[role]||[]).includes(page);
+}
+function notifRow(clickable,onclickJs,innerHtml){
+  return '<div'+(clickable?' onclick="'+onclickJs+'"':'')+
+    ' style="padding:8px 12px;border-bottom:1px solid var(--border);cursor:'+(clickable?'pointer':'default')+'"'+
+    (clickable?' onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'"':'')+
+    '>'+innerHtml+'</div>';
+}
 function renderNotifList(){
   const list=document.getElementById('notif-list'); if(!list) return;
   const {crits,unpaid,pendingAdm,lowStock,deferredDue,resultsReady}=_notifState;
   if(!crits.length && !unpaid.length && !pendingAdm.length && !lowStock.length && !(deferredDue&&deferredDue.length) && !(resultsReady&&resultsReady.length)){
-    list.innerHTML='<div style="padding:16px;text-align:center;color:var(--slate);font-size:.78rem">✅ Nothing needs attention</div>';
+    list.innerHTML='<div style="padding:16px;text-align:center;color:var(--slate);font-size:.78rem">\u2705 Nothing needs attention</div>';
     return;
   }
+  const canConsultation=notifCanReach('consultation'), canBilling=notifCanReach('billing'),
+    canCriticals=notifCanReach('criticals'), canAdmission=notifCanReach('admission'), canInventory=notifCanReach('inventory');
   let html='';
   if(resultsReady&&resultsReady.length){
     html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;color:#166534;background:#f0fdf4">\ud83d\udd14 Results Ready ('+resultsReady.length+')</div>';
-    html+=resultsReady.map(p=>'<div onclick="notifJumpToPatientResults(\''+p.id+'\')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'">'+
+    html+=resultsReady.map(p=>notifRow(canConsultation,"notifJumpToPatientResults('"+p.id+"')",
       '<div style="font-weight:700;font-size:.8rem">'+escapeHtml(p.name||fullName(p))+' <span style="font-weight:400;color:var(--slate);font-size:.68rem">'+escapeHtml(p.mrn||p.lab_no||'')+'</span></div>'+
-      '<div style="font-size:.72rem;color:#166534">Lab/Radiology result ready for review</div></div>').join('');
+      '<div style="font-size:.72rem;color:#166534">Lab/Radiology result ready for review</div>')).join('');
   }
   if(deferredDue&&deferredDue.length){
     html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;color:#b91c1c;background:#fff1f2">\u26a0 Deferred Payments Now Due ('+deferredDue.length+')</div>';
     html+=deferredDue.map(d=>{
       const pt=d.patients||{};
-      return '<div onclick="notifJumpToDeferredPayment(\''+d.patient_id+'\')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'">'+
-        '<div style="font-weight:700;font-size:.8rem">'+escapeHtml(pt.name||'—')+' <span style="font-weight:400;color:var(--slate);font-size:.68rem">'+escapeHtml(pt.mrn||pt.lab_no||'')+'</span></div>'+
-        '<div style="font-size:.72rem;color:#b91c1c">'+escapeHtml(d.kind)+' \u2014 '+escapeHtml(d.label||'')+' ready \u00b7 payment was deferred (STAT) \u00b7 still '+(pt.payment_status==='insurance_pending'?'insurance pending':'unpaid')+'</div></div>';
+      return notifRow(canBilling,"notifJumpToDeferredPayment('"+d.patient_id+"')",
+        '<div style="font-weight:700;font-size:.8rem">'+escapeHtml(pt.name||'\u2014')+' <span style="font-weight:400;color:var(--slate);font-size:.68rem">'+escapeHtml(pt.mrn||pt.lab_no||'')+'</span></div>'+
+        '<div style="font-size:.72rem;color:#b91c1c">'+escapeHtml(d.kind)+' \u2014 '+escapeHtml(d.label||'')+' ready \u00b7 payment was deferred (STAT) \u00b7 still '+(pt.payment_status==='insurance_pending'?'insurance pending':'unpaid')+'</div>');
     }).join('');
   }
   if(crits.length){
-    html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;color:#b91c1c;background:#fff1f2">🚨 Unacknowledged Criticals ('+crits.length+')</div>';
+    html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;color:#b91c1c;background:#fff1f2">\ud83d\udea8 Unacknowledged Criticals ('+crits.length+')</div>';
     html+=crits.map(c=>{
       const pt=c.patients||{};
-      return '<div onclick="notifJumpToCritical()" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'">'+
-        '<div style="font-weight:700;font-size:.8rem">'+escapeHtml(pt.name||'—')+' <span style="font-weight:400;color:var(--slate);font-size:.68rem">'+escapeHtml(pt.mrn||'')+'</span></div>'+
-        '<div style="font-size:.72rem;color:#b91c1c">'+escapeHtml(c.parameter||'')+' = '+escapeHtml(c.value||'')+' · '+fmtDT(c.created_at)+'</div></div>';
+      return notifRow(canCriticals,'notifJumpToCritical()',
+        '<div style="font-weight:700;font-size:.8rem">'+escapeHtml(pt.name||'\u2014')+' <span style="font-weight:400;color:var(--slate);font-size:.68rem">'+escapeHtml(pt.mrn||'')+'</span></div>'+
+        '<div style="font-size:.72rem;color:#b91c1c">'+escapeHtml(c.parameter||'')+' = '+escapeHtml(c.value||'')+' \u00b7 '+fmtDT(c.created_at)+'</div>');
     }).join('');
   }
   if(unpaid.length){
-    html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;color:#92400e;background:#fffbeb">💰 Unpaid Invoices ('+unpaid.length+')</div>';
-    html+=unpaid.map(i=>'<div onclick="notifJumpToInvoice(\''+i.id+'\')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'">'+
-      '<div style="font-weight:700;font-size:.8rem">'+escapeHtml(i.invoice_no||'—')+' <span style="font-weight:400;color:var(--slate);font-size:.68rem">'+escapeHtml(i.patient_name||'')+'</span></div>'+
-      '<div style="font-size:.72rem;color:#92400e">'+((i.net_amount??i.total_amount??0).toFixed(2))+' '+escapeHtml(i.currency||CFG.currency)+' · overdue since '+fmtDT(i.created_at)+'</div></div>').join('');
+    html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;color:#92400e;background:#fffbeb">\ud83d\udcb0 Unpaid Invoices ('+unpaid.length+')</div>';
+    html+=unpaid.map(i=>notifRow(canBilling,"notifJumpToInvoice('"+i.id+"')",
+      '<div style="font-weight:700;font-size:.8rem">'+escapeHtml(i.invoice_no||'\u2014')+' <span style="font-weight:400;color:var(--slate);font-size:.68rem">'+escapeHtml(i.patient_name||'')+'</span></div>'+
+      '<div style="font-size:.72rem;color:#92400e">'+((i.net_amount??i.total_amount??0).toFixed(2))+' '+escapeHtml(i.currency||CFG.currency)+' \u00b7 overdue since '+fmtDT(i.created_at)+'</div>')).join('');
   }
   if(pendingAdm.length){
-    html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;color:#1d4ed8;background:#eff6ff">🛏 Pending Admissions ('+pendingAdm.length+')</div>';
-    html+=pendingAdm.map(p=>'<div onclick="notifJumpToAdmission(\''+p.id+'\')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'">'+
+    html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;color:#1d4ed8;background:#eff6ff">\ud83d\udecf Pending Admissions ('+pendingAdm.length+')</div>';
+    html+=pendingAdm.map(p=>notifRow(canAdmission,"notifJumpToAdmission('"+p.id+"')",
       '<div style="font-weight:700;font-size:.8rem">'+escapeHtml(p.name||fullName(p))+' <span style="font-weight:400;color:var(--slate);font-size:.68rem">'+escapeHtml(p.mrn||'')+'</span></div>'+
-      '<div style="font-size:.72rem;color:#1d4ed8">Routed to Admission · waiting since '+fmtDT(p.created_at)+'</div></div>').join('');
+      '<div style="font-size:.72rem;color:#1d4ed8">Routed to Admission \u00b7 waiting since '+fmtDT(p.created_at)+'</div>')).join('');
   }
   if(lowStock.length){
-    html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;color:#6d28d9;background:#f5f3ff">📦 Low Stock ('+lowStock.length+')</div>';
-    html+=lowStock.map(it=>'<div onclick="notifJumpToInventory()" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'">'+
-      '<div style="font-weight:700;font-size:.8rem">'+escapeHtml(it.item_name||'—')+'</div>'+
-      '<div style="font-size:.72rem;color:#6d28d9">'+(it.current_stock??0)+' '+escapeHtml(it.unit||'')+' left · reorder threshold '+(it.min_level??0)+'</div></div>').join('');
+    html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;color:#6d28d9;background:#f5f3ff">\ud83d\udce6 Low Stock ('+lowStock.length+')</div>';
+    html+=lowStock.map(it=>notifRow(canInventory,'notifJumpToInventory()',
+      '<div style="font-weight:700;font-size:.8rem">'+escapeHtml(it.item_name||'\u2014')+'</div>'+
+      '<div style="font-size:.72rem;color:#6d28d9">'+(it.current_stock??0)+' '+escapeHtml(it.unit||'')+' left \u00b7 reorder threshold '+(it.min_level??0)+'</div>')).join('');
   }
   list.innerHTML=html;
 }
@@ -12694,20 +12712,27 @@ async function globalSearch(q){
         box.style.display='block'; return;
       }
       let html='';
+      // Same role-gating as the notification bell (notifCanReach) -- a
+      // result is only clickable if the current role's ROLE_PAGES actually
+      // includes the page it jumps to (pt-history for patients, billing
+      // for invoices), so e.g. a receptionist (no pt-history) or cashier
+      // sees a patient match but can't dead-end on "Access denied"
+      // clicking it.
+      const canPtHistory=notifCanReach('pt-history'), canBilling=notifCanReach('billing');
       if(pts.length){
         html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:var(--slate);background:var(--bg)">Patients</div>';
         html+=pts.map(p=>{
           const labHit=p.lab_no && p.lab_no.toLowerCase().includes(term.toLowerCase());
-          return '<div onclick="jumpToPatient(\''+p.id+'\')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'">'+
+          return notifRow(canPtHistory,"jumpToPatient('"+p.id+"')",
             '<div style="font-weight:700;font-size:.82rem">'+escapeHtml(p.name||fullName(p))+(labHit?' <span style="font-weight:400;font-size:.68rem;color:var(--teal)">· Lab '+escapeHtml(p.lab_no)+'</span>':'')+'</div>'+
-            '<div style="font-size:.7rem;color:var(--slate)">'+escapeHtml(p.mrn||'—')+' · '+escapeHtml(p.visit_no||p.lab_no||'—')+' · '+escapeHtml(p.phone||'—')+'</div></div>';
+            '<div style="font-size:.7rem;color:var(--slate)">'+escapeHtml(p.mrn||'—')+' · '+escapeHtml(p.visit_no||p.lab_no||'—')+' · '+escapeHtml(p.phone||'—')+'</div>');
         }).join('');
       }
       if(invs.length){
         html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:var(--slate);background:var(--bg)">Invoices</div>';
-        html+=invs.map(i=>'<div onclick="jumpToInvoice(\''+i.id+'\')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'">'+
+        html+=invs.map(i=>notifRow(canBilling,"jumpToInvoice('"+i.id+"')",
           '<div style="font-weight:700;font-size:.82rem">'+escapeHtml(i.invoice_no||'—')+'</div>'+
-          '<div style="font-size:.7rem;color:var(--slate)">'+escapeHtml(i.patient_name||'—')+' · '+((i.net_amount??i.total_amount??0).toFixed(2))+' '+escapeHtml(i.currency||CFG.currency)+' · '+escapeHtml(i.payment_status||'')+'</div></div>').join('');
+          '<div style="font-size:.7rem;color:var(--slate)">'+escapeHtml(i.patient_name||'—')+' · '+((i.net_amount??i.total_amount??0).toFixed(2))+' '+escapeHtml(i.currency||CFG.currency)+' · '+escapeHtml(i.payment_status||'')+'</div>')).join('');
       }
       box.innerHTML=html; box.style.display='block';
     }catch(e){ box.style.display='none'; }
