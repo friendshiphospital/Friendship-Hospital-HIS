@@ -2642,6 +2642,25 @@ html[dir="rtl"] body{direction:rtl;}
   </div>
 </div>
 
+<!-- Lab Worklist "Quick History" — a fast, in-context multi-visit summary
+     (Item C, same shared history logic as Consultation's History tab), kept
+     visually and functionally distinct from "Full Timeline" (which
+     navigates away to the dedicated Patient History Timeline page). -->
+<div class="ov" id="wl-quick-history-ov">
+  <div class="mo mo-lg">
+    <div class="mo-hd"><h3>🕐 Quick History — <span id="wl-qh-name"></span></h3><button class="mo-x" onclick="closeOv('wl-quick-history-ov')">✕</button></div>
+    <div class="mo-b">
+      <div style="font-size:.68rem;color:var(--slate);background:#f8fafd;border:1px solid var(--border);border-radius:6px;padding:6px 10px;margin-bottom:10px">📖 Read-only quick view across every past visit under this patient's MRN. For the full interactive Timeline (trends, filters, admin actions), use "Open Full Timeline" below.</div>
+      <div id="wl-qh-body"><div class="empty-state">Loading…</div></div>
+      <div id="wl-qh-detail"></div>
+    </div>
+    <div class="mo-ft">
+      <button class="btn btn-s" onclick="closeOv('wl-quick-history-ov')">Close</button>
+      <button class="btn btn-p" onclick="wlQuickHistoryOpenFullTimeline()">📊 Open Full Timeline →</button>
+    </div>
+  </div>
+</div>
+
 <!-- Simulated DICOM/PACS viewer — there is no real DICOM file storage or
      PACS server in this architecture (single-file static app + Supabase),
      so this is a pan/zoom/window-level demo over a placeholder image, not
@@ -11675,8 +11694,53 @@ function renderWlRow(p,sampleMap) {
       (unpaid?'<button class="btn btn-s btn-xs" style="opacity:.5;cursor:not-allowed" title="Payment required">\ud83d\udd12 Blocked</button>':
         notReceived?'<button class="btn btn-s btn-xs" style="opacity:.5;cursor:not-allowed" title="Sample not yet received in the lab">\ud83d\udce5 Awaiting Receipt</button>':
         '<button class="btn btn-p btn-xs" onclick="openEnterModal(\x27'+p.id+'\x27,\x27'+(p.lab_no||'')+'\x27,\x27'+escAttr(p.name||fullName(p))+'\x27)">\ud83d\udcdd Enter</button>')+
-      '<button class="btn btn-s btn-xs" onclick="openPatientHistoryTimeline(\x27'+p.id+'\x27)" title="View this patient\x27s full history">\ud83d\udd50 History</button>'+
+      '<button class="btn btn-s btn-xs" onclick="openWlQuickHistory(\x27'+p.id+'\x27)" title="Quick view \u2014 this patient\x27s history across all visits, without leaving the Worklist">\ud83d\udd50 Quick History</button>'+
+      '<button class="btn btn-s btn-xs" onclick="openPatientHistoryTimeline(\x27'+p.id+'\x27)" title="Open the full Patient History Timeline page (trends, filters, admin actions)">\ud83d\udcca Full Timeline</button>'+
     '</div></td></tr>';
+}
+// Lab Worklist "Quick History" (Item C) \u2014 a fast, in-context multi-visit
+// summary reusing the exact same shared history logic as Consultation's
+// History tab (fetchPatientHistoryEvents/renderHistoryEventDetail, see
+// their definitions above), rather than a third reimplementation. Distinct
+// from "Full Timeline" (openPatientHistoryTimeline), which still navigates
+// away to the dedicated pt-history page for trends/filters/admin actions \u2014
+// both entry points stay, clearly separated by label and icon, so it's
+// obvious which one does what.
+let _wlQhEvents=[];
+let _wlQhPatientId=null;
+async function openWlQuickHistory(patientId){
+  if(!sb||!patientId) return;
+  _wlQhPatientId=patientId;
+  const nameEl=document.getElementById('wl-qh-name');
+  const body=document.getElementById('wl-qh-body');
+  const detailEl=document.getElementById('wl-qh-detail');
+  if(nameEl) nameEl.textContent='';
+  if(detailEl) detailEl.innerHTML='';
+  if(body) body.innerHTML='<div class="spin-center"><div class="spinner"></div>Loading\u2026</div>';
+  openOv('wl-quick-history-ov');
+  try {
+    const {data:pt}=await sb.from('patients').select('id,mrn,name,first_name,last_name,created_at').eq('id',patientId).maybeSingle();
+    if(nameEl) nameEl.textContent=pt?(pt.name||fullName(pt)):'';
+    const result=await fetchPatientHistoryEvents(pt||{id:patientId});
+    _wlQhEvents=result.events;
+    if(!body) return;
+    if(!_wlQhEvents.length){ body.innerHTML='<div class="empty-state">No previous history found</div>'; return; }
+    body.innerHTML='<div style="font-size:.68rem;color:var(--slate);margin-bottom:8px">'+_wlQhEvents.length+' event(s) across '+result.counts.visits+' visit(s) \u2014 click any entry to expand</div>'+
+      _wlQhEvents.map((e,i)=>'<div onclick="showWlQuickHistoryDetail('+i+')" class="tl-item" style="border-left-color:'+e.color+';cursor:pointer"><span style="font-size:1.1rem;flex-shrink:0">'+e.icon+'</span><div style="flex:1;min-width:0"><div style="font-size:.8rem;font-weight:700;color:var(--ink)">'+e.title+'</div><div style="font-size:.71rem;color:var(--slate);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+e.detail+'</div></div><div style="font-size:.68rem;color:var(--slate);flex-shrink:0">'+fmtDT(e.t)+'</div></div>').join('');
+  } catch(e){
+    console.error(e);
+    if(body) body.innerHTML='<div class="empty-state"><div class="empty-icon">\u26a0\ufe0f</div><div class="empty-title">Could not load history</div><div style="font-size:.8rem;color:var(--slate);margin-top:4px">'+escapeHtml(e.message||'Unknown error')+'</div></div>';
+  }
+}
+function showWlQuickHistoryDetail(idx){
+  const e=_wlQhEvents[idx]; if(!e) return;
+  const el=document.getElementById('wl-qh-detail'); if(!el) return;
+  el.innerHTML='<div style="margin-top:10px;border-top:2px dashed var(--border);padding-top:10px">'+renderHistoryEventDetail(e)+'</div>';
+}
+function wlQuickHistoryOpenFullTimeline(){
+  const id=_wlQhPatientId; if(!id) return;
+  closeOv('wl-quick-history-ov');
+  openPatientHistoryTimeline(id);
 }
 function toggleWlSourceSort(){
   window._wlSourceSort = window._wlSourceSort==='asc' ? 'desc' : window._wlSourceSort==='desc' ? null : 'asc';
