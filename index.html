@@ -10013,6 +10013,14 @@ function setDocFilter(filter,btn) {
 
 function selectDocPatient(p) {
   _docPt=p;
+  // Defense in depth: _currentAdmId is a shared global set by opening ANY
+  // patient's admission drawer elsewhere in the app and was never reset on
+  // a Consultation patient switch, which let a stale admission id leak
+  // onto a different patient's consent form (saveConsentForm() now
+  // resolves its own admission id fresh instead of trusting this global,
+  // but clearing it here too means nothing else reachable from
+  // Consultation can accidentally inherit a previous patient's value).
+  _currentAdmId = null;
   advanceVisitStatus(p.id,'With Doctor');
   loadConsultationSignOffState(p.id);
   const unpaid=p.payment_status==='unpaid'||p.payment_status==='insurance_pending';
@@ -14221,6 +14229,19 @@ function clearConsentSignature(){
   _consentHasSignature=false;
   const st=document.getElementById('con-sig-status'); if(st){ st.textContent='Sign above using mouse or touch'; st.style.color='var(--slate)'; }
 }
+// Resolves a patient's current active admission id fresh from the DB, the
+// same way loadDischargeTabAdmission() already does it correctly -- used
+// by saveConsentForm() instead of trusting the shared _currentAdmId
+// global, which is set by opening ANY patient's admission drawer and was
+// never reset on a Consultation patient switch (a stale value could get
+// silently recorded against the WRONG patient's consent form).
+async function resolveActiveAdmissionId(patientId) {
+  if(!sb||!patientId) return null;
+  try {
+    const {data:adm} = await sb.from('admissions').select('id').eq('patient_id',patientId).eq('status','Active').order('admission_date',{ascending:false}).limit(1).maybeSingle();
+    return adm?.id||null;
+  } catch(e){ return null; }
+}
 async function saveConsentForm(){
   if(!sb){ toast('Not connected','err'); return; }
   const ptId=_docPt?.id; if(!ptId){ toast('Select a patient first','err'); return; }
@@ -14230,9 +14251,10 @@ async function saveConsentForm(){
   if(!signeeName){ toast('Enter the patient/guardian name','err'); return; }
   if(!_consentHasSignature){ toast('A signature is required before saving','err'); return; }
   const canvas=document.getElementById('con-sig-pad');
+  const admissionId = await resolveActiveAdmissionId(ptId);
   try{
     await sb.from('consent_forms').insert({
-      patient_id:ptId, admission_id:_currentAdmId||null,
+      patient_id:ptId, admission_id:admissionId,
       consent_type:g('con-type')||document.getElementById('con-type')?.value,
       consent_date:g('con-date')||today(),
       procedure_description:procedure, risks_explained:g('con-risks')||null,
