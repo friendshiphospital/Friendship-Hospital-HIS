@@ -13851,6 +13851,18 @@ const INSTRUMENT_FIELD_MAP = {
   CREATININE:{table:'results_chemistry',field:'creat',targetInput:'ce-creat',label:'Creatinine'},
 };
 function mapInstrumentField(testCode){ return INSTRUMENT_FIELD_MAP[(testCode||'').trim().toUpperCase()]||null; }
+// Which TEST_CATALOG order(s) would actually cover each mapped analyte --
+// used by mapAndImportInstrumentResult() to refuse importing a result the
+// loaded patient was never even ordered for.
+const INSTRUMENT_FIELD_TESTS = {
+  hgb:['CBC (Full Blood Count)','Haemoglobin Only'],
+  wbc:['CBC (Full Blood Count)','WBC Count'],
+  plt:['CBC (Full Blood Count)','Platelet Count'],
+  na:['Serum Electrolytes'],
+  k:['Serum Electrolytes'],
+  fbs:['Fasting Blood Sugar','Random Blood Sugar','2hr Post Prandial'],
+  creat:['RFT (Renal Function)'],
+};
 
 // ASTM E1394/LIS2-A2: pipe-delimited records, one per line (real
 // transmissions use a control-character frame around each line, but the
@@ -14006,7 +14018,25 @@ async function mapAndImportInstrumentResult(i){
   if(!map){ toast('No known mapping for "'+m.test_parameter+'" — enter it manually in the result form','err'); return; }
   const pageId=map.table==='results_hematology'?'page-hem-entry':'page-chem-entry';
   const ptIdField=map.table==='results_hematology'?'hem-entry-pt-id':'chem-entry-pt-id';
-  if(!document.getElementById(ptIdField)?.value){ toast('Load the matching patient in '+(map.table==='results_hematology'?'Haematology':'Chemistry')+' entry first','err'); return; }
+  const ptId=document.getElementById(ptIdField)?.value;
+  if(!ptId){ toast('Load the matching patient in '+(map.table==='results_hematology'?'Haematology':'Chemistry')+' entry first','err'); return; }
+  // Identity cross-check: neither this function nor ingestInstrumentResults()
+  // previously checked the message's own sample barcode/patient identifier
+  // against the patient actually loaded on screen, or against what that
+  // patient was actually ordered for -- the only gate was "is SOME patient
+  // loaded". Both are queried fresh rather than trusting cached state, since
+  // this is the one place a wrong-patient result gets written.
+  let pt=null;
+  try{ const {data}=await sb.from('patients').select('lab_no,mrn,tests_requested').eq('id',ptId).maybeSingle(); pt=data; }catch(e){}
+  if(m.sample_barcode && pt?.lab_no && m.sample_barcode.trim().toUpperCase()!==String(pt.lab_no).trim().toUpperCase()){
+    toast('❌ Sample barcode mismatch — this message is for sample "'+m.sample_barcode+'", not the loaded patient (Lab No: '+pt.lab_no+'). Import blocked — enter it manually only if you are certain this is correct.','err');
+    return;
+  }
+  const acceptableTests=INSTRUMENT_FIELD_TESTS[map.field]||[];
+  if(acceptableTests.length && !(pt?.tests_requested||[]).some(t=>acceptableTests.includes(t))){
+    toast('❌ The loaded patient has no ordered test covering "'+map.label+'" — import blocked. Enter it manually only if you are certain this is correct.','err');
+    return;
+  }
   const input=document.getElementById(map.targetInput);
   if(!input){ toast('Target field not found on the entry form','err'); return; }
   input.value=m.raw_value;
