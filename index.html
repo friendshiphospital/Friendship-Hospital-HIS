@@ -18298,6 +18298,19 @@ async function saveAndCalculateValidation(){
   if(!sb||!_valCurrentStudy) return;
   const study=_valCurrentStudy;
   try{
+    // Immutability guard (CAP/ISO 15189): once a study's result has been
+    // Approved, its raw validation_samples ARE the audit trail behind that
+    // sign-off. Recalculating used to unconditionally delete-then-insert
+    // them on every Save & Calculate, silently and permanently destroying
+    // the original replicate data with no confirmation and no locked
+    // state. Queried fresh here rather than trusting a possibly-stale
+    // _valCurrentResult, since this is the one place that data gets
+    // destroyed.
+    const {data:latestResults}=await sb.from('validation_results').select('approved_at').eq('study_id',study.id).order('calculated_at',{ascending:false}).limit(1);
+    if(latestResults?.[0]?.approved_at){
+      toast('❌ This study is already Approved — its raw sample data is locked and cannot be recalculated. Start a new study instead.','err');
+      return;
+    }
     if(study.protocol_type==='EP15-A3'){
       if(!_valPastedRuns.length){ toast('Paste run data first','err'); return; }
       const result=calculateEP15(_valPastedRuns,study.claimed_cv_pct,study.tea_limit);
