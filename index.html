@@ -7803,6 +7803,13 @@ async function doLogout() {
   document.getElementById('auth-screen').style.display='flex';
   document.getElementById('auth-email').value='';
   document.getElementById('auth-pass').value='';
+  // doLogin() disables #auth-btn and swaps its text to "Signing in..." at
+  // the start of every attempt but only resets it in the failure branch --
+  // a SUCCESSFUL login left it disabled forever, so on a shared tab the
+  // next person to sign in after a logout found Sign In permanently
+  // unclickable (this page is never reloaded on logout).
+  const btn=document.getElementById('auth-btn');
+  if(btn){ btn.disabled=false; btn.innerHTML='Sign In'; }
 }
 function updateTopbarDate() {
   const el=document.getElementById('topbar-date');
