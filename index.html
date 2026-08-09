@@ -17172,18 +17172,16 @@ function clearStaffForm() {
 
 function renderPermissionsMatrix() {
   const body=document.getElementById('perm-matrix-body'); if(!body) return;
-  // Role access definitions
-  const roleAccess={
-    admin:['dashboard','register','appointments','billing','prices','admission','theatre','consultation','nursing','fluid-chart','handover','infection','worklist','samples','unified-entry','hem-entry','chem-entry','sero-entry','micro-entry','pcr-entry','histo-entry','cyto-entry','allresults','criticals','reports','qc','validation','labhistory','tat','inventory','staff','doctors','radiology','analyzer','delivery','settings','pt-history'],
-    doctor:['dashboard','consultation','nursing','fluid-chart','admission','theatre','radiology','pt-history','labhistory'],
-    nurse:['dashboard','nursing','fluid-chart','admission','handover','infection','samples'],
-    lab_tech:['dashboard','worklist','samples','unified-entry','hem-entry','chem-entry','sero-entry','micro-entry','pcr-entry','histo-entry','cyto-entry','allresults','criticals','reports','tat','inventory','delivery','qc','validation','labhistory'],
-    lab_supervisor:['dashboard','worklist','samples','unified-entry','hem-entry','chem-entry','sero-entry','micro-entry','pcr-entry','histo-entry','cyto-entry','allresults','criticals','reports','tat','inventory','delivery','qc','validation','labhistory','staff'],
-    receptionist:['dashboard','register','appointments','billing','prices','worklist','infection'],
-    cashier:['dashboard','billing','prices','register','appointments'],
-    theatre_nurse:['dashboard','theatre','nursing','admission','fluid-chart','inventory'],
-    radiologist:['dashboard','radiology','pt-history','inventory'],
-  };
+  // Derived directly from the real ROLE_PAGES gating array at render time
+  // (previously a separate, hardcoded roleAccess object here had drifted
+  // from ROLE_PAGES in both directions -- e.g. showing Cashier as having
+  // Register access when it doesn't, and Theatre Nurse as lacking Critical
+  // Values when it has it -- so this matrix could no longer be trusted as
+  // documentation of actual access). admin bypasses ROLE_PAGES entirely at
+  // runtime (see goPage()/filterSidebar()), so it's shown with access to
+  // everything here too, matching that real behavior rather than whatever
+  // ROLE_PAGES.admin happens to literally list.
+  const hasAccess = (role,page) => role==='admin' ? true : (ROLE_PAGES[role]||[]).includes(page);
   const modules=[
     {label:'🏥 Reception',pages:['register','appointments']},
     {label:'💰 Billing',pages:['billing','prices']},
@@ -17201,7 +17199,7 @@ function renderPermissionsMatrix() {
     html+='<tr style="background:#f1f5f9"><td colspan="10" style="padding:5px 10px;font-weight:700;font-size:.72rem;text-transform:uppercase;letter-spacing:.4px;color:var(--slate)">'+mod.label+'</td></tr>';
     mod.pages.forEach(page=>{
       html+='<tr style="border-bottom:1px solid var(--border)"><td style="padding:5px 10px;font-size:.78rem">'+(pageLabels[page]||page)+'</td>'+
-        roles.map(r=>'<td style="text-align:center;padding:5px 4px">'+(roleAccess[r]?.includes(page)?'<span style="color:#166534;font-size:1rem">\u2705</span>':'<span style="color:#e2e8f0;font-size:1rem">\u2012</span>')+'</td>').join('')+
+        roles.map(r=>'<td style="text-align:center;padding:5px 4px">'+(hasAccess(r,page)?'<span style="color:#166534;font-size:1rem">\u2705</span>':'<span style="color:#e2e8f0;font-size:1rem">\u2012</span>')+'</td>').join('')+
         '</tr>';
     });
   });
