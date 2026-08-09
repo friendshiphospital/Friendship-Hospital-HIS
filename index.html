@@ -7659,7 +7659,7 @@ async function doLogin() {
     if(error) throw error;
     currentUser = data.user;
     const linked = await loadProfile();
-    if(!linked) { await denyUnlinkedAccount(); throw new Error(STAFF_NOT_LINKED_MSG); }
+    if(!linked) { const msg=_profileDenyMsg; await denyUnlinkedAccount(); throw new Error(msg); }
     showApp();
   } catch(e) {
     showAuthMsg(e.message||'Login failed','err');
@@ -7679,14 +7679,31 @@ function showAuthMsg(msg,type) {
 // Returns true if currentProfile was populated from a real staff row,
 // false if the caller should deny access.
 const STAFF_NOT_LINKED_MSG = "Your account isn't set up correctly — no staff record is linked to this login. Contact an administrator.";
+// Set by loadProfile() alongside its boolean return, so callers can show a
+// message that actually explains WHY access was denied (no linked staff
+// row vs. a suspended/inactive/on-leave account) instead of always the
+// generic "not linked" text.
+let _profileDenyMsg = STAFF_NOT_LINKED_MSG;
 async function loadProfile() {
   if(!currentUser) return false;
   try {
     const {data} = await sb.from('staff').select('*').eq('user_id',currentUser.id).maybeSingle();
-    if(!data) { currentProfile = null; return false; }
+    if(!data) { currentProfile = null; _profileDenyMsg = STAFF_NOT_LINKED_MSG; return false; }
+    // staff.status was previously written and shown on the Staff List badge
+    // but never actually checked anywhere access is granted -- a
+    // "deactivated" account kept full, indefinite access. Fails closed the
+    // same way an unlinked account already does: any explicitly-set status
+    // other than 'active' is refused (an absent/null status, e.g. on a
+    // legacy row predating this column, is treated as active rather than
+    // locking out accounts this fix was never meant to touch).
+    if(data.status && data.status!=='active') {
+      currentProfile = null;
+      _profileDenyMsg = 'Your staff account is currently marked "'+data.status.replace('_',' ')+'" and cannot sign in. Contact an administrator.';
+      return false;
+    }
     currentProfile = data;
     return true;
-  } catch(e) { currentProfile = null; return false; }
+  } catch(e) { currentProfile = null; _profileDenyMsg = STAFF_NOT_LINKED_MSG; return false; }
 }
 // Shared cleanup for "authenticated with Supabase, but not a valid staff
 // account" — signs out so no authenticated session is left sitting around
@@ -7710,8 +7727,9 @@ async function restoreSession() {
     currentUser = session.user;
     const linked = await loadProfile();
     if(linked) { showApp(); return; }
+    const msg=_profileDenyMsg;
     await denyUnlinkedAccount();
-    showAuthMsg(STAFF_NOT_LINKED_MSG,'err');
+    showAuthMsg(msg,'err');
   } catch(e) {
     await denyUnlinkedAccount();
     showAuthMsg(STAFF_NOT_LINKED_MSG,'err');
