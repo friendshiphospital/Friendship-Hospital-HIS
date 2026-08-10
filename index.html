@@ -5983,6 +5983,31 @@ html[dir="rtl"] body{direction:rtl;}
   </div>
 </div><!-- /page-analyzer -->
 
+<!-- Manual mapping picker (Analyzer Interface) — for a result whose test
+     code isn't in INSTRUMENT_FIELD_MAP (analyzer sent a code this app
+     doesn't recognize yet). "Map & Import" previously just toasted an
+     error and dead-ended here with no in-app way to route the value
+     anywhere except retyping it from the raw message text by hand. This
+     lets a tech pick exactly which department + field it belongs to,
+     once, then imports and safety-checks it the same way an already-known
+     mapping does. -->
+<div class="ov" id="manual-map-ov">
+  <div class="mo">
+    <div class="mo-hd"><h3>🔗 Manual Mapping</h3><button class="mo-x" onclick="closeOv('manual-map-ov')">✕</button></div>
+    <div class="mo-b">
+      <div style="font-size:.72rem;color:var(--slate);background:#f8fafd;border:1px solid var(--border);border-radius:6px;padding:6px 10px;margin-bottom:10px">This instrument's test code isn't automatically recognized. Choose which result field this value belongs to, then confirm — it will import into whichever patient is currently loaded on that department's entry page, same as an automatic mapping.</div>
+      <div class="fg"><label class="fl">Analyzer Test Code</label><div class="fc" style="background:var(--bg);font-family:'DM Mono',monospace" id="mm-test-code">—</div></div>
+      <div class="fg"><label class="fl">Raw Value</label><div class="fc" style="background:var(--bg);font-weight:700" id="mm-raw-value">—</div></div>
+      <div class="fg"><label class="fl">Department</label><select class="fc" id="mm-dept" onchange="populateManualMapFieldOptions()"></select></div>
+      <div class="fg"><label class="fl">Result Field</label><select class="fc" id="mm-field"></select></div>
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <button class="btn btn-p" onclick="confirmManualMap()" style="flex:2;justify-content:center">📥 Import Into This Field</button>
+        <button class="btn btn-s" onclick="closeOv('manual-map-ov')" style="flex:1;justify-content:center">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Analyzer Validation & Verification (CLSI EP15-A3 precision, EP09-A3
      method comparison) — distinct from ongoing QC (Levey-Jennings/
      Westgard/Six Sigma above) and from Analyzer Interface (connectivity
@@ -14332,7 +14357,7 @@ async function parsePastedInstrumentMessage(){
 function renderInstrumentMessages(){
   const body=document.getElementById('instrument-msg-body'); if(!body) return;
   if(!_instrumentMessages.length){ body.innerHTML='<tr><td colspan="6" style="text-align:center;padding:18px;color:var(--slate);font-size:.8rem">No instrument messages yet — simulate one above</td></tr>'; return; }
-  const statusBadge=s=>s==='auto_mapped'?'<span class="bdg bdg-g">🟢 Auto-Mapped</span>':s==='error'?'<span class="bdg bdg-r">🔴 Communication Error</span>':'<span class="bdg bdg-a">🟡 Pending Mapping</span>';
+  const statusBadge=s=>s==='auto_mapped'?'<span class="bdg bdg-g">🟢 Auto-Mapped</span>':s==='manually_mapped'?'<span class="bdg bdg-t">🔗 Manually Mapped</span>':s==='error'?'<span class="bdg bdg-r">🔴 Communication Error</span>':'<span class="bdg bdg-a">🟡 Pending Mapping</span>';
   body.innerHTML=_instrumentMessages.map((m,i)=>
     '<tr>'+
     '<td>'+escapeHtml(m.machine_id||'—')+'</td>'+
@@ -14347,7 +14372,7 @@ function renderInstrumentMessages(){
 async function mapAndImportInstrumentResult(i){
   const m=_instrumentMessages[i]; if(!m) return;
   const map=mapInstrumentField(m.test_parameter);
-  if(!map){ toast('No known mapping for "'+m.test_parameter+'" — enter it manually in the result form','err'); return; }
+  if(!map){ openManualMapPicker(i); return; }
   const pageId=map.table==='results_hematology'?'page-hem-entry':'page-chem-entry';
   const ptIdField=map.table==='results_hematology'?'hem-entry-pt-id':'chem-entry-pt-id';
   const ptId=document.getElementById(ptIdField)?.value;
@@ -14378,6 +14403,67 @@ async function mapAndImportInstrumentResult(i){
   renderInstrumentMessages();
   toast('📥 Imported '+map.label+' = '+m.raw_value+' into '+(map.table==='results_hematology'?'Haematology':'Chemistry')+' entry — review before saving','ok');
   goPage(map.table==='results_hematology'?'hem-entry':'chem-entry');
+}
+
+let _manualMapMsgIdx=null;
+function openManualMapPicker(i){
+  const m=_instrumentMessages[i]; if(!m) return;
+  _manualMapMsgIdx=i;
+  const codeEl=document.getElementById('mm-test-code'); if(codeEl) codeEl.textContent=m.test_parameter||'—';
+  const valEl=document.getElementById('mm-raw-value'); if(valEl) valEl.textContent=(m.raw_value!=null?String(m.raw_value):'—');
+  populateManualMapDeptOptions();
+  populateManualMapFieldOptions();
+  openOv('manual-map-ov');
+}
+// RESULT_META only covers the four numeric-panel departments (hem/chem/
+// sero/immuno) -- micro/pcr/histo/cyto are narrative reports with no
+// single-value-per-field shape a raw instrument value could sensibly land
+// in, so they're correctly not offered here.
+function populateManualMapDeptOptions(){
+  const sel=document.getElementById('mm-dept'); if(!sel) return;
+  sel.innerHTML=Object.keys(RESULT_META).map(k=>'<option value="'+k+'">'+escapeHtml(DEPT_META[k]?.label||k)+'</option>').join('');
+}
+function populateManualMapFieldOptions(){
+  const dept=document.getElementById('mm-dept')?.value||Object.keys(RESULT_META)[0];
+  const sel=document.getElementById('mm-field'); if(!sel) return;
+  const fields=RESULT_META[dept]||{};
+  sel.innerHTML=Object.entries(fields).map(([code,meta])=>'<option value="'+code+'">'+escapeHtml(meta.label)+'</option>').join('');
+}
+async function confirmManualMap(){
+  const i=_manualMapMsgIdx; const m=_instrumentMessages[i]; if(!m) return;
+  const deptKey=document.getElementById('mm-dept')?.value;
+  const fieldCode=document.getElementById('mm-field')?.value;
+  const loadMap=DEPT_LOAD_MAP[deptKey];
+  const targetInput=loadMap?.fields?.[fieldCode];
+  const meta=RESULT_META[deptKey]?.[fieldCode];
+  if(!targetInput||!meta){ toast('Could not resolve a target field for that selection','err'); return; }
+  const deptMeta=DEPT_META[deptKey];
+  const ptId=document.getElementById(deptMeta.ptIdField)?.value;
+  if(!ptId){ toast('Load the matching patient in '+deptMeta.label+' entry first','err'); return; }
+  // Same identity/ordered-test safety checks the automatic-mapping path
+  // already applies — a manual pick is still a human choice, but the
+  // machine's own barcode/order data can still catch a wrong-patient mixup.
+  let pt=null;
+  try{ const {data}=await sb.from('patients').select('lab_no,mrn,tests_requested').eq('id',ptId).maybeSingle(); pt=data; }catch(e){}
+  if(m.sample_barcode && pt?.lab_no && m.sample_barcode.trim().toUpperCase()!==String(pt.lab_no).trim().toUpperCase()){
+    toast('❌ Sample barcode mismatch — this message is for sample "'+m.sample_barcode+'", not the loaded patient (Lab No: '+pt.lab_no+'). Import blocked.','err');
+    return;
+  }
+  const acceptableTests=(RESULT_TAGS[deptKey]?.[fieldCode]||'').split('|').filter(Boolean);
+  if(acceptableTests.length && !(pt?.tests_requested||[]).some(t=>acceptableTests.includes(t))){
+    if(!confirm('⚠️ The loaded patient has no ordered test covering "'+meta.label+'". Import anyway? Only do this if you are certain it is correct.')) return;
+  }
+  const input=document.getElementById(targetInput);
+  if(!input){ toast('Target field not found on the entry form','err'); return; }
+  input.value=m.raw_value;
+  input.dispatchEvent(new Event('input',{bubbles:true}));
+  m.imported_at=new Date().toISOString(); m.imported_by=currentProfile?.id; m.imported_by_name=currentProfile?.full_name||'';
+  m.mapped_table=loadMap.table; m.mapped_field=fieldCode; m.sync_status='manually_mapped';
+  try{ if(typeof m.id==='number') await sb.from('instrument_messages').update({imported_at:m.imported_at,imported_by:m.imported_by,imported_by_name:m.imported_by_name,mapped_table:loadMap.table,mapped_field:fieldCode,sync_status:'manually_mapped'}).eq('id',m.id); }catch(e){}
+  closeOv('manual-map-ov');
+  renderInstrumentMessages();
+  toast('📥 Manually mapped & imported '+meta.label+' = '+m.raw_value+' into '+deptMeta.label+' entry — review before saving','ok');
+  goPage(deptMeta.page);
 }
 
 
