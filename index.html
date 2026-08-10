@@ -4854,7 +4854,7 @@ html[dir="rtl"] body{direction:rtl;}
             <thead><tr><th>Parameter</th><th>Result</th><th>Unit</th><th>Reference Range</th><th>Flag</th></tr></thead>
             <tbody data-test="CBC (Full Blood Count)|Haemoglobin Only|WBC Count|Platelet Count">
               <tr class="sec-hdr"><td colspan="5">Red Cell Parameters</td></tr>
-              <tr data-test="CBC (Full Blood Count)|WBC Count"><td class="tn">WBC — White Blood Cells</td><td><input id="he-wbc" type="number" step="0.1" class="fc" style="padding:4px 7px" oninput="flagHem(this,4.0,10.0,'he-wbc-flag',true)"></td><td>×10³/µL</td><td>4.0 – 10.0</td><td id="he-wbc-flag"></td></tr>
+              <tr data-test="CBC (Full Blood Count)|WBC Count"><td class="tn">WBC — White Blood Cells</td><td><input id="he-wbc" type="number" step="0.1" class="fc" style="padding:4px 7px" oninput="flagHem(this,4.0,10.0,'he-wbc-flag',true);calcAbsCounts()"></td><td>×10³/µL</td><td>4.0 – 10.0</td><td id="he-wbc-flag"></td></tr>
               <tr data-test="CBC (Full Blood Count)"><td class="tn">RBC — Red Blood Cells</td><td><input id="he-rbc" type="number" step="0.01" class="fc" style="padding:4px 7px" oninput="flagHem(this,4.2,5.4,'he-rbc-flag')"></td><td>×10⁶/µL</td><td>M: 4.5–5.9 / F: 3.9–5.2</td><td id="he-rbc-flag"></td></tr>
               <tr data-test="CBC (Full Blood Count)|Haemoglobin Only"><td class="tn">HGB — Haemoglobin</td><td><input id="he-hgb" type="number" step="0.1" class="fc" style="padding:4px 7px" oninput="flagHem(this,12.0,17.5,'he-hgb-flag',true)"></td><td>g/dL</td><td>M: 13.5–17.5 / F: 12.0–15.5</td><td id="he-hgb-flag"></td></tr>
               <tr data-test="CBC (Full Blood Count)"><td class="tn">HCT — Haematocrit</td><td><input id="he-hct" type="number" step="0.1" class="fc" style="padding:4px 7px" oninput="flagHem(this,37,52,'he-hct-flag')"></td><td>%</td><td>M: 41–53 / F: 36–46</td><td id="he-hct-flag"></td></tr>
@@ -4971,8 +4971,8 @@ html[dir="rtl"] body{direction:rtl;}
           <tr><td class="tn">AST (SGOT)</td><td><input id="ce-ast" type="number" step="1" class="fc" style="padding:3px 6px" oninput="flagChem(this,10,40,'ce-ast-f')"></td><td style="font-size:.68rem">10–40 U/L</td><td id="ce-ast-f"></td></tr>
           <tr><td class="tn">ALP</td><td><input id="ce-alp" type="number" step="1" class="fc" style="padding:3px 6px" oninput="flagChem(this,44,147,'ce-alp-f')"></td><td style="font-size:.68rem">44–147 U/L</td><td id="ce-alp-f"></td></tr>
           <tr><td class="tn">GGT</td><td><input id="ce-ggt" type="number" step="1" class="fc" style="padding:3px 6px" oninput="flagChem(this,0,51,'ce-ggt-f')"></td><td style="font-size:.68rem">0–51 U/L</td><td id="ce-ggt-f"></td></tr>
-          <tr><td class="tn">Total Protein</td><td><input id="ce-tp" type="number" step="0.1" class="fc" style="padding:3px 6px" oninput="flagChem(this,60,83,'ce-tp-f')"></td><td style="font-size:.68rem">60–83 g/L</td><td id="ce-tp-f"></td></tr>
-          <tr><td class="tn">Albumin</td><td><input id="ce-alb" type="number" step="0.1" class="fc" style="padding:3px 6px" oninput="flagChem(this,35,50,'ce-alb-f',true)"></td><td style="font-size:.68rem">35–50 g/L</td><td id="ce-alb-f"></td></tr>
+          <tr><td class="tn">Total Protein</td><td><input id="ce-tp" type="number" step="0.1" class="fc" style="padding:3px 6px" oninput="flagChem(this,60,83,'ce-tp-f');calcGlobAG()"></td><td style="font-size:.68rem">60–83 g/L</td><td id="ce-tp-f"></td></tr>
+          <tr><td class="tn">Albumin</td><td><input id="ce-alb" type="number" step="0.1" class="fc" style="padding:3px 6px" oninput="flagChem(this,35,50,'ce-alb-f',true);calcGlobAG()"></td><td style="font-size:.68rem">35–50 g/L</td><td id="ce-alb-f"></td></tr>
           <tr><td class="tn">Globulin</td><td><input id="ce-glob" class="fc" style="padding:3px 6px;background:#f8fafd" readonly placeholder="Auto"></td><td style="font-size:.68rem">23–35 g/L</td><td></td></tr>
           <tr><td class="tn">A/G Ratio</td><td><input id="ce-ag" class="fc" style="padding:3px 6px;background:#f8fafd" readonly placeholder="Auto"></td><td style="font-size:.68rem">1.0–2.5</td><td></td></tr>
         </tbody></table>
@@ -4985,7 +4985,7 @@ html[dir="rtl"] body{direction:rtl;}
         <div class="card-hd"><span class="card-title" style="color:var(--chem)">🫘 Renal Function (RFT)</span></div>
         <div class="card-body" style="padding:8px">
           <table class="rt"><thead><tr><th>Test</th><th>Result</th><th>Ref.</th><th>F</th></tr></thead><tbody data-test="RFT (Renal Function)">
-            <tr><td class="tn">Creatinine</td><td><input id="ce-creat" type="number" step="1" class="fc" style="padding:3px 6px" oninput="flagChem(this,62,106,'ce-creat-f',true)"></td><td style="font-size:.68rem">M:62–106 µmol/L</td><td id="ce-creat-f"></td></tr>
+            <tr><td class="tn">Creatinine</td><td><input id="ce-creat" type="number" step="1" class="fc" style="padding:3px 6px" oninput="flagChem(this,62,106,'ce-creat-f',true);calcEgfr()"></td><td style="font-size:.68rem">M:62–106 µmol/L</td><td id="ce-creat-f"></td></tr>
             <tr><td class="tn">Urea (BUN)</td><td><input id="ce-urea" type="number" step="0.1" class="fc" style="padding:3px 6px" oninput="flagChem(this,2.5,7.8,'ce-urea-f',true)"></td><td style="font-size:.68rem">2.5–7.8 mmol/L</td><td id="ce-urea-f"></td></tr>
             <tr><td class="tn">Uric Acid</td><td><input id="ce-ua" type="number" step="0.01" class="fc" style="padding:3px 6px" oninput="flagChem(this,0.2,0.42,'ce-ua-f')"></td><td style="font-size:.68rem">0.20–0.42 mmol/L</td><td id="ce-ua-f"></td></tr>
             <tr><td class="tn">eGFR</td><td><input id="ce-egfr" class="fc" style="padding:3px 6px;background:#f8fafd" readonly placeholder="Auto from Creat"></td><td style="font-size:.68rem">&gt;60 mL/min/1.73m²</td><td></td></tr>
@@ -12225,8 +12225,6 @@ function flagChem(inp,lo,hi,flagId,canBeCrit=false) {
   let flag='',color='';
   if(v>hi){ flag='▲ H'; color='var(--red)'; } else if(v<lo){ flag='▼ L'; color='var(--chem)'; }
   flagEl.innerHTML=flag?'<span style="color:'+color+';font-weight:700;font-size:.72rem">'+flag+'</span>':'';
-  const tp=parseFloat(document.getElementById('ce-tp')?.value)||0, alb=parseFloat(document.getElementById('ce-alb')?.value)||0;
-  if(tp&&alb){ const glob=(tp-alb).toFixed(1); const ag=alb>0?(alb/(tp-alb)).toFixed(2):'—'; const ge=document.getElementById('ce-glob'); if(ge) ge.value=glob; const ae=document.getElementById('ce-ag'); if(ae) ae.value=ag; }
   if(canBeCrit){ const fid=inp.id.replace('ce-',''); const cr=CRIT_RANGES[fid]; if(cr&&!isNaN(v)&&(v<cr.lo||v>cr.hi)){ inp.style.background='#fff1f2'; const warn=document.getElementById('ce-critical-warn'); if(warn) warn.style.display='block'; } }
 }
 function flagSero(inp,lo,hi,flagId) {
@@ -12255,6 +12253,43 @@ function calcAbsCounts() {
 function calcGlobAG() {
   const tp=parseFloat(document.getElementById('ce-tp')?.value)||0, alb=parseFloat(document.getElementById('ce-alb')?.value)||0;
   if(tp&&alb){ const glob=(tp-alb).toFixed(1); const ae=document.getElementById('ce-ag'); const ge=document.getElementById('ce-glob'); if(ge) ge.value=glob; if(ae) ae.value=alb>0?(alb/(tp-alb)).toFixed(2):'—'; }
+}
+// 2021 CKD-EPI race-free creatinine equation (adults only). Reuses
+// _uePatient — already fetched by whichever path opened this entry screen
+// (openUnifiedResultsEntry()/loadPatientIntoEntryPage()) — for age/sex
+// rather than firing a second fetch per keystroke. ce-egfr stays readonly
+// whenever this successfully computes a value, so a valid calculated
+// result can't be silently overwritten by hand; if age/sex aren't usable
+// for the equation (missing, non-years unit, or age<18), the field is
+// left blank AND made editable instead, so a pediatric or unknown-age
+// patient's RFT order is never permanently unverifiable just because
+// CKD-EPI doesn't apply to them.
+function calcEgfr() {
+  const el=document.getElementById('ce-egfr'); if(!el) return;
+  const creatUmol=parseFloat(document.getElementById('ce-creat')?.value);
+  const pt=_uePatient;
+  const age=parseFloat(pt?.age);
+  const ageUnit=(pt?.age_unit||'Years').toLowerCase();
+  const sex=(pt?.sex||'').toLowerCase();
+  const isAdult=ageUnit.startsWith('y')&&!isNaN(age)&&age>=18;
+  const usableSex=sex==='male'||sex==='female';
+  if(isNaN(creatUmol)||creatUmol<=0||!isAdult||!usableSex){
+    el.readOnly=false;
+    el.placeholder=(isAdult&&usableSex)?'Auto from Creat':'Enter manually (age/sex not on file or not adult)';
+    return;
+  }
+  const scr=creatUmol/88.4;
+  let egfr;
+  if(sex==='female'){
+    egfr = scr<=0.7 ? 142*Math.pow(scr/0.7,-0.241)*Math.pow(0.9938,age)*1.012
+                    : 142*Math.pow(scr/0.7,-1.200)*Math.pow(0.9938,age)*1.012;
+  } else {
+    egfr = scr<=0.9 ? 142*Math.pow(scr/0.9,-0.302)*Math.pow(0.9938,age)
+                    : 142*Math.pow(scr/0.9,-1.200)*Math.pow(0.9938,age);
+  }
+  el.readOnly=true;
+  el.placeholder='Auto from Creat';
+  el.value=Math.round(egfr);
 }
 function switchMicroTab(tab,btn) {
   ['ua','stool','culture','csf'].forEach(t=>{ const el=document.getElementById('micro-tab-'+t); if(el) el.style.display=t===tab?'':'none'; });
@@ -20353,7 +20388,8 @@ function openEnterModal(patId,labNo,ptName){
 async function loadPatientIntoEntryPage(ptId, ptName) {
   if(!ptId) return;
   let pt=null;
-  if(sb) { try{ const {data}=await sb.from('patients').select('name,first_name,last_name,mrn,lab_no,age,age_unit,sex').eq('id',ptId).single(); pt=data; }catch(e){} }
+  if(sb) { try{ const {data}=await sb.from('patients').select('id,name,first_name,last_name,mrn,lab_no,age,age_unit,sex').eq('id',ptId).single(); pt=data; }catch(e){} }
+  _uePatient = pt;
   const label = (pt?.name||fullName(pt||{})||ptName||'—') + ' · ' + (pt?.mrn||pt?.lab_no||'—') + ' · ' + (pt?.age||'?')+(pt?.age_unit||'y') + ' / ' + (pt?.sex||'');
   Object.entries(DEPT_META).forEach(([key,meta])=>{
     const idEl=document.getElementById(meta.ptIdField); if(idEl) idEl.value=ptId;
@@ -20375,6 +20411,12 @@ async function loadPatientIntoEntryPage(ptId, ptName) {
 let _ueMoved = [];
 let _ueCurrentDepts = [];
 let _uePatientId = null;
+// The full patient row (age/age_unit/sex etc.) already fetched by whichever
+// path opened this entry screen — kept alongside _uePatientId so
+// auto-calculated fields that need demographics (e.g. calcEgfr()'s
+// CKD-EPI equation) can read them synchronously instead of firing a second
+// fetch per keystroke.
+let _uePatient = null;
 
 function _ueRestoreAll() {
   _ueMoved.forEach(m=>{
@@ -20640,6 +20682,7 @@ async function openUnifiedResultsEntry(ptId, labNo, ptName) {
   let pt=null;
   if(sb) { try{ const {data}=await sb.from('patients').select('id,name,first_name,last_name,mrn,lab_no,age,age_unit,sex,tests_requested,priority,payment_status').eq('id',ptId).single(); pt=data; }catch(e){} }
   if(!pt) pt={id:ptId,name:ptName,mrn:labNo,tests_requested:[]};
+  _uePatient = pt;
   if(pt.payment_status==='unpaid'||pt.payment_status==='insurance_pending'){
     toast('🔒 Payment required before entering results for this patient','err'); return;
   }
