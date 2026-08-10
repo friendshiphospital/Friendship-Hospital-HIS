@@ -553,6 +553,7 @@ html[dir="rtl"] body{direction:rtl;}
       <div class="sb-item" data-p="qc" onclick="goPage('qc')"><span class="ic">🔬</span><span data-i18n="nav_qc">QC Module</span></div>
       <div class="sb-item" data-p="analyzer" onclick="goPage('analyzer')"><span class="ic">🔌</span><span data-i18n="nav_analyzer">Analyzer Interface</span></div>
       <div class="sb-item" data-p="validation" onclick="goPage('validation')"><span class="ic">📐</span><span data-i18n="nav_validation">Analyzer Validation</span></div>
+      <div class="sb-item" data-p="reference-ranges" onclick="goPage('reference-ranges')"><span class="ic">📏</span><span data-i18n="nav_reference_ranges">Reference Ranges</span></div>
       <div class="sb-item" data-p="pt-history" onclick="goPage('pt-history')"><span class="ic">🕐</span><span data-i18n="nav_pt_history">Patient Timeline</span></div>
     </div>
     <div class="sb-group" data-module="radiology">
@@ -4696,6 +4697,17 @@ html[dir="rtl"] body{direction:rtl;}
           <strong>ON:</strong> a result auto-verifies and releases straight to the doctor's view only if it's within the reference range, triggers no Delta Check alert, the department's QC is currently passing, and it isn't a critical/panic value — anything else still falls back to manual sign-off. A Delta Check breach always blocks auto-verification and requires a mandatory reason code, regardless of this setting.
         </div>
       </div></div>
+      <div class="card"><div class="card-hd"><span class="card-title">📏 Lab Unit System</span></div><div class="card-body">
+        <div class="fg"><label class="fl">Display Unit System</label>
+          <select class="fc" id="cfg-lab-unit-system" onchange="setLabUnitSystem(this.value)">
+            <option value="si">SI (International System) — current default</option>
+            <option value="conventional">Conventional / US</option>
+          </select>
+        </div>
+        <div style="font-size:.72rem;color:var(--slate);margin-top:8px;line-height:1.6">
+          Changes only what result-entry pages and printed reports <strong>display</strong> — the value actually saved to the database is always the SI value the tech entered, unchanged either way. A field with no Conventional range configured yet (Laboratory → Reference Ranges) automatically falls back to showing SI, so nothing breaks before every field is migrated.
+        </div>
+      </div></div>
       <div class="card"><div class="card-hd"><span class="card-title">📅 Follow-Up Visit Policy</span></div><div class="card-body">
         <div style="font-size:.72rem;color:var(--slate);margin-bottom:8px">Controls the default follow-up date a doctor is offered when completing a visit (Consultation → Complete &amp; Sign Off), and the pricing Reception is offered — never applied silently — when a patient with an open, unused follow-up registers again within this window.</div>
         <div class="fg"><label class="fl">Follow-up Window (days)</label><input class="fc" type="number" min="1" id="cfg-followup-window-days" placeholder="7"></div>
@@ -4854,7 +4866,7 @@ html[dir="rtl"] body{direction:rtl;}
             <thead><tr><th>Parameter</th><th>Result</th><th>Unit</th><th>Reference Range</th><th>Flag</th></tr></thead>
             <tbody data-test="CBC (Full Blood Count)|Haemoglobin Only|WBC Count|Platelet Count">
               <tr class="sec-hdr"><td colspan="5">Red Cell Parameters</td></tr>
-              <tr data-test="CBC (Full Blood Count)|WBC Count"><td class="tn">WBC — White Blood Cells</td><td><input id="he-wbc" type="number" step="0.1" class="fc" style="padding:4px 7px" oninput="flagHem(this,4.0,10.0,'he-wbc-flag',true)"></td><td>×10³/µL</td><td>4.0 – 10.0</td><td id="he-wbc-flag"></td></tr>
+              <tr data-test="CBC (Full Blood Count)|WBC Count"><td class="tn">WBC — White Blood Cells</td><td><input id="he-wbc" type="number" step="0.1" class="fc" style="padding:4px 7px" oninput="flagHem(this,4.0,10.0,'he-wbc-flag',true);calcAbsCounts()"></td><td>×10³/µL</td><td>4.0 – 10.0</td><td id="he-wbc-flag"></td></tr>
               <tr data-test="CBC (Full Blood Count)"><td class="tn">RBC — Red Blood Cells</td><td><input id="he-rbc" type="number" step="0.01" class="fc" style="padding:4px 7px" oninput="flagHem(this,4.2,5.4,'he-rbc-flag')"></td><td>×10⁶/µL</td><td>M: 4.5–5.9 / F: 3.9–5.2</td><td id="he-rbc-flag"></td></tr>
               <tr data-test="CBC (Full Blood Count)|Haemoglobin Only"><td class="tn">HGB — Haemoglobin</td><td><input id="he-hgb" type="number" step="0.1" class="fc" style="padding:4px 7px" oninput="flagHem(this,12.0,17.5,'he-hgb-flag',true)"></td><td>g/dL</td><td>M: 13.5–17.5 / F: 12.0–15.5</td><td id="he-hgb-flag"></td></tr>
               <tr data-test="CBC (Full Blood Count)"><td class="tn">HCT — Haematocrit</td><td><input id="he-hct" type="number" step="0.1" class="fc" style="padding:4px 7px" oninput="flagHem(this,37,52,'he-hct-flag')"></td><td>%</td><td>M: 41–53 / F: 36–46</td><td id="he-hct-flag"></td></tr>
@@ -4964,15 +4976,15 @@ html[dir="rtl"] body{direction:rtl;}
       <div class="card-hd"><span class="card-title" style="color:var(--chem)">🫀 Liver Function (LFT)</span></div>
       <div class="card-body" style="padding:8px">
         <table class="rt"><thead><tr><th>Test</th><th>Result</th><th>Ref.</th><th>F</th></tr></thead><tbody data-test="LFT (Liver Function)">
-          <tr><td class="tn">T. Bilirubin</td><td><input id="ce-tbil" type="number" step="0.1" class="fc" style="padding:3px 6px" oninput="flagChem(this,0,17,'ce-tbil-f')"></td><td style="font-size:.68rem">0–17 µmol/L</td><td id="ce-tbil-f"></td></tr>
-          <tr><td class="tn">D. Bilirubin</td><td><input id="ce-dbil" type="number" step="0.1" class="fc" style="padding:3px 6px" oninput="flagChem(this,0,5,'ce-dbil-f')"></td><td style="font-size:.68rem">0–5 µmol/L</td><td id="ce-dbil-f"></td></tr>
-          <tr><td class="tn">I. Bilirubin</td><td><input id="ce-ibil" type="number" step="0.1" class="fc" style="padding:3px 6px"></td><td style="font-size:.68rem">0–12 µmol/L</td><td></td></tr>
-          <tr><td class="tn">ALT (SGPT)</td><td><input id="ce-alt" type="number" step="1" class="fc" style="padding:3px 6px" oninput="flagChem(this,7,56,'ce-alt-f',true)"></td><td style="font-size:.68rem">7–56 U/L</td><td id="ce-alt-f"></td></tr>
-          <tr><td class="tn">AST (SGOT)</td><td><input id="ce-ast" type="number" step="1" class="fc" style="padding:3px 6px" oninput="flagChem(this,10,40,'ce-ast-f')"></td><td style="font-size:.68rem">10–40 U/L</td><td id="ce-ast-f"></td></tr>
-          <tr><td class="tn">ALP</td><td><input id="ce-alp" type="number" step="1" class="fc" style="padding:3px 6px" oninput="flagChem(this,44,147,'ce-alp-f')"></td><td style="font-size:.68rem">44–147 U/L</td><td id="ce-alp-f"></td></tr>
-          <tr><td class="tn">GGT</td><td><input id="ce-ggt" type="number" step="1" class="fc" style="padding:3px 6px" oninput="flagChem(this,0,51,'ce-ggt-f')"></td><td style="font-size:.68rem">0–51 U/L</td><td id="ce-ggt-f"></td></tr>
-          <tr><td class="tn">Total Protein</td><td><input id="ce-tp" type="number" step="0.1" class="fc" style="padding:3px 6px" oninput="flagChem(this,60,83,'ce-tp-f')"></td><td style="font-size:.68rem">60–83 g/L</td><td id="ce-tp-f"></td></tr>
-          <tr><td class="tn">Albumin</td><td><input id="ce-alb" type="number" step="0.1" class="fc" style="padding:3px 6px" oninput="flagChem(this,35,50,'ce-alb-f',true)"></td><td style="font-size:.68rem">35–50 g/L</td><td id="ce-alb-f"></td></tr>
+          <tr><td class="tn">T. Bilirubin</td><td><input id="ce-tbil" type="number" step="0.1" class="fc" style="padding:3px 6px" oninput="flagChem(this,0,17,'ce-tbil-f')"></td><td id="ce-tbil-range" data-refrange="chem.tbil" style="font-size:.68rem">0–17 µmol/L</td><td id="ce-tbil-f"></td></tr>
+          <tr><td class="tn">D. Bilirubin</td><td><input id="ce-dbil" type="number" step="0.1" class="fc" style="padding:3px 6px" oninput="flagChem(this,0,5,'ce-dbil-f')"></td><td id="ce-dbil-range" data-refrange="chem.dbil" style="font-size:.68rem">0–5 µmol/L</td><td id="ce-dbil-f"></td></tr>
+          <tr><td class="tn">I. Bilirubin</td><td><input id="ce-ibil" type="number" step="0.1" class="fc" style="padding:3px 6px"></td><td id="ce-ibil-range" data-refrange="chem.ibil" style="font-size:.68rem">0–12 µmol/L</td><td></td></tr>
+          <tr><td class="tn">ALT (SGPT)</td><td><input id="ce-alt" type="number" step="1" class="fc" style="padding:3px 6px" oninput="flagChem(this,7,56,'ce-alt-f',true)"></td><td id="ce-alt-range" data-refrange="chem.alt" style="font-size:.68rem">7–56 U/L</td><td id="ce-alt-f"></td></tr>
+          <tr><td class="tn">AST (SGOT)</td><td><input id="ce-ast" type="number" step="1" class="fc" style="padding:3px 6px" oninput="flagChem(this,10,40,'ce-ast-f')"></td><td id="ce-ast-range" data-refrange="chem.ast" style="font-size:.68rem">10–40 U/L</td><td id="ce-ast-f"></td></tr>
+          <tr><td class="tn">ALP</td><td><input id="ce-alp" type="number" step="1" class="fc" style="padding:3px 6px" oninput="flagChem(this,44,147,'ce-alp-f')"></td><td id="ce-alp-range" data-refrange="chem.alp" style="font-size:.68rem">44–147 U/L</td><td id="ce-alp-f"></td></tr>
+          <tr><td class="tn">GGT</td><td><input id="ce-ggt" type="number" step="1" class="fc" style="padding:3px 6px" oninput="flagChem(this,0,51,'ce-ggt-f')"></td><td id="ce-ggt-range" data-refrange="chem.ggt" style="font-size:.68rem">0–51 U/L</td><td id="ce-ggt-f"></td></tr>
+          <tr><td class="tn">Total Protein</td><td><input id="ce-tp" type="number" step="0.1" class="fc" style="padding:3px 6px" oninput="flagChem(this,60,83,'ce-tp-f');calcGlobAG()"></td><td id="ce-tp-range" data-refrange="chem.tp" style="font-size:.68rem">60–83 g/L</td><td id="ce-tp-f"></td></tr>
+          <tr><td class="tn">Albumin</td><td><input id="ce-alb" type="number" step="0.1" class="fc" style="padding:3px 6px" oninput="flagChem(this,35,50,'ce-alb-f',true);calcGlobAG()"></td><td id="ce-alb-range" data-refrange="chem.alb" style="font-size:.68rem">35–50 g/L</td><td id="ce-alb-f"></td></tr>
           <tr><td class="tn">Globulin</td><td><input id="ce-glob" class="fc" style="padding:3px 6px;background:#f8fafd" readonly placeholder="Auto"></td><td style="font-size:.68rem">23–35 g/L</td><td></td></tr>
           <tr><td class="tn">A/G Ratio</td><td><input id="ce-ag" class="fc" style="padding:3px 6px;background:#f8fafd" readonly placeholder="Auto"></td><td style="font-size:.68rem">1.0–2.5</td><td></td></tr>
         </tbody></table>
@@ -4985,10 +4997,10 @@ html[dir="rtl"] body{direction:rtl;}
         <div class="card-hd"><span class="card-title" style="color:var(--chem)">🫘 Renal Function (RFT)</span></div>
         <div class="card-body" style="padding:8px">
           <table class="rt"><thead><tr><th>Test</th><th>Result</th><th>Ref.</th><th>F</th></tr></thead><tbody data-test="RFT (Renal Function)">
-            <tr><td class="tn">Creatinine</td><td><input id="ce-creat" type="number" step="1" class="fc" style="padding:3px 6px" oninput="flagChem(this,62,106,'ce-creat-f',true)"></td><td style="font-size:.68rem">M:62–106 µmol/L</td><td id="ce-creat-f"></td></tr>
-            <tr><td class="tn">Urea (BUN)</td><td><input id="ce-urea" type="number" step="0.1" class="fc" style="padding:3px 6px" oninput="flagChem(this,2.5,7.8,'ce-urea-f',true)"></td><td style="font-size:.68rem">2.5–7.8 mmol/L</td><td id="ce-urea-f"></td></tr>
-            <tr><td class="tn">Uric Acid</td><td><input id="ce-ua" type="number" step="0.01" class="fc" style="padding:3px 6px" oninput="flagChem(this,0.2,0.42,'ce-ua-f')"></td><td style="font-size:.68rem">0.20–0.42 mmol/L</td><td id="ce-ua-f"></td></tr>
-            <tr><td class="tn">eGFR</td><td><input id="ce-egfr" class="fc" style="padding:3px 6px;background:#f8fafd" readonly placeholder="Auto from Creat"></td><td style="font-size:.68rem">&gt;60 mL/min/1.73m²</td><td></td></tr>
+            <tr><td class="tn">Creatinine</td><td><input id="ce-creat" type="number" step="1" class="fc" style="padding:3px 6px" oninput="flagChem(this,62,106,'ce-creat-f',true);calcEgfr()"></td><td id="ce-creat-range" data-refrange="chem.creat" style="font-size:.68rem">M:62–106 µmol/L</td><td id="ce-creat-f"></td></tr>
+            <tr><td class="tn">Urea (BUN)</td><td><input id="ce-urea" type="number" step="0.1" class="fc" style="padding:3px 6px" oninput="flagChem(this,2.5,7.8,'ce-urea-f',true)"></td><td id="ce-urea-range" data-refrange="chem.urea" style="font-size:.68rem">2.5–7.8 mmol/L</td><td id="ce-urea-f"></td></tr>
+            <tr><td class="tn">Uric Acid</td><td><input id="ce-ua" type="number" step="0.01" class="fc" style="padding:3px 6px" oninput="flagChem(this,0.2,0.42,'ce-ua-f')"></td><td id="ce-ua-range" data-refrange="chem.ua" style="font-size:.68rem">0.20–0.42 mmol/L</td><td id="ce-ua-f"></td></tr>
+            <tr><td class="tn">eGFR</td><td><input id="ce-egfr" class="fc" style="padding:3px 6px;background:#f8fafd" readonly placeholder="Auto from Creat"></td><td id="ce-egfr-range" data-refrange="chem.egfr" style="font-size:.68rem">&gt;60 mL/min/1.73m²</td><td></td></tr>
           </tbody></table>
         </div>
       </div>
@@ -4997,13 +5009,13 @@ html[dir="rtl"] body{direction:rtl;}
         <div class="card-hd"><span class="card-title" style="color:var(--chem)">⚡ Electrolytes</span></div>
         <div class="card-body" style="padding:8px">
           <table class="rt"><thead><tr><th>Test</th><th>Result</th><th>Ref.</th><th>F</th></tr></thead><tbody data-test="Serum Electrolytes|Calcium|Phosphorus|Magnesium">
-            <tr data-test="Serum Electrolytes"><td class="tn">Sodium (Na)</td><td><input id="ce-na" type="number" step="1" class="fc" style="padding:3px 6px" oninput="flagChem(this,136,145,'ce-na-f',true)"></td><td style="font-size:.68rem">136–145 mmol/L</td><td id="ce-na-f"></td></tr>
-            <tr data-test="Serum Electrolytes"><td class="tn">Potassium (K)</td><td><input id="ce-k" type="number" step="0.1" class="fc" style="padding:3px 6px" oninput="flagChem(this,3.5,5.1,'ce-k-f',true)"></td><td style="font-size:.68rem">3.5–5.1 mmol/L</td><td id="ce-k-f"></td></tr>
-            <tr data-test="Serum Electrolytes"><td class="tn">Chloride (Cl)</td><td><input id="ce-cl" type="number" step="1" class="fc" style="padding:3px 6px" oninput="flagChem(this,98,107,'ce-cl-f')"></td><td style="font-size:.68rem">98–107 mmol/L</td><td id="ce-cl-f"></td></tr>
-            <tr data-test="Serum Electrolytes"><td class="tn">CO₂ / Bicarbonate</td><td><input id="ce-co2" type="number" step="1" class="fc" style="padding:3px 6px" oninput="flagChem(this,22,29,'ce-co2-f')"></td><td style="font-size:.68rem">22–29 mmol/L</td><td id="ce-co2-f"></td></tr>
-            <tr data-test="Calcium"><td class="tn">Calcium (Ca)</td><td><input id="ce-ca" type="number" step="0.01" class="fc" style="padding:3px 6px" oninput="flagChem(this,2.1,2.6,'ce-ca-f',true)"></td><td style="font-size:.68rem">2.1–2.6 mmol/L</td><td id="ce-ca-f"></td></tr>
-            <tr data-test="Phosphorus"><td class="tn">Phosphorus</td><td><input id="ce-phos" type="number" step="0.01" class="fc" style="padding:3px 6px" oninput="flagChem(this,0.8,1.5,'ce-phos-f')"></td><td style="font-size:.68rem">0.8–1.5 mmol/L</td><td id="ce-phos-f"></td></tr>
-            <tr data-test="Magnesium"><td class="tn">Magnesium</td><td><input id="ce-mg" type="number" step="0.01" class="fc" style="padding:3px 6px" oninput="flagChem(this,0.7,1.1,'ce-mg-f')"></td><td style="font-size:.68rem">0.7–1.1 mmol/L</td><td id="ce-mg-f"></td></tr>
+            <tr data-test="Serum Electrolytes"><td class="tn">Sodium (Na)</td><td><input id="ce-na" type="number" step="1" class="fc" style="padding:3px 6px" oninput="flagChem(this,136,145,'ce-na-f',true)"></td><td id="ce-na-range" data-refrange="chem.na" style="font-size:.68rem">136–145 mmol/L</td><td id="ce-na-f"></td></tr>
+            <tr data-test="Serum Electrolytes"><td class="tn">Potassium (K)</td><td><input id="ce-k" type="number" step="0.1" class="fc" style="padding:3px 6px" oninput="flagChem(this,3.5,5.1,'ce-k-f',true)"></td><td id="ce-k-range" data-refrange="chem.k" style="font-size:.68rem">3.5–5.1 mmol/L</td><td id="ce-k-f"></td></tr>
+            <tr data-test="Serum Electrolytes"><td class="tn">Chloride (Cl)</td><td><input id="ce-cl" type="number" step="1" class="fc" style="padding:3px 6px" oninput="flagChem(this,98,107,'ce-cl-f')"></td><td id="ce-cl-range" data-refrange="chem.cl" style="font-size:.68rem">98–107 mmol/L</td><td id="ce-cl-f"></td></tr>
+            <tr data-test="Serum Electrolytes"><td class="tn">CO₂ / Bicarbonate</td><td><input id="ce-co2" type="number" step="1" class="fc" style="padding:3px 6px" oninput="flagChem(this,22,29,'ce-co2-f')"></td><td id="ce-co2-range" data-refrange="chem.co2" style="font-size:.68rem">22–29 mmol/L</td><td id="ce-co2-f"></td></tr>
+            <tr data-test="Calcium"><td class="tn">Calcium (Ca)</td><td><input id="ce-ca" type="number" step="0.01" class="fc" style="padding:3px 6px" oninput="flagChem(this,2.1,2.6,'ce-ca-f',true)"></td><td id="ce-ca-range" data-refrange="chem.ca" style="font-size:.68rem">2.1–2.6 mmol/L</td><td id="ce-ca-f"></td></tr>
+            <tr data-test="Phosphorus"><td class="tn">Phosphorus</td><td><input id="ce-phos" type="number" step="0.01" class="fc" style="padding:3px 6px" oninput="flagChem(this,0.8,1.5,'ce-phos-f')"></td><td id="ce-phos-range" data-refrange="chem.phos" style="font-size:.68rem">0.8–1.5 mmol/L</td><td id="ce-phos-f"></td></tr>
+            <tr data-test="Magnesium"><td class="tn">Magnesium</td><td><input id="ce-mg" type="number" step="0.01" class="fc" style="padding:3px 6px" oninput="flagChem(this,0.7,1.1,'ce-mg-f')"></td><td id="ce-mg-range" data-refrange="chem.mg" style="font-size:.68rem">0.7–1.1 mmol/L</td><td id="ce-mg-f"></td></tr>
           </tbody></table>
         </div>
       </div>
@@ -5015,12 +5027,12 @@ html[dir="rtl"] body{direction:rtl;}
         <div class="card-hd"><span class="card-title" style="color:var(--chem)">🍬 Glucose &amp; HbA1c</span></div>
         <div class="card-body" style="padding:8px">
           <table class="rt"><thead><tr><th>Test</th><th>Result</th><th>Ref.</th><th>F</th></tr></thead><tbody data-test="HbA1c|Fasting Blood Sugar|Random Blood Sugar|2hr Post Prandial|Insulin|C-Peptide">
-            <tr data-test="Fasting Blood Sugar"><td class="tn">Fasting Blood Sugar</td><td><input id="ce-fbs" type="number" step="0.1" class="fc" style="padding:3px 6px" oninput="flagChem(this,3.9,6.1,'ce-fbs-f',true)"></td><td style="font-size:.68rem">3.9–6.1 mmol/L</td><td id="ce-fbs-f"></td></tr>
-            <tr data-test="Random Blood Sugar"><td class="tn">Random Blood Sugar</td><td><input id="ce-rbs" type="number" step="0.1" class="fc" style="padding:3px 6px" oninput="flagChem(this,3.9,11.1,'ce-rbs-f')"></td><td style="font-size:.68rem">&lt;11.1 mmol/L</td><td id="ce-rbs-f"></td></tr>
-            <tr data-test="2hr Post Prandial"><td class="tn">2hr Post-Prandial</td><td><input id="ce-ppbs" type="number" step="0.1" class="fc" style="padding:3px 6px" oninput="flagChem(this,3.9,7.8,'ce-ppbs-f')"></td><td style="font-size:.68rem">&lt;7.8 mmol/L</td><td id="ce-ppbs-f"></td></tr>
-            <tr data-test="HbA1c"><td class="tn">HbA1c</td><td><input id="ce-hba1c" type="number" step="0.1" class="fc" style="padding:3px 6px" oninput="flagChem(this,4,5.7,'ce-hba1c-f')"></td><td style="font-size:.68rem">&lt;5.7%</td><td id="ce-hba1c-f"></td></tr>
-            <tr data-test="Insulin"><td class="tn">Insulin</td><td><input id="ce-ins" type="number" step="0.1" class="fc" style="padding:3px 6px"></td><td style="font-size:.68rem">2.6–25 µIU/mL</td><td></td></tr>
-            <tr data-test="C-Peptide"><td class="tn">C-Peptide</td><td><input id="ce-cpep" type="number" step="0.01" class="fc" style="padding:3px 6px"></td><td style="font-size:.68rem">0.5–2.7 ng/mL</td><td></td></tr>
+            <tr data-test="Fasting Blood Sugar"><td class="tn">Fasting Blood Sugar</td><td><input id="ce-fbs" type="number" step="0.1" class="fc" style="padding:3px 6px" oninput="flagChem(this,3.9,6.1,'ce-fbs-f',true)"></td><td id="ce-fbs-range" data-refrange="chem.fbs" style="font-size:.68rem">3.9–6.1 mmol/L</td><td id="ce-fbs-f"></td></tr>
+            <tr data-test="Random Blood Sugar"><td class="tn">Random Blood Sugar</td><td><input id="ce-rbs" type="number" step="0.1" class="fc" style="padding:3px 6px" oninput="flagChem(this,3.9,11.1,'ce-rbs-f')"></td><td id="ce-rbs-range" data-refrange="chem.rbs" style="font-size:.68rem">&lt;11.1 mmol/L</td><td id="ce-rbs-f"></td></tr>
+            <tr data-test="2hr Post Prandial"><td class="tn">2hr Post-Prandial</td><td><input id="ce-ppbs" type="number" step="0.1" class="fc" style="padding:3px 6px" oninput="flagChem(this,3.9,7.8,'ce-ppbs-f')"></td><td id="ce-ppbs-range" data-refrange="chem.ppbs" style="font-size:.68rem">&lt;7.8 mmol/L</td><td id="ce-ppbs-f"></td></tr>
+            <tr data-test="HbA1c"><td class="tn">HbA1c</td><td><input id="ce-hba1c" type="number" step="0.1" class="fc" style="padding:3px 6px" oninput="flagChem(this,4,5.7,'ce-hba1c-f')"></td><td id="ce-hba1c-range" data-refrange="chem.hba1c" style="font-size:.68rem">&lt;5.7%</td><td id="ce-hba1c-f"></td></tr>
+            <tr data-test="Insulin"><td class="tn">Insulin</td><td><input id="ce-ins" type="number" step="0.1" class="fc" style="padding:3px 6px"></td><td id="ce-ins-range" data-refrange="chem.ins" style="font-size:.68rem">2.6–25 µIU/mL</td><td></td></tr>
+            <tr data-test="C-Peptide"><td class="tn">C-Peptide</td><td><input id="ce-cpep" type="number" step="0.01" class="fc" style="padding:3px 6px"></td><td id="ce-cpep-range" data-refrange="chem.cpep" style="font-size:.68rem">0.5–2.7 ng/mL</td><td></td></tr>
           </tbody></table>
         </div>
       </div>
@@ -5029,10 +5041,10 @@ html[dir="rtl"] body{direction:rtl;}
         <div class="card-hd"><span class="card-title" style="color:var(--chem)">💊 Lipid Profile</span></div>
         <div class="card-body" style="padding:8px">
           <table class="rt"><thead><tr><th>Test</th><th>Result</th><th>Ref.</th><th>F</th></tr></thead><tbody data-test="Lipid Profile">
-            <tr><td class="tn">Total Cholesterol</td><td><input id="ce-tchol" type="number" step="0.01" class="fc" style="padding:3px 6px" oninput="flagChem(this,0,5.2,'ce-tchol-f',true)"></td><td style="font-size:.68rem">&lt;5.2 mmol/L</td><td id="ce-tchol-f"></td></tr>
-            <tr><td class="tn">LDL Cholesterol</td><td><input id="ce-ldl" type="number" step="0.01" class="fc" style="padding:3px 6px" oninput="flagChem(this,0,3.4,'ce-ldl-f',true)"></td><td style="font-size:.68rem">&lt;3.4 mmol/L</td><td id="ce-ldl-f"></td></tr>
-            <tr><td class="tn">HDL Cholesterol</td><td><input id="ce-hdl" type="number" step="0.01" class="fc" style="padding:3px 6px" oninput="flagChem(this,1.0,99,'ce-hdl-f')"></td><td style="font-size:.68rem">&gt;1.0 mmol/L</td><td id="ce-hdl-f"></td></tr>
-            <tr><td class="tn">Triglycerides</td><td><input id="ce-trig" type="number" step="0.01" class="fc" style="padding:3px 6px" oninput="flagChem(this,0,1.7,'ce-trig-f',true)"></td><td style="font-size:.68rem">&lt;1.7 mmol/L</td><td id="ce-trig-f"></td></tr>
+            <tr><td class="tn">Total Cholesterol</td><td><input id="ce-tchol" type="number" step="0.01" class="fc" style="padding:3px 6px" oninput="flagChem(this,0,5.2,'ce-tchol-f',true)"></td><td id="ce-tchol-range" data-refrange="chem.tchol" style="font-size:.68rem">&lt;5.2 mmol/L</td><td id="ce-tchol-f"></td></tr>
+            <tr><td class="tn">LDL Cholesterol</td><td><input id="ce-ldl" type="number" step="0.01" class="fc" style="padding:3px 6px" oninput="flagChem(this,0,3.4,'ce-ldl-f',true)"></td><td id="ce-ldl-range" data-refrange="chem.ldl" style="font-size:.68rem">&lt;3.4 mmol/L</td><td id="ce-ldl-f"></td></tr>
+            <tr><td class="tn">HDL Cholesterol</td><td><input id="ce-hdl" type="number" step="0.01" class="fc" style="padding:3px 6px" oninput="flagChem(this,1.0,99,'ce-hdl-f')"></td><td id="ce-hdl-range" data-refrange="chem.hdl" style="font-size:.68rem">&gt;1.0 mmol/L</td><td id="ce-hdl-f"></td></tr>
+            <tr><td class="tn">Triglycerides</td><td><input id="ce-trig" type="number" step="0.01" class="fc" style="padding:3px 6px" oninput="flagChem(this,0,1.7,'ce-trig-f',true)"></td><td id="ce-trig-range" data-refrange="chem.trig" style="font-size:.68rem">&lt;1.7 mmol/L</td><td id="ce-trig-f"></td></tr>
           </tbody></table>
         </div>
       </div>
@@ -5041,13 +5053,13 @@ html[dir="rtl"] body{direction:rtl;}
         <div class="card-hd"><span class="card-title" style="color:var(--chem)">❤️ Cardiac Markers</span></div>
         <div class="card-body" style="padding:8px">
           <table class="rt"><thead><tr><th>Test</th><th>Result</th><th>Ref.</th><th>F</th></tr></thead><tbody data-test="Cardiac Enzymes|Troponin I|hs-CRP|LDH">
-            <tr data-test="Cardiac Enzymes|Troponin I"><td class="tn">Troponin I</td><td><input id="ce-tropi" type="number" step="0.001" class="fc" style="padding:3px 6px" oninput="flagChem(this,0,0.04,'ce-tropi-f',true)"></td><td style="font-size:.68rem">&lt;0.04 ng/mL</td><td id="ce-tropi-f"></td></tr>
-            <tr data-test="Cardiac Enzymes|Troponin I"><td class="tn">hs-TnT</td><td><input id="ce-hstnt" type="number" step="1" class="fc" style="padding:3px 6px" oninput="flagChem(this,0,14,'ce-hstnt-f',true)"></td><td style="font-size:.68rem">&lt;14 ng/L</td><td id="ce-hstnt-f"></td></tr>
-            <tr data-test="Cardiac Enzymes"><td class="tn">CK Total</td><td><input id="ce-ck" type="number" step="1" class="fc" style="padding:3px 6px" oninput="flagChem(this,30,200,'ce-ck-f')"></td><td style="font-size:.68rem">30–200 U/L</td><td id="ce-ck-f"></td></tr>
-            <tr data-test="Cardiac Enzymes"><td class="tn">CK-MB</td><td><input id="ce-ckmb" type="number" step="0.1" class="fc" style="padding:3px 6px" oninput="flagChem(this,0,25,'ce-ckmb-f')"></td><td style="font-size:.68rem">&lt;25 U/L</td><td id="ce-ckmb-f"></td></tr>
-            <tr data-test="Cardiac Enzymes"><td class="tn">NT-proBNP</td><td><input id="ce-ntpro" type="number" step="1" class="fc" style="padding:3px 6px" oninput="flagChem(this,0,125,'ce-ntpro-f')"></td><td style="font-size:.68rem">&lt;125 pg/mL</td><td id="ce-ntpro-f"></td></tr>
-            <tr data-test="hs-CRP"><td class="tn">hs-CRP</td><td><input id="ce-hsCrp" type="number" step="0.1" class="fc" style="padding:3px 6px" oninput="flagChem(this,0,5,'ce-hsCrp-f',true)"></td><td style="font-size:.68rem">&lt;5 mg/L</td><td id="ce-hsCrp-f"></td></tr>
-            <tr data-test="LDH"><td class="tn">LDH</td><td><input id="ce-ldh" type="number" step="1" class="fc" style="padding:3px 6px" oninput="flagChem(this,140,280,'ce-ldh-f')"></td><td style="font-size:.68rem">140–280 U/L</td><td id="ce-ldh-f"></td></tr>
+            <tr data-test="Cardiac Enzymes|Troponin I"><td class="tn">Troponin I</td><td><input id="ce-tropi" type="number" step="0.001" class="fc" style="padding:3px 6px" oninput="flagChem(this,0,0.04,'ce-tropi-f',true)"></td><td id="ce-troponin_i-range" data-refrange="chem.troponin_i" style="font-size:.68rem">&lt;0.04 ng/mL</td><td id="ce-tropi-f"></td></tr>
+            <tr data-test="Cardiac Enzymes|Troponin I"><td class="tn">hs-TnT</td><td><input id="ce-hstnt" type="number" step="1" class="fc" style="padding:3px 6px" oninput="flagChem(this,0,14,'ce-hstnt-f',true)"></td><td id="ce-hs_tnt-range" data-refrange="chem.hs_tnt" style="font-size:.68rem">&lt;14 ng/L</td><td id="ce-hstnt-f"></td></tr>
+            <tr data-test="Cardiac Enzymes"><td class="tn">CK Total</td><td><input id="ce-ck" type="number" step="1" class="fc" style="padding:3px 6px" oninput="flagChem(this,30,200,'ce-ck-f')"></td><td id="ce-ck-range" data-refrange="chem.ck" style="font-size:.68rem">30–200 U/L</td><td id="ce-ck-f"></td></tr>
+            <tr data-test="Cardiac Enzymes"><td class="tn">CK-MB</td><td><input id="ce-ckmb" type="number" step="0.1" class="fc" style="padding:3px 6px" oninput="flagChem(this,0,25,'ce-ckmb-f')"></td><td id="ce-ckmb-range" data-refrange="chem.ckmb" style="font-size:.68rem">&lt;25 U/L</td><td id="ce-ckmb-f"></td></tr>
+            <tr data-test="Cardiac Enzymes"><td class="tn">NT-proBNP</td><td><input id="ce-ntpro" type="number" step="1" class="fc" style="padding:3px 6px" oninput="flagChem(this,0,125,'ce-ntpro-f')"></td><td id="ce-nt_probnp-range" data-refrange="chem.nt_probnp" style="font-size:.68rem">&lt;125 pg/mL</td><td id="ce-ntpro-f"></td></tr>
+            <tr data-test="hs-CRP"><td class="tn">hs-CRP</td><td><input id="ce-hsCrp" type="number" step="0.1" class="fc" style="padding:3px 6px" oninput="flagChem(this,0,5,'ce-hsCrp-f',true)"></td><td id="ce-hs_crp-range" data-refrange="chem.hs_crp" style="font-size:.68rem">&lt;5 mg/L</td><td id="ce-hsCrp-f"></td></tr>
+            <tr data-test="LDH"><td class="tn">LDH</td><td><input id="ce-ldh" type="number" step="1" class="fc" style="padding:3px 6px" oninput="flagChem(this,140,280,'ce-ldh-f')"></td><td id="ce-ldh-range" data-refrange="chem.ldh" style="font-size:.68rem">140–280 U/L</td><td id="ce-ldh-f"></td></tr>
           </tbody></table>
         </div>
       </div>
@@ -6091,6 +6103,80 @@ html[dir="rtl"] body{direction:rtl;}
   </div>
 </div>
 
+<div class="page" id="page-reference-ranges">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+    <div class="pg-title">📏 Lab Reference Ranges</div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-p btn-sm" onclick="openRefRangeForm()">+ Add Range</button>
+    </div>
+  </div>
+  <div style="font-size:.72rem;color:var(--slate);background:#f8fafd;border:1px solid var(--border);border-radius:6px;padding:6px 10px;margin-bottom:12px">
+    📖 SI is this lab's current default and stays unaffected by this page. A row with a Conventional range filled in becomes available wherever Settings → Lab Unit System is switched to Conventional/US — result entry pages and printed reports display and convert the value, but the value actually saved in the database is always the original SI value entered by the tech.
+  </div>
+  <div style="display:grid;grid-template-columns:360px 1fr;gap:14px">
+    <!-- Form panel -->
+    <div class="card" id="refrange-form-card">
+      <div class="card-hd"><span class="card-title" id="refrange-form-title">➕ Add Reference Range</span></div>
+      <div class="card-body">
+        <input type="hidden" id="rr-edit-id">
+        <div class="g2">
+          <div class="fg"><label class="fl">Department *</label>
+            <select class="fc" id="rr-dept">
+              <option value="hem">🩸 Haematology</option>
+              <option value="chem">⚗️ Chemistry</option>
+              <option value="sero">🦠 Serology</option>
+              <option value="immuno">🧪 Immunology</option>
+            </select>
+          </div>
+          <div class="fg"><label class="fl">Field Code *</label><input class="fc" id="rr-field-code" placeholder="e.g. creat"></div>
+        </div>
+        <div class="fg"><label class="fl">Label *</label><input class="fc" id="rr-label" placeholder="e.g. Creatinine"></div>
+        <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:var(--slate);margin:10px 0 4px">SI (current default)</div>
+        <div class="g2">
+          <div class="fg"><label class="fl">SI Unit *</label><input class="fc" id="rr-si-unit" placeholder="e.g. µmol/L"></div>
+          <div class="fg"><label class="fl">SI Low / High</label>
+            <div style="display:flex;gap:6px">
+              <input class="fc" type="number" step="any" id="rr-si-lo" placeholder="Low">
+              <input class="fc" type="number" step="any" id="rr-si-hi" placeholder="High">
+            </div>
+          </div>
+        </div>
+        <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:var(--slate);margin:10px 0 4px">Conventional / US (optional)</div>
+        <div class="g2">
+          <div class="fg"><label class="fl">Conventional Unit</label><input class="fc" id="rr-conv-unit" placeholder="e.g. mg/dL"></div>
+          <div class="fg"><label class="fl">Conversion Factor (SI → Conv.)</label><input class="fc" type="number" step="any" id="rr-conv-factor" placeholder="e.g. 0.0113"></div>
+        </div>
+        <div class="fg"><label class="fl">Conventional Low / High</label>
+          <div style="display:flex;gap:6px">
+            <input class="fc" type="number" step="any" id="rr-conv-lo" placeholder="Low">
+            <input class="fc" type="number" step="any" id="rr-conv-hi" placeholder="High">
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:4px">
+          <button class="btn btn-p" onclick="saveRefRange()" style="flex:2;justify-content:center">💾 Save</button>
+          <button class="btn btn-s" onclick="clearRefRangeForm()" style="flex:1;justify-content:center">🔄 Clear</button>
+        </div>
+      </div>
+    </div>
+    <!-- Ranges list -->
+    <div class="card">
+      <div class="card-hd"><span class="card-title">📋 All Reference Ranges</span>
+        <div style="display:flex;gap:6px">
+          <select class="fc" id="rr-dept-filter" style="width:auto" onchange="filterRefRanges()">
+            <option value="">All Departments</option>
+            <option value="hem">Haematology</option>
+            <option value="chem">Chemistry</option>
+            <option value="sero">Serology</option>
+            <option value="immuno">Immunology</option>
+          </select>
+          <input class="fc" id="rr-search" placeholder="Search field/label…" oninput="filterRefRanges()" style="width:160px">
+        </div>
+      </div>
+      <div id="refrange-table-body"><div class="spin-center"><div class="spinner"></div>Loading…</div></div>
+    </div>
+  </div>
+</div>
+
     </div><!-- /.content -->
   </div><!-- /#main -->
 </div><!-- /#app -->
@@ -6910,6 +6996,14 @@ const CFG = {
   // actually gates.
   get autoVerifyEnabled(){ return localStorage.getItem('cfg_auto_verify_enabled')==='true'; },
   set autoVerifyEnabled(v){ localStorage.setItem('cfg_auto_verify_enabled', v?'true':'false'); },
+  // Display-only toggle (Lab Reference Ranges feature) — 'si' is this
+  // lab's existing default and what every stored result value always
+  // stays in, regardless of this setting. Never read by anything that
+  // computes/validates against the stored value (Delta Check, critical
+  // thresholds, auto-verify range checks, eGFR calc) — only by the
+  // display/print layer (getLabRefRange(), near RESULT_META).
+  get labUnitSystem(){ const v=localStorage.getItem('cfg_lab_unit_system'); return v==='conventional'?'conventional':'si'; },
+  set labUnitSystem(v){ localStorage.setItem('cfg_lab_unit_system', v==='conventional'?'conventional':'si'); },
   // Bed-turnaround SLA (Bed Management / IPD overhaul, Phase 5b) — how long
   // a bed may sit in Cleaning/Maintenance before the grid tile escalates.
   // Two thresholds, same amber-then-red escalation as everywhere else in
@@ -6948,7 +7042,7 @@ const CFG = {
 const BLOOD_SHELF_LIFE_CFG_KEY={'Whole Blood':'bloodShelfWholeBlood','Packed RBC':'bloodShelfPrbc',Platelets:'bloodShelfPlatelets',FFP:'bloodShelfFfp',Cryoprecipitate:'bloodShelfCryo'};
 
 const ROLE_PAGES = {
-  admin:['dashboard','admission','theatre','consultation','nursing','fluid-chart','appointments','infection','handover','register','worklist','samples','set-printer','hem-entry','chem-entry','sero-entry','immuno-entry','micro-entry','pcr-entry','histo-entry','cyto-entry','unified-entry','allresults','criticals','reports','print-reports-hub','rad-print','billing','prices','pt-history','labhistory','tat','inventory','bloodbank','qc','validation','staff','doctors','radiology','analyzer','delivery','settings','statistics'],
+  admin:['dashboard','admission','theatre','consultation','nursing','fluid-chart','appointments','infection','handover','register','worklist','samples','set-printer','hem-entry','chem-entry','sero-entry','immuno-entry','micro-entry','pcr-entry','histo-entry','cyto-entry','unified-entry','allresults','criticals','reports','print-reports-hub','rad-print','billing','prices','pt-history','labhistory','tat','inventory','bloodbank','qc','validation','reference-ranges','staff','doctors','radiology','analyzer','delivery','settings','statistics'],
   doctor:['dashboard','admission','theatre','consultation','nursing','fluid-chart','allresults','criticals','radiology','bloodbank','pt-history'],
   nurse:['dashboard','nursing','fluid-chart','admission','criticals','bloodbank','pt-history','inventory','handover','infection','samples'],
   lab_tech:['dashboard','worklist','samples','set-printer','hem-entry','chem-entry','sero-entry','immuno-entry','micro-entry','pcr-entry','histo-entry','cyto-entry','unified-entry','allresults','criticals','reports','tat','inventory','delivery','qc','validation','labhistory','bloodbank','pt-history'],
@@ -6970,7 +7064,7 @@ const PAGE_TITLES = {
   allresults:'All Results',criticals:'Critical Values',reports:'Print Reports',
   billing:'Billing & Invoices',prices:'Price List',
   'pt-history':'Patient History Timeline',labhistory:'Lab History',
-  tat:'TAT Tracker',inventory:'Inventory',bloodbank:'Blood Bank',qc:'QC Module',
+  tat:'TAT Tracker',inventory:'Inventory',bloodbank:'Blood Bank',qc:'QC Module','reference-ranges':'Lab Reference Ranges',
   staff:'Staff Management',doctors:'Doctors',radiology:'Radiology',
   delivery:'Result Delivery',settings:'Settings',
 };
@@ -6992,7 +7086,7 @@ const PAGE_TITLES = {
 const MODULE_PAGES = {
   reception:      { label:'Reception',      icon:'🏥', pages:['register','appointments','print-reports-hub'] },
   phlebotomy:     { label:'Phlebotomy',      icon:'💉', pages:['samples','set-printer'] },
-  laboratory:     { label:'Laboratory',      icon:'🔬', pages:['worklist','unified-entry','hem-entry','chem-entry','sero-entry','immuno-entry','micro-entry','pcr-entry','histo-entry','cyto-entry','reports','allresults','labhistory','criticals','qc','analyzer','validation','tat','pt-history'] },
+  laboratory:     { label:'Laboratory',      icon:'🔬', pages:['worklist','unified-entry','hem-entry','chem-entry','sero-entry','immuno-entry','micro-entry','pcr-entry','histo-entry','cyto-entry','reports','allresults','labhistory','criticals','qc','analyzer','validation','reference-ranges','tat','pt-history'] },
   radiology:      { label:'Radiology',       icon:'🩻', pages:['radiology','rad-print'] },
   doctor:         { label:'Doctor',          icon:'🩺', pages:['consultation','pt-history'] },
   nursing:        { label:'Nursing',         icon:'🧑‍⚕️', pages:['nursing','fluid-chart','infection','handover','pt-history'] },
@@ -7922,6 +8016,7 @@ function goPage(p) {
   else if(p==='qc') run(loadQcPage);
   else if(p==='analyzer') run(loadInstrumentMessages);
   else if(p==='validation') run(initValidationPage);
+  else if(p==='reference-ranges') run(loadRefRanges);
   else if(p==='labhistory'){ setD('lh-from',new Date(Date.now()-7*864e5).toISOString().slice(0,10)); setD('lh-to',td); }
   else if(p==='tat'){ setD('tat-filter-date',td); run(loadTat); }
   else if(p==='inventory') run(loadInventory);
@@ -7932,7 +8027,7 @@ function goPage(p) {
   else if(p==='radiology') run(loadRadRequests);
   else if(p==='settings') loadSettings();
   else if(p==='hem-entry') setD('he-date',td);
-  else if(p==='chem-entry'){ setD('ce-date',td); calcGlobAG(); }
+  else if(p==='chem-entry'){ setD('ce-date',td); calcGlobAG(); refreshAllRangeDisplays('#page-chem-entry'); }
   else if(p==='sero-entry') setD('se-date',td);
   else if(p==='micro-entry') setD('mi-date',td);
   else if(p==='pt-history'){ setD('pth-from',new Date(Date.now()-365*864e5).toISOString().slice(0,10)); setD('pth-to',td); }
@@ -8055,6 +8150,7 @@ function loadSettings() {
   const ss=document.getElementById('cfg-sms-sender-id'); if(ss) ss.value=CFG.smsSenderId;
   const av=document.getElementById('cfg-auto-verify'); if(av) av.checked=CFG.autoVerifyEnabled;
   updateAutoVerifyLabel();
+  const lus=document.getElementById('cfg-lab-unit-system'); if(lus) lus.value=CFG.labUnitSystem;
   const ane=document.getElementById('cfg-admin-notify-email'); if(ane) ane.value=CFG.adminNotifyEmail;
   const dot=document.getElementById('cfg-discount-override-pct'); if(dot) dot.value=CFG.discountOverrideThreshold;
   const pinCard=document.getElementById('cfg-override-pin-card'); if(pinCard) pinCard.style.display = currentProfile?.role==='admin' ? '' : 'none';
@@ -8189,6 +8285,18 @@ function setAutoVerifyEnabled(on){
 function updateAutoVerifyLabel(){
   const el=document.getElementById('cfg-auto-verify-label'); if(!el) return;
   el.textContent='⚡ Auto-Verification & Smart Rules Engine: '+(CFG.autoVerifyEnabled?'ON':'OFF');
+}
+// Same immediate-apply pattern as setAutoVerifyEnabled() — a display
+// preference a tech/doctor needs to see take effect right away, not after
+// a separate "Save Settings" click. Refreshing any currently-open result
+// entry page's range display is intentionally left to that page's own
+// next render (e.g. re-selecting the patient, or the next flag*() call)
+// rather than forcing a full re-render here — matches how every other
+// live CFG toggle in this app behaves.
+function setLabUnitSystem(v){
+  CFG.labUnitSystem=v;
+  refreshAllRangeDisplays();
+  toast('Lab display unit system set to '+(v==='conventional'?'Conventional / US':'SI'),'ok');
 }
 // Sets/changes the CURRENT admin's own Quick-PIN via the set_override_pin()
 // RPC (migration_v2.12) — the plain PIN is sent once over the (HTTPS)
@@ -12225,8 +12333,6 @@ function flagChem(inp,lo,hi,flagId,canBeCrit=false) {
   let flag='',color='';
   if(v>hi){ flag='▲ H'; color='var(--red)'; } else if(v<lo){ flag='▼ L'; color='var(--chem)'; }
   flagEl.innerHTML=flag?'<span style="color:'+color+';font-weight:700;font-size:.72rem">'+flag+'</span>':'';
-  const tp=parseFloat(document.getElementById('ce-tp')?.value)||0, alb=parseFloat(document.getElementById('ce-alb')?.value)||0;
-  if(tp&&alb){ const glob=(tp-alb).toFixed(1); const ag=alb>0?(alb/(tp-alb)).toFixed(2):'—'; const ge=document.getElementById('ce-glob'); if(ge) ge.value=glob; const ae=document.getElementById('ce-ag'); if(ae) ae.value=ag; }
   if(canBeCrit){ const fid=inp.id.replace('ce-',''); const cr=CRIT_RANGES[fid]; if(cr&&!isNaN(v)&&(v<cr.lo||v>cr.hi)){ inp.style.background='#fff1f2'; const warn=document.getElementById('ce-critical-warn'); if(warn) warn.style.display='block'; } }
 }
 function flagSero(inp,lo,hi,flagId) {
@@ -12254,7 +12360,53 @@ function calcAbsCounts() {
 }
 function calcGlobAG() {
   const tp=parseFloat(document.getElementById('ce-tp')?.value)||0, alb=parseFloat(document.getElementById('ce-alb')?.value)||0;
-  if(tp&&alb){ const glob=(tp-alb).toFixed(1); const ae=document.getElementById('ce-ag'); const ge=document.getElementById('ce-glob'); if(ge) ge.value=glob; if(ae) ae.value=alb>0?(alb/(tp-alb)).toFixed(2):'—'; }
+  if(tp&&alb){
+    const globSi=tp-alb; // always computed in SI (g/L) from the raw SI tp/alb inputs
+    const ae=document.getElementById('ce-ag'); if(ae) ae.value=alb>0?(alb/globSi).toFixed(2):'—'; // unitless ratio — never converts
+    // Globulin isn't its own RESULT_META/lab_reference_ranges field, but it
+    // shares Total Protein/Albumin's g/L<->g/dL relationship exactly (same
+    // physical unit family), so reuse Albumin's resolved conversion factor
+    // rather than seeding a third, redundant copy of the same 0.1 factor.
+    const factor=getLabRefRange('chem','alb').factor||1;
+    const ge=document.getElementById('ce-glob'); if(ge) ge.value=(globSi*factor).toFixed(factor!==1?2:1);
+  }
+}
+// 2021 CKD-EPI race-free creatinine equation (adults only). Reuses
+// _uePatient — already fetched by whichever path opened this entry screen
+// (openUnifiedResultsEntry()/loadPatientIntoEntryPage()) — for age/sex
+// rather than firing a second fetch per keystroke. ce-egfr stays readonly
+// whenever this successfully computes a value, so a valid calculated
+// result can't be silently overwritten by hand; if age/sex aren't usable
+// for the equation (missing, non-years unit, or age<18), the field is
+// left blank AND made editable instead, so a pediatric or unknown-age
+// patient's RFT order is never permanently unverifiable just because
+// CKD-EPI doesn't apply to them.
+function calcEgfr() {
+  const el=document.getElementById('ce-egfr'); if(!el) return;
+  const creatUmol=parseFloat(document.getElementById('ce-creat')?.value);
+  const pt=_uePatient;
+  const age=parseFloat(pt?.age);
+  const ageUnit=(pt?.age_unit||'Years').toLowerCase();
+  const sex=(pt?.sex||'').toLowerCase();
+  const isAdult=ageUnit.startsWith('y')&&!isNaN(age)&&age>=18;
+  const usableSex=sex==='male'||sex==='female';
+  if(isNaN(creatUmol)||creatUmol<=0||!isAdult||!usableSex){
+    el.readOnly=false;
+    el.placeholder=(isAdult&&usableSex)?'Auto from Creat':'Enter manually (age/sex not on file or not adult)';
+    return;
+  }
+  const scr=creatUmol/88.4;
+  let egfr;
+  if(sex==='female'){
+    egfr = scr<=0.7 ? 142*Math.pow(scr/0.7,-0.241)*Math.pow(0.9938,age)*1.012
+                    : 142*Math.pow(scr/0.7,-1.200)*Math.pow(0.9938,age)*1.012;
+  } else {
+    egfr = scr<=0.9 ? 142*Math.pow(scr/0.9,-0.302)*Math.pow(0.9938,age)
+                    : 142*Math.pow(scr/0.9,-1.200)*Math.pow(0.9938,age);
+  }
+  el.readOnly=true;
+  el.placeholder='Auto from Creat';
+  el.value=Math.round(egfr);
 }
 function switchMicroTab(tab,btn) {
   ['ua','stool','culture','csf'].forEach(t=>{ const el=document.getElementById('micro-tab-'+t); if(el) el.style.display=t===tab?'':'none'; });
@@ -12758,21 +12910,38 @@ async function printChemReport() {
     const req=new Set((pt.tests_requested||[]).map(t=>String(t).toLowerCase().trim()));
     const wanted=(tag)=>!req.size || tag.split('|').some(t=>req.has(t.toLowerCase().trim()));
     const ptB=buildLabPtBanner(pt, r.analysis_date||r.created_at);
-    const row=(name,val,unit,lo,hi,tag)=>{ if(!wanted(tag)) return ''; const v=parseFloat(val); const f=!isNaN(v)?(v>hi?'▲ H':v<lo?'▼ L':''):''; return '<tr style="border-bottom:1px solid #f1f5fb"><td style="padding:3px 8px;font-size:9pt">'+name+'</td><td style="padding:3px 8px;color:'+(f==='▲ H'?'#b91c1c':f==='▼ L'?'#1d4ed8':'inherit')+';font-weight:'+(f?700:400)+'">'+(val??'—')+'</td><td style="padding:3px 8px;font-size:8pt;color:#64748b">'+unit+'</td><td style="padding:3px 8px;font-size:8pt;color:#64748b">'+lo+'–'+hi+'</td><td style="padding:3px 8px;color:'+(f==='▲ H'?'#b91c1c':f==='▼ L'?'#1d4ed8':'')+';font-weight:700;font-size:8.5pt">'+f+'</td></tr>'; };
+    // fieldCode (7th arg, optional) resolves unit/lo/hi/value together via
+    // getLabRefRange()/convertLabValueForDisplay() against
+    // CFG.labUnitSystem, falling back to the literal SI unit/lo/hi passed
+    // in when there's no fieldCode or no matching lab_reference_ranges row
+    // — every existing call keeps working unchanged, this just lets a
+    // call opt in to the toggle by passing one extra argument.
+    const row=(name,val,unit,lo,hi,tag,fieldCode)=>{
+      if(!wanted(tag)) return '';
+      let dVal=val, dUnit=unit, dLo=lo, dHi=hi;
+      if(fieldCode){
+        const range=getLabRefRange('chem',fieldCode);
+        dUnit=range.unit; dLo=range.lo; dHi=range.hi;
+        dVal=convertLabValueForDisplay('chem',fieldCode,val);
+      }
+      const v=parseFloat(dVal); const f=(!isNaN(v)&&dHi!=null&&dLo!=null)?(v>dHi?'▲ H':v<dLo?'▼ L':''):'';
+      return '<tr style="border-bottom:1px solid #f1f5fb"><td style="padding:3px 8px;font-size:9pt">'+name+'</td><td style="padding:3px 8px;color:'+(f==='▲ H'?'#b91c1c':f==='▼ L'?'#1d4ed8':'inherit')+';font-weight:'+(f?700:400)+'">'+(dVal??'—')+'</td><td style="padding:3px 8px;font-size:8pt;color:#64748b">'+dUnit+'</td><td style="padding:3px 8px;font-size:8pt;color:#64748b">'+(dHi!=null?dLo+'–'+dHi:'—')+'</td><td style="padding:3px 8px;color:'+(f==='▲ H'?'#b91c1c':f==='▼ L'?'#1d4ed8':'')+';font-weight:700;font-size:8.5pt">'+f+'</td></tr>';
+    };
     const sh=l=>'<tr style="background:#e0f7fa"><td colspan="5" style="padding:4px 8px;font-weight:700;font-size:8pt;text-transform:uppercase;letter-spacing:.5px;color:#0369a1">'+l+'</td></tr>';
     const sect=(label,rows)=>{ const body=rows.filter(Boolean).join(''); return body ? sh(label)+body : ''; };
     const LFT='LFT (Liver Function)', RFT='RFT (Renal Function)', ELEC='Serum Electrolytes';
     const col1 =
-      sect('Liver Function',[row('T. Bilirubin',r.tbil,'µmol/L',0,17,LFT),row('D. Bilirubin',r.dbil,'µmol/L',0,5,LFT),row('ALT (SGPT)',r.alt,'U/L',7,56,LFT),row('AST (SGOT)',r.ast,'U/L',10,40,LFT),row('ALP',r.alp,'U/L',44,147,LFT),row('GGT',r.ggt,'U/L',0,51,LFT),row('Total Protein',r.tp,'g/L',60,83,LFT),row('Albumin',r.alb,'g/L',35,50,LFT)])+
-      sect('Renal Function',[row('Creatinine',r.creat,'µmol/L',62,106,RFT),row('Urea',r.urea,'mmol/L',2.5,7.8,RFT),row('eGFR',r.egfr,'mL/min/1.73m²',60,999,RFT)])+
-      sect('Electrolytes',[row('Sodium (Na)',r.na,'mmol/L',136,145,ELEC),row('Potassium (K)',r.k,'mmol/L',3.5,5.1,ELEC),row('Chloride',r.cl,'mmol/L',98,107,ELEC),row('Calcium',r.ca,'mmol/L',2.1,2.6,'Calcium')]);
+      sect('Liver Function',[row('T. Bilirubin',r.tbil,'µmol/L',0,17,LFT,'tbil'),row('D. Bilirubin',r.dbil,'µmol/L',0,5,LFT,'dbil'),row('ALT (SGPT)',r.alt,'U/L',7,56,LFT,'alt'),row('AST (SGOT)',r.ast,'U/L',10,40,LFT,'ast'),row('ALP',r.alp,'U/L',44,147,LFT,'alp'),row('GGT',r.ggt,'U/L',0,51,LFT,'ggt'),row('Total Protein',r.tp,'g/L',60,83,LFT,'tp'),row('Albumin',r.alb,'g/L',35,50,LFT,'alb')])+
+      sect('Renal Function',[row('Creatinine',r.creat,'µmol/L',62,106,RFT,'creat'),row('Urea',r.urea,'mmol/L',2.5,7.8,RFT,'urea'),row('eGFR',r.egfr,'mL/min/1.73m²',60,999,RFT,'egfr')])+
+      sect('Electrolytes',[row('Sodium (Na)',r.na,'mmol/L',136,145,ELEC,'na'),row('Potassium (K)',r.k,'mmol/L',3.5,5.1,ELEC,'k'),row('Chloride',r.cl,'mmol/L',98,107,ELEC,'cl'),row('Calcium',r.ca,'mmol/L',2.1,2.6,'Calcium','ca')]);
     const col2 =
-      sect('Glucose & Diabetes',[row('Fasting Blood Sugar',r.fbs,'mmol/L',3.9,6.1,'Fasting Blood Sugar'),row('Random Blood Sugar',r.rbs,'mmol/L',3.9,11.1,'Random Blood Sugar'),row('HbA1c',r.hba1c,'%',4,5.7,'HbA1c')])+
-      sect('Lipid Profile',[row('Total Cholesterol',r.tchol,'mmol/L',0,5.2,'Lipid Profile'),row('LDL Cholesterol',r.ldl,'mmol/L',0,3.4,'Lipid Profile'),row('HDL Cholesterol',r.hdl,'mmol/L',1.0,99,'Lipid Profile'),row('Triglycerides',r.trig,'mmol/L',0,1.7,'Lipid Profile')])+
-      sect('Cardiac Markers',[row('Troponin I',r.troponin_i,'ng/mL',0,0.04,'Cardiac Enzymes|Troponin I'),row('hs-TnT',r.hs_tnt,'ng/L',0,14,'Cardiac Enzymes|Troponin I'),row('CK Total',r.ck,'U/L',30,200,'Cardiac Enzymes'),row('CK-MB',r.ckmb,'U/L',0,25,'Cardiac Enzymes'),row('NT-proBNP',r.nt_probnp,'pg/mL',0,125,'Cardiac Enzymes'),row('hs-CRP',r.hs_crp,'mg/L',0,5,'hs-CRP'),row('LDH',r.ldh,'U/L',140,280,'LDH')]);
+      sect('Glucose & Diabetes',[row('Fasting Blood Sugar',r.fbs,'mmol/L',3.9,6.1,'Fasting Blood Sugar','fbs'),row('Random Blood Sugar',r.rbs,'mmol/L',3.9,11.1,'Random Blood Sugar','rbs'),row('HbA1c',r.hba1c,'%',4,5.7,'HbA1c','hba1c')])+
+      sect('Lipid Profile',[row('Total Cholesterol',r.tchol,'mmol/L',0,5.2,'Lipid Profile','tchol'),row('LDL Cholesterol',r.ldl,'mmol/L',0,3.4,'Lipid Profile','ldl'),row('HDL Cholesterol',r.hdl,'mmol/L',1.0,99,'Lipid Profile','hdl'),row('Triglycerides',r.trig,'mmol/L',0,1.7,'Lipid Profile','trig')])+
+      sect('Cardiac Markers',[row('Troponin I',r.troponin_i,'ng/mL',0,0.04,'Cardiac Enzymes|Troponin I','troponin_i'),row('hs-TnT',r.hs_tnt,'ng/L',0,14,'Cardiac Enzymes|Troponin I','hs_tnt'),row('CK Total',r.ck,'U/L',30,200,'Cardiac Enzymes','ck'),row('CK-MB',r.ckmb,'U/L',0,25,'Cardiac Enzymes','ckmb'),row('NT-proBNP',r.nt_probnp,'pg/mL',0,125,'Cardiac Enzymes','nt_probnp'),row('hs-CRP',r.hs_crp,'mg/L',0,5,'hs-CRP','hs_crp'),row('LDH',r.ldh,'U/L',140,280,'LDH','ldh')]);
     if(!col1 && !col2){ toast('⚠️ No saved results match this patient\'s requested tests — click Save Chemistry Results first','err'); return; }
     const thead='<thead><tr style="background:#1e3a5a;color:#fff"><th style="padding:5px 8px;font-size:8.5pt;text-align:left">Test</th><th style="padding:5px 8px;font-size:8.5pt;text-align:left">Result</th><th style="padding:5px 8px;font-size:8.5pt;text-align:left">Unit</th><th style="padding:5px 8px;font-size:8.5pt;text-align:left">Reference</th><th>F</th></tr></thead>';
-    const html=printHeader('Biochemistry Report')+ptB+
+    const unitSystemNote='<div style="font-size:7.5pt;color:#64748b;margin-bottom:6px">Units: '+(CFG.labUnitSystem==='conventional'?'Conventional / US (where configured; SI shown for any test without a Conventional range on file)':'SI (International System)')+'</div>';
+    const html=printHeader('Biochemistry Report')+ptB+unitSystemNote+
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">'+
       (col1?'<table style="width:100%;border-collapse:collapse">'+thead+'<tbody>'+col1+'</tbody></table>':'<div></div>')+
       (col2?'<table style="width:100%;border-collapse:collapse">'+thead+'<tbody>'+col2+'</tbody></table>':'<div></div>')+
@@ -17331,7 +17500,132 @@ async function seedDefaultPrices() {
   } catch(e){ toast(e.message,'err'); }
 }
 
-
+// ══════════════════════════════════════════════════════════════
+// LAB REFERENCE RANGES MODULE (admin) — modeled directly on the Price
+// List module above: same _allX/_x-list globals, same load/render/filter/
+// openForm/clearForm/save/edit/delete shape, same dbWrite-via-sb.from
+// convention. _refRangesByKey is the extra piece Price List doesn't need
+// — a dept_key+field_code -> row lookup map, kept in sync on every load/
+// save/delete, that getLabRefRange() (near RESULT_META) reads from to
+// resolve a field's unit/range for the currently selected
+// CFG.labUnitSystem across every result-entry page and print report,
+// without a second per-field fetch.
+// ══════════════════════════════════════════════════════════════
+let _allRefRanges = [];
+let _refRangesByKey = {};
+function refRangeKey(deptKey, fieldCode){ return deptKey+'|'+fieldCode; }
+function rebuildRefRangesByKey(){
+  _refRangesByKey = {};
+  _allRefRanges.forEach(r=>{ _refRangesByKey[refRangeKey(r.dept_key, r.field_code)] = r; });
+}
+async function loadRefRanges() {
+  const body = document.getElementById('refrange-table-body');
+  if(!body||!sb) return;
+  body.innerHTML='<div class="spin-center"><div class="spinner"></div>Loading…</div>';
+  try {
+    const {data} = await sb.from('lab_reference_ranges').select('*').order('dept_key').order('label');
+    _allRefRanges = data||[];
+    rebuildRefRangesByKey();
+    renderRefRangeTable(_allRefRanges);
+  } catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>'; }
+}
+const REF_RANGE_DEPT_LABELS = {hem:'🩸 Haematology',chem:'⚗️ Chemistry',sero:'🦠 Serology',immuno:'🧪 Immunology'};
+function renderRefRangeTable(rows) {
+  const body = document.getElementById('refrange-table-body');
+  if(!body) return;
+  if(!rows.length){ body.innerHTML='<div class="empty-state"><div class="empty-icon">📏</div><div class="empty-title">No reference ranges yet.<br>Apply migration_v2.45 in Supabase to seed from the current defaults.</div></div>'; return; }
+  const groups = {};
+  rows.forEach(r=>{ if(!groups[r.dept_key]) groups[r.dept_key]=[]; groups[r.dept_key].push(r); });
+  let html='<div style="overflow-x:auto"><table class="tbl" id="refrange-table"><thead><tr>'+
+    '<th>Field</th><th>SI Range</th><th>Conventional Range</th><th>Actions</th></tr></thead><tbody>';
+  let currentDept='';
+  rows.forEach(r=>{
+    if(r.dept_key!==currentDept){
+      currentDept=r.dept_key;
+      html+='<tr style="background:#f1f5f9"><td colspan="4" style="padding:6px 10px;font-weight:700;font-size:.72rem;text-transform:uppercase;letter-spacing:.4px;color:var(--slate)">'+escapeHtml(REF_RANGE_DEPT_LABELS[r.dept_key]||r.dept_key)+'</td></tr>';
+    }
+    const siRange=(r.si_lo??'—')+' – '+(r.si_hi??'—')+' '+escapeHtml(r.si_unit||'');
+    const convRange=r.conventional_unit ? ((r.conventional_lo??'—')+' – '+(r.conventional_hi??'—')+' '+escapeHtml(r.conventional_unit)) : '<span style="color:var(--slate)">Not set — falls back to SI</span>';
+    html+='<tr id="refrange-row-'+r.id+'">'+
+      '<td style="font-weight:500">'+escapeHtml(r.label||r.field_code)+'<div style="font-size:.66rem;color:var(--slate);font-family:DM Mono,monospace">'+escapeHtml(r.field_code)+'</div></td>'+
+      '<td style="font-size:.78rem">'+siRange+'</td>'+
+      '<td style="font-size:.78rem">'+convRange+'</td>'+
+      '<td><div class="acts">'+
+        '<button class="btn btn-s btn-xs" onclick="editRefRange(\''+r.id+'\')">✏️</button>'+
+        '<button class="btn btn-r btn-xs" onclick="deleteRefRange(\''+r.id+'\')">✕</button>'+
+      '</div></td></tr>';
+  });
+  html+='</tbody></table></div>';
+  body.innerHTML = html;
+}
+function filterRefRanges() {
+  const dept = document.getElementById('rr-dept-filter')?.value||'';
+  const q = (document.getElementById('rr-search')?.value||'').toLowerCase();
+  let filtered = _allRefRanges;
+  if(dept) filtered = filtered.filter(r=>r.dept_key===dept);
+  if(q) filtered = filtered.filter(r=>r.label?.toLowerCase().includes(q)||r.field_code?.toLowerCase().includes(q));
+  renderRefRangeTable(filtered);
+}
+function openRefRangeForm() {
+  clearRefRangeForm();
+  document.getElementById('refrange-form-card')?.scrollIntoView({behavior:'smooth'});
+  document.getElementById('rr-field-code')?.focus();
+}
+function clearRefRangeForm() {
+  ['rr-edit-id','rr-field-code','rr-label','rr-si-unit','rr-si-lo','rr-si-hi','rr-conv-unit','rr-conv-lo','rr-conv-hi','rr-conv-factor'].forEach(id=>{const el=document.getElementById(id);if(el) el.value='';});
+  const dept=document.getElementById('rr-dept'); if(dept) dept.selectedIndex=0;
+  document.getElementById('refrange-form-title').textContent='➕ Add Reference Range';
+}
+async function saveRefRange() {
+  if(!sb){toast('Not connected','err');return;}
+  const g=id=>document.getElementById(id)?.value||'';
+  const gn=id=>{ const v=g(id); return v===''?null:parseFloat(v); };
+  if(!g('rr-field-code')){toast('Field code required','err');return;}
+  if(!g('rr-label')){toast('Label required','err');return;}
+  if(!g('rr-si-unit')){toast('SI unit required','err');return;}
+  const editId = g('rr-edit-id');
+  const payload = {
+    dept_key:g('rr-dept'), field_code:g('rr-field-code').trim(), label:g('rr-label'),
+    si_unit:g('rr-si-unit'), si_lo:gn('rr-si-lo'), si_hi:gn('rr-si-hi'),
+    conventional_unit:g('rr-conv-unit')||null, conventional_lo:gn('rr-conv-lo'), conventional_hi:gn('rr-conv-hi'),
+    conversion_factor:gn('rr-conv-factor'),
+    updated_by:currentProfile?.id, updated_by_name:currentProfile?.full_name||'', updated_at:new Date().toISOString(),
+  };
+  try {
+    if(editId) {
+      await sb.from('lab_reference_ranges').update(payload).eq('id',editId);
+      toast('✅ Reference range updated','ok');
+    } else {
+      await sb.from('lab_reference_ranges').insert(payload);
+      toast('✅ Reference range saved','ok');
+    }
+    clearRefRangeForm(); loadRefRanges();
+  } catch(e){toast(e.message,'err');}
+}
+function editRefRange(id) {
+  const r = _allRefRanges.find(x=>x.id===id);
+  if(!r) return;
+  document.getElementById('rr-edit-id').value = r.id;
+  document.getElementById('rr-dept').value = r.dept_key||'hem';
+  document.getElementById('rr-field-code').value = r.field_code||'';
+  document.getElementById('rr-label').value = r.label||'';
+  document.getElementById('rr-si-unit').value = r.si_unit||'';
+  document.getElementById('rr-si-lo').value = r.si_lo??'';
+  document.getElementById('rr-si-hi').value = r.si_hi??'';
+  document.getElementById('rr-conv-unit').value = r.conventional_unit||'';
+  document.getElementById('rr-conv-lo').value = r.conventional_lo??'';
+  document.getElementById('rr-conv-hi').value = r.conventional_hi??'';
+  document.getElementById('rr-conv-factor').value = r.conversion_factor??'';
+  document.getElementById('refrange-form-title').textContent='✏️ Edit Reference Range';
+  document.getElementById('refrange-form-card')?.scrollIntoView({behavior:'smooth'});
+}
+async function deleteRefRange(id) {
+  if(!confirm('Delete this reference range? Result entry/reports will fall back to the built-in default for this field.')) return;
+  try {
+    await sb.from('lab_reference_ranges').delete().eq('id',id);
+    toast('Deleted','ok'); loadRefRanges();
+  } catch(e){toast(e.message,'err');}
+}
 
 // ══════════════════════════════════════════════════════════════
 // STAFF MODULE
@@ -20353,7 +20647,8 @@ function openEnterModal(patId,labNo,ptName){
 async function loadPatientIntoEntryPage(ptId, ptName) {
   if(!ptId) return;
   let pt=null;
-  if(sb) { try{ const {data}=await sb.from('patients').select('name,first_name,last_name,mrn,lab_no,age,age_unit,sex').eq('id',ptId).single(); pt=data; }catch(e){} }
+  if(sb) { try{ const {data}=await sb.from('patients').select('id,name,first_name,last_name,mrn,lab_no,age,age_unit,sex').eq('id',ptId).single(); pt=data; }catch(e){} }
+  _uePatient = pt;
   const label = (pt?.name||fullName(pt||{})||ptName||'—') + ' · ' + (pt?.mrn||pt?.lab_no||'—') + ' · ' + (pt?.age||'?')+(pt?.age_unit||'y') + ' / ' + (pt?.sex||'');
   Object.entries(DEPT_META).forEach(([key,meta])=>{
     const idEl=document.getElementById(meta.ptIdField); if(idEl) idEl.value=ptId;
@@ -20365,6 +20660,7 @@ async function loadPatientIntoEntryPage(ptId, ptName) {
   ['he-date','ce-date','se-date','mi-date','pcr-date','hi-date','cy-date'].forEach(id=>{
     const el=document.getElementById(id); if(el && !el.value) el.value=today();
   });
+  refreshAllRangeDisplays('#page-chem-entry');
 }
 
 // ── UNIFIED RESULTS ENTRY ──────────────────────────────
@@ -20375,6 +20671,12 @@ async function loadPatientIntoEntryPage(ptId, ptName) {
 let _ueMoved = [];
 let _ueCurrentDepts = [];
 let _uePatientId = null;
+// The full patient row (age/age_unit/sex etc.) already fetched by whichever
+// path opened this entry screen — kept alongside _uePatientId so
+// auto-calculated fields that need demographics (e.g. calcEgfr()'s
+// CKD-EPI equation) can read them synchronously instead of firing a second
+// fetch per keystroke.
+let _uePatient = null;
 
 function _ueRestoreAll() {
   _ueMoved.forEach(m=>{
@@ -20640,6 +20942,7 @@ async function openUnifiedResultsEntry(ptId, labNo, ptName) {
   let pt=null;
   if(sb) { try{ const {data}=await sb.from('patients').select('id,name,first_name,last_name,mrn,lab_no,age,age_unit,sex,tests_requested,priority,payment_status').eq('id',ptId).single(); pt=data; }catch(e){} }
   if(!pt) pt={id:ptId,name:ptName,mrn:labNo,tests_requested:[]};
+  _uePatient = pt;
   if(pt.payment_status==='unpaid'||pt.payment_status==='insurance_pending'){
     toast('🔒 Payment required before entering results for this patient','err'); return;
   }
@@ -20749,6 +21052,9 @@ async function openUnifiedResultsEntry(ptId, labNo, ptName) {
   if(info) info.innerHTML='<span style="font-weight:700">'+(pt.name||fullName(pt)||'—')+'</span> · '+(pt.mrn||pt.lab_no||'—')+' · '+(pt.age||'?')+(pt.age_unit||'y')+' / '+(pt.sex||'')+
     (pt.priority==='STAT'?' · <span style="color:var(--red);font-weight:700">⚡ STAT</span>':'')+
     '<div style="font-size:.72rem;color:var(--slate);margin-top:2px">Sections shown: '+wanted.map(d=>DEPT_META[d].label).join(', ')+'</div>';
+  // Cards were just moved (not cloned) into #ue-detail, so a global
+  // refresh (no root selector) finds them wherever they now live.
+  refreshAllRangeDisplays();
   goPage('unified-entry');
 }
 
@@ -20847,6 +21153,68 @@ const RESULT_TAGS = {
     psa:'PSA (Tumour Marker)', afp:'🔹 Tumour Marker Profile (AFP+CEA+CA125+CA19.9)|AFP (Tumour Marker)', cea:'🔹 Tumour Marker Profile (AFP+CEA+CA125+CA19.9)|CEA (Tumour Marker)', ca125:'🔹 Tumour Marker Profile (AFP+CEA+CA125+CA19.9)|CA-125', ca199:'🔹 Tumour Marker Profile (AFP+CEA+CA125+CA19.9)|CA-19.9',
     vit_d:'Vitamin D', vit_b12:'Vitamin B12', folate:'Folate', ferritin:'Ferritin' }
 };
+
+// ══════════════════════════════════════════════════════════════
+// LAB REFERENCE RANGES — SI/Conventional unit-system resolution
+// ══════════════════════════════════════════════════════════════
+// Single shared resolver every result-entry page and print report reads
+// through instead of each hardcoding RESULT_META's SI values directly —
+// backed by the admin-managed lab_reference_ranges table
+// (_refRangesByKey, loaded by loadRefRanges() on the Reference Ranges
+// page; see index.html's Lab Reference Ranges module for the admin CRUD
+// side). Falls back to RESULT_META for any field with no matching row yet
+// (migration not applied, or an admin hasn't filled in a Conventional
+// range for that field), so nothing breaks before every field is
+// migrated. Never used by anything that computes/validates against the
+// STORED value (Delta Check, critical thresholds, auto-verify range
+// checks, eGFR's own calculation) — only by what a human sees on screen
+// or on a printed page.
+function getLabRefRange(deptKey, fieldCode){
+  const meta = RESULT_META[deptKey]?.[fieldCode];
+  const row = (typeof _refRangesByKey!=='undefined' && _refRangesByKey) ? _refRangesByKey[refRangeKey(deptKey, fieldCode)] : null;
+  const wantConventional = CFG.labUnitSystem==='conventional';
+  if(wantConventional && row && row.conventional_unit){
+    return {
+      label: row.label || meta?.label || fieldCode,
+      unit: row.conventional_unit,
+      lo: row.conventional_lo,
+      hi: row.conventional_hi,
+      factor: row.conversion_factor || 1,
+    };
+  }
+  return {
+    label: row?.label || meta?.label || fieldCode,
+    unit: row?.si_unit || meta?.unit || '',
+    lo: row?.si_lo ?? meta?.lo,
+    hi: row?.si_hi ?? meta?.hi,
+    factor: 1,
+  };
+}
+// Converts a raw value ALWAYS entered/stored in SI to whatever
+// getLabRefRange() currently says should be shown — a no-op (factor 1)
+// whenever CFG.labUnitSystem is 'si' or this field has no Conventional
+// data on file yet.
+function convertLabValueForDisplay(deptKey, fieldCode, siValue){
+  if(siValue==null || siValue==='') return siValue;
+  const v = parseFloat(siValue);
+  if(isNaN(v)) return siValue;
+  const range = getLabRefRange(deptKey, fieldCode);
+  if(!range.factor || range.factor===1) return v;
+  return Number((v*range.factor).toFixed(4));
+}
+// Refreshes every reference-range display on the currently visible entry
+// page — tags a range <td> with data-refrange="<deptKey>.<fieldCode>"
+// once (see the Chemistry RFT/LFT/etc. rows for the pattern) and this
+// keeps it in sync with CFG.labUnitSystem without each row needing its
+// own onload wiring. Called on page entry (goPage) and whenever the
+// Settings toggle changes.
+function refreshAllRangeDisplays(rootSelector){
+  document.querySelectorAll((rootSelector||'')+' [data-refrange]').forEach(el=>{
+    const [deptKey,fieldCode] = el.getAttribute('data-refrange').split('.');
+    const r = getLabRefRange(deptKey, fieldCode);
+    el.textContent = (r.lo??'—')+'–'+(r.hi??'—')+' '+r.unit;
+  });
+}
 
 // ══════════════════════════════════════════════════════════════
 // LAB SAFETY PHASE 1 — verification scoped to what was ordered THIS visit
