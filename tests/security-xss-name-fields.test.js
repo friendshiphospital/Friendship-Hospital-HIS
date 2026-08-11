@@ -174,5 +174,80 @@ module.exports = async function run(context, baseUrl) {
     await page.close();
   }
 
+  // --- Task 1 security recheck: openUnifiedResultsEntry() patient info banner
+  // (#ue-pt-info) -- highest-traffic lab entry page, missed by the original
+  // print/render sweep because the function is neither print*- nor
+  // build*Report*-named. ---
+  {
+    const page = await context.newPage();
+    await login(page, baseUrl, `
+      if (table === 'patients') { const c = chainable({ id:'p4', name: window.__xssPayload, mrn:'522', lab_no:'304', age:30, age_unit:'Years', sex:'Male', tests_requested:['CBC (Full Blood Count)'] }, []); c.select=()=>c; c.eq=()=>c; c.single=()=>Promise.resolve({data:{id:'p4', name: window.__xssPayload, mrn:'522', lab_no:'304', age:30, age_unit:'Years', sex:'Male', tests_requested:['CBC (Full Blood Count)']}, error:null}); return c; }
+    `);
+    await page.evaluate((ptId) => openUnifiedResultsEntry(ptId, '304', 'poisoned'), 'p4');
+    await page.waitForTimeout(300);
+    const infoHtml = await page.evaluate(() => document.getElementById('ue-pt-info')?.innerHTML || '');
+    const imgCount = await page.evaluate(() => document.querySelectorAll('#ue-pt-info img').length);
+    t.check('Unified Results Entry: the patient info banner actually rendered (not an empty/vacuous check)', infoHtml.length > 20);
+    t.check('Unified Results Entry: no live <img> element rendered from a poisoned patient name', imgCount === 0);
+    t.check('Unified Results Entry: the payload is present safely escaped in the banner', infoHtml.includes('&lt;img'));
+    await page.close();
+  }
+
+  // --- Task 1 security recheck: loadVitalsForPatient() (#fc-pt-name-bar) --
+  // the Fluid Chart deep-link banner, fed a raw name parameter straight from
+  // the calling onclick handler. ---
+  {
+    const page = await context.newPage();
+    await login(page, baseUrl);
+    await page.evaluate((payload) => loadVitalsForPatient('p5', 'a5', payload, 'Ward A', 'B1', 'ADM-5'), XSS_PAYLOAD);
+    await page.waitForTimeout(100);
+    const barHtml = await page.evaluate(() => document.getElementById('fc-pt-name-bar')?.innerHTML || '');
+    const imgCount = await page.evaluate(() => document.querySelectorAll('#fc-pt-name-bar img').length);
+    t.check('Nursing Fluid Chart banner: actually rendered (not an empty/vacuous check)', barHtml.length > 20);
+    t.check('Nursing Fluid Chart banner: no live <img> element rendered from a poisoned patient name', imgCount === 0);
+    t.check('Nursing Fluid Chart banner: the payload is present safely escaped', barHtml.includes('&lt;img'));
+    await page.close();
+  }
+
+  // --- Task 1 security recheck: buildBillItemRow() -- a cashier can type a
+  // fully free-text custom line-item name via "+ Add Item"; it round-trips
+  // through Supabase and re-renders via innerHTML when the invoice is
+  // reopened for editing. Genuinely stored, not just theoretical poisoned
+  // data. ---
+  {
+    const page = await context.newPage();
+    await login(page, baseUrl);
+    await page.evaluate((payload) => {
+      const html = buildBillItemRow(0, payload, 100, 1);
+      document.getElementById('bill-items-list').innerHTML = html;
+    }, XSS_PAYLOAD);
+    const rowHtml = await page.evaluate(() => document.getElementById('bill-items-list')?.innerHTML || '');
+    const imgCount = await page.evaluate(() => document.querySelectorAll('#bill-items-list img').length);
+    const nameVal = await page.evaluate(() => document.getElementById('bill-item-name-0')?.value || '');
+    t.check('Billing custom line item: actually rendered (not an empty/vacuous check)', rowHtml.length > 20);
+    t.check('Billing custom line item: no live <img> element rendered from a poisoned item name', imgCount === 0);
+    t.check('Billing custom line item: the payload is present safely escaped in the row markup', rowHtml.includes('&lt;img'));
+    t.check('Billing custom line item: the input field still shows the real (decoded) text value to the cashier', nameVal === XSS_PAYLOAD);
+    await page.close();
+  }
+
+  // --- Task 1 security recheck: Reception's print-only Radiology page --
+  // loadRadPrintStudies()/loadRadRequests() -- patient name, imaging_type
+  // and radiologist all reach innerHTML unescaped. ---
+  {
+    const page = await context.newPage();
+    await login(page, baseUrl, `
+      if (table === 'radiology_requests') { const c = chainable(null, [{ id:'r1', imaging_type: window.__xssPayload, reported_at:new Date().toISOString(), status:'Reported', radiologist: window.__xssPayload }]); c.select=()=>c; c.eq=()=>c; c.in=()=>c; c.order=()=>c; return c; }
+    `);
+    await page.evaluate((payload) => loadRadPrintStudies('p6', payload), XSS_PAYLOAD);
+    await page.waitForTimeout(300);
+    const bodyHtml = await page.evaluate(() => document.getElementById('rp-studies-body')?.innerHTML || '');
+    const imgCount = await page.evaluate(() => document.querySelectorAll('#rp-studies-body img').length);
+    t.check('Reception Radiology print list: actually rendered (not an empty/vacuous check)', bodyHtml.length > 20);
+    t.check('Reception Radiology print list: no live <img> element rendered from imaging_type/radiologist', imgCount === 0);
+    t.check('Reception Radiology print list: the payload is present safely escaped in the row', bodyHtml.includes('&lt;img'));
+    await page.close();
+  }
+
   return t;
 };

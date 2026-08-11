@@ -9957,7 +9957,7 @@ function loadVitalsForPatient(patId,admId,name,ward,bed,admNo) {
   if(banner){ banner.style.display='block'; document.getElementById('vs-pt-name').textContent=name; document.getElementById('vs-pt-meta').textContent='Ward: '+ward+' · Bed: '+bed+' · '+admNo; }
   document.getElementById('vs-by').value=currentProfile?.full_name||'';
   loadVitalsHistory();
-  const bar=document.getElementById('fc-pt-name-bar'); if(bar) bar.innerHTML='<strong>'+name+'</strong> · '+ward+'/'+bed+' · '+admNo+' <button class="btn btn-p btn-sm" onclick="goPage(\'fluid-chart\');loadFluidChart()" style="margin-left:8px">💧 Fluid Chart</button>';
+  const bar=document.getElementById('fc-pt-name-bar'); if(bar) bar.innerHTML='<strong>'+escapeHtml(name)+'</strong> · '+escapeHtml(ward)+'/'+escapeHtml(bed)+' · '+escapeHtml(admNo)+' <button class="btn btn-p btn-sm" onclick="goPage(\'fluid-chart\');loadFluidChart()" style="margin-left:8px">💧 Fluid Chart</button>';
 }
 async function searchVitalsPatient(q) {
   const res=document.getElementById('vs-search-results'); if(!res) return;
@@ -16081,8 +16081,8 @@ async function autoAddTestItems(tests) {
 }
 
 function buildBillItemRow(i, name, price, qty=1) {
-  return '<div class="bill-item-row" id="bill-row-'+i+'" data-item-name="'+name+'" style="display:grid;grid-template-columns:1fr 70px 80px 28px;gap:4px;margin-bottom:4px;align-items:center">'+
-    '<input class="fc" value="'+name+'" style="padding:4px 7px;font-size:.76rem" id="bill-item-name-'+i+'" onchange="recalcBill()">'+
+  return '<div class="bill-item-row" id="bill-row-'+i+'" data-item-name="'+escapeHtml(name)+'" style="display:grid;grid-template-columns:1fr 70px 80px 28px;gap:4px;margin-bottom:4px;align-items:center">'+
+    '<input class="fc" value="'+escapeHtml(name)+'" style="padding:4px 7px;font-size:.76rem" id="bill-item-name-'+i+'" onchange="recalcBill()">'+
     '<input class="fc" type="number" value="'+qty+'" min="1" style="padding:4px 7px;font-size:.76rem;text-align:center" id="bill-item-qty-'+i+'" oninput="recalcBill()">'+
     '<input class="fc" type="number" value="'+price+'" min="0" step="0.01" style="padding:4px 7px;font-size:.76rem;text-align:right" id="bill-item-price-'+i+'" oninput="recalcBill()">'+
     '<button class="btn btn-r btn-xs" onclick="document.getElementById(\x27bill-row-'+i+'\x27).remove();recalcBill()">\u2715</button>'+
@@ -18268,8 +18268,8 @@ async function loadRadRequests() {
         return '<tr class="'+(unpaid?'pay-unpaid':'')+'" style="background:'+(urgColor[r.urgency]||'')+'">' +
           '<td style="font-size:.72rem;color:var(--slate)">'+fmtDate(r.created_at)+'</td>'+
           '<td><div style="font-weight:600;font-size:.82rem">'+escapeHtml(pt.name||'—')+'</div>'+
-          '<div style="font-size:.68rem;color:var(--slate)">'+(pt.mrn||pt.lab_no||'')+' \u00b7 '+(pt.age||'?')+(pt.age_unit||'y')+' / '+(pt.sex||'')+' '+(pt.ward?'\u00b7 '+pt.ward:'')+'</div></td>'+
-          '<td style="font-size:.78rem;font-weight:600">'+(r.imaging_type||'—')+(r.is_critical?' <span class="bdg" style="background:#b91c1c;color:#fff">🚨 CRITICAL</span>':'')+'</td>'+
+          '<div style="font-size:.68rem;color:var(--slate)">'+escapeHtml(pt.mrn||pt.lab_no||'')+' \u00b7 '+escapeHtml((pt.age||'?')+(pt.age_unit||'y'))+' / '+escapeHtml(pt.sex||'')+' '+(pt.ward?'\u00b7 '+escapeHtml(pt.ward):'')+'</div></td>'+
+          '<td style="font-size:.78rem;font-weight:600">'+escapeHtml(r.imaging_type||'—')+(r.is_critical?' <span class="bdg" style="background:#b91c1c;color:#fff">🚨 CRITICAL</span>':'')+'</td>'+
           '<td>'+(r.urgency==='STAT'?'<span class="bdg" style="background:#fef2f2;color:#b91c1c;border:1.5px solid #fca5a5">\u26a1 STAT</span>':statusBadge(r.urgency))+'</td>'+
           '<td style="font-size:.75rem">'+escapeHtml(r.requesting_doctor||'—')+'</td>'+
           '<td>'+paymentTag(pt.payment_status)+(r.payment_deferred?' <span class="bdg" style="background:#fef2f2;color:#b91c1c;border:1.5px solid #fca5a5">\u26a0 Payment Deferred \u2014 STAT</span>':'')+'</td>'+
@@ -18522,10 +18522,10 @@ async function loadRadPrintStudies(ptId, ptName){
   body.innerHTML='<div class="spin-center"><div class="spinner"></div>Loading…</div>';
   try{
     const {data} = await sb.from('radiology_requests').select('id,imaging_type,reported_at,status,radiologist').eq('patient_id',ptId).in('status',['Reported','Verified']).order('reported_at',{ascending:false});
-    if(!data?.length){ body.innerHTML='<div style="padding:16px;text-align:center;color:var(--slate);font-size:.82rem">No completed radiology reports found for '+ptName+'</div>'; return; }
+    if(!data?.length){ body.innerHTML='<div style="padding:16px;text-align:center;color:var(--slate);font-size:.82rem">No completed radiology reports found for '+escapeHtml(ptName)+'</div>'; return; }
     body.innerHTML='<div style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:var(--slate);margin-bottom:8px">Completed Studies</div>'+
       data.map(r=>'<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:var(--bg);border-radius:8px;margin-bottom:6px">'+
-        '<div><div style="font-weight:700;font-size:.85rem">'+r.imaging_type+'</div><div style="font-size:.72rem;color:var(--slate)">'+(r.radiologist?'Dr. '+r.radiologist+' · ':'')+fmtDate(r.reported_at)+'</div></div>'+
+        '<div><div style="font-weight:700;font-size:.85rem">'+escapeHtml(r.imaging_type)+'</div><div style="font-size:.72rem;color:var(--slate)">'+(r.radiologist?'Dr. '+escapeHtml(r.radiologist)+' · ':'')+fmtDate(r.reported_at)+'</div></div>'+
         '<button class="btn btn-p btn-sm" onclick="printRadReportById(\''+r.id+'\')">🖨 Print</button>'+
         '</div>').join('');
   }catch(e){ body.innerHTML='<div style="padding:16px;color:var(--red);font-size:.82rem">'+escapeHtml(e.message)+'</div>'; }
@@ -21135,7 +21135,7 @@ async function openUnifiedResultsEntry(ptId, labNo, ptName) {
   else detail.innerHTML='<div style="padding:20px;text-align:center;color:var(--slate)">No matching test sections found for this patient.</div>';
 
   const info=document.getElementById('ue-pt-info');
-  if(info) info.innerHTML='<span style="font-weight:700">'+(pt.name||fullName(pt)||'—')+'</span> · '+(pt.mrn||pt.lab_no||'—')+' · '+(pt.age||'?')+(pt.age_unit||'y')+' / '+(pt.sex||'')+
+  if(info) info.innerHTML='<span style="font-weight:700">'+escapeHtml(pt.name||fullName(pt)||'—')+'</span> · '+escapeHtml(pt.mrn||pt.lab_no||'—')+' · '+escapeHtml((pt.age||'?')+(pt.age_unit||'y'))+' / '+escapeHtml(pt.sex||'')+
     (pt.priority==='STAT'?' · <span style="color:var(--red);font-weight:700">⚡ STAT</span>':'')+
     '<div style="font-size:.72rem;color:var(--slate);margin-top:2px">Sections shown: '+wanted.map(d=>DEPT_META[d].label).join(', ')+'</div>';
   // Cards were just moved (not cloned) into #ue-detail, so a global
