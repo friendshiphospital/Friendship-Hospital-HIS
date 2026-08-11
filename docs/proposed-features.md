@@ -1,6 +1,13 @@
 # Proposed Features — Friendship Hospital HIS
 
-A discovery/planning document only. Nothing here is implemented. Grounded in
+**Status update:** Tier 1 (all 4 items), Tier 2 (all 4 items), and Tier 3
+item 11 have since been implemented — see the ✅ marker on each item
+below. Item 3's notification target was changed from "a designated
+supplier contact" to Admin + Lab Supervisor email per an explicit request.
+Tier 3 items 9 and 10 remain proposals only, not implemented. The rest of
+this document is left as originally written for context.
+
+Originally: a discovery/planning document only, with nothing implemented. Grounded in
 the actual codebase (`index.html`, `CLAUDE.md`, `supabase/functions/`) as of
 this writing, and in the realistic context of **Friendship Hospital, Al
 Damazin, Blue Nile State, Sudan**: intermittent internet connectivity (the
@@ -19,7 +26,7 @@ this repo is built.
 ## Tier 1 — Quick Wins
 *Small effort, real value, could reasonably be next.*
 
-### 1. SMS/WhatsApp appointment & follow-up reminders
+### 1. SMS/WhatsApp appointment & follow-up reminders ✅ Implemented
 **What:** Automated SMS (or WhatsApp, if the same gateway supports it) sent
 a day before a booked appointment, and when a doctor schedules a follow-up
 (`follow_ups` table, already written by the visit-completion flow).
@@ -36,7 +43,7 @@ button on the Appointments list is the smallest first version; a real
 cron-scheduled batch job is the natural v2.
 **Extends:** Appointments, Doctor Consultation (follow-ups).
 
-### 2. Edge Function deployment/secrets health-check panel
+### 2. Edge Function deployment/secrets health-check panel ✅ Implemented
 **What:** A small admin-only panel (Settings or Staff module) that pings
 each Edge Function this app depends on (`reception-shift-notify`,
 `send-sms`, `create-staff-account`) and reports, per function: reachable
@@ -56,7 +63,7 @@ everywhere, and render deployed/not-deployed + configured/not-configured
 per function. No new backend code.
 **Extends:** Settings/Administration.
 
-### 3. Low-stock reagent auto-alert to a designated supplier contact
+### 3. Low-stock reagent auto-alert to a designated supplier contact ✅ Implemented
 **What:** When a reagent crosses its reorder threshold (the in-app
 low-stock alert already exists), automatically notify a fixed
 supplier/vendor phone number or email, not just an in-app badge.
@@ -69,7 +76,7 @@ new, equally small `send-email` function on the same template) triggered
 from the point where the low-stock condition is already detected.
 **Extends:** Inventory.
 
-### 4. Confirm hardware barcode scanners "just work" at Sample Receiving
+### 4. Confirm hardware barcode scanners "just work" at Sample Receiving ✅ Implemented
 **What:** Most desktop USB/Bluetooth barcode scanners act as a keyboard —
 they type the scanned code followed by Enter into whatever text field has
 focus. The app already prints barcoded sample labels
@@ -91,7 +98,7 @@ check/fix on one input field, not new functionality.
 ## Tier 2 — Medium-Term
 *Meaningfully valuable, bigger lift.*
 
-### 5. Multi-visit lab result trend charts
+### 5. Multi-visit lab result trend charts ✅ Implemented
 **What:** Line-graph charts of a patient's numeric lab values (e.g.
 haemoglobin, creatinine, glucose) plotted across their visit history, on
 the Patient Timeline / Patient History view.
@@ -107,7 +114,7 @@ charting library. The work is querying + aligning a given field across
 visits and rendering it, per analyte.
 **Extends:** Patient History / Patient Timeline, Laboratory result entry.
 
-### 6. Doctor's mobile-friendly results/orders view
+### 6. Doctor's mobile-friendly results/orders view ✅ Implemented
 **What:** A responsive layout pass — not a separate app — so a doctor can
 usefully check a patient's results, orders, and timeline from a phone
 browser between wards, rather than needing a desktop screen.
@@ -121,7 +128,7 @@ backend, no new data model. Effort is mostly disciplined testing across
 the pages doctors actually use on a phone.
 **Extends:** Doctor Consultation, Patient History/Timeline.
 
-### 7. Extended analytics beyond the current Statistics dashboard
+### 7. Extended analytics beyond the current Statistics dashboard ✅ Implemented
 **What:** Month-over-month trend views (patient volume, revenue), a simple
 top-diagnoses/top-tests breakdown, and department workload over time —
 built on top of the existing Statistics module rather than a new one.
@@ -134,7 +141,7 @@ work is well-formed aggregate queries (grouped by month/department) against
 existing tables, not new data collection.
 **Extends:** Statistics/Analytics.
 
-### 8. Automated backup-verification alert
+### 8. Automated backup-verification alert ✅ Implemented
 **What:** A scheduled Edge Function that runs a lightweight read-check
 against the database on a schedule and alerts the admin — by the same
 email/SMS pattern already built — **only on failure**, not with daily
@@ -182,7 +189,7 @@ matters most for staff who aren't especially technical.
 beyond the current app-shell caching in `sw.js`, an icon/manifest set, and
 careful testing of what still works fully offline versus what degrades.
 
-### 11. True bidirectional instrument (analyzer) integration
+### 11. True bidirectional instrument (analyzer) integration ✅ Implemented
 **What:** Real serial/TCP connectivity to lab analyzers, replacing the
 current paste-a-raw-HL7/ASTM-message workflow in the Analyzer Interface
 with live, automatic result capture.

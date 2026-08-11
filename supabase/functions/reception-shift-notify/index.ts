@@ -210,6 +210,16 @@ Deno.serve(async (req) => {
     return json({ error: "Invalid JSON body" }, 400);
   }
 
+  // Health-check ping (Settings → Edge Function Health Check, index.html):
+  // proves the function is deployed, reachable, and authenticated, and
+  // reports whether RESEND_API_KEY is set — without sending a real email.
+  if (body.ping === true) {
+    if (!RESEND_API_KEY) {
+      return json({ error: "Email provider not configured — set RESEND_API_KEY via `supabase secrets set`" }, 500);
+    }
+    return json({ ok: true, ping: true });
+  }
+
   const kind = String(body.kind || "");
   const shift = (body.shift || {}) as Record<string, unknown>;
   const adminEmail = String(body.admin_email || "admin@hospital.com").trim();
