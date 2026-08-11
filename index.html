@@ -390,6 +390,28 @@ html[dir="rtl"] body{direction:rtl;}
 }
 /* RESPONSIVE */
 @media(max-width:900px){.split2{grid-template-columns:1fr;}.g4{grid-template-columns:1fr 1fr;}}
+/* Mobile layout (Tier 2 quick win — doctors checking results/orders from a
+   phone browser between wards). The desktop shell assumes a fixed-width
+   sidebar permanently pushing #main over; below this breakpoint the
+   sidebar becomes an off-canvas overlay instead (hidden by translateX,
+   toggled via #mb-menu-btn/closeMobileSidebar()) so the page content gets
+   the full screen width, with a hamburger button + backdrop to open it. */
+#mb-menu-btn{display:none;background:none;border:none;font-size:1.3rem;cursor:pointer;padding:4px 8px;color:var(--ink);flex-shrink:0;}
+#mb-sidebar-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:299;}
+@media(max-width:768px){
+  #mb-menu-btn{display:block;}
+  #sidebar{transform:translateX(-100%);transition:transform .2s ease;box-shadow:0 0 24px rgba(0,0,0,.25);}
+  #sidebar.mb-open{transform:translateX(0);}
+  #mb-sidebar-backdrop.mb-open{display:block;}
+  #main{margin-left:0!important;}
+  .topbar{padding:0 10px;gap:6px;}
+  .topbar .pg-title{font-size:.86rem;}
+  #gs-wrap{max-width:none;}
+  #gs-wrap ~ div{gap:5px;}
+  #topbar-date{display:none;}
+  .g2,.g4{grid-template-columns:1fr;}
+  .stat-grid{grid-template-columns:repeat(2,1fr)!important;}
+}
 /* OFFLINE / CONNECTION BADGE */
 #conn-badge{display:flex;align-items:center;gap:7px;margin:0 14px 10px;padding:7px 11px;border-radius:8px;cursor:pointer;font-size:.74rem;font-weight:600;transition:background .15s;}
 #conn-badge.online{background:rgba(34,197,94,.12);color:#86efac;}
@@ -609,12 +631,14 @@ html[dir="rtl"] body{direction:rtl;}
       <button onclick="doLogout()" style="margin-top:8px;width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.55);border-radius:6px;padding:6px;font-size:.73rem;cursor:pointer;font-family:'DM Sans',sans-serif;">⏻ Sign Out</button>
     </div>
   </nav>
+  <div id="mb-sidebar-backdrop" onclick="closeMobileSidebar()"></div>
   <div id="main">
     <div id="crit-banner" onclick="goPage('criticals')">
       🚨 <span id="crit-banner-text">Unacknowledged critical values</span> — Click to review
     </div>
     <div class="topbar">
       <div style="display:flex;align-items:center;gap:10px">
+        <button id="mb-menu-btn" onclick="toggleMobileSidebar()" title="Menu" aria-label="Menu">☰</button>
         <span class="pg-title" id="pg-title">Dashboard</span>
       </div>
       <!-- Global search — lives in the persistent topbar shell (outside the
@@ -2283,6 +2307,11 @@ html[dir="rtl"] body{direction:rtl;}
           <input type="date" id="appt-filter-date" class="fc" style="width:140px;padding:5px 8px;font-size:.76rem" onchange="loadAppointments()"></div>
         <div id="appt-list-body"><div class="spin-center"><div class="spinner"></div>Loading…</div></div>
       </div>
+      <div class="card">
+        <div class="card-hd"><span class="card-title">🔁 Follow-Ups Due Soon</span>
+          <button class="btn btn-s btn-sm" onclick="loadFollowUpsDue()">↻</button></div>
+        <div id="followups-due-body"><div class="spin-center"><div class="spinner"></div>Loading…</div></div>
+      </div>
     </div>
   </div>
 </div>
@@ -3492,7 +3521,7 @@ html[dir="rtl"] body{direction:rtl;}
           <div class="fg">
             <label class="fl">Scan or Search Sample</label>
             <div style="display:flex;gap:6px">
-              <div class="srch" style="flex:1"><span>🔍</span><input id="sc-recv-search" placeholder="Lab No, MRN, patient name…" oninput="searchReceivePatient(this.value)"></div>
+              <div class="srch" style="flex:1"><span>🔍</span><input id="sc-recv-search" placeholder="Lab No, MRN, patient name…" oninput="searchReceivePatient(this.value)" onkeydown="handleReceiveScanEnter(event)"></div>
               <button class="btn btn-s btn-sm" type="button" onclick="scanForReceiving()">📷 Scan</button>
             </div>
             <div id="sc-recv-results" style="display:none;border:1.5px solid var(--teal);border-radius:7px;background:#fff;max-height:160px;overflow-y:auto;margin-top:4px;z-index:50;position:relative"></div>
@@ -3772,6 +3801,7 @@ html[dir="rtl"] body{direction:rtl;}
         <button class="tab" onclick="setStatsTab('lab',this)">Lab</button>
         <button class="tab" onclick="setStatsTab('nursing',this)">Nursing</button>
         <button class="tab" onclick="setStatsTab('billing',this)">Billing</button>
+        <button class="tab" onclick="setStatsTab('trends',this)">📈 Trends</button>
       </div>
       <div id="stats-body"><div class="spin-center"><div class="spinner"></div>Loading…</div></div>
     </div>
@@ -4669,6 +4699,8 @@ html[dir="rtl"] body{direction:rtl;}
         <div class="fg"><label class="fl">Discount Override Threshold (%)</label><input class="fc" type="number" min="0" max="100" step="1" id="cfg-discount-override-pct" placeholder="15"></div>
       </div>
       <div style="font-size:.7rem;color:var(--slate);margin:-6px 0 10px">Open/Close Shift emails are sent to this address. Invoice discounts above this percentage require manager (admin) authorization before they can be saved.</div>
+      <div class="fg"><label class="fl">Lab Supervisor Notify Email (Low-Stock Alerts)</label><input class="fc" type="email" id="cfg-labsup-notify-email" placeholder="labsupervisor@hospital.com"></div>
+      <div style="font-size:.7rem;color:var(--slate);margin:-6px 0 10px">Low-stock reagent alerts (Inventory) are emailed to both the Admin Notify Email above and this address.</div>
       <button class="btn btn-p" onclick="saveSettings()" style="width:100%;justify-content:center">💾 Save Settings</button>
       <div id="cfg-status" style="margin-top:7px;font-size:.78rem;color:var(--green)"></div>
     </div></div>
@@ -4778,6 +4810,11 @@ html[dir="rtl"] body{direction:rtl;}
       <div class="card"><div class="card-hd"><span class="card-title">🔢 ID Counters</span></div><div class="card-body">
         <div style="font-size:.74rem;color:var(--slate);margin-bottom:8px">These counters generate every File Number, Lab No., and Radiology No. Correcting one only changes what the <em>next</em> number will be — it does not renumber existing records. Only use this to fix a genuine mistake.</div>
         <div id="cfg-counters-body"><div class="spin-center"><div class="spinner"></div>Loading…</div></div>
+      </div></div>
+      <div class="card"><div class="card-hd"><span class="card-title">🩺 Edge Function Health Check</span>
+        <button class="btn btn-s btn-sm" onclick="runEdgeFunctionHealthCheck()">▶ Run Check</button></div><div class="card-body">
+        <div style="font-size:.72rem;color:var(--slate);margin-bottom:8px">Pings each Supabase Edge Function this app depends on with a harmless test payload and reports whether it's deployed and whether its provider secret is configured — the shift-notification emails, SMS reminders, low-stock alerts, and staff account creation all silently do nothing if one of these was never deployed or set up, since none of them block the user-facing action that triggers them.</div>
+        <div id="edge-health-body"><div class="empty-state"><div class="empty-icon">🩺</div><div class="empty-title">Click "Run Check" to test all Edge Functions</div></div></div>
       </div></div>
     </div>
   </div>
@@ -5926,7 +5963,30 @@ html[dir="rtl"] body{direction:rtl;}
             </div>
           </div>
           <div style="margin-top:14px;padding:12px;background:#fffbeb;border:1.5px solid #fde68a;border-radius:8px;font-size:.78rem;color:#92400e;line-height:1.6">
-            ⚠️ <strong>Note:</strong> Full bidirectional HL7/ASTM integration requires a middleware server (e.g. Mirth Connect, Rhapsody) or direct TCP socket access. This page stores interface configuration for future integration. Contact your IT team or a LIS integration vendor to complete the setup.
+            ⚠️ <strong>Note:</strong> Network HL7/MLLP integration (analyzer on the LAN) still requires a middleware server (e.g. Mirth Connect, Rhapsody) or direct TCP socket access — not possible from a static browser app. For an analyzer connected directly by USB/RS-232 cable, see the Live Serial Connection panel below instead, which talks to it directly, no middleware needed.
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-hd"><span class="card-title">🔌 Live Serial Connection (USB / RS-232)</span></div>
+        <div class="card-body">
+          <div style="font-size:.72rem;color:var(--slate);margin-bottom:10px">Direct, real bidirectional link to an analyzer connected by USB or RS-232 cable, using the browser's Web Serial API (Chrome / Edge desktop only — no extra software, no middleware). Incoming frames are parsed with the same ASTM/HL7 logic as the paste/simulate tools above and land in the same Instrument Data Stream table below.</div>
+          <div id="ws-support-warn" style="display:none;background:#fee2e2;border:1.5px solid #fca5a5;border-radius:8px;padding:8px 10px;font-size:.74rem;color:#b91c1c;margin-bottom:10px">⚠️ Web Serial API not available in this browser — use Chrome or Edge on a desktop/laptop. Not supported on iOS/Safari or most mobile browsers.</div>
+          <div class="g2">
+            <div class="fg"><label class="fl">Baud Rate</label>
+              <select class="fc" id="ws-baud"><option value="9600" selected>9600 (most common)</option><option value="19200">19200</option><option value="38400">38400</option><option value="57600">57600</option><option value="115200">115200</option></select>
+            </div>
+            <div class="fg"><label class="fl">Status</label>
+              <div><span class="bdg bdg-sl" id="ws-status">⚪ Disconnected</span></div>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;margin-bottom:8px">
+            <button class="btn btn-p" id="ws-connect-btn" onclick="connectSerialAnalyzer()" style="flex:1;justify-content:center">🔌 Connect to Analyzer</button>
+            <button class="btn btn-r" id="ws-disconnect-btn" onclick="disconnectSerialAnalyzer()" disabled style="flex:1;justify-content:center">⏹ Disconnect</button>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--bg);border-radius:8px;font-size:.78rem">
+            <span style="font-weight:600">Last Frame Received</span>
+            <span id="ws-last-frame" style="color:var(--slate)">—</span>
           </div>
         </div>
       </div>
@@ -6999,6 +7059,10 @@ const CFG = {
   // Shift Management / Anti-fraud (RCM engine) — same localStorage-only,
   // per-deployment config pattern as everything else in CFG.
   get adminNotifyEmail(){ return localStorage.getItem('cfg_admin_notify_email')||'admin@hospital.com'; },
+  // Tier 1 low-stock reagent alert — Admin + Lab Supervisor, per explicit
+  // request (not the proposal doc's original "designated supplier
+  // contact"). Same localStorage-only, per-deployment config pattern.
+  get labSupervisorNotifyEmail(){ return localStorage.getItem('cfg_labsup_notify_email')||''; },
   get discountOverrideThreshold(){ return parseFloat(localStorage.getItem('cfg_discount_override_pct'))||15; },
   // Follow-Up Visit Policy (Phase 5 Admin Settings) — read here in Phase 4
   // too, only for the default date suggestion when a doctor schedules a
@@ -7216,6 +7280,7 @@ function goHome() {
   currentModule = null;
   document.getElementById('sidebar').style.display = 'none';
   document.getElementById('main').style.display = 'none';
+  closeMobileSidebar();
   const ls = document.getElementById('launcher-screen'); if (ls) ls.classList.add('show');
   renderLauncher();
 }
@@ -7959,6 +8024,18 @@ function updateTopbarDate() {
 }
 
 // ── NAVIGATION ────────────────────────────────────────
+// Mobile off-canvas sidebar (Tier 2 quick win — see the #mb-menu-btn/
+// #mb-sidebar-backdrop CSS above). Desktop widths never show the
+// hamburger button at all, so these are no-ops there; harmless either way
+// since they only toggle a class the desktop CSS doesn't react to.
+function toggleMobileSidebar(){
+  document.getElementById('sidebar')?.classList.toggle('mb-open');
+  document.getElementById('mb-sidebar-backdrop')?.classList.toggle('mb-open');
+}
+function closeMobileSidebar(){
+  document.getElementById('sidebar')?.classList.remove('mb-open');
+  document.getElementById('mb-sidebar-backdrop')?.classList.remove('mb-open');
+}
 function goPage(p) {
   if(currentProfile) {
     const role=currentProfile.role||'receptionist', allowed=ROLE_PAGES[role]||[];
@@ -7999,6 +8076,7 @@ function goPage(p) {
   pg.classList.add('active');
   const ct=document.querySelector('.content'); if(ct) ct.scrollTop=0;
   document.querySelectorAll('.sb-item').forEach(el=>el.classList.toggle('active',el.dataset.p===p));
+  closeMobileSidebar();
   // Page-specific init hooks
   if(p==='infection') setTimeout(loadInfectionFlags,100);
   if(p==='nursing') setTimeout(()=>{ loadNursingQueue(); loadNursingOrders(); startVitalsClock(); },100);
@@ -8029,7 +8107,7 @@ function goPage(p) {
   else if(p==='nursing'){ run(loadNursingQueue); run(loadNursingOrders); setD('ho-date',td); setEl('vs-by',currentProfile?.full_name||''); }
   else if(p==='fluid-chart'){ setD('fc-date',td); run(loadFluidChart); }
   else if(p==='consultation'){ run(loadDoctorQueue); run(buildOrderTestPanel); setD('doc-date',td); }
-  else if(p==='appointments'){ run(loadAppointments); run(loadApptDoctors); setD('appt-date',td); setD('appt-filter-date',td); }
+  else if(p==='appointments'){ run(loadAppointments); run(loadApptDoctors); run(loadFollowUpsDue); setD('appt-date',td); setD('appt-filter-date',td); }
   else if(p==='billing'){ run(loadBilling); }
   else if(p==='prices') run(loadPriceEditor);
   else if(p==='register'){ initRegForm(); run(loadRecentPatients); run(populateDoctorDropdown); }
@@ -8039,7 +8117,7 @@ function goPage(p) {
   else if(p==='allresults'){ setD('ar-date-from',new Date(Date.now()-7*864e5).toISOString().slice(0,10)); setD('ar-date-to',td); run(loadAllResults); }
   else if(p==='criticals') run(loadCriticals);
   else if(p==='qc') run(loadQcPage);
-  else if(p==='analyzer') run(loadInstrumentMessages);
+  else if(p==='analyzer'){ run(loadInstrumentMessages); const w=document.getElementById('ws-support-warn'); if(w) w.style.display=isWebSerialSupported()?'none':'block'; }
   else if(p==='validation') run(initValidationPage);
   else if(p==='reference-ranges') run(loadRefRanges);
   else if(p==='labhistory'){ setD('lh-from',new Date(Date.now()-7*864e5).toISOString().slice(0,10)); setD('lh-to',td); }
@@ -8177,6 +8255,7 @@ function loadSettings() {
   updateAutoVerifyLabel();
   const lus=document.getElementById('cfg-lab-unit-system'); if(lus) lus.value=CFG.labUnitSystem;
   const ane=document.getElementById('cfg-admin-notify-email'); if(ane) ane.value=CFG.adminNotifyEmail;
+  const lse=document.getElementById('cfg-labsup-notify-email'); if(lse) lse.value=CFG.labSupervisorNotifyEmail;
   const dot=document.getElementById('cfg-discount-override-pct'); if(dot) dot.value=CFG.discountOverrideThreshold;
   const pinCard=document.getElementById('cfg-override-pin-card'); if(pinCard) pinCard.style.display = currentProfile?.role==='admin' ? '' : 'none';
   const cu=document.getElementById('cfg-sb-url'); if(cu) cu.value=localStorage.getItem('sb_url')||'';
@@ -8294,10 +8373,51 @@ function saveSettings() {
   const aah=parseFloat(g('cfg-admission-alert-hours')); localStorage.setItem('cfg_admission_alert_hours', (isNaN(aah)||aah<=0)?4:aah);
   localStorage.setItem('cfg_sms_sender_id',g('cfg-sms-sender-id'));
   localStorage.setItem('cfg_admin_notify_email', g('cfg-admin-notify-email')||'admin@hospital.com');
+  localStorage.setItem('cfg_labsup_notify_email', g('cfg-labsup-notify-email'));
   const dot=parseFloat(g('cfg-discount-override-pct')); localStorage.setItem('cfg_discount_override_pct', (isNaN(dot)||dot<0)?15:dot);
   const st=document.getElementById('cfg-status'); if(st){ st.textContent='✅ Settings saved'; setTimeout(()=>st.textContent='',3000); }
   toast('Settings saved','ok');
   refreshNotifications();
+}
+// Edge Function Health Check (Tier 1 quick win) — pings every Edge
+// Function this app depends on with {ping:true}. Each function
+// short-circuits on that flag right after its own secret-configured
+// check and before doing anything with a real side effect (see the
+// "Health-check ping" comment in each function's index.ts), so this is
+// safe to run repeatedly and never sends a real SMS/email or creates a
+// real staff account.
+const EDGE_FUNCTIONS_HEALTH = [
+  {name:'send-sms', label:'SMS Reminders / Notices'},
+  {name:'reception-shift-notify', label:'Shift Open/Close Emails'},
+  {name:'send-email', label:'Generic Email (Low-Stock, Backup Alerts)'},
+  {name:'create-staff-account', label:'Staff Account Creation'},
+];
+async function runEdgeFunctionHealthCheck(){
+  const body=document.getElementById('edge-health-body'); if(!sb||!body) return;
+  body.innerHTML='<div class="spin-center"><div class="spinner"></div>Checking…</div>';
+  const rows=await Promise.all(EDGE_FUNCTIONS_HEALTH.map(async fn=>{
+    try{
+      const {data,error}=await sb.functions.invoke(fn.name,{body:{ping:true}});
+      if(error){
+        // supabase-js surfaces a non-2xx response as `error`, with the
+        // function's own JSON body (if any) on error.context — a 404
+        // here means never deployed; any other status with a JSON
+        // {error:...} body means deployed but not configured.
+        let detail=error.message||'Unreachable';
+        try{ const ctx=await error.context?.json?.(); if(ctx?.error) detail=ctx.error; }catch(e){}
+        const notDeployed=/404|not found/i.test(detail)||error.context?.status===404;
+        return {...fn, status:notDeployed?'not_deployed':'not_configured', detail};
+      }
+      if(data?.error) return {...fn, status:'not_configured', detail:data.error};
+      return {...fn, status:'ok', detail:'Deployed and configured'};
+    }catch(e){ return {...fn, status:'not_deployed', detail:e.message||'Unreachable'}; }
+  }));
+  const badge=r=>r.status==='ok'?'<span style="color:#166534;font-weight:700">✅ OK</span>'
+    :r.status==='not_configured'?'<span style="color:#b45309;font-weight:700">⚠ Deployed, secret not configured</span>'
+    :'<span style="color:#b91c1c;font-weight:700">❌ Not deployed / unreachable</span>';
+  body.innerHTML='<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Function</th><th>Purpose</th><th>Status</th><th>Detail</th></tr></thead><tbody>'+
+    rows.map(r=>'<tr><td><code>'+escapeHtml(r.name)+'</code></td><td>'+escapeHtml(r.label)+'</td><td>'+badge(r)+'</td><td style="font-size:.72rem;color:var(--slate)">'+escapeHtml(r.detail)+'</td></tr>').join('')+
+    '</tbody></table></div>';
 }
 // Auto-Verification toggle applies immediately on click rather than
 // waiting for "Save Settings" — it's a safety-relevant switch, not a
@@ -8409,6 +8529,7 @@ async function loadStatistics(){
     else if(_statsTab==='lab') await renderStatsLab(from,to);
     else if(_statsTab==='nursing') await renderStatsNursing(from,to);
     else if(_statsTab==='billing') await renderStatsBilling(from,to);
+    else if(_statsTab==='trends') await renderStatsTrends();
   }catch(e){ body.innerHTML='<div class="empty-state">'+escapeHtml(e.message)+'</div>'; }
 }
 async function renderStatsOverview(from,to){
@@ -8494,6 +8615,109 @@ async function renderStatsBilling(from,to){
   html+=statsRawTable(['Invoice No.','Status','Amount','Date'], rows.map(i=>[i.invoice_no,i.payment_status,(i.net_amount||0).toFixed(2)+' '+(i.currency||CFG.currency),fmtDate(i.created_at)]));
   document.getElementById('stats-body').innerHTML=html;
   _statsExport={title:'Billing', headers:['Invoice No.','Status','Amount','Date'], rows:rows.map(i=>[i.invoice_no,i.payment_status,(i.net_amount||0).toFixed(2)+' '+(i.currency||CFG.currency),fmtDate(i.created_at)])};
+}
+// ── Statistics: Trends tab (Tier 2 quick win) ───────────────────────────
+// Unlike every other Statistics tab, Trends always looks at a fixed
+// trailing window (the last STATS_TREND_MONTHS calendar months, including
+// the current one) rather than the from/to date filter above — a
+// month-over-month view is meaningless over a single custom range, so it
+// intentionally ignores those inputs, same convention as the QC Levey-
+// Jennings chart ignoring the page's other filters. Same plain-canvas
+// drawing approach as renderQcChart()/renderPthTrend() — no chart library.
+const STATS_TREND_MONTHS=6;
+const STATS_DEPT_COLORS=['#0b7a75','#f59e0b','#8b5cf6','#3b82f6','#ef4444','#16a34a','#be123c'];
+async function renderStatsTrends(){
+  if(!sb) return;
+  const now=new Date();
+  const monthKeys=[];
+  for(let i=STATS_TREND_MONTHS-1;i>=0;i--){ const d=new Date(now.getFullYear(),now.getMonth()-i,1); monthKeys.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')); }
+  const rangeStart=new Date(now.getFullYear(),now.getMonth()-(STATS_TREND_MONTHS-1),1).toISOString();
+  const sectionTables={Haematology:'results_hematology',Chemistry:'results_chemistry','Serology/Immuno':'results_serology',Microbiology:'results_microbiology',PCR:'results_pcr',Histopathology:'results_histopathology',Cytology:'results_cytology'};
+  const deptNames=Object.keys(sectionTables);
+  const [{data:pts},{data:invs},...sectionRows]=await Promise.all([
+    sb.from('patients').select('created_at,tests_requested').gte('created_at',rangeStart),
+    sb.from('invoices').select('net_amount,created_at').gte('created_at',rangeStart),
+    ...Object.values(sectionTables).map(t=>sb.from(t).select('created_at').gte('created_at',rangeStart).then(r=>r,()=>({data:[]}))),
+  ]);
+  const monthOf=iso=>{ const d=new Date(iso); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); };
+  const volByMonth={}, revByMonth={}; monthKeys.forEach(m=>{ volByMonth[m]=0; revByMonth[m]=0; });
+  (pts||[]).forEach(p=>{ const m=monthOf(p.created_at); if(m in volByMonth) volByMonth[m]++; });
+  (invs||[]).forEach(i=>{ const m=monthOf(i.created_at); if(m in revByMonth) revByMonth[m]+=(i.net_amount||0); });
+  const deptByMonth={}; monthKeys.forEach(m=>{ deptByMonth[m]={}; deptNames.forEach(d=>deptByMonth[m][d]=0); });
+  sectionRows.forEach((res,i)=>{ const dname=deptNames[i]; (res.data||[]).forEach(r=>{ const m=monthOf(r.created_at); if(deptByMonth[m]) deptByMonth[m][dname]++; }); });
+  const testCounts={};
+  (pts||[]).forEach(p=>{ (Array.isArray(p.tests_requested)?p.tests_requested:[]).forEach(tn=>{ if(!tn) return; testCounts[tn]=(testCounts[tn]||0)+1; }); });
+  const topTests=Object.entries(testCounts).sort((a,b)=>b[1]-a[1]).slice(0,10);
+
+  let html='<div style="font-size:.72rem;color:var(--slate);margin-bottom:10px">Last '+STATS_TREND_MONTHS+' months — independent of the date filter above, always trailing from today.</div>';
+  html+='<div class="card-title" style="font-size:.85rem;margin:0 0 6px">Monthly Patient Volume &amp; Revenue</div>';
+  html+='<canvas id="stats-trend-canvas" height="180" style="width:100%"></canvas>';
+  html+='<div class="card-title" style="font-size:.85rem;margin:18px 0 6px">Department Workload Over Time</div>';
+  html+='<canvas id="stats-dept-canvas" height="180" style="width:100%"></canvas>';
+  html+='<div class="card-title" style="font-size:.85rem;margin:18px 0 6px">Top Tests Ordered</div>';
+  html += topTests.length
+    ? '<div style="font-size:.8rem">'+topTests.map(([tn,c])=>'<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--border)"><span>'+escapeHtml(tn)+'</span><strong>'+c+'</strong></div>').join('')+'</div>'
+    : '<div class="empty-state" style="margin-top:6px">No tests recorded in this window</div>';
+  document.getElementById('stats-body').innerHTML=html;
+  drawStatsTrendChart(monthKeys,volByMonth,revByMonth);
+  drawStatsDeptChart(monthKeys,deptNames,deptByMonth);
+  _statsExport={title:'Trends', headers:['Month','Patients','Revenue',...deptNames],
+    rows:monthKeys.map(m=>[m,volByMonth[m],revByMonth[m].toFixed(2),...deptNames.map(d=>deptByMonth[m][d])])};
+}
+function drawStatsTrendChart(monthKeys,volByMonth,revByMonth){
+  const canvas=document.getElementById('stats-trend-canvas'); if(!canvas) return;
+  const ctx=canvas.getContext('2d'); const W=canvas.offsetWidth||600,H=180; canvas.width=W; canvas.height=H; ctx.clearRect(0,0,W,H);
+  const pad={t:16,r:16,b:26,l:16};
+  const dW=W-pad.l-pad.r, dH=H-pad.t-pad.b;
+  const vols=monthKeys.map(m=>volByMonth[m]), revs=monthKeys.map(m=>revByMonth[m]);
+  const maxVol=Math.max(1,...vols), maxRev=Math.max(1,...revs);
+  const bw=dW/monthKeys.length*0.5;
+  monthKeys.forEach((m,i)=>{
+    const x=pad.l+(i+0.5)/monthKeys.length*dW;
+    const barH=(vols[i]/maxVol)*dH;
+    ctx.fillStyle='#94d2bd'; ctx.fillRect(x-bw/2,pad.t+dH-barH,bw,barH);
+    ctx.fillStyle='#64748b'; ctx.font='9px sans-serif'; ctx.textAlign='center'; ctx.fillText(m.slice(5),x,H-6);
+    ctx.fillStyle='#0e1928'; ctx.font='bold 9px sans-serif'; ctx.fillText(String(vols[i]),x,pad.t+dH-barH-4);
+  });
+  ctx.beginPath(); ctx.strokeStyle='#0b7a75'; ctx.lineWidth=2.5;
+  monthKeys.forEach((m,i)=>{
+    const x=pad.l+(i+0.5)/monthKeys.length*dW, y=pad.t+dH-(revs[i]/maxRev)*dH;
+    i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+  });
+  ctx.stroke();
+  monthKeys.forEach((m,i)=>{
+    const x=pad.l+(i+0.5)/monthKeys.length*dW, y=pad.t+dH-(revs[i]/maxRev)*dH;
+    ctx.beginPath(); ctx.arc(x,y,3.5,0,Math.PI*2); ctx.fillStyle='#0b7a75'; ctx.fill();
+  });
+  ctx.fillStyle='#94d2bd'; ctx.fillRect(pad.l,2,8,8);
+  ctx.fillStyle='#64748b'; ctx.font='9px sans-serif'; ctx.textAlign='left'; ctx.fillText('Patients',pad.l+11,10);
+  ctx.strokeStyle='#0b7a75'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(pad.l+70,6); ctx.lineTo(pad.l+86,6); ctx.stroke();
+  ctx.fillStyle='#0b7a75'; ctx.fillText('Revenue ('+CFG.currency+')',pad.l+90,10);
+}
+function drawStatsDeptChart(monthKeys,deptNames,deptByMonth){
+  const canvas=document.getElementById('stats-dept-canvas'); if(!canvas) return;
+  const ctx=canvas.getContext('2d'); const W=canvas.offsetWidth||600,H=180; canvas.width=W; canvas.height=H; ctx.clearRect(0,0,W,H);
+  const pad={t:14,r:10,b:26,l:10};
+  const dW=W-pad.l-pad.r, dH=H-pad.t-pad.b;
+  const totals=monthKeys.map(m=>deptNames.reduce((s,d)=>s+deptByMonth[m][d],0));
+  const maxTotal=Math.max(1,...totals);
+  const bw=dW/monthKeys.length*0.6;
+  monthKeys.forEach((m,i)=>{
+    const x=pad.l+(i+0.5)/monthKeys.length*dW;
+    let yCursor=pad.t+dH;
+    deptNames.forEach((d,di)=>{
+      const v=deptByMonth[m][d]; const segH=(v/maxTotal)*dH;
+      if(segH>0){ ctx.fillStyle=STATS_DEPT_COLORS[di%STATS_DEPT_COLORS.length]; ctx.fillRect(x-bw/2,yCursor-segH,bw,segH); }
+      yCursor-=segH;
+    });
+    ctx.fillStyle='#64748b'; ctx.font='9px sans-serif'; ctx.textAlign='center'; ctx.fillText(m.slice(5),x,H-6);
+  });
+  let lx=pad.l;
+  deptNames.forEach((d,di)=>{
+    ctx.fillStyle=STATS_DEPT_COLORS[di%STATS_DEPT_COLORS.length]; ctx.fillRect(lx,0,8,8);
+    ctx.fillStyle='#64748b'; ctx.font='8px sans-serif'; ctx.textAlign='left'; ctx.fillText(d,lx+11,7);
+    lx+=ctx.measureText(d).width+26;
+  });
 }
 function statsRawTable(headers,rows){
   if(!rows.length) return '<div class="empty-state" style="margin-top:10px">No records in this date range</div>';
@@ -8832,6 +9056,31 @@ async function sendAppointmentReminder(apptId, phone, patientName, apptDate, app
 async function sendResultReadySms(patientId, phone, patientName){
   const msg=(CFG.name||'Hospital')+': '+patientName+', your lab results are ready. Please contact the laboratory or your doctor to collect them.';
   await sendSms(phone, msg, 'result_ready', patientId);
+}
+// Low-stock reagent auto-alert (Tier 1 quick win) — emails Admin + Lab
+// Supervisor (CFG.adminNotifyEmail / CFG.labSupervisorNotifyEmail) the
+// moment a reagent's current_stock crosses at-or-below its min_level
+// reorder threshold, so the alert reaches someone even if nobody is
+// looking at the Inventory page's low-stock badge that day. Only fires
+// on the actual crossing (was above threshold, now at/below it) so
+// repeated dispensing from an already-low item doesn't spam an email
+// per unit taken. Non-blocking by design (never awaited at the call
+// site) — same reasoning as dispatchShiftEmail(): a slow/unreachable
+// email endpoint must never hold up dispensing or discarding stock.
+async function notifyLowStockIfCrossed(itemName, prevStock, newStock, minLevel, unit){
+  if(!sb) return;
+  const min=minLevel||0;
+  if(!(prevStock>min && newStock<=min)) return;
+  const recipients=[CFG.adminNotifyEmail, CFG.labSupervisorNotifyEmail].filter(Boolean);
+  if(!recipients.length) return;
+  const subject='⚠️ Low Stock Alert: '+itemName;
+  const html='<p>The following reagent has dropped to or below its reorder threshold:</p>'+
+    '<table cellpadding="6" style="border-collapse:collapse;font-family:sans-serif">'+
+    '<tr><td style="color:#64748b">Item</td><td style="font-weight:700">'+escapeHtml(itemName)+'</td></tr>'+
+    '<tr><td style="color:#64748b">Current Stock</td><td style="font-weight:700">'+newStock+' '+escapeHtml(unit||'')+'</td></tr>'+
+    '<tr><td style="color:#64748b">Reorder Threshold</td><td>'+min+' '+escapeHtml(unit||'')+'</td></tr>'+
+    '</table><p style="font-size:12px;color:#64748b">Friendship Hospital HIS — Inventory module.</p>';
+  try{ await sb.functions.invoke('send-email',{body:{to:recipients, subject, html}}); }catch(e){ /* best-effort, matches dispatchShiftEmail */ }
 }
 async function loadDeliveryLog(){
   const body=document.getElementById('delivery-log-body'); if(!body||!sb) return;
@@ -11416,6 +11665,41 @@ async function loadApptDoctors() {
   if(!sb) return; const el=document.getElementById('appt-doctor'); if(!el) return;
   const {data}=await sb.from('doctors').select('name').order('name').catch(()=>({data:null}));
   if(data) el.innerHTML='<option value="">Select…</option>'+data.map(d=>'<option>'+escapeHtml(d.name)+'</option>').join('');
+}
+// Follow-up reminders (Tier 1 quick win) — same "manual Send Reminder
+// button" pattern as loadAppointments()'s 📲 button, applied to
+// scheduled-but-not-yet-used follow_ups rows (saveFollowUpSchedule()).
+// Window is due-within-3-days OR already overdue, so reception sees
+// what needs a nudge without scrolling a full history of used/expired ones.
+async function loadFollowUpsDue() {
+  const body=document.getElementById('followups-due-body'); if(!sb||!body) return;
+  body.innerHTML='<div class="spin-center"><div class="spinner"></div>Loading…</div>';
+  try {
+    const cutoff=new Date(); cutoff.setDate(cutoff.getDate()+3);
+    const cutoffStr=cutoff.toISOString().slice(0,10);
+    const {data:allFu}=await sb.from('follow_ups').select('*').eq('used',false).lte('target_date',cutoffStr).order('target_date');
+    // Re-filter client-side rather than trusting the server-side .lte()
+    // alone — same defence-in-depth already used by
+    // checkAndApplyFollowUpPricing() for this same table/window concept.
+    const fu=(allFu||[]).filter(f=>!f.used && f.target_date<=cutoffStr);
+    if(!fu.length){ body.innerHTML='<div class="empty-state"><div class="empty-icon">🔁</div><div class="empty-title">No follow-ups due soon</div></div>'; return; }
+    const mrns=[...new Set(fu.map(f=>f.patient_mrn).filter(Boolean))];
+    const {data:pts}=mrns.length?await sb.from('patients').select('mrn,name,phone').in('mrn',mrns).order('created_at',{ascending:false}):{data:[]};
+    const phoneByMrn={}; (pts||[]).forEach(p=>{ if(!(p.mrn in phoneByMrn)) phoneByMrn[p.mrn]={name:p.name,phone:p.phone}; });
+    const rows=fu.map(f=>{
+      const pt=phoneByMrn[f.patient_mrn]||{};
+      const overdue=f.target_date<today();
+      return '<tr><td>'+escapeHtml(f.target_date)+(overdue?' <span style="color:var(--red);font-size:.68rem;font-weight:700">OVERDUE</span>':'')+'</td>'+
+        '<td>'+escapeHtml(pt.name||f.patient_mrn||'—')+'</td><td>'+escapeHtml(f.reason||'—')+'</td>'+
+        '<td>'+(pt.phone?'<button class="btn btn-s btn-xs" onclick="sendFollowUpReminder(\''+escAttr(f.id)+'\',\''+escAttr(pt.phone)+'\',\''+escAttr(pt.name||'')+'\',\''+escAttr(f.target_date)+'\')" title="Send SMS reminder">📲 Remind</button>':'<span style="color:var(--slate);font-size:.72rem">No phone on file</span>')+'</td></tr>';
+    }).join('');
+    body.innerHTML='<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Due</th><th>Patient</th><th>Reason</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+  } catch(e){ body.innerHTML='<div style="padding:10px;color:var(--red);font-size:.78rem">'+escapeHtml(e.message)+'</div>'; }
+}
+async function sendFollowUpReminder(followUpId, phone, patientName, targetDate){
+  const msg=(CFG.name||'Hospital')+': Reminder — '+patientName+', you have a follow-up visit due on '+targetDate+'. Please visit at your earliest convenience.';
+  const res=await sendSms(phone, msg, 'followup_reminder', null);
+  if(res.ok){ try{ await sb.from('follow_ups').update({reminder_sent_at:new Date().toISOString()}).eq('id',followUpId); }catch(e){} }
 }
 async function saveAppointment() {
   if(!sb){ toast('Not connected','err'); return; }
@@ -14326,6 +14610,106 @@ async function logInstrumentParseError(machineId,protocol,raw,barcode,errMsg){
   _instrumentMessages.unshift(row);
   renderInstrumentMessages();
 }
+// ── Tier 3: True bidirectional analyzer integration via Web Serial ──────
+// Chrome/Edge-only browser API for direct USB/RS-232 device access — the
+// one genuine way a static, build-step-free HTML app can talk to a real
+// analyzer over a cable without an external middleware server (raw TCP
+// sockets are impossible from browser JS; MLLP-over-network integration
+// still needs that middleware — see the note in the card above). Frames
+// are parsed with the SAME parseAstmMessage()/parseHl7Message() functions
+// the paste/simulate paths already use, and fed into the exact same
+// ingestInstrumentResults()/logInstrumentParseError() pipeline — this is a
+// new transport, not a new parsing/import path.
+//
+// Framing is intentionally pragmatic rather than a full ASTM E1381
+// low-level (ENQ/ACK/NAK/checksum) state machine — real analyzer serial
+// framing is genuinely model-dependent (see docs/proposed-features.md
+// item 11's own complexity note). What this DOES handle:
+//   - HL7 MLLP envelopes: 0x0B <message> 0x1C 0x0D
+//   - ASTM records terminated by EOT (0x04); ENQ (0x05) is ACKed with a
+//     bare ACK (0x06) so a real analyzer's simple handshake isn't left
+//     hanging
+// A lab with unusual framing needs can extend serialFrameByte() below —
+// it's the one place bytes are inspected before handoff to the existing
+// parsers.
+let _serialPort=null, _serialReader=null, _serialBuf=[];
+function isWebSerialSupported(){ return typeof navigator!=='undefined' && 'serial' in navigator; }
+function updateSerialStatus(text,ok){
+  const el=document.getElementById('ws-status'); if(!el) return;
+  el.textContent=text; el.className='bdg '+(ok===true?'bdg-g':ok===false?'bdg-r':'bdg-sl');
+}
+async function connectSerialAnalyzer(){
+  if(!isWebSerialSupported()){ toast('Web Serial API not available — use Chrome or Edge on desktop','err'); return; }
+  try{
+    _serialPort=await navigator.serial.requestPort();
+    const baud=parseInt(document.getElementById('ws-baud')?.value,10)||9600;
+    await _serialPort.open({baudRate:baud});
+    _serialBuf=[];
+    updateSerialStatus('🟢 Connected @ '+baud+' baud',true);
+    const cb=document.getElementById('ws-connect-btn'), db=document.getElementById('ws-disconnect-btn');
+    if(cb) cb.disabled=true; if(db) db.disabled=false;
+    readSerialLoop();
+  }catch(e){
+    if(e.name==='NotFoundError'){ toast('No serial device selected','warn'); return; }
+    updateSerialStatus('🔴 Connection failed: '+e.message,false);
+    toast('Serial connection failed: '+e.message,'err');
+  }
+}
+async function readSerialLoop(){
+  if(!_serialPort?.readable) return;
+  _serialReader=_serialPort.readable.getReader();
+  try{
+    while(true){
+      const {value,done}=await _serialReader.read();
+      if(done) break;
+      if(value) for(const b of value) serialFrameByte(b);
+    }
+  }catch(e){
+    updateSerialStatus('🔴 Read error: '+e.message,false);
+  }finally{
+    try{ _serialReader.releaseLock(); }catch(e2){}
+  }
+}
+function serialFrameByte(b){
+  const ENQ=0x05, ACK=0x06, EOT=0x04, VT=0x0b, FS=0x1c, CR=0x0d;
+  if(b===ENQ){ _serialBuf=[]; sendSerialByte(ACK); return; }
+  if(b===VT){ _serialBuf=[]; return; } // start of an MLLP envelope
+  if(b===EOT){ finishSerialFrame('ASTM'); return; }
+  if(b===FS){ _serialBuf.push('__FS__'); return; } // end of MLLP content marker — wait for the trailing CR
+  if(b===CR && _serialBuf[_serialBuf.length-1]==='__FS__'){ _serialBuf.pop(); finishSerialFrame('HL7'); return; }
+  _serialBuf.push(String.fromCharCode(b));
+}
+async function finishSerialFrame(kind){
+  const raw=_serialBuf.filter(c=>c!=='__FS__').join('').trim();
+  _serialBuf=[];
+  if(!raw) return;
+  const lastEl=document.getElementById('ws-last-frame'); if(lastEl) lastEl.textContent=new Date().toLocaleTimeString();
+  const machineId='Live Serial ('+kind+')';
+  try{
+    const parsed=kind==='ASTM'?parseAstmMessage(raw):parseHl7Message(raw);
+    await ingestInstrumentResults(machineId,kind,raw,parsed.sampleId,parsed);
+    toast('📡 Live analyzer message received and parsed ('+parsed.results.length+' result'+(parsed.results.length!==1?'s':'')+')','ok');
+  }catch(e){
+    await logInstrumentParseError(machineId,kind,raw,null,e.message);
+    toast('⚠️ Could not parse incoming serial frame: '+e.message,'warn');
+  }
+}
+async function sendSerialByte(b){
+  if(!_serialPort?.writable) return;
+  try{
+    const writer=_serialPort.writable.getWriter();
+    await writer.write(new Uint8Array([b]));
+    writer.releaseLock();
+  }catch(e){ /* best-effort ACK — a missed handshake byte shouldn't crash the read loop */ }
+}
+async function disconnectSerialAnalyzer(){
+  try{ await _serialReader?.cancel(); }catch(e){}
+  try{ await _serialPort?.close(); }catch(e){}
+  _serialPort=null; _serialReader=null; _serialBuf=[];
+  updateSerialStatus('⚪ Disconnected',null);
+  const cb=document.getElementById('ws-connect-btn'), db=document.getElementById('ws-disconnect-btn');
+  if(cb) cb.disabled=false; if(db) db.disabled=true;
+}
 async function simulateInstrumentMessage(){
   const profile=INSTRUMENT_PROFILES[document.getElementById('im-sim-profile')?.value]; if(!profile) return;
   const barcode=document.getElementById('im-sim-barcode')?.value?.trim()||('SIM-'+Math.floor(10000+Math.random()*90000));
@@ -15466,7 +15850,7 @@ function switchSampleTab(tab, btn) {
   });
   document.querySelectorAll('#page-samples .tab').forEach(b=>b.classList.remove('active'));
   if(btn) btn.classList.add('active');
-  if(tab==='receive') loadReceiveQueue();
+  if(tab==='receive'){ loadReceiveQueue(); const s=document.getElementById('sc-recv-search'); if(s) setTimeout(()=>s.focus(),0); }
   if(tab==='queue') loadSampleQueueFull();
   if(tab==='reject') loadRejectionLog();
 }
@@ -15522,22 +15906,43 @@ function updateTubeColor() {
   guide.textContent = volumes[spec]||'';
 }
 
+// _scRecvMatches tracks the currently-shown match list so a hardware
+// (keyboard-wedge) barcode scanner's trailing Enter keystroke can select
+// the right patient without a mouse click — see handleReceiveScanEnter().
+let _scRecvMatches=[];
 async function searchReceivePatient(q) {
   const box=document.getElementById('sc-recv-results');
-  if(!q||q.length<2||!sb){ if(box) box.style.display='none'; return; }
+  if(!q||q.length<2||!sb){ if(box) box.style.display='none'; _scRecvMatches=[]; return; }
   try{
     const{data}=await sb.from('patients').select('id,name,first_name,last_name,mrn,lab_no,age,age_unit,sex,payment_status').or('name.ilike.%'+q+'%,mrn.ilike.%'+q+'%,lab_no.ilike.%'+q+'%,phone.ilike.%'+q+'%').limit(8);
     if(!box) return;
     // Only samples currently Collected (awaiting receipt) are relevant here
-    if(!data?.length){ box.style.display='none'; return; }
+    if(!data?.length){ box.style.display='none'; _scRecvMatches=[]; return; }
     const ids=data.map(p=>p.id);
     const{data:recs}=await sb.from('sample_records').select('patient_id').in('patient_id',ids).eq('status','Collected');
     const collectedIds=new Set((recs||[]).map(r=>r.patient_id));
     const matches=data.filter(p=>collectedIds.has(p.id));
+    _scRecvMatches=matches;
     if(!matches.length){ box.style.display='block'; box.innerHTML='<div style="padding:8px 12px;font-size:.78rem;color:var(--slate)">No collected samples match — sample may not be marked Collected yet</div>'; return; }
     box.style.display='block';
     box.innerHTML=matches.map(p=>'<div onclick="selectReceivePt(\''+p.id+'\')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:.8rem" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'"><div style="font-weight:700">'+escapeHtml(p.name||fullName(p))+'</div><div style="font-size:.7rem;color:var(--slate)">'+escapeHtml(p.mrn||p.lab_no||'—')+'</div></div>').join('');
   }catch(e){}
+}
+// Most USB/Bluetooth barcode scanners act as a keyboard: they type the
+// scanned code into whatever field has focus, then send Enter. With the
+// field auto-focused (switchSampleTab()) and this handler wired to it,
+// a scan now goes straight to "patient selected" with no mouse click —
+// picks an exact lab_no/mrn match first, then falls back to "select the
+// only visible match" for a plain manual search-then-Enter.
+function handleReceiveScanEnter(e){
+  if(e.key!=='Enter') return;
+  e.preventDefault();
+  if(!_scRecvMatches.length) return;
+  const q=(e.target.value||'').trim().toLowerCase();
+  const exact=_scRecvMatches.find(p=>(p.mrn||'').toLowerCase()===q||(p.lab_no||'').toLowerCase()===q);
+  if(exact){ selectReceivePt(exact.id); return; }
+  if(_scRecvMatches.length===1){ selectReceivePt(_scRecvMatches[0].id); return; }
+  toast('Multiple matches — select the correct patient from the list','warn');
 }
 async function selectReceivePt(ptId){
   if(!sb||!ptId) return;
@@ -19688,14 +20093,18 @@ async function submitDiscardBatch(){
     // the low-stock alert.
     const [{data:batch},{data:it}]=await Promise.all([
       sb.from('inventory_batches').select('quantity').eq('id',_invDiscardBatchId).maybeSingle(),
-      sb.from('reagent_inventory').select('current_stock').eq('id',_invDiscardItemId).maybeSingle(),
+      sb.from('reagent_inventory').select('current_stock,item_name,min_level,unit').eq('id',_invDiscardItemId).maybeSingle(),
     ]);
     await sb.from('inventory_batches').update({
       is_active:false, discard_reason_code:reasonCode, discard_notes:notes,
       discarded_by:currentProfile?.id, discarded_by_name:currentProfile?.full_name||'',
       discarded_at:new Date().toISOString(),
     }).eq('id',_invDiscardBatchId);
-    if(batch?.quantity) await sb.from('reagent_inventory').update({current_stock:Math.max(0,(it?.current_stock||0)-batch.quantity)}).eq('id',_invDiscardItemId);
+    if(batch?.quantity){
+      const prevStock=it?.current_stock||0, newStock=Math.max(0,prevStock-batch.quantity);
+      await sb.from('reagent_inventory').update({current_stock:newStock}).eq('id',_invDiscardItemId);
+      notifyLowStockIfCrossed(it?.item_name||'Reagent',prevStock,newStock,it?.min_level,it?.unit);
+    }
     toast('🗑 Batch discarded — '+reasonCode,'ok');
     closeOv('inv-discard-ov');
     loadInventory();
@@ -19725,7 +20134,11 @@ async function dispenseFromInventoryFefo(itemId,qty){
     await sb.from('inventory_batches').update({quantity:b.quantity-take}).eq('id',b.id);
     remaining-=take; dispensed+=take;
   }
-  if(dispensed>0) await sb.from('reagent_inventory').update({current_stock:Math.max(0,(it?.current_stock||0)-dispensed)}).eq('id',itemId);
+  if(dispensed>0){
+    const prevStock=it?.current_stock||0, newStock=Math.max(0,prevStock-dispensed);
+    await sb.from('reagent_inventory').update({current_stock:newStock}).eq('id',itemId);
+    notifyLowStockIfCrossed(it?.item_name||'Reagent',prevStock,newStock,it?.min_level,it?.unit);
+  }
   return {dispensed,shortfall:remaining};
 }
 async function promptDispenseFefo(itemId){

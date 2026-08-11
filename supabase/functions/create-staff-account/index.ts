@@ -100,6 +100,16 @@ Deno.serve(async (req) => {
     return json({ error: "Invalid JSON body" }, 400);
   }
 
+  // Health-check ping (Settings → Edge Function Health Check, index.html):
+  // by this point the caller is authenticated AND verified admin, so a
+  // ping reaching here proves the function is deployed, reachable, and
+  // correctly enforcing its admin check — without creating a real
+  // auth user/staff row. No provider secret to check (SUPABASE_URL /
+  // SUPABASE_SERVICE_ROLE_KEY are already validated above).
+  if (body.ping === true) {
+    return json({ ok: true, ping: true });
+  }
+
   const full_name = String(body.full_name || "").trim();
   const email = String(body.email || "").trim();
   const password = String(body.password || "");

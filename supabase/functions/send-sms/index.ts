@@ -79,6 +79,17 @@ Deno.serve(async (req) => {
     return json({ error: "Invalid JSON body" }, 400);
   }
 
+  // Health-check ping (Settings → Edge Function Health Check, index.html):
+  // proves the function is deployed, reachable, and authenticated, and
+  // reports whether SMS_API_URL/SMS_API_KEY are set — without sending a
+  // real SMS to anyone.
+  if (body.ping === true) {
+    if (!SMS_API_URL || !SMS_API_KEY) {
+      return json({ error: "SMS provider not configured — set SMS_API_URL and SMS_API_KEY via `supabase secrets set`" }, 500);
+    }
+    return json({ ok: true, ping: true });
+  }
+
   const to = String(body.to || "").trim();
   const message = String(body.message || "").trim();
   const sender = body.sender ? String(body.sender) : SMS_SENDER_ID;
