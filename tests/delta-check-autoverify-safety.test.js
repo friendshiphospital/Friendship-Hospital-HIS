@@ -8,6 +8,20 @@
 //      breach, QC accepted and on file, not critical) each independently
 //      and correctly block auto-verification when violated, and only
 //      allow it when ALL FOUR hold simultaneously.
+//   3. (PART 4) A delta-breach override on an explicit manual "Save &
+//      Verify" click now actually verifies once the reason code is given,
+//      instead of being forced back to unverified forever regardless of
+//      what the user clicked — see saveResultWithSafetyChecks()'s
+//      passesRequiredFieldsGate()/delta-override path. Previously this was
+//      reproduced live as a genuinely silent bug: a SECOND identical
+//      Save & Verify attempt (no breach the second time, since the value
+//      now matches itself) still did nothing at all, no toast, no
+//      verification, because logResultHistory() never stamped recorded_at
+//      on the history row it inserted, so runDeltaCheck()'s
+//      "most recent prior result" lookup kept finding the original stale
+//      baseline forever instead of the just-saved value — the exact same
+//      breach re-triggered on every subsequent attempt. Both the
+//      recorded_at fix and the delta-override verify fix are covered here.
 //
 // Findings are reported inline as comments next to the relevant checks,
 // not just asserted silently — see the boundary-inclusivity note below.
@@ -298,6 +312,100 @@ module.exports = async function run(context, baseUrl) {
     await page.waitForTimeout(150);
     const finalPayload = await page.evaluate(() => window.__mock.upserts[0]);
     t.check('with the master Auto-Verification toggle OFF, a clean result is never auto-verified regardless of the four gates', finalPayload?.is_verified === false);
+    await page.close();
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // PART 4 — Delta-breach override on an explicit manual Save & Verify
+  // (verify:true): the reason-code justification IS the human review Delta
+  // Check exists to enforce, so it should go on to verify, not be
+  // permanently stuck at "pending sign-off" no matter how many times the
+  // exact same values are re-saved.
+  // ═══════════════════════════════════════════════════════════════════
+  {
+    const page = await context.newPage();
+    await page.addInitScript(initScript({
+      historyRow: { hgb: 10.0, analysis_date: '2026-01-01' }, // prior Hgb 10.0 -> new value below breaches
+      qcLots: [{ id: 'lot1' }], qcResults: [{ accepted: true, result_date: '2026-01-01' }],
+    }));
+    await login(page, baseUrl);
+    await page.evaluate(() => saveResultWithSafetyChecks({
+      table: 'results_hematology', deptKey: 'hem', deptLabel: 'Haematology', pageId: 'page-hem-entry', ptId: 'p1',
+      payload: { hgb: 7.0 }, // 30% drop -> breaches
+      hasCrit: false, verify: true, successLabel: 'CBC',
+    }));
+    await page.waitForTimeout(200);
+    await page.evaluate(() => {
+      document.getElementById('delta-reason-code').value = 'Confirmed by Re-run';
+      document.getElementById('delta-reason-note').value = 'Confirmed on repeat, clinically consistent';
+    });
+    await page.evaluate(() => confirmDeltaOverride());
+    await page.waitForTimeout(150);
+    const finalPayload = await page.evaluate(() => window.__mock.upserts[0]);
+    t.check('an explicit manual Save & Verify click that hits a delta breach IS verified once the override reason is given (not permanently forced to pending)', finalPayload?.is_verified === true);
+    await page.close();
+  }
+
+  // A plain "Save" (verify:false) that hits a delta breach must still stay
+  // unverified after the override — only an explicit Save & Verify click
+  // should ever result in is_verified:true, delta breach or not.
+  {
+    const page = await context.newPage();
+    await page.addInitScript(initScript({
+      historyRow: { hgb: 10.0, analysis_date: '2026-01-01' },
+      qcLots: [{ id: 'lot1' }], qcResults: [{ accepted: true, result_date: '2026-01-01' }],
+    }));
+    await login(page, baseUrl);
+    await page.evaluate(() => saveResultWithSafetyChecks({
+      table: 'results_hematology', deptKey: 'hem', deptLabel: 'Haematology', pageId: 'page-hem-entry', ptId: 'p1',
+      payload: { hgb: 7.0 }, hasCrit: false, verify: false, successLabel: 'CBC',
+    }));
+    await page.waitForTimeout(200);
+    await page.evaluate(() => {
+      document.getElementById('delta-reason-code').value = 'Confirmed by Re-run';
+      document.getElementById('delta-reason-note').value = 'note';
+    });
+    await page.evaluate(() => confirmDeltaOverride());
+    await page.waitForTimeout(150);
+    const finalPayload = await page.evaluate(() => window.__mock.upserts[0]);
+    t.check('a plain Save (not Save & Verify) that hits a delta breach stays unverified after the override, exactly as before', finalPayload?.is_verified === false);
+    await page.close();
+  }
+
+  // logResultHistory() now stamps recorded_at explicitly -- proves the
+  // inserted history row actually carries a fresh timestamp rather than
+  // silently omitting it (the direct cause of the "still broken" bug: an
+  // undated row can never win runDeltaCheck()'s most-recent-first ordering
+  // against an older row that does have one, so the same stale breach
+  // re-fires forever instead of the just-saved value becoming the new
+  // baseline).
+  {
+    const page = await context.newPage();
+    await page.addInitScript(`
+      localStorage.setItem('sb_url','https://mock.supabase.co');
+      localStorage.setItem('sb_key','mock-anon-key');
+      ${CHAINABLE_MOCK_SRC}
+      window.__mock = { historyInserts: [] };
+      window.supabase = { createClient: () => ({
+        auth: { signInWithPassword: async()=>({data:{user:{id:'u1'}},error:null}), getSession: async()=>({data:{session:null}}), signOut: async()=>({error:null}) },
+        from: (table) => {
+          if (table === 'staff') return chainable({ id: 's1', user_id: 'u1', full_name: 'Lab Tech Test', role: 'lab_tech' }, []);
+          if (table === 'results_hematology_history') {
+            const c = chainable(null, []);
+            c.insert = (payload) => { window.__mock.historyInserts.push(payload); return Promise.resolve({ data: null, error: null }); };
+            return c;
+          }
+          return chainable(null, []);
+        },
+        rpc: () => Promise.resolve({ data: null, error: null }),
+        functions: { invoke: async()=>({data:{ok:true},error:null}) },
+      }) };
+    `);
+    await login(page, baseUrl);
+    await page.evaluate(() => logResultHistory('results_hematology', { patient_id: 'p1', hgb: 10 }));
+    await page.waitForTimeout(150);
+    const inserted = await page.evaluate(() => window.__mock.historyInserts[0]);
+    t.check('logResultHistory() stamps recorded_at on the history row it inserts, not left undated', !!inserted?.recorded_at && !isNaN(new Date(inserted.recorded_at).getTime()));
     await page.close();
   }
 
