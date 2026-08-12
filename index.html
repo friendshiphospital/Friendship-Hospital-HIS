@@ -4688,7 +4688,12 @@ html[dir="rtl"] body{direction:rtl;}
       <div class="fg"><label class="fl">Currency</label>
         <select class="fc" id="cfg-currency"><option value="SDG">SDG — Sudanese Pound</option><option value="USD">USD — US Dollar</option><option value="SAR">SAR — Saudi Riyal</option><option value="OMR">OMR — Omani Rial</option></select></div>
       <div class="fg"><label class="fl">Lab Number Prefix</label><input class="fc" id="cfg-lab-prefix" value="FH" maxlength="6"></div>
-      <div class="fg"><label class="fl">Report Footer Text</label><textarea class="fc" id="cfg-footer" rows="2">Results are valid for 24 hours. For queries contact the laboratory.</textarea></div>
+      <div class="fg"><label class="fl">Report Footer Text (General / Other Documents)</label><textarea class="fc" id="cfg-footer" rows="2">Results are valid for 24 hours. For queries contact the laboratory.</textarea></div>
+      <div style="font-size:.7rem;color:var(--slate);margin:-6px 0 10px">Printed documents use the footer for their own section below where one applies (Lab, Radiology, Doctor, Nursing) — this General field is only the fallback for everything else (invoices, price lists, staff-related prints, etc.).</div>
+      <div class="fg"><label class="fl">Report Footer Text — Laboratory</label><textarea class="fc" id="cfg-lab-footer" rows="2">Results are valid for 24 hours. For queries contact the laboratory.</textarea></div>
+      <div class="fg"><label class="fl">Report Footer Text — Radiology</label><textarea class="fc" id="cfg-rad-footer" rows="2">This report is for the referring clinician's use. For queries contact the Radiology department.</textarea></div>
+      <div class="fg"><label class="fl">Report Footer Text — Doctor</label><textarea class="fc" id="cfg-doctor-footer" rows="2">This document is issued by the treating physician. For medical queries, contact Friendship Hospital.</textarea></div>
+      <div class="fg"><label class="fl">Report Footer Text — Nursing</label><textarea class="fc" id="cfg-nursing-footer" rows="2">This is a clinical nursing record. For queries contact the Nursing Department.</textarea></div>
       <div class="g2">
         <div class="fg"><label class="fl">Unpaid Invoice Alert (hours)</label><input class="fc" type="number" min="1" id="cfg-unpaid-alert-hours" placeholder="72"></div>
         <div class="fg"><label class="fl">Pending Admission Alert (hours)</label><input class="fc" type="number" min="1" id="cfg-admission-alert-hours" placeholder="4"></div>
@@ -7021,6 +7026,12 @@ if ('serviceWorker' in navigator) {
 let sb = null, currentUser = null, currentProfile = null;
 let currentPt = null, _admPt = null, _otPt = null, _vsPt = null;
 let _docPt = null, _billPt = null, _scPt = null, _radPt = null, _rptPt = null;
+// Tracks whether the Notes tab has unsaved edits since the last save/patient
+// switch, so completeAndSignOffVisit() can auto-save before signing off
+// instead of requiring a separate prior Save click (see that function).
+let _docNotesDirty = false;
+document.addEventListener('input', e => { if(e.target.closest && e.target.closest('#doc-tab-notes')) _docNotesDirty = true; });
+document.addEventListener('change', e => { if(e.target.closest && e.target.closest('#doc-tab-notes')) _docNotesDirty = true; });
 let _currentAdmId = null, _currentInvId = null;
 let _wlDateMode = 'week', _admFilter = 'Active', _billFilter = 'all', _otRoomFilter = 'all';
 let _painScore = null, _allAdmissions = [], _allBillInvoices = [], _allPrices = [];
@@ -7044,6 +7055,13 @@ const CFG = {
   get currency(){ return localStorage.getItem('cfg_currency')||'SDG'; },
   get prefix(){ return localStorage.getItem('cfg_lab_prefix')||'FH'; },
   get footer(){ return localStorage.getItem('cfg_footer')||'Results are valid for 24 hours.'; },
+  // Per-section print footer text (printFooter(section), CLAUDE.md item 4) —
+  // 'footer' above stays the General fallback, unchanged, so anything not
+  // explicitly recategorized into one of these keeps its exact current text.
+  get labFooter(){ return localStorage.getItem('cfg_lab_footer')||'Results are valid for 24 hours. For queries contact the laboratory.'; },
+  get radFooter(){ return localStorage.getItem('cfg_rad_footer')||"This report is for the referring clinician's use. For queries contact the Radiology department."; },
+  get doctorFooter(){ return localStorage.getItem('cfg_doctor_footer')||'This document is issued by the treating physician. For medical queries, contact Friendship Hospital.'; },
+  get nursingFooter(){ return localStorage.getItem('cfg_nursing_footer')||'This is a clinical nursing record. For queries contact the Nursing Department.'; },
   // Notification thresholds (Phase 3) — configurable rather than hardcoded,
   // so a site can tune what counts as "overdue" without editing code.
   get unpaidAlertHours(){ return parseFloat(localStorage.getItem('cfg_unpaid_alert_hours'))||72; },
@@ -8248,6 +8266,7 @@ function loadSettings() {
   const g=(id,key)=>{ const el=document.getElementById(id); if(el){ const v=localStorage.getItem(key); if(v) el.value=v; } };
   g('cfg-hosp-name','cfg_hosp_name'); g('cfg-addr1','cfg_addr1'); g('cfg-phone','cfg_phone');
   g('cfg-email','cfg_email'); g('cfg-currency','cfg_currency'); g('cfg-lab-prefix','cfg_lab_prefix'); g('cfg-footer','cfg_footer');
+  g('cfg-lab-footer','cfg_lab_footer'); g('cfg-rad-footer','cfg_rad_footer'); g('cfg-doctor-footer','cfg_doctor_footer'); g('cfg-nursing-footer','cfg_nursing_footer');
   const uah=document.getElementById('cfg-unpaid-alert-hours'); if(uah) uah.value=CFG.unpaidAlertHours;
   const aah=document.getElementById('cfg-admission-alert-hours'); if(aah) aah.value=CFG.admissionAlertHours;
   const ss=document.getElementById('cfg-sms-sender-id'); if(ss) ss.value=CFG.smsSenderId;
@@ -8369,6 +8388,10 @@ function saveSettings() {
   localStorage.setItem('cfg_phone',g('cfg-phone')); localStorage.setItem('cfg_email',g('cfg-email'));
   localStorage.setItem('cfg_currency',g('cfg-currency')); localStorage.setItem('cfg_lab_prefix',g('cfg-lab-prefix'));
   localStorage.setItem('cfg_footer',g('cfg-footer'));
+  localStorage.setItem('cfg_lab_footer',g('cfg-lab-footer'));
+  localStorage.setItem('cfg_rad_footer',g('cfg-rad-footer'));
+  localStorage.setItem('cfg_doctor_footer',g('cfg-doctor-footer'));
+  localStorage.setItem('cfg_nursing_footer',g('cfg-nursing-footer'));
   const uah=parseFloat(g('cfg-unpaid-alert-hours')); localStorage.setItem('cfg_unpaid_alert_hours', (isNaN(uah)||uah<=0)?72:uah);
   const aah=parseFloat(g('cfg-admission-alert-hours')); localStorage.setItem('cfg_admission_alert_hours', (isNaN(aah)||aah<=0)?4:aah);
   localStorage.setItem('cfg_sms_sender_id',g('cfg-sms-sender-id'));
@@ -8744,14 +8767,22 @@ function exportStatsPDF(){
     : '<div style="color:#64748b;font-size:.85rem">No records in this date range.</div>';
   const html = printHeader('Statistics — '+title)
     + '<div style="margin:10px 0;font-size:9.5pt;color:#475569">Period: '+fmtDate(from)+' – '+fmtDate(to)+'</div>'
-    + table + printFooter();
+    + table + printFooter('general');
   openPrintWin(html, 'Statistics — '+title);
 }
 function printHeader(docType) {
   return '<div style="border-bottom:2px solid #0b7a75;padding-bottom:10px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:flex-start"><div><div style="font-size:16pt;font-weight:800;color:#0b7a75;font-family:DM Serif Display,serif">🏥 FRIENDSHIP HOSPITAL — AL DAMAZIN</div><div style="font-size:9pt;color:#64748b;margin-top:2px">Al Damazin, Blue Nile State, Sudan</div><div style="font-size:8.5pt;color:#64748b;margin-top:1px">Tel: '+escapeHtml(CFG.phone)+'  |  Email: '+escapeHtml(CFG.email)+'</div></div><div style="text-align:right"><div style="font-size:10pt;font-weight:700;color:#1e3a5a">'+escapeHtml(docType)+'</div></div></div>';
 }
-function printFooter() {
-  return '<div style="border-top:1px solid #e2e8f3;margin-top:20px;padding-top:8px;font-size:8pt;color:#64748b;display:flex;justify-content:space-between"><span>'+escapeHtml(CFG.footer)+'</span><span>Printed: '+new Date().toLocaleString('en-GB')+' | By: '+escapeHtml(currentProfile?.full_name||'—')+'</span></div>';
+// section: 'lab' | 'radiology' | 'doctor' | 'nursing' | 'general' (default) —
+// each has its own independently configurable Settings field/localStorage
+// key (CFG.labFooter/radFooter/doctorFooter/nursingFooter), so a
+// Prescription printout no longer carries a lab-results disclaimer and vice
+// versa. Falls back to CFG.footer (General) for an unrecognized/omitted
+// section, matching every caller from before this was added.
+function printFooter(section) {
+  const textBySection = {lab:CFG.labFooter, radiology:CFG.radFooter, doctor:CFG.doctorFooter, nursing:CFG.nursingFooter, general:CFG.footer};
+  const text = textBySection[section] ?? CFG.footer;
+  return '<div style="border-top:1px solid #e2e8f3;margin-top:20px;padding-top:8px;font-size:8pt;color:#64748b;display:flex;justify-content:space-between"><span>'+escapeHtml(text)+'</span><span>Printed: '+new Date().toLocaleString('en-GB')+' | By: '+escapeHtml(currentProfile?.full_name||'—')+'</span></div>';
 }
 function openPrintWin(html, title='Print') {
   const w=window.open('','_blank','width=900,height=750'); if(!w){ toast('Allow popups','warn'); return; }
@@ -9268,7 +9299,7 @@ function printTransferRegister(){
         return '<tr><td>'+fmtDT(x.transferred_at)+'</td><td>'+escapeHtml(pt.name||'—')+'</td><td>'+escapeHtml(x.from_ward||'—')+'</td><td>'+escapeHtml(x.to_ward||'—')+'</td><td>'+escapeHtml(x.reason||'—')+'</td><td>'+escapeHtml(x.transferred_by_name||'—')+'</td></tr>'; }).join('')
       +'</tbody></table>'
     : '<div style="color:#64748b;font-size:.85rem">No transfers recorded for this filter.</div>';
-  const html=printHeader('Bed Transfer Register')+table+printFooter();
+  const html=printHeader('Bed Transfer Register')+table+printFooter('general');
   openPrintWin(html,'Bed Transfer Register');
 }
 
@@ -9319,7 +9350,7 @@ function printBedCensus(){
     ? '<table><thead><tr><th>Ward</th><th>Occupied</th><th>Total Beds</th><th>Occupancy %</th></tr></thead><tbody>'+
       rows.map(r=>{ const pct=r.total>0?Math.round(r.occupied/r.total*100):0; return '<tr><td>'+r.ward+'</td><td>'+r.occupied+'</td><td>'+r.total+'</td><td>'+pct+'%</td></tr>'; }).join('')+'</tbody></table>'
     : '<div style="color:#64748b;font-size:.85rem">No census data loaded.</div>';
-  const html=printHeader('Daily Bed Census — '+fmtDate(date))+table+printFooter();
+  const html=printHeader('Daily Bed Census — '+fmtDate(date))+table+printFooter('general');
   openPrintWin(html,'Daily Bed Census');
 }
 
@@ -9928,7 +9959,7 @@ async function saveDischarge(source) {
 function printDischargeSummary() {
   const g=id=>escapeHtml(document.getElementById(id)?.value||'—');
   const bn=document.getElementById('disch-pt-banner');
-  const html=printHeader('Discharge Summary')+'<div style="margin-bottom:14px">'+(bn?.innerHTML||'')+'</div><table><tr><th colspan="2">Discharge Information</th></tr><tr><td style="width:40%"><b>Discharge Date</b></td><td>'+g('disch-date')+'</td></tr><tr><td><b>Discharge Type</b></td><td>'+g('disch-type')+'</td></tr><tr><td><b>Final Diagnosis</b></td><td>'+g('disch-dx')+'</td></tr><tr><td><b>Condition at Discharge</b></td><td>'+g('disch-condition')+'</td></tr><tr><td><b>Procedures Performed</b></td><td>'+g('disch-procedures')+'</td></tr></table><h3 style="margin:14px 0 6px;font-size:10pt;color:#1e3a5a">Discharge Instructions</h3><p style="white-space:pre-wrap">'+g('disch-instructions')+'</p><div style="margin-top:8px"><b>Follow-up:</b> '+g('disch-fu-date')+' with '+g('disch-fu-with')+'</div><div style="margin-top:30px;display:flex;justify-content:space-between"><div style="width:200px;text-align:center;border-top:1px solid #000;padding-top:6px">Prepared by<br>'+g('disch-prepared-by')+'</div></div>'+printFooter();
+  const html=printHeader('Discharge Summary')+'<div style="margin-bottom:14px">'+(bn?.innerHTML||'')+'</div><table><tr><th colspan="2">Discharge Information</th></tr><tr><td style="width:40%"><b>Discharge Date</b></td><td>'+g('disch-date')+'</td></tr><tr><td><b>Discharge Type</b></td><td>'+g('disch-type')+'</td></tr><tr><td><b>Final Diagnosis</b></td><td>'+g('disch-dx')+'</td></tr><tr><td><b>Condition at Discharge</b></td><td>'+g('disch-condition')+'</td></tr><tr><td><b>Procedures Performed</b></td><td>'+g('disch-procedures')+'</td></tr></table><h3 style="margin:14px 0 6px;font-size:10pt;color:#1e3a5a">Discharge Instructions</h3><p style="white-space:pre-wrap">'+g('disch-instructions')+'</p><div style="margin-top:8px"><b>Follow-up:</b> '+g('disch-fu-date')+' with '+g('disch-fu-with')+'</div><div style="margin-top:30px;display:flex;justify-content:space-between"><div style="width:200px;text-align:center;border-top:1px solid #000;padding-top:6px">Prepared by<br>'+g('disch-prepared-by')+'</div></div>'+printFooter('doctor');
   openPrintWin(html,'Discharge Summary');
 }
 
@@ -10089,7 +10120,7 @@ function printWhoChecklist(){
     sec('signin','1. Sign In — before induction of anaesthesia')+
     sec('timeout','2. Time Out — before skin incision')+
     sec('signout','3. Sign Out — before patient leaves OR')+
-    printFooter();
+    printFooter('general');
   openPrintWin(html,'WHO Surgical Safety Checklist');
 }
 async function startOperation(id) {
@@ -10178,7 +10209,7 @@ async function savePreop(cleared) {
 function printPreopForm() {
   const g=id=>escapeHtml(document.getElementById(id)?.value||'—');
   const bn=document.getElementById('preop-pt-banner');
-  const html=printHeader('Pre-Operative Assessment Form')+'<div style="margin-bottom:12px">'+(bn?.innerHTML||'')+'</div><table><tr><th colspan="2">Pre-Operative Assessment</th></tr><tr><td style="width:35%"><b>Allergies</b></td><td>'+g('preop-allergies')+'</td></tr><tr><td><b>Current Medications</b></td><td>'+g('preop-meds')+'</td></tr><tr><td><b>Past Medical History</b></td><td>'+g('preop-pmh')+'</td></tr><tr><td><b>Airway Assessment</b></td><td>'+g('preop-airway')+'</td></tr><tr><td><b>Anaesthesia Plan</b></td><td>'+g('preop-anaes-plan')+'</td></tr><tr><td><b>Fasting Instructions</b></td><td>'+g('preop-fasting')+'</td></tr><tr><td><b>Consent</b></td><td>'+(document.getElementById('preop-consent-chk')?.checked?'✅ Confirmed':'❌ Not confirmed')+'</td></tr></table><div style="margin-top:20px;display:flex;gap:40px"><div style="width:200px;text-align:center;border-top:1px solid #000;padding-top:6px">Surgeon Signature</div><div style="width:200px;text-align:center;border-top:1px solid #000;padding-top:6px">Anaesthetist Signature</div></div>'+printFooter();
+  const html=printHeader('Pre-Operative Assessment Form')+'<div style="margin-bottom:12px">'+(bn?.innerHTML||'')+'</div><table><tr><th colspan="2">Pre-Operative Assessment</th></tr><tr><td style="width:35%"><b>Allergies</b></td><td>'+g('preop-allergies')+'</td></tr><tr><td><b>Current Medications</b></td><td>'+g('preop-meds')+'</td></tr><tr><td><b>Past Medical History</b></td><td>'+g('preop-pmh')+'</td></tr><tr><td><b>Airway Assessment</b></td><td>'+g('preop-airway')+'</td></tr><tr><td><b>Anaesthesia Plan</b></td><td>'+g('preop-anaes-plan')+'</td></tr><tr><td><b>Fasting Instructions</b></td><td>'+g('preop-fasting')+'</td></tr><tr><td><b>Consent</b></td><td>'+(document.getElementById('preop-consent-chk')?.checked?'✅ Confirmed':'❌ Not confirmed')+'</td></tr></table><div style="margin-top:20px;display:flex;gap:40px"><div style="width:200px;text-align:center;border-top:1px solid #000;padding-top:6px">Surgeon Signature</div><div style="width:200px;text-align:center;border-top:1px solid #000;padding-top:6px">Anaesthetist Signature</div></div>'+printFooter('doctor');
   openPrintWin(html,'Pre-Op Form');
 }
 async function printOTSchedule() {
@@ -10193,7 +10224,7 @@ async function printOTSchedule() {
         '<tr style="background:#f8f9fa"><td colspan="8" style="padding:4px 10px 10px"><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;font-size:8pt">'+
         sc(b.pre_op_checklist?.consent)+' Consent &nbsp;'+sc(b.pre_op_checklist?.fast)+' Fasting &nbsp;'+sc(b.pre_op_checklist?.xm)+' Blood X-match &nbsp;'+sc(b.pre_op_checklist?.labs)+' Pre-op labs &nbsp;'+sc(b.pre_op_checklist?.allergy)+' Allergies &nbsp;'+sc(b.pre_op_checklist?.iv)+' IV access &nbsp;'+sc(b.pre_op_checklist?.site)+' Site marked &nbsp;'+sc(b.pre_op_checklist?.anaes)+' Anaes. assessment'+
         '</div></td></tr>').join('')+
-      '</tbody></table><div style="margin-top:20px;display:flex;justify-content:space-between;gap:20px"><div style="width:200px;text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Theatre Coordinator</div><div style="width:200px;text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Head of Surgery</div><div style="width:200px;text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Anaesthesia Lead</div></div>'+printFooter();
+      '</tbody></table><div style="margin-top:20px;display:flex;justify-content:space-between;gap:20px"><div style="width:200px;text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Theatre Coordinator</div><div style="width:200px;text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Head of Surgery</div><div style="width:200px;text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Anaesthesia Lead</div></div>'+printFooter('general');
     openPrintWin(html,'OT Schedule');
   } catch(e){ toast(e.message,'err'); }
 }
@@ -10460,7 +10491,7 @@ async function printFluidChart() {
     const html=printHeader('Nursing Fluid Balance Chart')+'<div style="display:flex;gap:20px;margin-bottom:12px;font-size:9.5pt"><div><strong>Patient:</strong> '+escapeHtml(_fcPt.name||'—')+'</div><div><strong>MRN:</strong> '+escapeHtml(_fcPt.mrn||'—')+'</div><div><strong>Ward/Bed:</strong> '+escapeHtml(_fcPt.ward||'—')+'/'+escapeHtml(_fcPt.bed||'—')+'</div><div><strong>Date:</strong> '+fmtDate(d)+'</div></div>'+
       '<table style="width:100%;border-collapse:collapse"><thead><tr style="background:#0e1928;color:#fff"><th style="padding:6px 8px;font-size:8pt;width:70px">Time</th><th colspan="3" style="padding:6px 8px;font-size:8pt;border-left:2px solid rgba(255,255,255,.2)">INTAKE (mL)</th><th colspan="4" style="padding:6px 8px;font-size:8pt;border-left:2px solid rgba(255,255,255,.2)">OUTPUT (mL)</th><th style="padding:6px 8px;font-size:8pt;border-left:2px solid rgba(255,255,255,.2)">NET</th><th style="padding:6px 8px;font-size:8pt">Nurse</th></tr><tr style="background:#1e3a5a;color:rgba(255,255,255,.7)"><th></th><th style="padding:4px 8px;font-size:7.5pt;border-left:2px solid rgba(255,255,255,.1)">IV</th><th style="padding:4px 8px;font-size:7.5pt">PO</th><th style="padding:4px 8px;font-size:7.5pt">Other</th><th style="padding:4px 8px;font-size:7.5pt;border-left:2px solid rgba(255,255,255,.1)">Urine</th><th style="padding:4px 8px;font-size:7.5pt">Drain</th><th style="padding:4px 8px;font-size:7.5pt">NG</th><th style="padding:4px 8px;font-size:7.5pt">Other</th><th style="padding:4px 8px;font-size:7.5pt">Net</th><th></th></tr></thead><tbody>'+
       (rows||'<tr><td colspan="10" style="padding:20px;text-align:center">No entries</td></tr>')+'</tbody><tfoot><tr style="background:#f1f5f9;font-weight:800;border-top:2px solid var(--border)"><td style="padding:6px 8px">24hr TOTAL</td><td style="padding:6px 8px;text-align:center;color:#1d4ed8">'+totIv+'</td><td colspan="2" style="padding:6px 8px;text-align:center">—</td><td style="padding:6px 8px;text-align:center;color:#0b7a75">'+totUrine+'</td><td colspan="3" style="padding:6px 8px;text-align:center">—</td><td style="padding:6px 8px;text-align:center;font-size:10pt;color:'+(totNet>0?'#1d4ed8':'#b91c1c')+'">'+((totNet>0?'+':'')+totNet)+'</td><td></td></tr></tfoot></table>'+
-      '<div style="margin-top:20px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px"><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Nurse Signature</div><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Charge Nurse</div><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Doctor Review</div></div>'+printFooter();
+      '<div style="margin-top:20px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px"><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Nurse Signature</div><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Charge Nurse</div><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Doctor Review</div></div>'+printFooter('nursing');
     openPrintWin(html,'Fluid Balance Chart');
   } catch(e){ toast(e.message,'err'); }
 }
@@ -10528,6 +10559,7 @@ function setDocFilter(filter,btn) {
 
 function selectDocPatient(p) {
   _docPt=p;
+  _docNotesDirty=false;
   // Defense in depth: _currentAdmId is a shared global set by opening ANY
   // patient's admission drawer elsewhere in the app and was never reset on
   // a Consultation patient switch, which let a stale admission id leak
@@ -11296,18 +11328,23 @@ async function cancelOrder(id) {
   try { await sb.from('doctor_orders').update({status:'Cancelled'}).eq('id',id); toast('Order cancelled','warn'); loadActiveOrders(); } catch(e){toast(e.message,'err');}
 }
 
+// Returns true on a genuinely successful save, false otherwise \u2014 used by
+// completeAndSignOffVisit() to know whether it's safe to proceed with an
+// auto-save-then-complete, not just fired-and-forgotten from the button.
 async function saveConsultation() {
-  if(!sb){toast('Not connected','err');return;}
-  if(!_docPt){toast('Select patient first','err');return;}
-  if(!(await guardVisitNotLocked(_docPt.id,'Saving a consultation note'))) return;
+  if(!sb){toast('Not connected','err');return false;}
+  if(!_docPt){toast('Select patient first','err');return false;}
+  if(!(await guardVisitNotLocked(_docPt.id,'Saving a consultation note'))) return false;
   const g=id=>document.getElementById(id)?.value||'';
   try {
     await sb.from('doctor_consultations').insert({patient_id:_docPt.id,consultation_date:g('doc-date')||today(),visit_type:g('doc-visit-type'),chief_complaint:g('doc-complaint'),duration:g('doc-duration'),hpi:g('doc-hpi'),pmh:g('doc-pmh'),current_medications:g('doc-meds'),family_history:g('doc-fhx'),social_history:g('doc-shx'),allergies:g('doc-allergies'),general_exam:g('doc-general'),cvs_exam:g('doc-cvs'),resp_exam:g('doc-resp'),abdominal_exam:g('doc-abd'),cns_exam:g('doc-cns'),msk_exam:g('doc-msk'),other_exam:g('doc-other-exam'),primary_diagnosis:g('doc-dx1'),icd10:g('doc-icd'),secondary_diagnosis:g('doc-dx2'),differential_diagnosis:g('doc-diff-dx'),management_plan:g('doc-plan'),disposition:g('doc-disposition'),followup:g('doc-followup'),prognosis:g('doc-prognosis'),consulting_doctor:g('doc-doctor-name'),performed_by:currentProfile?.id});
     if(g('doc-dx1')){ try{ await sb.from('patients').update({diagnosis:g('doc-dx1')}).eq('id',_docPt.id); }catch(e){} }
+    _docNotesDirty=false;
     toast('\u2705 Consultation saved','ok');
     const msg=document.getElementById('doc-status-msg');
     if(msg){msg.style.color='var(--green)';msg.textContent='\u2705 Saved at '+new Date().toLocaleTimeString();setTimeout(()=>msg.textContent='',5000);}
-  } catch(e){toast(e.message,'err');}
+    return true;
+  } catch(e){toast(e.message,'err');return false;}
 }
 
 function printConsultation() {
@@ -11347,7 +11384,7 @@ function printConsultation() {
     sec('Management Plan',g('doc-plan'))+
     '<div style="margin-top:30px;display:grid;grid-template-columns:1fr 1fr;gap:30px;text-align:center">'+
     '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">'+g('doc-doctor-name')+'<br>Consulting Doctor</div>'+
-    '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">Date: '+g('doc-date')+'</div></div>'+printFooter();
+    '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">Date: '+g('doc-date')+'</div></div>'+printFooter('doctor');
   openPrintWin(html,'Consultation Note');
 }
 
@@ -11386,8 +11423,16 @@ async function loadConsultationSignOffState(patientId){
   }catch(e){ applyConsultationNotesLock(false); }
 }
 let _pendingSignOffPatientId=null;
+// Requiring a separate, prior manual Save click before this was an easy way
+// to hit a confusing "save notes first" error after the doctor had, in
+// fact, already typed notes — just not clicked Save yet. Auto-saving any
+// unsaved Notes-tab edits here (same saveConsultation() logic, same DB
+// write) means Complete & Sign Off works as one action regardless of
+// whether Save was clicked first, while a genuinely note-less attempt
+// still correctly blocks below.
 async function completeAndSignOffVisit(){
   if(!sb||!_docPt){ toast('Select patient first','err'); return; }
+  if(_docNotesDirty){ if(!(await saveConsultation())) return; }
   try{
     const {data:existing}=await sb.from('doctor_consultations').select('id,is_signed_off').eq('patient_id',_docPt.id).order('created_at',{ascending:false}).limit(1).maybeSingle();
     if(!existing){ toast('⚠️ Save consultation notes before completing this visit','err'); return; }
@@ -11584,7 +11629,7 @@ function printPrescription() {
     '<div style="margin-top:30px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;text-align:center">'+
     '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">'+dn+'<br>Prescribing Doctor</div>'+
     '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">Signature &amp; Stamp</div>'+
-    '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">Date: '+today()+'</div></div>'+printFooter();
+    '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">Date: '+today()+'</div></div>'+printFooter('doctor');
   openPrintWin(html,'Prescription');
 }
 
@@ -11609,7 +11654,7 @@ function printSickLeave() {
     '<tr><td style="padding:8px;font-size:9pt;font-weight:600;color:#64748b">Fitness Statement</td><td style="padding:8px;font-size:9.5pt;font-weight:700">'+g('sl-fit')+'</td></tr></table>'+
     '<div style="margin-top:30px;display:grid;grid-template-columns:1fr 1fr;gap:30px;text-align:center">'+
     '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">'+dn+'<br>Medical Officer — Friendship Hospital</div>'+
-    '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">Date: '+today()+'<br>Official Stamp</div></div>'+printFooter();
+    '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">Date: '+today()+'<br>Official Stamp</div></div>'+printFooter('doctor');
   openPrintWin(html,'Medical Certificate');
 }
 
@@ -11634,7 +11679,7 @@ function printReferral() {
     '<p style="font-size:9.5pt">Thank you for your kind assistance.</p>'+
     '<div style="margin-top:30px;display:grid;grid-template-columns:1fr 1fr;gap:30px;text-align:center">'+
     '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">'+dn+'<br>Referring Physician — Friendship Hospital</div>'+
-    '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">Date: '+today()+'<br>Stamp</div></div>'+printFooter();
+    '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">Date: '+today()+'<br>Stamp</div></div>'+printFooter('doctor');
   openPrintWin(html,'Referral Letter');
 }
 
@@ -12256,7 +12301,7 @@ function printWorklist() {
     }).join('')+'</tbody></table>'+
     '<div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:20px;text-align:center">'+
     '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">Lab Supervisor</div>'+
-    '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">Date: '+today()+'</div></div>'+printFooter();
+    '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">Date: '+today()+'</div></div>'+printFooter('lab');
   openPrintWin(html,'Laboratory Worklist');
 }
 async function loadAllResults() {
@@ -12396,7 +12441,7 @@ async function printCriticalNotice(id) {
       '<div style="margin-top:20px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;text-align:center">'+
       '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">Lab Technologist</div>'+
       '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">Clinician (Read-back)</div>'+
-      '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">Date / Time</div></div>'+printFooter();
+      '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">Date / Time</div></div>'+printFooter('lab');
     openPrintWin(html,'Critical Value Notice');
   } catch(e){ toast(e.message,'err'); }
 }
@@ -12820,15 +12865,44 @@ function scanForReceiving(){
     await markSampleReceived();
   }, {title:'📷 Scan Sample Barcode'});
 }
+// Only hem/chem currently populate critical_values (logCriticalValues()'s
+// own critRanges are all hem/chem parameters) with these exact plain
+// department-label strings — used below purely to surface an informational
+// "not yet acknowledged" warning on the release confirmation. Acknowledgement
+// and release are separate safety steps; a missing/unmatched entry here just
+// means the extra clause is silently omitted, never a hard gate on its own.
+const DEPT_CRIT_LABEL = {hem:'Haematology', chem:'Chemistry'};
+async function hasUnacknowledgedCritical(ptId, dept){
+  const label = DEPT_CRIT_LABEL[dept]; if(!sb || !label || !ptId) return false;
+  try{
+    const {count} = await sb.from('critical_values').select('id',{count:'exact',head:true}).eq('patient_id',ptId).eq('department',label).eq('is_acknowledged',false);
+    return (count||0)>0;
+  }catch(e){ return false; }
+}
+// Shared by both release paths (releaseResults() and the Unified Entry's
+// releaseAllUnifiedEntry()) — a result flagged has_critical on its own row
+// gets one extra confirm() before it's released, the same native-dialog
+// pattern already used throughout this app (STAT payment deferral,
+// operation cancellation, etc.), so a critical value never leaves the lab
+// with a routine, unremarkable click.
+async function confirmCriticalRelease(ptId, dept){
+  const unacked = await hasUnacknowledgedCritical(ptId, dept);
+  const msg = 'This result contains a CRITICAL value. Are you sure you want to release it?'+
+    (unacked?' It has not yet been acknowledged by a clinician.':'');
+  return confirm(msg);
+}
 async function releaseResults(dept) {
   const meta = DEPT_META[dept], map = DEPT_LOAD_MAP[dept];
   if(!meta || !map || !sb) return;
   const ptId = document.getElementById(meta.ptIdField)?.value;
   if(!ptId){ toast('No patient loaded','err'); return; }
   try {
-    const {data:existing} = await sb.from(map.table).select('is_verified').eq('patient_id',ptId).order('created_at',{ascending:false}).limit(1).maybeSingle();
+    const {data:existing} = await sb.from(map.table).select('is_verified,has_critical').eq('patient_id',ptId).order('created_at',{ascending:false}).limit(1).maybeSingle();
     if(!existing){ toast('Save and verify results before releasing','err'); return; }
     if(!existing.is_verified){ toast('⚠️ Results must be verified before they can be released','err'); return; }
+    if(existing.has_critical && !(await confirmCriticalRelease(ptId, dept))){
+      toast('Release cancelled — result remains verified but unreleased','warn'); return;
+    }
     const {data:sampleRec} = await sb.from('sample_records').select('payment_deferred').eq('patient_id',ptId).maybeSingle();
     if(!(await checkReleasePaymentGate(ptId, sampleRec?.payment_deferred, 'Results release'))) return;
     await sb.from(map.table).update({is_released:true, released_at:new Date().toISOString(), released_by:currentProfile?.id}).eq('patient_id',ptId);
@@ -13207,7 +13281,7 @@ async function printHemReport() {
     if(!body){ toast('⚠️ No saved results match this patient\'s requested tests — click Save Results first','err'); return; }
     const html=printHeader('Haematology Report — CBC')+ptB+'<table style="width:100%;border-collapse:collapse"><thead><tr style="background:#1e3a5a;color:#fff"><th style="padding:6px 8px;font-size:8.5pt;text-align:left">Parameter</th><th style="padding:6px 8px;font-size:8.5pt;text-align:left">Result</th><th style="padding:6px 8px;font-size:8.5pt;text-align:left">Unit</th><th style="padding:6px 8px;font-size:8.5pt;text-align:left">Reference</th><th style="padding:6px 8px;font-size:8.5pt;text-align:left">Flag</th></tr></thead><tbody>'+body+
       '</tbody></table>'+(r.notes?'<div style="background:#f8fafd;border-left:3px solid #0b7a75;padding:10px 12px;margin-top:12px;font-size:9pt"><strong>Comments:</strong> '+escapeHtml(r.notes)+'</div>':'')+
-      '<div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:20px"><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Medical Laboratory Technologist</div><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Laboratory Supervisor</div></div>'+printFooter();
+      '<div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:20px"><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Medical Laboratory Technologist</div><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Laboratory Supervisor</div></div>'+printFooter('lab');
     openPrintWin(html,'CBC Report');
   } catch(e){ toast(e.message,'err'); }
 }
@@ -13256,7 +13330,7 @@ async function printChemReport() {
       (col2?'<table style="width:100%;border-collapse:collapse">'+thead+'<tbody>'+col2+'</tbody></table>':'<div></div>')+
       '</div>'+
       (r.notes?'<div style="background:#f8fafd;border-left:3px solid #0369a1;padding:10px 12px;margin-top:12px;font-size:9pt"><strong>Comments:</strong> '+escapeHtml(r.notes)+'</div>':'')+
-      '<div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:20px"><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Medical Laboratory Technologist</div><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Laboratory Supervisor</div></div>'+printFooter();
+      '<div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:20px"><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Medical Laboratory Technologist</div><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Laboratory Supervisor</div></div>'+printFooter('lab');
     openPrintWin(html,'Chemistry Report');
   } catch(e){ toast(e.message,'err'); }
 }
@@ -13798,7 +13872,7 @@ async function generateInsuranceClaim(invId) {
       '<div style="border-top:1px solid #000;padding-top:6px;font-size:8.5pt">Cashier / Receptionist</div>'+
       '<div style="border-top:1px solid #000;padding-top:6px;font-size:8.5pt">Medical Director</div>'+
       '<div style="border-top:1px solid #000;padding-top:6px;font-size:8.5pt">Insurance Stamp &amp; Date</div>'+
-      '</div>'+printFooter();
+      '</div>'+printFooter('general');
     openPrintWin(html,'Insurance Claim');
   } catch(e){ toast(e.message,'err'); }
 }
@@ -14062,7 +14136,7 @@ async function printPcrReport() {
       (r.notes?'<div style="background:#f8fafd;border-left:3px solid #7c3aed;padding:10px 12px;margin-top:12px;font-size:9pt"><strong>Comments:</strong> '+escapeHtml(r.notes)+'</div>':'')+
       '<div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:20px">'+
       '<div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Medical Laboratory Technologist</div>'+
-      '<div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Laboratory Supervisor</div></div>'+printFooter();
+      '<div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Laboratory Supervisor</div></div>'+printFooter('lab');
     openPrintWin(html,'PCR Report');
   } catch(e){ toast(e.message,'err'); }
 }
@@ -14160,7 +14234,7 @@ async function printHistoReport() {
       (r.notes?'<div style="background:#f8fafd;border-left:3px solid #b45309;padding:10px 12px;margin-top:8px;font-size:9pt"><strong>Comments:</strong> '+escapeHtml(r.notes)+'</div>':'')+
       '<div style="margin-top:16px;display:grid;grid-template-columns:1fr 1fr;gap:20px">'+
       '<div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Histopathologist</div>'+
-      '<div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Date Reported</div></div>'+printFooter();
+      '<div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Date Reported</div></div>'+printFooter('lab');
     openPrintWin(html,'Histopathology Report');
   } catch(e){ toast(e.message,'err'); }
 }
@@ -14225,7 +14299,7 @@ async function printCytoReport() {
       (r.notes?'<div style="background:#f8fafd;border-left:3px solid #0369a1;padding:10px 12px;font-size:9pt"><strong>Comments:</strong> '+escapeHtml(r.notes)+'</div>':'')+
       '<div style="margin-top:16px;display:grid;grid-template-columns:1fr 1fr;gap:20px">'+
       '<div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Cytologist / Pathologist</div>'+
-      '<div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Date Reported</div></div>'+printFooter();
+      '<div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Date Reported</div></div>'+printFooter('lab');
     openPrintWin(html,'Cytology Report');
   } catch(e){ toast(e.message,'err'); }
 }
@@ -14257,7 +14331,7 @@ async function printSeroReportFull() {
       '<table style="width:100%;border-collapse:collapse"><thead><tr style="background:#1e3a5a;color:#fff"><th style="padding:5px 8px;font-size:8.5pt;text-align:left">Test</th><th style="padding:5px 8px;font-size:8.5pt;text-align:left">Result</th></tr></thead><tbody>'+body+
       '</tbody></table>'+
       (r.notes?'<div style="background:#f8fafd;border-left:3px solid #7c3aed;padding:10px 12px;margin-top:12px;font-size:9pt"><strong>Comments:</strong> '+escapeHtml(r.notes)+'</div>':'')+
-      '<div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:20px"><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Medical Laboratory Technologist</div><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Laboratory Supervisor</div></div>'+printFooter();
+      '<div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:20px"><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Medical Laboratory Technologist</div><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Laboratory Supervisor</div></div>'+printFooter('lab');
     openPrintWin(html,'Serology Report');
   } catch(e){ toast(e.message,'err'); }
 }
@@ -14291,7 +14365,7 @@ async function printImmunoReportFull() {
       (col2?'<table style="width:100%;border-collapse:collapse"><thead><tr style="background:#1e3a5a;color:#fff"><th style="padding:5px 8px;font-size:8.5pt;text-align:left">Test</th><th style="padding:5px 8px;font-size:8.5pt;text-align:left">Result</th></tr></thead><tbody>'+col2+'</tbody></table>':'<div></div>')+
       '</div>'+
       (r.notes?'<div style="background:#f8fafd;border-left:3px solid #7c3aed;padding:10px 12px;margin-top:12px;font-size:9pt"><strong>Comments:</strong> '+escapeHtml(r.notes)+'</div>':'')+
-      '<div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:20px"><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Medical Laboratory Technologist</div><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Laboratory Supervisor</div></div>'+printFooter();
+      '<div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:20px"><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Medical Laboratory Technologist</div><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Laboratory Supervisor</div></div>'+printFooter('lab');
     openPrintWin(html,'Immunology Report');
   } catch(e){ toast(e.message,'err'); }
 }
@@ -14335,7 +14409,7 @@ async function printMicroReportFull() {
       '<div>'+(rightCol?'<table style="width:100%;border-collapse:collapse">'+tableHead+'<tbody>'+rightCol+'</tbody></table>':'')+'</div>'+
       '</div>'+
       (r.notes?'<div style="background:#f8fafd;border-left:3px solid #15803d;padding:10px 12px;margin-top:12px;font-size:9pt"><strong>Comments:</strong> '+escapeHtml(r.notes)+'</div>':'')+
-      '<div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:20px"><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Medical Laboratory Technologist</div><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Laboratory Supervisor</div></div>'+printFooter();
+      '<div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:20px"><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Medical Laboratory Technologist</div><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Laboratory Supervisor</div></div>'+printFooter('lab');
     openPrintWin(html,'Microbiology Report');
   } catch(e){ toast(e.message,'err'); }
 }
@@ -15142,7 +15216,7 @@ function buildDischargeSummaryHtml(pt,d){
     `<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">${L('dis_sig_doctor')}</div>`+
     `<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">${L('dis_sig_signature')}</div>`+
     `<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">${L('dis_sig_date')}</div></div>`+
-    printFooter();
+    printFooter('doctor');
   return isAr ? '<div dir="rtl" lang="ar" style="text-align:right">'+body+'</div>' : body;
 }
 
@@ -15254,7 +15328,7 @@ async function printConsentForm(id){
       '<div style="margin:16px 0"><div style="font-size:8pt;font-weight:700;text-transform:uppercase;color:#64748b;margin-bottom:4px">Signature</div>'+
       (c.signature_data_url?'<img src="'+c.signature_data_url+'" style="max-width:320px;height:auto;border:1px solid #e2e8f0;border-radius:6px;background:#fff">':'<div style="color:#b91c1c">No signature on file</div>')+'</div>'+
       '<div style="font-size:8pt;color:#64748b;margin-top:14px">Recorded by '+escapeHtml(c.performed_by_name||'—')+' · '+fmtDT(c.created_at)+'</div>'+
-      printFooter();
+      printFooter('general');
     openPrintWin(html,'Informed Consent — '+(pt.name||''));
   }catch(e){ toast(e.message,'err'); }
 }
@@ -15838,7 +15912,7 @@ async function printMAR() {
     'Never pre-sign. Each entry must be made at time of administration. (ISO 15189 / Hospital Policy)</div>'+
     '<div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:20px;text-align:center">'+
     '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">Nurse Signature</div>'+
-    '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">Date / Time</div></div>'+printFooter();
+    '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">Date / Time</div></div>'+printFooter('nursing');
   openPrintWin(html,'MAR');
 }
 
@@ -16049,7 +16123,7 @@ async function printHandoverNote() {
     '<div style="margin-top:20px;display:grid;grid-template-columns:1fr 1fr;gap:20px;text-align:center">'+
     '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">Handing Over — Signature</div>'+
     '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">Receiving — Signature</div></div>'+
-    printFooter();
+    printFooter('nursing');
   openPrintWin(html,'Handover Note');
 }
 
@@ -16080,7 +16154,7 @@ async function printVitalsSheet() {
       '<th style="padding:5px 8px;font-size:8.5pt">RR</th><th style="padding:5px 8px;font-size:8.5pt">Temp</th>'+
       '<th style="padding:5px 8px;font-size:8.5pt">SpO₂</th><th style="padding:5px 8px;font-size:8.5pt">NEWS2</th>'+
       '<th style="padding:5px 8px;font-size:8.5pt">Pain</th><th style="padding:5px 8px;font-size:8.5pt">By</th></tr></thead>'+
-      `<tbody>${rows}</tbody></table>`+printFooter();
+      `<tbody>${rows}</tbody></table>`+printFooter('nursing');
     openPrintWin(html,'Vitals Chart');
   }catch(e){toast(e.message,'err');}
 }
@@ -17300,7 +17374,7 @@ async function printInvoice(id) {
       '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">Cashier / Receptionist</div>'+
       '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">Patient / Guardian</div>'+
       '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">Date: '+fmtDate(inv.created_at)+'</div></div>'+
-      printFooter();
+      printFooter('general');
     openPrintWin(html,'Invoice - '+(inv.invoice_no||''));
   } catch(e){toast(e.message,'err');}
 }
@@ -17511,7 +17585,7 @@ async function printPriceList() {
     '<div style="margin-top:14px;font-size:8pt;color:#64748b">All prices are subject to change. Insurance rates may differ. Consult billing department for packages and discounts.</div>'+
     '<div style="margin-top:16px;display:grid;grid-template-columns:1fr 1fr;gap:20px;text-align:center">'+
     '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">Medical Director</div>'+
-    '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">Finance Manager</div></div>'+printFooter();
+    '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">Finance Manager</div></div>'+printFooter('general');
   openPrintWin(html,'Price List');
 }
 
@@ -18865,7 +18939,7 @@ async function printRadReport() {
       '<div style="margin-top:20px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;text-align:center">'+
       '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">'+escapeHtml(r.radiologist||g('rad-rep-radiologist')||'Radiologist')+'<br>Radiologist</div>'+
       '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">Signature &amp; Stamp</div>'+
-      '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">Date: '+fmtDate(r.reported_at||today())+'</div></div>'+printFooter();
+      '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">Date: '+fmtDate(r.reported_at||today())+'</div></div>'+printFooter('radiology');
     openPrintWin(html,'Radiology Report');
   } catch(e){toast(e.message,'err');}
 }
@@ -19738,7 +19812,7 @@ async function printValidationReport(){
       sigBlock(r.verified_by_name,r.verified_at,'Reviewed by Quality Manager')+
       sigBlock(r.approved_by_name,r.approved_at,'Approved by Laboratory Director')+
       '</div>'+
-      printFooter();
+      printFooter('lab');
     openPrintWin(html,'Validation Report — '+study.analyte+' ('+study.protocol_type+')');
   }catch(e){ toast(e.message,'err'); }
 }
@@ -19971,7 +20045,7 @@ function printLotRegister(){
         return '<tr><td>'+escapeHtml(item.item_name||'—')+'</td><td>'+escapeHtml(b.batch_no||'—')+'</td><td>'+fmtDate(b.received_date)+'</td><td>'+(b.quantity??'—')+'</td><td>'+(b.is_opened?fmtDate(b.opened_date):'—')+'</td><td>'+fmtDate(b.expiry_date)+'</td><td>'+fmtDate(eff)+'</td><td>'+st.label+'</td></tr>'; }).join('')
       +'</tbody></table>'
     : '<div style="color:#64748b;font-size:.85rem">No batches recorded.</div>';
-  const html=printHeader('Reagent Lot & Stability Register')+table+printFooter();
+  const html=printHeader('Reagent Lot & Stability Register')+table+printFooter('lab');
   openPrintWin(html,'Reagent Lot & Stability Register');
 }
 async function loadInventory(){
@@ -20172,7 +20246,7 @@ function printInventoryBarcodeLabel(itemId){
     '<div style="font-weight:800;font-size:12pt;margin-bottom:6px">'+escapeHtml(it.item_name)+'</div>'+
     '<svg id="lbl-inv-barcode"></svg>'+
     '<div style="font-size:9pt;color:#64748b;margin-top:6px">'+escapeHtml(it.department||'')+' · '+escapeHtml(it.category||'')+'</div>'+
-    '</div>'+printFooter();
+    '</div>'+printFooter('lab');
   const w=openPrintWin(html,'Item Label');
   try{ JsBarcode(w.document.getElementById('lbl-inv-barcode'), it.barcode, {format:'CODE128',width:1.4,height:40,fontSize:11,margin:4}); }catch(e){ /* label still prints without the barcode graphic if the value has invalid characters for CODE128 */ }
 }
@@ -20260,7 +20334,7 @@ function printBloodUnitLabel(unitId) {
     '<div style="font-weight:800;font-size:14pt;margin-bottom:4px">'+escapeHtml(u.blood_group)+(u.rh_factor==='Positive'?'+':'−')+' · '+escapeHtml(u.component_type)+'</div>'+
     '<svg id="lbl-bb-barcode"></svg>'+
     '<div style="font-size:9pt;color:#64748b;margin-top:6px">Unit '+escapeHtml(u.unit_no)+' · Exp '+fmtDate(u.expiry_date)+'</div>'+
-    '</div>'+printFooter();
+    '</div>'+printFooter('general');
   const w=openPrintWin(html,'Blood Unit Label');
   try{ JsBarcode(w.document.getElementById('lbl-bb-barcode'), u.unit_no, {format:'CODE128',width:1.6,height:45,fontSize:12,margin:4}); }catch(e){ /* label still prints without the barcode graphic if the value has invalid characters for CODE128 */ }
 }
@@ -20728,7 +20802,7 @@ function printBloodIssueSlip(u) {
       '<div>Issuing Staff Signature: ______________________</div>'+
       '<div>Receiving Staff Signature: ______________________</div>'+
     '</div>'+
-    '</div>'+printFooter();
+    '</div>'+printFooter('general');
   openPrintWin(html,'Blood Issue Slip');
 }
 
@@ -21578,20 +21652,22 @@ async function releaseAllUnifiedEntry() {
     const {data:sampleRec} = await sb.from('sample_records').select('payment_deferred').eq('patient_id',_uePatientId).maybeSingle();
     if(!(await checkReleasePaymentGate(_uePatientId, sampleRec?.payment_deferred, 'Results release'))) return;
   }
-  let released=0, blocked=0;
+  let released=0, blocked=0, declined=0;
   for(const d of _ueCurrentDepts) {
     const map = DEPT_LOAD_MAP[d];
     if(!map || !sb || !_uePatientId) continue;
     try {
-      const {data:existing} = await sb.from(map.table).select('is_verified').eq('patient_id',_uePatientId).order('created_at',{ascending:false}).limit(1).maybeSingle();
+      const {data:existing} = await sb.from(map.table).select('is_verified,has_critical').eq('patient_id',_uePatientId).order('created_at',{ascending:false}).limit(1).maybeSingle();
       if(existing && existing.is_verified) {
+        if(existing.has_critical && !(await confirmCriticalRelease(_uePatientId, d))){ declined++; continue; }
         await sb.from(map.table).update({is_released:true, released_at:new Date().toISOString(), released_by:currentProfile?.id}).eq('patient_id',_uePatientId);
         released++;
       } else if(existing) blocked++;
     } catch(e){}
   }
-  if(released && !blocked) toast('📤 All sections released','ok');
-  else if(released && blocked) toast('📤 '+released+' section(s) released — '+blocked+' skipped (not yet verified)','warn');
+  if(released && !blocked && !declined) toast('📤 All sections released','ok');
+  else if(released) toast('📤 '+released+' section(s) released'+(blocked?' — '+blocked+' skipped (not yet verified)':'')+(declined?' — '+declined+' declined at critical-value confirmation':''),'warn');
+  else if(declined && !blocked) toast('Release cancelled — results remain verified but unreleased','warn');
   else toast('⚠️ Nothing released — verify results first','err');
   if(released) await updateSampleStatus(_uePatientId,'Released');
 }
@@ -21875,7 +21951,7 @@ async function printAllReports() {
     }
     if(!sections){ toast('No saved results to print yet','err'); return; }
     const html = printHeader('Combined Laboratory Report')+ptB+sections+
-      '<div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:20px"><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Medical Laboratory Technologist</div><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Laboratory Supervisor</div></div>'+printFooter();
+      '<div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:20px"><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Medical Laboratory Technologist</div><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Laboratory Supervisor</div></div>'+printFooter('lab');
     openPrintWin(html,'Combined Laboratory Report — '+(pt.name||fullName(pt)));
   } catch(e){ toast(e.message,'err'); }
 }
@@ -22110,7 +22186,7 @@ function printPurchaseOrder(poId,poMeta,items){
     '<div style="margin-bottom:14px;font-size:9pt"><strong>Status:</strong> '+escapeHtml(po.status||'draft')+(po.supplier?' \u00b7 <strong>Supplier:</strong> '+escapeHtml(po.supplier):'')+'</div>'+
     '<table class="tbl" style="width:100%"><thead><tr><th>Item</th><th>Qty to Order</th></tr></thead><tbody>'+
     lineItems.map(i=>'<tr><td>'+escapeHtml(i.item_name_snapshot)+'</td><td>'+i.qty_ordered+'</td></tr>').join('')+
-    '</tbody></table>'+printFooter();
+    '</tbody></table>'+printFooter('general');
   openPrintWin(html,'Purchase Order '+po.po_no);
 }
 
@@ -22367,7 +22443,7 @@ async function printQcReport(){
       '<div style="margin-top:24px;display:grid;grid-template-columns:1fr 1fr;gap:20px;text-align:center">'+
       '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">Reviewed By</div>'+
       '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">Date</div></div>'+
-      printFooter();
+      printFooter('lab');
     openPrintWin(html,'QC Report — '+(lot?.control_name||'')+' ('+(lot?.lot_no||'')+')');
   }catch(e){ toast(e.message,'err'); }
 }
