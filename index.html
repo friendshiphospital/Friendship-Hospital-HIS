@@ -12947,10 +12947,19 @@ const RESULT_HISTORY_TABLE = {
 // deployment that hasn't run migration_v2.17 yet, the insert 404s/errors
 // and is swallowed here rather than blocking the save that already
 // succeeded — the current-panel table remains the source of truth either way.
+// recorded_at is stamped explicitly here (not left to a DB default) because
+// runDeltaCheck() picks the "previous" value to compare against via
+// .order('recorded_at',{ascending:false}).limit(1) — an undated row can
+// never win that ordering against an older row that does have a real
+// timestamp, so the very save that's supposed to become the new baseline
+// would be silently invisible to every later delta check, making the same
+// breach re-trigger forever. Every other history-style insert in this file
+// (vital_signs etc.) already sets recorded_at itself rather than trusting a
+// column default, so this just matches that existing pattern.
 async function logResultHistory(table,payload){
   const histTable=RESULT_HISTORY_TABLE[table];
   if(!histTable||!sb) return;
-  try{ await sb.from(histTable).insert(payload); }catch(e){ /* additive — never block the result save on this */ }
+  try{ await sb.from(histTable).insert({...payload,recorded_at:new Date().toISOString()}); }catch(e){ /* additive — never block the result save on this */ }
 }
 function computeDelta(prev,curr,rule){ return rule.type==='pct' ? ((curr-prev)/prev)*100 : curr-prev; }
 function deltaBreaches(delta,rule){
@@ -13103,11 +13112,35 @@ async function saveResultWithSafetyChecks(opts){
       refreshAutoVerifyBadge(pageId,autoVerified,finalVerify,autoVerifyReason);
     }catch(e){ toast(e.message,'err'); }
   };
+  // Lab Safety Phase 1 — never let Verify (manual or auto) silently stamp a
+  // column that isn't part of what's actually ordered this visit, and never
+  // allow it at all if a currently-ordered test still has no value entered.
+  // Shared by both the normal path below and the delta-override path, so a
+  // delta-flagged save is held to the exact same required-fields gate as
+  // any other verify attempt, not a looser or stricter one.
+  const passesRequiredFieldsGate=async()=>{
+    const {data:pt}=await sb.from('patients').select('tests_requested').eq('id',ptId).maybeSingle();
+    const check=checkVerificationComplete(deptKey,pt?.tests_requested,payload);
+    if(!check.complete){
+      toast('⚠️ Cannot verify — missing results for: '+check.missingLabels.join(', '),'err');
+      return false;
+    }
+    const {data:existingRow}=await sb.from(table).select('verified_fields').eq('patient_id',ptId).maybeSingle();
+    payload.verified_fields=[...new Set([...(existingRow?.verified_fields||[]),...check.requiredFields])];
+    return true;
+  };
   const breaches=await runDeltaCheck(table,ptId,payload);
   if(breaches.length){
     showDeltaAlertModal(breaches, async(reasonCode,reasonNote)=>{
       await logDeltaBreaches(breaches,ptId,table,deptLabel,reasonCode,reasonNote);
-      await doFinalize(false,false,'Delta Check breach requires manual review'); // a delta breach always forces manual sign-off, never auto-verified
+      // A delta breach always blocks Auto-Verify outright (never
+      // auto-verified) — but the reason code just given IS the human
+      // review Delta Check exists to enforce, so an explicit manual
+      // Save & Verify click should still go on to verify from here,
+      // subject to the same required-fields gate as any other save,
+      // instead of being silently forced back to unverified forever.
+      const finalVerify = verify && await passesRequiredFieldsGate();
+      await doFinalize(finalVerify, false, finalVerify?'':'Delta Check breach requires manual review');
     });
     return;
   }
@@ -13117,19 +13150,7 @@ async function saveResultWithSafetyChecks(opts){
     if(gate.eligible){ finalVerify=true; autoVerified=true; }
     else { autoVerifyReason=gate.reason; }
   }
-  // Lab Safety Phase 1 — never let Verify (manual or auto) silently stamp a
-  // column that isn't part of what's actually ordered this visit, and never
-  // allow it at all if a currently-ordered test still has no value entered.
-  if(finalVerify){
-    const {data:pt}=await sb.from('patients').select('tests_requested').eq('id',ptId).maybeSingle();
-    const check=checkVerificationComplete(deptKey,pt?.tests_requested,payload);
-    if(!check.complete){
-      toast('⚠️ Cannot verify — missing results for: '+check.missingLabels.join(', '),'err');
-      return;
-    }
-    const {data:existingRow}=await sb.from(table).select('verified_fields').eq('patient_id',ptId).maybeSingle();
-    payload.verified_fields=[...new Set([...(existingRow?.verified_fields||[]),...check.requiredFields])];
-  }
+  if(finalVerify && !(await passesRequiredFieldsGate())) return;
   await doFinalize(finalVerify,autoVerified,autoVerifyReason);
 }
 function refreshAutoVerifyBadge(pageId,autoVerified,verified,reason){
