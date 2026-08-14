@@ -8233,8 +8233,8 @@ async function guardVisitNotLocked(patientId,actionLabel){
 async function checkAndAdvanceToResultsReady(patientId){
   if(!sb||!patientId) return;
   try{
-    const [{data:sample},{data:radRows}]=await Promise.all([
-      sb.from('sample_records').select('status').eq('patient_id',patientId).maybeSingle(),
+    const [sample,{data:radRows}]=await Promise.all([
+      getCurrentSampleRecord(patientId,'status'),
       sb.from('radiology_requests').select('status').eq('patient_id',patientId),
     ]);
     const labDone=!sample||['Completed','Released'].includes(sample.status);
@@ -8242,15 +8242,16 @@ async function checkAndAdvanceToResultsReady(patientId){
     if(labDone && radDone) await advanceVisitStatus(patientId,'Results Ready');
   }catch(e){}
 }
-// {done,total} across Lab (counts as 1 unit — sample_records is one row
-// per visit, not per test) + Radiology (1 unit per study) — "2 of 3
+// {done,total} across Lab (counts as 1 unit — only the CURRENT specimen's
+// status counts, via getCurrentSampleRecord(), not per individual test)
+// + Radiology (1 unit per study) — "2 of 3
 // complete" style progress, shown where useful (Doctor Queue, sticky
 // header) rather than on every single queue.
 async function visitOrderProgress(patientId){
   if(!sb||!patientId) return null;
   try{
-    const [{data:sample},{data:radRows}]=await Promise.all([
-      sb.from('sample_records').select('status').eq('patient_id',patientId).maybeSingle(),
+    const [sample,{data:radRows}]=await Promise.all([
+      getCurrentSampleRecord(patientId,'status'),
       sb.from('radiology_requests').select('status').eq('patient_id',patientId),
     ]);
     let done=0,total=0;
@@ -8896,11 +8897,17 @@ async function refreshNotifications(){
       const {data:queuePts}=await sb.from('patients').select('id,name,first_name,last_name,mrn,lab_no,visit_destination,created_at').ilike('visit_destination','%doctor%').gte('created_at',since24h).limit(50);
       if(queuePts?.length){
         const ids=queuePts.map(p=>p.id);
-        const [{data:doneSamples},{data:doneRad}]=await Promise.all([
-          sb.from('sample_records').select('patient_id').in('patient_id',ids).in('status',['Completed','Released']),
+        const [{data:allSamples},{data:doneRad}]=await Promise.all([
+          // Every specimen for these patients, not pre-filtered by status --
+          // a patient with an older Released specimen AND a newer, still-
+          // Pending one (a second order placed after the first finished)
+          // must not show as "ready" just because SOME row matches; only
+          // their CURRENT (most recent) specimen's status counts.
+          sb.from('sample_records').select('patient_id,status,created_at').in('patient_id',ids),
           sb.from('radiology_requests').select('patient_id').in('patient_id',ids).in('status',['Reported','Verified']),
         ]);
-        const readyIds=new Set([...(doneSamples||[]).map(s=>s.patient_id),...(doneRad||[]).map(r=>r.patient_id)]);
+        const currentByPt=mostRecentSampleByPatient(allSamples);
+        const readyIds=new Set([...[...currentByPt.values()].filter(s=>['Completed','Released'].includes(s.status)).map(s=>s.patient_id),...(doneRad||[]).map(r=>r.patient_id)]);
         resultsReady=queuePts.filter(p=>readyIds.has(p.id));
       }
     }
@@ -10541,11 +10548,15 @@ async function loadDoctorQueue() {
     // bell's resultsReady category, batched here for every queue card at
     // once rather than a query per card.
     const ids=data.map(p=>p.id);
-    const [{data:doneSamples},{data:doneRad}]=await Promise.all([
-      sb.from('sample_records').select('patient_id').in('patient_id',ids).in('status',['Completed','Released']),
+    const [{data:allSamples},{data:doneRad}]=await Promise.all([
+      // Full set, not status-filtered -- see the notification bell's
+      // identical resultsReady logic for why only each patient's CURRENT
+      // (most recent) specimen may decide "ready" here.
+      sb.from('sample_records').select('patient_id,status,created_at').in('patient_id',ids),
       sb.from('radiology_requests').select('patient_id').in('patient_id',ids).in('status',['Reported','Verified']),
     ]);
-    const readyIds=new Set([...(doneSamples||[]).map(s=>s.patient_id),...(doneRad||[]).map(r=>r.patient_id)]);
+    const currentByPt=mostRecentSampleByPatient(allSamples);
+    const readyIds=new Set([...[...currentByPt.values()].filter(s=>['Completed','Released'].includes(s.status)).map(s=>s.patient_id),...(doneRad||[]).map(r=>r.patient_id)]);
     body.innerHTML = data.map(p => renderDocQueueCard(p, readyIds.has(p.id))).join('');
   } catch(e){ body.innerHTML='<div style="padding:10px;color:var(--red);font-size:.78rem">'+escapeHtml(e.message)+'</div>'; }
 }
@@ -11038,17 +11049,24 @@ async function _submitLabOrder(deferred) {
       if(isCollision && attempt<2){ labNo=null; continue; } // regenerate and retry
       throw updErr;
     }
-    // ignoreDuplicates: a patient's sample_records row is one row per
-    // patient, not per order -- a NEW lab order must never regress an
-    // already-Collected/Received/Processing/Completed sample back to
-    // Pending. Both the Doctor's View Result gate (loadActiveOrders()'s
-    // labResultsReady) and the Lab Worklist's RECEIVABLE_STATUSES filter
-    // read this exact same row, so overwriting it silently made already-
-    // released results look Pending again and made the patient vanish
-    // from the Worklist the moment a second test was ordered. Only create
-    // the row when it doesn't exist yet; an existing one keeps its real
-    // status regardless of what gets added to tests_requested.
-    try{ await sb.from('sample_records').upsert({patient_id:_docPt.id,status:'Pending',...deferralFields},{onConflict:'patient_id',ignoreDuplicates:true}); }catch(e){}
+    // sample_records is one row PER SPECIMEN/ORDER-BATCH, not one row per
+    // patient — a NEW lab order must never regress an already-Collected/
+    // Received/Processing/Completed/Released specimen back to Pending (that
+    // was the original bug ignoreDuplicates below used to guard against),
+    // but it also must not silently reuse that finished specimen's row as
+    // if the new test were already collected — a genuinely NEW test needs
+    // its OWN fresh Pending row so it goes through Sample Collection and
+    // Sample Receipt again, exactly like the first order did. Only skip
+    // creating a new row when the patient's most recent specimen is STILL
+    // Pending (i.e. this order is simply joining a collection that hasn't
+    // happened yet) — creating a second Pending row in that case would just
+    // be a duplicate queue entry for the same not-yet-drawn tube(s).
+    try{
+      const current = await getCurrentSampleRecord(_docPt.id,'status');
+      if(!current || current.status!=='Pending'){
+        await sb.from('sample_records').insert({patient_id:_docPt.id,status:'Pending',...deferralFields});
+      }
+    }catch(e){}
     if(!deferred) await chargeForNewOrder(_docPt, checked.map(t=>({name:t,category:'lab'})), 'lab');
     advanceVisitStatus(_docPt.id,'Orders Pending');
     toast((deferred?'\u26a1 \u2705 Lab orders placed (\u26a0 Payment Deferred \u2014 STAT): ':'\u2705 Lab orders placed: ')+checked.join(', ')+' — Lab No. '+labNo,'ok');
@@ -11266,11 +11284,11 @@ async function loadActiveOrders() {
   const el=document.getElementById('active-orders-list');
   if(!el||!_docPt?.id||!sb) return;
   try {
-    const [ordersRes,radRes,ptRes,sampleRes]=await Promise.all([
+    const [ordersRes,radRes,ptRes,sample]=await Promise.all([
       sb.from('doctor_orders').select('*').eq('patient_id',_docPt.id).neq('status','Cancelled').order('ordered_at',{ascending:false}).limit(20),
       sb.from('radiology_requests').select('id,imaging_type,urgency,status,requesting_doctor,created_at,payment_deferred,payment_deferred_by_name').eq('patient_id',_docPt.id).order('created_at',{ascending:false}).limit(20),
       sb.from('patients').select('tests_requested,created_at').eq('id',_docPt.id).maybeSingle(),
-      sb.from('sample_records').select('status').eq('patient_id',_docPt.id).maybeSingle(),
+      getCurrentSampleRecord(_docPt.id,'status'),
     ]);
     const allDoctorOrders=ordersRes.data||[];
     // A specific test's own result can't be checked individually (results_*
@@ -11278,8 +11296,12 @@ async function loadActiveOrders() {
     // department, not one row per ordered test) — sample_records.status
     // reaching Completed/Released is the same granularity the rest of the
     // app already treats as "this patient's lab work for this visit is
-    // ready", so View Result uses that as its readiness signal too.
-    const labResultsReady=['Completed','Released'].includes(sampleRes.data?.status);
+    // ready", so View Result uses that as its readiness signal too. Reads
+    // the CURRENT (most recently created) specimen's status specifically —
+    // an older, already-released specimen from an earlier order this same
+    // visit must never make a freshly-ordered, not-yet-collected test look
+    // ready.
+    const labResultsReady=['Completed','Released'].includes(sample?.status);
     const nonRadOrders=allDoctorOrders.filter(o=>o.order_type!=='Radiology').map(o=>({
       order_type:o.order_type, order_detail:o.order_detail, status:o.status, ordered_at:o.ordered_at,
       orderedByLabel:o.ordered_by||'—', payment_deferred:o.payment_deferred, payment_deferred_by_name:o.payment_deferred_by_name,
@@ -12077,15 +12099,13 @@ async function loadWorklist() {
       return;
     }
     const ids=pts.map(p=>p.id);
-    const {data:samples}=await sb.from('sample_records').select('patient_id,status,sample_source').in('patient_id',ids);
-    // Keyed by patient_id -> {status, source} rather than a bare status string,
-    // so the worklist can filter/sort/display sample_source alongside status.
-    const sampleMap={}; (samples||[]).forEach(s=>sampleMap[s.patient_id]={status:s.status, source:s.sample_source||''});
+    // Keyed by patient_id -> {status, source} for each patient's CURRENT
+    // specimen — see buildWorklistSampleMap()/mostRecentSampleByPatient().
+    const sampleMap=await buildWorklistSampleMap(ids);
     updateWlStats(pts,sampleMap);
     // A sample must be physically Received (or further along) in the lab
     // before it's workable — patients whose sample is still Pending collection
     // or Collected-but-not-yet-received don't belong in the worklist at all.
-    const RECEIVABLE_STATUSES = ['Received','Processing','Completed'];
     let filtered = pts.filter(p => RECEIVABLE_STATUSES.includes(sampleMap[p.id]?.status));
     if(dept) {
       const deptKeyMap={haematology:'hem',chemistry:'chem',serology:'sero',immunology:'immuno',microbiology:'micro',pcr:'pcr',histopathology:'histo',cytology:'cyto'};
@@ -12269,8 +12289,7 @@ async function searchWorklist(term) {
       return;
     }
     const ids=results.map(p=>p.id);
-    const {data:samples}=await sb.from('sample_records').select('patient_id,status,sample_source').in('patient_id',ids);
-    const sampleMap={}; (samples||[]).forEach(s=>sampleMap[s.patient_id]={status:s.status, source:s.sample_source||''});
+    const sampleMap=await buildWorklistSampleMap(ids);
     updateWlStats(results,sampleMap);
     const hasStat=results.some(p=>p.priority==='STAT');
     const hasUnpaid=results.some(p=>p.payment_status==='unpaid'||p.payment_status==='insurance_pending');
@@ -12768,17 +12787,73 @@ function switchMicroTab(tab,btn) {
 }
 // ── SAVE RESULT ENTRIES ────────────────────────────────
 // ── RELEASE WORKFLOW ───────────────────────────────────
-// A result must be verified before it can be released — this mirrors standard
-// lab practice (entry -> technical verification -> release to the requesting
-// clinician) and matches DEPT_LOAD_MAP's table names so one function covers
-// every department without duplicating per-department release logic.
+// Statuses meaning "the lab actually has this specimen in hand" — a fresh
+// Pending (awaiting collection) or Collected (drawn but not yet logged in
+// at the lab) specimen isn't workable yet. RECEIVABLE_STATUSES is what
+// Worklist uses to decide what belongs in its active queue (a fully
+// Released specimen has nothing left to do there, so it's excluded);
+// SAMPLE_ENTERABLE_STATUSES is the same idea for Unified Results Entry,
+// which also needs Released included since viewing/reprinting/an admin's
+// unlock-to-edit override on an already-released result still goes through
+// this same screen.
+const RECEIVABLE_STATUSES = ['Received','Processing','Completed'];
+const SAMPLE_ENTERABLE_STATUSES = ['Received','Processing','Completed','Released'];
+// sample_records is one row PER SPECIMEN/ORDER-BATCH now, not one row per
+// patient (a second lab order placed after the first was already collected
+// used to silently reuse the first order's row and inherit its Received/
+// Completed/Released status, skipping Collection/Receipt entirely for the
+// new specimen) — every place that wants "this patient's CURRENT lab
+// status" now needs to resolve to the most recently created row rather than
+// assuming there's only one. Centralized here so that definition of
+// "current" stays identical everywhere it's read, and so updates never hit
+// more rows than intended (a plain .eq('patient_id',...) UPDATE would touch
+// every specimen this patient has ever had once there can be more than one).
+async function getCurrentSampleRecord(patientId, cols){
+  if(!sb||!patientId) return null;
+  try{
+    const {data}=await sb.from('sample_records').select(cols||'*').eq('patient_id',patientId).order('created_at',{ascending:false}).limit(1).maybeSingle();
+    return data;
+  }catch(e){ return null; }
+}
+// Batch counterpart for lists that already fetched one .in('patient_id',ids)
+// page of sample_records rows (Worklist, Doctor Queue's "Result Ready"
+// badge, etc.) — groups by patient_id and keeps only each patient's most
+// recently created row, so a stale earlier specimen never outvotes (or gets
+// arbitrarily overwritten by, depending on array order) the specimen that's
+// actually current.
+function mostRecentSampleByPatient(rows){
+  const map=new Map();
+  (rows||[]).forEach(r=>{
+    const prev=map.get(r.patient_id);
+    if(!prev || new Date(r.created_at||0) > new Date(prev.created_at||0)) map.set(r.patient_id, r);
+  });
+  return map;
+}
+// Shared by loadWorklist() and its search counterpart — builds the
+// patient_id -> {status, source} map both use to gate/annotate rows,
+// resolving each patient to their CURRENT (most recently created) specimen
+// only, per mostRecentSampleByPatient() above.
+async function buildWorklistSampleMap(ids){
+  if(!sb || !ids?.length) return {};
+  const {data:samples}=await sb.from('sample_records').select('patient_id,status,sample_source,created_at').in('patient_id',ids);
+  const currentByPt=mostRecentSampleByPatient(samples);
+  const sampleMap={};
+  currentByPt.forEach((s,ptId)=>{ sampleMap[ptId]={status:s.status, source:s.sample_source||''}; });
+  return sampleMap;
+}
 // Shared status-lifecycle helper — keeps sample_records.status in sync with
 // what's actually happened (Pending at creation already exists; this adds
 // the rest of the chain), the same way for every department rather than
-// each save/release function tracking it separately.
+// each save/release function tracking it separately. Targets the specific
+// current row by id (not a blind patient_id match) so an older, already-
+// Released specimen from an earlier order this same visit is never dragged
+// along by a status change meant for the newer one.
 async function updateSampleStatus(patientId, status, extra={}){
   if(!sb||!patientId) return;
-  try{ await sb.from('sample_records').update({status, ...extra}).eq('patient_id',patientId); }catch(e){ /* best-effort — a missing sample_records row shouldn't block the actual save/release */ }
+  try{
+    const current=await getCurrentSampleRecord(patientId,'id');
+    if(current) await sb.from('sample_records').update({status, ...extra}).eq('id',current.id);
+  }catch(e){ /* best-effort — a missing sample_records row shouldn't block the actual save/release */ }
   // Every department's verify flow (Hem/Chem/Sero/Immuno/Micro/PCR/Histo/
   // Cyto) already calls this with 'Completed' on verify and 'Released' on
   // release — hooking the visit-status check here covers all of them from
@@ -12859,7 +12934,11 @@ function scanForReceiving(){
     const p=await resolvePatientByBarcode(code);
     if(!p){ toast('No patient found for scanned code: '+code,'err'); return; }
     if(!sb){ toast('Not connected','err'); return; }
-    const {data:rec}=await sb.from('sample_records').select('status').eq('patient_id',p.id).maybeSingle();
+    // The specimen currently awaiting receipt specifically, not just
+    // whichever sample_records row is newest — an older, already-received/
+    // released specimen from an earlier order must never be mistaken for
+    // the one just scanned at the receiving bench.
+    const {data:rec}=await sb.from('sample_records').select('status').eq('patient_id',p.id).eq('status','Collected').order('created_at',{ascending:false}).limit(1).maybeSingle();
     if(!rec||rec.status!=='Collected'){ toast('This sample is not awaiting receipt (status: '+(rec?.status||'no record')+')','err'); return; }
     await selectReceivePt(p.id);
     await markSampleReceived();
@@ -12903,7 +12982,7 @@ async function releaseResults(dept) {
     if(existing.has_critical && !(await confirmCriticalRelease(ptId, dept))){
       toast('Release cancelled — result remains verified but unreleased','warn'); return;
     }
-    const {data:sampleRec} = await sb.from('sample_records').select('payment_deferred').eq('patient_id',ptId).maybeSingle();
+    const sampleRec = await getCurrentSampleRecord(ptId,'payment_deferred');
     if(!(await checkReleasePaymentGate(ptId, sampleRec?.payment_deferred, 'Results release'))) return;
     await sb.from(map.table).update({is_released:true, released_at:new Date().toISOString(), released_by:currentProfile?.id}).eq('patient_id',ptId);
     await updateSampleStatus(ptId,'Released');
@@ -13924,9 +14003,11 @@ function checkPaymentGate(pt, actionName, onProceed, opts) {
   toast('🚫 '+actionName+' blocked — '+reason+' Please contact billing.','err');
 }
 // Shared stamp applied to any order record proceeding under a STAT payment
-// deferral (or explicitly cleared when NOT deferred, so placing a later,
-// already-paid order for the same patient doesn't leave a stale deferral
-// flag behind on a shared one-row-per-patient table like sample_records).
+// deferral (or explicitly cleared when NOT deferred). sample_records now
+// gets its own fresh row per order (migration_v2.47), so this no longer
+// needs to worry about clearing a stale flag left on a shared row — it's
+// just the deferred/not-deferred fields for whichever row this order's
+// write is attaching them to.
 function buildPaymentDeferralFields(deferred){
   return deferred
     ? { payment_deferred:true, payment_deferred_by:currentProfile?.id||null, payment_deferred_by_name:currentProfile?.full_name||'', payment_deferred_at:new Date().toISOString() }
@@ -21027,11 +21108,21 @@ async function loadSampleQueue(){
       }).join('')+(hiddenCount?'<tr><td colspan="5" style="text-align:center;padding:8px;font-size:.72rem;color:var(--slate)">'+hiddenCount+' more order(s) hidden pending payment</td></tr>':'')+'</tbody></table></div>';
   }catch(e){}
 }
+// Set alongside _scPt whenever a patient is selected for collection — the
+// id of their CURRENT sample_records row (if one exists), resolved once
+// here while definitely online so _doMarkSampleCollected() below can target
+// it precisely (UPDATE by id) rather than upserting blindly onto
+// "whichever row has this patient_id", which is no longer unique once a
+// patient can have more than one specimen (see migration_v2.47). null
+// means no row exists yet for this patient — the next Mark Collected
+// creates one fresh.
+let _scCurrentSampleId=null;
 async function selectScPt(ptId){
   if(!sb||!ptId)return;
   try{
     const{data:p}=await sb.from('patients').select('*').eq('id',ptId).single();
     if(!p)return;_scPt=p;
+    _scCurrentSampleId=(await getCurrentSampleRecord(ptId,'id'))?.id||null;
     const b=document.getElementById('sc-pt-banner');if(b)b.style.display='block';
     const n=document.getElementById('sc-pt-name-disp');if(n)n.textContent=p.name||fullName(p);
     const m=document.getElementById('sc-pt-meta-disp');
@@ -21086,14 +21177,24 @@ async function _doMarkSampleCollected(){
   const g=id=>document.getElementById(id)?.value||'';
   const sampleSource = g('sc-source')==='Other Departments' ? g('sc-source-other') : g('sc-source');
   try{
-    const result = await dbWrite('sample_records','upsert',{
+    const payload={
       patient_id:_scPt.id,status:'Collected',specimen_type:g('sc-specimen'),
       collection_site:g('sc-site'),needle_gauge:g('sc-gauge'),
       attempts:parseInt(g('sc-attempts'))||1,condition:g('sc-condition'),
       collected_by:g('sc-collector')||currentProfile?.full_name,
       collected_at:new Date().toISOString(),notes:g('sc-notes'),
       sample_source:sampleSource
-    },{onConflict:'patient_id'});
+    };
+    // Update the specific Pending row resolved when this patient was
+    // selected (_scCurrentSampleId) rather than upserting on patient_id —
+    // patient_id is no longer unique on sample_records (see
+    // migration_v2.47), so an onConflict upsert against it would error.
+    // No row yet (a patient reached here with none on file at all) falls
+    // back to a plain insert, matching the old upsert's create-if-missing
+    // behaviour.
+    const result = _scCurrentSampleId
+      ? await dbWrite('sample_records','update',payload,{match:{id:_scCurrentSampleId}})
+      : await dbWrite('sample_records','insert',payload);
     toast(result.queued ? '📥 Offline — sample logged on this device, will sync later' : '✅ Sample collected', result.queued?'warn':'ok');
     if(!result.queued) {
       // Print one label per required tube, not just one generic label —
@@ -21167,12 +21268,16 @@ async function markSampleUnreceived(){
   const notes=document.getElementById('sc-unrecv-notes')?.value||'';
   if(reason==='Other (see notes)' && !notes.trim()){ toast('Please describe the reason in notes','err'); return; }
   try{
-    const {data:existing} = await sb.from('sample_records').select('notes').eq('patient_id',id).single();
+    // Target the specific specimen currently Received, not just any row for
+    // this patient_id — an older, already-Released specimen from an earlier
+    // order must never be the one that gets reverted here.
+    const {data:existing} = await sb.from('sample_records').select('id,notes').eq('patient_id',id).eq('status','Received').order('created_at',{ascending:false}).limit(1).maybeSingle();
+    if(!existing){ toast('No sample currently in Received status for this patient','err'); return; }
     const auditLine = '[UNRECEIVED by '+(currentProfile?.full_name||'—')+' at '+new Date().toLocaleString()+': '+reason+(notes?' — '+notes:'')+'] ';
     await sb.from('sample_records').update({
       status:'Collected', received_by:null, received_at:null,
-      notes: auditLine + (existing?.notes||'')
-    }).eq('patient_id',id);
+      notes: auditLine + (existing.notes||'')
+    }).eq('id',existing.id);
     toast('↩️ Sample reverted to Collected — will need to be received again','ok');
     document.getElementById('sc-unrecv-pt-id').value='';
     document.getElementById('sc-unrecv-current').style.display='none';
@@ -21519,6 +21624,19 @@ async function openUnifiedResultsEntry(ptId, labNo, ptName) {
   if(pt.payment_status==='unpaid'||pt.payment_status==='insurance_pending'){
     toast('🔒 Payment required before entering results for this patient','err'); return;
   }
+  // Gate on the CURRENT specimen's status, the same way Worklist decides
+  // what's workable — a lab order whose specimen hasn't been Collected and
+  // Received yet must go through Sample Collection/Receipt first, exactly
+  // like the very first order for this patient did, rather than becoming
+  // directly enterable here the moment payment clears (see
+  // migration_v2.47 / _submitLabOrder()'s per-order sample_records row).
+  if(sb){
+    const sample = await getCurrentSampleRecord(ptId,'status');
+    if(sample && !SAMPLE_ENTERABLE_STATUSES.includes(sample.status)){
+      toast('🔬 Sample not yet received — complete Sample Collection → Receive in Lab first (status: '+sample.status+')','err');
+      return;
+    }
+  }
   const testsStr=(pt.tests_requested||[]).join(' ').toLowerCase();
   let wanted = departmentsMatchingTests(pt.tests_requested);
   if(!wanted.length) wanted=['hem'];
@@ -21649,7 +21767,7 @@ async function saveAllUnifiedEntry(verify) {
 async function releaseAllUnifiedEntry() {
   if(!_ueCurrentDepts.length){ toast('Nothing to release','err'); return; }
   if(_uePatientId && sb){
-    const {data:sampleRec} = await sb.from('sample_records').select('payment_deferred').eq('patient_id',_uePatientId).maybeSingle();
+    const sampleRec = await getCurrentSampleRecord(_uePatientId,'payment_deferred');
     if(!(await checkReleasePaymentGate(_uePatientId, sampleRec?.payment_deferred, 'Results release'))) return;
   }
   let released=0, blocked=0, declined=0;

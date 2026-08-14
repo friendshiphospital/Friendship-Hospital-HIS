@@ -37,7 +37,11 @@ function initScriptNotifBell() {
       from: (table) => {
         if (table === 'staff') return chainable({ id: 's1', user_id: 'u1', full_name: 'Dr Test', role: 'doctor' }, []);
         if (table === 'patients') return chainable(null, queuePatients);
-        if (table === 'sample_records') return chainable(null, [{ patient_id: 'qp1' }]);
+        // resultsReady now resolves each patient's CURRENT (most recently
+        // created) specimen via mostRecentSampleByPatient() rather than
+        // just checking whether any row was returned -- needs a real
+        // Completed/Released status and a created_at to compare against.
+        if (table === 'sample_records') return chainable(null, [{ patient_id: 'qp1', status: 'Completed', created_at: '2026-01-01T09:00:00Z' }]);
         if (table === 'radiology_requests') return chainable(null, []);
         if (table === 'invoices') return chainable(null, []);
         if (table === 'critical_values') return chainable(null, []);
