@@ -87,6 +87,7 @@ function makeStatefulSupabaseMock(seed) {
     let mode = 'select';
     let payload = null;
     let onConflict = null;
+    let ignoreDuplicates = false;
     let wantCount = false, wantHead = false;
 
     const api = {
@@ -99,7 +100,7 @@ function makeStatefulSupabaseMock(seed) {
       select(cols, opts) { selectStr = cols || '*'; if (opts && opts.count) { wantCount = true; wantHead = !!opts.head; } return api; },
       insert(p) { mode = 'insert'; payload = Array.isArray(p) ? p : [p]; return api; },
       update(p) { mode = 'update'; payload = p; return api; },
-      upsert(p, opts) { mode = 'upsert'; payload = Array.isArray(p) ? p : [p]; onConflict = opts && opts.onConflict; return api; },
+      upsert(p, opts) { mode = 'upsert'; payload = Array.isArray(p) ? p : [p]; onConflict = opts && opts.onConflict; ignoreDuplicates = !!(opts && opts.ignoreDuplicates); return api; },
       delete() { mode = 'delete'; return api; },
       eq(col, val) { filters.push({ col, op: 'eq', val }); return api; },
       neq(col, val) { filters.push({ col, op: 'neq', val }); return api; },
@@ -143,7 +144,11 @@ function makeStatefulSupabaseMock(seed) {
         const conflictCols = (onConflict || 'id').split(',');
         const results = payload.map(p => {
           let existing = t.find(row => conflictCols.every(c => row[c] === p[c]));
-          if (existing) { Object.assign(existing, p); return existing; }
+          // ignoreDuplicates mirrors Postgrest/Postgres's ON CONFLICT DO
+          // NOTHING: a conflicting row is left completely untouched (not
+          // even merged) rather than updated -- matching how the app relies
+          // on this to never regress an in-progress sample_records row.
+          if (existing) { if (!ignoreDuplicates) Object.assign(existing, p); return existing; }
           const row = { ...p };
           if (row.id == null) row.id = genId();
           if (row.created_at == null) row.created_at = new Date().toISOString();

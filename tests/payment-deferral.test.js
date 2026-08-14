@@ -10,7 +10,7 @@ function initScript() {
     localStorage.setItem('sb_url','https://mock.supabase.co');
     localStorage.setItem('sb_key','mock-anon-key');
     ${CHAINABLE_MOCK_SRC}
-    window.__mock = { doctorOrderInserts: [], sampleRecordUpserts: [], radInserts: [] };
+    window.__mock = { doctorOrderInserts: [], sampleRecordInserts: [], radInserts: [] };
     window.supabase = { createClient: () => ({
       auth: { signInWithPassword: async()=>({data:{user:{id:'u1'}},error:null}), getSession: async()=>({data:{session:null}}), signOut: async()=>({error:null}) },
       from: (table) => {
@@ -20,8 +20,11 @@ function initScript() {
           return c;
         }
         if (table === 'sample_records') {
+          // No existing row (chainable(null,[])) -> getCurrentSampleRecord()
+          // sees nothing, so _submitLabOrder() INSERTs a fresh Pending row
+          // (see migration_v2.47 / sample-records-per-order.test.js).
           const c = chainable(null, []);
-          c.upsert = (payload) => { window.__mock.sampleRecordUpserts.push(payload); return Promise.resolve({data:null,error:null}); };
+          c.insert = (payload) => { window.__mock.sampleRecordInserts.push(payload); return Promise.resolve({data:[payload],error:null}); };
           return c;
         }
         if (table === 'radiology_requests') {
@@ -140,10 +143,10 @@ module.exports = async function run(context, baseUrl) {
     await page.evaluate(() => submitLabOrder());
     await page.waitForTimeout(200);
     const orderInserts = await page.evaluate(() => window.__mock.doctorOrderInserts);
-    const sampleUpserts = await page.evaluate(() => window.__mock.sampleRecordUpserts);
+    const sampleInserts = await page.evaluate(() => window.__mock.sampleRecordInserts);
     t.check('STAT lab order proceeds after deferral is granted (doctor_orders insert happens)', orderInserts.length === 1);
     t.check('doctor_orders row is stamped payment_deferred:true with the doctor identity', orderInserts[0]?.[0]?.payment_deferred === true && orderInserts[0]?.[0]?.payment_deferred_by_name === 'Dr Test');
-    t.check('sample_records upsert also carries the deferral stamp', sampleUpserts.length === 1 && sampleUpserts[0]?.payment_deferred === true);
+    t.check('sample_records insert also carries the deferral stamp', sampleInserts.length === 1 && sampleInserts[0]?.payment_deferred === true);
     await page.close();
   }
 

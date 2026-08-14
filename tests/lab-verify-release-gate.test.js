@@ -64,7 +64,12 @@ module.exports = async function run(context, baseUrl) {
             c.update = (payload) => ({ eq: () => { window.__mock.released = true; Object.assign(window.__mock.savedRow, payload); return Promise.resolve({data:null,error:null}); } });
             return c;
           }
-          if (table === 'sample_records') return chainable({ payment_deferred: false }, []);
+          // status:'Received' -- Unified Results Entry now gates on the
+          // current specimen's status (must be Received/Processing/
+          // Completed/Released) before opening; this test's patient has
+          // already had their sample received, matching the pre-verify
+          // Section 8 golden-path point this test starts from.
+          if (table === 'sample_records') return chainable({ payment_deferred: false, status: 'Received', created_at: new Date().toISOString() }, []);
           const c = chainable(null, []);
           c.insert = (payload) => Promise.resolve({data:[payload],error:null});
           c.update = () => ({ eq: () => Promise.resolve({data:null,error:null}) });
