@@ -64,7 +64,7 @@ begin
     from pg_constraint
     where conrelid = 'public.sample_records'::regclass
       and contype = 'u'
-      and (select array_agg(attname order by attname)
+      and (select array_agg(attname::text order by attname)
            from pg_attribute
            where attrelid = conrelid and attnum = any(conkey)) = array['patient_id']
   loop
@@ -77,7 +77,7 @@ begin
     where indrelid = 'public.sample_records'::regclass
       and indisunique
       and not indisprimary
-      and (select array_agg(a.attname order by a.attname)
+      and (select array_agg(a.attname::text order by a.attname)
            from pg_attribute a
            where a.attrelid = indrelid and a.attnum = any(indkey::int[])) = array['patient_id']
   loop
