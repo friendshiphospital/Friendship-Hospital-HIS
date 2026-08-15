@@ -10568,9 +10568,40 @@ function setDocFilter(filter,btn) {
   loadDoctorQueue();
 }
 
+// Fields meant to persist across a patient switch within the same doctor
+// session (same doctor's name, same day's date) rather than being wiped
+// like every other field in these tabs below.
+const DOC_NOTES_STICKY_FIELDS = new Set(['doc-doctor-name','doc-date']);
 function selectDocPatient(p) {
   _docPt=p;
   _docNotesDirty=false;
+  // Every free-text Doctor-module tab (Consultation Notes, Prescription,
+  // Sick Leave, Referral, Discharge Summary, Consent) was never cleared on
+  // a patient switch — the DOM inputs are reused, not recreated, so
+  // whatever the PREVIOUS patient's chief complaint, drug list, referral
+  // reason, or discharge summary said just sat there. That let one
+  // patient's clinical documentation, prescription, or certificate get
+  // silently attributed to the next one on save/print, and made
+  // completeAndSignOffVisit()'s "no unsaved changes" dirty-check see
+  // stale-but-unchanged Notes text and skip auto-saving, surfacing as a
+  // confusing "save notes first" error even though the form visibly had
+  // text in it. Same defensive-clear pattern already used by
+  // openUnifiedResultsEntry() for lab result forms. Vitals/Orders/History
+  // are excluded — those are read-only/list views already re-fetched
+  // fresh for this patient by their own load calls below, not raw
+  // persisted <input> values that could go stale.
+  ['doc-tab-notes','doc-tab-rx','doc-tab-sl','doc-tab-ref','doc-tab-discharge','doc-tab-consent'].forEach(tabId=>{
+    const tab=document.getElementById(tabId); if(!tab) return;
+    tab.querySelectorAll('input,textarea,select').forEach(el=>{
+      if(DOC_NOTES_STICKY_FIELDS.has(el.id)) return;
+      if(el.tagName==='SELECT') el.selectedIndex=0; else el.value='';
+    });
+  });
+  // Prescription rows are dynamically added <tr>s (addRxRow()), not static
+  // inputs — clearing their values above leaves empty rows behind instead
+  // of restoring the "Click + Add Drug to start" placeholder state.
+  const rxRows=document.getElementById('rx-rows');
+  if(rxRows) rxRows.innerHTML='<tr id="rx-empty-row"><td colspan="7" class="empty-state">Click "+ Add Drug" to start prescription</td></tr>';
   // Defense in depth: _currentAdmId is a shared global set by opening ANY
   // patient's admission drawer elsewhere in the app and was never reset on
   // a Consultation patient switch, which let a stale admission id leak
@@ -21743,8 +21774,16 @@ async function openUnifiedResultsEntry(ptId, labNo, ptName) {
     function showDept(activeCard){
       [...detail.children].forEach(d=>d.style.display='none');
       deptContainer.style.display='';
-      taggedCards.forEach(c=>{ c.style.display = (activeCard===null || c===activeCard) ? '' : 'none'; });
+      // Every panel/profile card in this department stays visible together —
+      // a nav click only scrolls to/highlights the chosen card, it no longer
+      // hides its siblings. Hiding non-active cards let a tech miss an
+      // entire ordered test's entry fields (e.g. Chemistry's Lipid Profile
+      // card, or Immunology's Thyroid panel) simply because it wasn't the
+      // first card shown, silently leaving real ordered results never
+      // entered — not lost on save, just never typed in.
+      taggedCards.forEach(c=>{ c.style.display=''; });
       footerCards.forEach(c=>{ c.style.display=''; });
+      if(activeCard) activeCard.scrollIntoView({behavior:'smooth',block:'start'});
     }
 
     if(taggedCards.length){
