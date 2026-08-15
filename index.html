@@ -13252,7 +13252,16 @@ async function saveResultWithSafetyChecks(opts){
     // verified" even though nothing about the reviewed values changed.
     if(finalVerify){ payload.is_verified=true; payload.verified_at=new Date().toISOString(); }
     try{
-      await sb.from(table).upsert(payload,{onConflict:'patient_id'});
+      // The Supabase JS client does NOT throw on a database/query error from
+      // .upsert() — it resolves normally with {data, error}. Never checking
+      // that error meant a genuinely failed write (e.g. a missing unique
+      // constraint for onConflict:'patient_id' to target) was completely
+      // invisible: no exception, no error toast, and a false "saved &
+      // verified" success message regardless of whether anything was
+      // actually persisted. Throwing it here routes a real failure into the
+      // catch block below instead of being silently swallowed.
+      const {error}=await sb.from(table).upsert(payload,{onConflict:'patient_id'});
+      if(error) throw error;
       await logResultHistory(table,payload);
       if(hasCrit) await logCriticalValues(ptId,payload,deptLabel);
       if(finalVerify) await updateSampleStatus(ptId,'Completed');
@@ -13388,7 +13397,11 @@ async function saveSeroEntry(verify=false) {
   // doFinalize() for the full explanation (a plain Save after Save & Verify
   // was silently reverting the row to "Not yet verified").
   if(verify){ payload.is_verified=true; payload.verified_at=new Date().toISOString(); }
-  try { await sb.from('results_serology').upsert(payload,{onConflict:'patient_id'}); if(verify) await updateSampleStatus(ptId,'Completed'); toast(verify?'✅ Serology saved & verified':'💾 Serology saved','ok'); } catch(e){ toast(e.message,'err'); }
+  // Supabase's .upsert() resolves with {data,error} rather than throwing on
+  // a DB-level failure — capturing and throwing that error here is what
+  // actually routes a genuine write failure into the catch block below
+  // instead of a false "saved & verified" success toast.
+  try { const {error}=await sb.from('results_serology').upsert(payload,{onConflict:'patient_id'}); if(error) throw error; if(verify) await updateSampleStatus(ptId,'Completed'); toast(verify?'✅ Serology saved & verified':'💾 Serology saved','ok'); } catch(e){ toast(e.message,'err'); }
 }
 async function saveImmunoEntry(verify=false) {
   if(!sb||!document.getElementById('immuno-entry-pt-id')?.value){ toast('No patient loaded','err'); return; }
@@ -13411,7 +13424,11 @@ async function saveImmunoEntry(verify=false) {
   // doFinalize() for the full explanation (a plain Save after Save & Verify
   // was silently reverting the row to "Not yet verified").
   if(verify){ payload.is_verified=true; payload.verified_at=new Date().toISOString(); }
-  try { await sb.from('results_serology').upsert(payload,{onConflict:'patient_id'}); if(verify) await updateSampleStatus(ptId,'Completed'); toast(verify?'✅ Immunology saved & verified':'💾 Immunology saved','ok'); } catch(e){ toast(e.message,'err'); }
+  // Supabase's .upsert() resolves with {data,error} rather than throwing on
+  // a DB-level failure — capturing and throwing that error here is what
+  // actually routes a genuine write failure into the catch block below
+  // instead of a false "saved & verified" success toast.
+  try { const {error}=await sb.from('results_serology').upsert(payload,{onConflict:'patient_id'}); if(error) throw error; if(verify) await updateSampleStatus(ptId,'Completed'); toast(verify?'✅ Immunology saved & verified':'💾 Immunology saved','ok'); } catch(e){ toast(e.message,'err'); }
 }
 async function saveMicroEntry(verify=false) {
   if(!sb||!document.getElementById('micro-entry-pt-id')?.value){ toast('No patient loaded','err'); return; }
@@ -13435,7 +13452,11 @@ async function saveMicroEntry(verify=false) {
   // doFinalize() for the full explanation (a plain Save after Save & Verify
   // was silently reverting the row to "Not yet verified").
   if(verify){ payload.is_verified=true; payload.verified_at=new Date().toISOString(); }
-  try { await sb.from('results_microbiology').upsert(payload,{onConflict:'patient_id'}); if(verify) await updateSampleStatus(ptId,'Completed'); toast(verify?'✅ Microbiology saved & verified':'💾 Microbiology saved','ok'); } catch(e){ toast(e.message,'err'); }
+  // Supabase's .upsert() resolves with {data,error} rather than throwing on
+  // a DB-level failure — capturing and throwing that error here is what
+  // actually routes a genuine write failure into the catch block below
+  // instead of a false "saved & verified" success toast.
+  try { const {error}=await sb.from('results_microbiology').upsert(payload,{onConflict:'patient_id'}); if(error) throw error; if(verify) await updateSampleStatus(ptId,'Completed'); toast(verify?'✅ Microbiology saved & verified':'💾 Microbiology saved','ok'); } catch(e){ toast(e.message,'err'); }
 }
 // ── PRINT REPORTS FOR RESULT ENTRY PAGES ─────────────
 // Shared patient info banner for every lab report (single-section and
@@ -14301,7 +14322,12 @@ async function savePcrEntry(verify=false) {
   // was silently reverting the row to "Not yet verified").
   if(verify){ payload.is_verified=true; payload.verified_at=new Date().toISOString(); }
   try {
-    await sb.from('results_pcr').upsert(payload,{onConflict:'patient_id'});
+    // Supabase's .upsert() resolves with {data,error} rather than throwing
+    // on a DB-level failure — capturing and throwing that error here is
+    // what actually routes a genuine write failure into the catch block
+    // below instead of a false "saved & verified" success toast.
+    const {error}=await sb.from('results_pcr').upsert(payload,{onConflict:'patient_id'});
+    if(error) throw error;
     if(verify) await updateSampleStatus(ptId,'Completed');
     toast(verify?'✅ PCR saved & verified':'💾 PCR results saved','ok');
   } catch(e){ toast(e.message,'err'); }
@@ -14395,7 +14421,12 @@ async function saveHistoEntry(verify=false) {
   // was silently reverting the row to "Not yet verified").
   if(verify){ payload.is_verified=true; payload.verified_at=new Date().toISOString(); }
   try {
-    await sb.from('results_histopathology').upsert(payload,{onConflict:'patient_id'});
+    // Supabase's .upsert() resolves with {data,error} rather than throwing
+    // on a DB-level failure — capturing and throwing that error here is
+    // what actually routes a genuine write failure into the catch block
+    // below instead of a false "saved & verified" success toast.
+    const {error}=await sb.from('results_histopathology').upsert(payload,{onConflict:'patient_id'});
+    if(error) throw error;
     if(verify) await updateSampleStatus(ptId,'Completed');
     toast(verify?'✅ Histopathology saved & verified':'💾 Histopathology saved','ok');
   } catch(e){ toast(e.message,'err'); }
@@ -14475,7 +14506,12 @@ async function saveCytoEntry(verify=false) {
   // was silently reverting the row to "Not yet verified").
   if(verify){ payload.is_verified=true; payload.verified_at=new Date().toISOString(); }
   try {
-    await sb.from('results_cytology').upsert(payload,{onConflict:'patient_id'});
+    // Supabase's .upsert() resolves with {data,error} rather than throwing
+    // on a DB-level failure — capturing and throwing that error here is
+    // what actually routes a genuine write failure into the catch block
+    // below instead of a false "saved & verified" success toast.
+    const {error}=await sb.from('results_cytology').upsert(payload,{onConflict:'patient_id'});
+    if(error) throw error;
     if(verify) await updateSampleStatus(ptId,'Completed');
     toast(verify?'✅ Cytology saved & verified':'💾 Cytology saved','ok');
   } catch(e){ toast(e.message,'err'); }
