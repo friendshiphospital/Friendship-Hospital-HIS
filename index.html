@@ -11487,8 +11487,23 @@ async function completeAndSignOffVisit(){
   if(!sb||!_docPt){ toast('Select patient first','err'); return; }
   if(_docNotesDirty){ if(!(await saveConsultation())) return; }
   try{
-    const {data:existing}=await sb.from('doctor_consultations').select('id,is_signed_off').eq('patient_id',_docPt.id).order('created_at',{ascending:false}).limit(1).maybeSingle();
-    if(!existing){ toast('⚠️ Save consultation notes before completing this visit','err'); return; }
+    let {data:existing}=await sb.from('doctor_consultations').select('id,is_signed_off').eq('patient_id',_docPt.id).order('created_at',{ascending:false}).limit(1).maybeSingle();
+    if(!existing){
+      // Seen live: a note saves successfully (green "Consultation saved"
+      // toast fires from saveConsultation() above) yet this immediate
+      // re-read of the same row comes back empty, so the doctor got a
+      // false "save notes first" block on a note that, in fact, had just
+      // saved. Rather than trust one read-after-write, retry once — a
+      // second save is harmless (doctor_consultations is append-only, see
+      // Phase 2) — and only report the block if the form is genuinely
+      // empty and a retry still finds nothing.
+      const hasContent = ['doc-complaint','doc-hpi','doc-dx1','doc-plan'].some(id=>document.getElementById(id)?.value?.trim());
+      if(hasContent){
+        if(!(await saveConsultation())) return;
+        ({data:existing} = await sb.from('doctor_consultations').select('id,is_signed_off').eq('patient_id',_docPt.id).order('created_at',{ascending:false}).limit(1).maybeSingle());
+      }
+      if(!existing){ toast('⚠️ Save consultation notes before completing this visit','err'); return; }
+    }
     if(existing.is_signed_off){ toast('This visit is already signed off','warn'); return; }
     _pendingSignOffPatientId=_docPt.id;
     if(confirm('Schedule a follow-up for this patient?')){
