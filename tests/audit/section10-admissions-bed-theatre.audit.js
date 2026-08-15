@@ -21,6 +21,7 @@
 // DB-backed mock for one stage only, to confirm it isn't just a client-side
 // checkbox toggle but actually persists and is read back correctly.
 const { STATEFUL_MOCK_SRC } = require('../helpers/stateful-mock');
+const { stripTags } = require('../helpers/test-kit');
 
 function initScript(seedOverrides) {
   const seed = {
@@ -298,7 +299,7 @@ module.exports = async function run(context, baseUrl) {
     const ok = enabled && !!cl?.signin_completed_at && cl?.signin_completed_by_name === 'Dr. Audit Doctor' &&
       Array.isArray(cl?.signin_items) && cl.signin_items.length === 7 && timeoutUnlocked && /✓/.test(badgeAfterReopen);
     log('10f', ok ? 'PASS' : 'FAIL',
-      `Checked all 7 Sign In items for the theatre booking from 10d and confirmed the stage. Real who_safety_checklist row: signin_completed_at="${cl?.signin_completed_at}", signin_completed_by_name="${cl?.signin_completed_by_name}", signin_items count=${cl?.signin_items?.length}. Time Out unlocked immediately after (${timeoutUnlocked}). Closed and reopened the checklist modal from scratch — the completed Sign In badge ("${badgeAfterReopen.replace(/<[^>]+>/g,'').trim()}") was correctly read back from the DB row, not just held in client memory.`);
+      `Checked all 7 Sign In items for the theatre booking from 10d and confirmed the stage. Real who_safety_checklist row: signin_completed_at="${cl?.signin_completed_at}", signin_completed_by_name="${cl?.signin_completed_by_name}", signin_items count=${cl?.signin_items?.length}. Time Out unlocked immediately after (${timeoutUnlocked}). Closed and reopened the checklist modal from scratch — the completed Sign In badge ("${stripTags(badgeAfterReopen).trim()}") was correctly read back from the DB row, not just held in client memory.`);
   }
 
   // ─────────────────────────────────────────────────────────────

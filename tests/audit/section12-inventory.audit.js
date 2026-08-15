@@ -40,6 +40,7 @@
 //         several roles, cross-referenced against CLAUDE.md/README's
 //         documented role table.
 const { STATEFUL_MOCK_SRC } = require('../helpers/stateful-mock');
+const { stripTags } = require('../helpers/test-kit');
 
 function futureDate(days) {
   const d = new Date(); d.setDate(d.getDate() + days);
@@ -178,7 +179,7 @@ module.exports = async function run(context, baseUrl) {
     await page.evaluate(() => loadInventory());
     await page.waitForTimeout(200);
     const tableAfterHtml = await page.evaluate(() => document.getElementById('inv-table-body').innerHTML);
-    const tableReflectsOk = /\b12\s*kits\b/.test(tableAfterHtml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' '));
+    const tableReflectsOk = /\b12\s*kits\b/.test(stripTags(tableAfterHtml, ' ').replace(/\s+/g, ' '));
 
     const ok = savedOk && listedOk && dispenseOk && tableReflectsOk;
     log('12a', ok ? 'PASS' : 'FAIL',
@@ -206,7 +207,7 @@ module.exports = async function run(context, baseUrl) {
     await page.waitForTimeout(200);
 
     const rowHtml = await page.evaluate(() => document.getElementById('inv-table-body').innerHTML);
-    const rowFlaggedOk = rowHtml.includes('pay-unpaid') && /4\s*kits\s*⚠️/.test(rowHtml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').replace(/>\s*</g, '><'));
+    const rowFlaggedOk = rowHtml.includes('pay-unpaid') && /4\s*kits\s*⚠️/.test(stripTags(rowHtml, ' ').replace(/\s+/g, ' ').replace(/>\s*</g, '><'));
 
     await page.evaluate(() => refreshNotifications());
     await page.waitForTimeout(300);
@@ -333,7 +334,7 @@ module.exports = async function run(context, baseUrl) {
     const catalogHtml = await page3.evaluate(() => document.getElementById('inv-table-body').innerHTML);
     // The item still shows in the catalog (current_stock untouched) even
     // though its only batch was just discarded / has 0 active batches.
-    const catalogShowsStaleStock = /25\s*boxes/.test(catalogHtml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' '));
+    const catalogShowsStaleStock = /25\s*boxes/.test(stripTags(catalogHtml, ' ').replace(/\s+/g, ' '));
 
     log('12d', gateOk && auditTrailOk ? (staleStockBug ? '⚠️ GAP FOUND' : 'PASS') : 'FAIL',
       `Reason-coded mandatory-notes discard gate: submitting with no reason code was rejected ("${blockedNoReason}"), submitting a reason but no notes was also rejected ("${blockedNoNotes}") — no silent discards=${gateOk}. Supplying both (Damaged, "Box found with 3 broken vials…") and confirming produced a real permanent audit trail on the batch: is_active=${batchAfter.is_active}, discard_reason_code=${batchAfter.discard_reason_code}, discard_notes recorded=${!!batchAfter.discard_notes}, discarded_by_name=${batchAfter.discarded_by_name}, discarded_at=${!!batchAfter.discarded_at}=${auditTrailOk}, modal closed after=${modalClosedOk}. BUG: unlike receiveBatchStock() and dispenseFromInventoryFefo() (both proven in 12a to keep reagent_inventory.current_stock and the batch's own quantity in lockstep), submitDiscardBatch() (index.html, function submitDiscardBatch) never writes to reagent_inventory at all — the item's whole 25-box batch was discarded but current_stock is still ${itemAfter.current_stock} (should be 0). The live Stock Catalog table still shows "25 boxes" in stock for an item with zero active batches left=${catalogShowsStaleStock}, and — because the same current_stock field feeds both the per-row low-stock highlight (12b) and the notification bell — a wastage discard can leave an actually-empty item looking fully stocked and silently suppress the low-stock alert that should have fired.`);

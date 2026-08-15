@@ -13,4 +13,21 @@ function makeSuite(name) {
   };
 }
 
-module.exports = { makeSuite };
+// Strips HTML tags from innerHTML pulled out of the page for test
+// assertions/report strings. A single-pass /<[^>]+>/g replace is an
+// incomplete sanitizer (CodeQL js/incomplete-multi-character-sanitization)
+// -- e.g. "<<script>script>" loses its inner "<script>" in one pass but
+// still leaves "<script>" behind. Looping to a fixed point closes that gap.
+// `replacement` defaults to '' for plain display strings; callers matching
+// against adjacent table cells pass ' ' so cell boundaries don't collapse
+// two words together (e.g. "<td>12</td><td>kits</td>" -> "12 kits", not
+// "12kits"). Test-only string handling (never rendered as HTML), but cheap
+// to do right.
+function stripTags(html, replacement) {
+  const rep = replacement === undefined ? '' : replacement;
+  let prev, out = String(html || '');
+  do { prev = out; out = prev.replace(/<[^>]*>/g, rep); } while (out !== prev);
+  return out;
+}
+
+module.exports = { makeSuite, stripTags };
