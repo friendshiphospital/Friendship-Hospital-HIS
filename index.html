@@ -11386,7 +11386,12 @@ async function cancelOrder(id) {
 // auto-save-then-complete, not just fired-and-forgotten from the button.
 async function saveConsultation() {
   if(!sb){toast('Not connected','err');return false;}
-  if(!_docPt){toast('Select patient first','err');return false;}
+  // Defensive guard: _docPt must be a real patient object with a real .id
+  // before anything below touches _docPt.id — a bare string, null, or an
+  // object missing .id here (e.g. from a stale/incorrect caller) would
+  // otherwise proceed straight into a confusing downstream database error
+  // instead of a clear message telling the doctor what to do.
+  if(!_docPt || typeof _docPt!=='object' || !_docPt.id){ toast('No valid patient selected — please reselect the patient and try again','err'); return false; }
   if(!(await guardVisitNotLocked(_docPt.id,'Saving a consultation note'))) return false;
   const g=id=>document.getElementById(id)?.value||'';
   try {
@@ -11484,7 +11489,12 @@ let _pendingSignOffPatientId=null;
 // whether Save was clicked first, while a genuinely note-less attempt
 // still correctly blocks below.
 async function completeAndSignOffVisit(){
-  if(!sb||!_docPt){ toast('Select patient first','err'); return; }
+  if(!sb){ toast('Select patient first','err'); return; }
+  // Defensive guard: same rationale as saveConsultation() above — _docPt
+  // must be a real patient object with a real .id before anything below
+  // reads _docPt.id, or a stale/incorrect caller would otherwise produce a
+  // confusing downstream database error instead of a clear message.
+  if(!_docPt || typeof _docPt!=='object' || !_docPt.id){ toast('No valid patient selected — please reselect the patient and try again','err'); return; }
   if(_docNotesDirty){ if(!(await saveConsultation())) return; }
   try{
     let {data:existing}=await sb.from('doctor_consultations').select('id,is_signed_off').eq('patient_id',_docPt.id).order('created_at',{ascending:false}).limit(1).maybeSingle();
@@ -21874,11 +21884,35 @@ function closeUnifiedEntry() {
 
 async function saveAllUnifiedEntry(verify) {
   if(!_ueCurrentDepts.length){ toast('Nothing to save','err'); return; }
+  const okDepts=[], failedDepts=[];
   for(const d of _ueCurrentDepts) {
-    const fn = window[DEPT_META[d].saveFn];
-    if(typeof fn==='function') { try{ await fn(verify); }catch(e){ console.warn(DEPT_META[d].saveFn,'failed:',e.message); } }
+    const meta = DEPT_META[d];
+    const fn = window[meta.saveFn];
+    if(typeof fn!=='function') continue;
+    try{
+      await fn(verify);
+      // Each department's own save function already shows its own accurate
+      // toast (including "saved — pending tech sign-off" when Verify gets
+      // downgraded because a required field is missing) but resolves
+      // normally rather than throwing for that case, so a bare try/catch
+      // here can't detect it. Re-check the row that was just saved so this
+      // summary can't contradict what the department's own message just
+      // said by claiming a blanket "verified" success underneath it.
+      if(verify){
+        const map = DEPT_LOAD_MAP[d];
+        if(map && sb && _uePatientId){
+          const {data} = await sb.from(map.table).select('is_verified').eq('patient_id',_uePatientId).order('created_at',{ascending:false}).limit(1).maybeSingle();
+          if(data && !data.is_verified){ failedDepts.push(meta.label+' (not verified — see its own message above)'); continue; }
+        }
+      }
+      okDepts.push(meta.label);
+    }catch(e){
+      console.warn(meta.saveFn,'failed:',e.message);
+      failedDepts.push(meta.label+' ('+e.message+')');
+    }
   }
-  toast(verify?'✅ All sections saved & verified':'💾 All sections saved','ok');
+  if(!failedDepts.length) toast(verify?'✅ All sections saved & verified':'💾 All sections saved','ok');
+  else toast('⚠️ '+okDepts.length+' of '+_ueCurrentDepts.length+' section(s) '+(verify?'saved & verified':'saved')+' — could not verify: '+failedDepts.join('; '),'err');
 }
 
 async function releaseAllUnifiedEntry() {
@@ -21888,6 +21922,7 @@ async function releaseAllUnifiedEntry() {
     if(!(await checkReleasePaymentGate(_uePatientId, sampleRec?.payment_deferred, 'Results release'))) return;
   }
   let released=0, blocked=0, declined=0;
+  const errored=[];
   for(const d of _ueCurrentDepts) {
     const map = DEPT_LOAD_MAP[d];
     if(!map || !sb || !_uePatientId) continue;
@@ -21898,10 +21933,12 @@ async function releaseAllUnifiedEntry() {
         await sb.from(map.table).update({is_released:true, released_at:new Date().toISOString(), released_by:currentProfile?.id}).eq('patient_id',_uePatientId);
         released++;
       } else if(existing) blocked++;
-    } catch(e){}
+    } catch(e){ console.warn(d,e.message); errored.push(DEPT_META[d].label+': '+e.message); }
   }
-  if(released && !blocked && !declined) toast('📤 All sections released','ok');
-  else if(released) toast('📤 '+released+' section(s) released'+(blocked?' — '+blocked+' skipped (not yet verified)':'')+(declined?' — '+declined+' declined at critical-value confirmation':''),'warn');
+  const erroredSuffix = errored.length?' — error releasing '+errored.join('; '):'';
+  if(released && !blocked && !declined && !errored.length) toast('📤 All sections released','ok');
+  else if(released) toast('📤 '+released+' section(s) released'+(blocked?' — '+blocked+' skipped (not yet verified)':'')+(declined?' — '+declined+' declined at critical-value confirmation':'')+erroredSuffix,'warn');
+  else if(errored.length) toast('⚠️ Release failed for: '+errored.join('; ')+(blocked?' — '+blocked+' other section(s) not yet verified':''),'err');
   else if(declined && !blocked) toast('Release cancelled — results remain verified but unreleased','warn');
   else toast('⚠️ Nothing released — verify results first','err');
   if(released) await updateSampleStatus(_uePatientId,'Released');
