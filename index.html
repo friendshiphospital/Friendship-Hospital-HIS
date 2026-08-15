@@ -13226,7 +13226,15 @@ async function saveResultWithSafetyChecks(opts){
   // of why Auto-Verify didn't trigger. Threaded through doFinalize now so
   // both the toast and the status badge can surface it.
   const doFinalize=async(finalVerify,autoVerified,autoVerifyReason)=>{
-    payload.is_verified=finalVerify; payload.verified_at=finalVerify?new Date().toISOString():null;
+    // Only ever SET verified state here, never clear it — omitting the keys
+    // entirely (rather than writing is_verified:false) means a plain 💾 Save
+    // on an already-verified row leaves verification untouched instead of
+    // silently reverting it, since upsert() only overwrites columns present
+    // in the payload. Found live: a tech would Save & Verify, later resave
+    // the same visit's results (a typo fix, an added comment) with the
+    // plain Save button, and the whole row would revert to "Not yet
+    // verified" even though nothing about the reviewed values changed.
+    if(finalVerify){ payload.is_verified=true; payload.verified_at=new Date().toISOString(); }
     try{
       await sb.from(table).upsert(payload,{onConflict:'patient_id'});
       await logResultHistory(table,payload);
@@ -13360,7 +13368,10 @@ async function saveSeroEntry(verify=false) {
     if(!check.complete){ toast('⚠️ Cannot verify — missing results for: '+check.missingLabels.join(', ')+' — saved as unverified','warn'); verify=false; }
     else payload.verified_fields=[...new Set([...check.existingVerifiedFields,...check.requiredFields])];
   }
-  payload.is_verified=verify; payload.verified_at=verify?new Date().toISOString():null;
+  // Only ever SET verified state, never clear it — see saveResultWithSafetyChecks's
+  // doFinalize() for the full explanation (a plain Save after Save & Verify
+  // was silently reverting the row to "Not yet verified").
+  if(verify){ payload.is_verified=true; payload.verified_at=new Date().toISOString(); }
   try { await sb.from('results_serology').upsert(payload,{onConflict:'patient_id'}); if(verify) await updateSampleStatus(ptId,'Completed'); toast(verify?'✅ Serology saved & verified':'💾 Serology saved','ok'); } catch(e){ toast(e.message,'err'); }
 }
 async function saveImmunoEntry(verify=false) {
@@ -13380,7 +13391,10 @@ async function saveImmunoEntry(verify=false) {
     if(!check.complete){ toast('⚠️ Cannot verify — missing results for: '+check.missingLabels.join(', ')+' — saved as unverified','warn'); verify=false; }
     else payload.verified_fields=[...new Set([...check.existingVerifiedFields,...check.requiredFields])];
   }
-  payload.is_verified=verify; payload.verified_at=verify?new Date().toISOString():null;
+  // Only ever SET verified state, never clear it — see saveResultWithSafetyChecks's
+  // doFinalize() for the full explanation (a plain Save after Save & Verify
+  // was silently reverting the row to "Not yet verified").
+  if(verify){ payload.is_verified=true; payload.verified_at=new Date().toISOString(); }
   try { await sb.from('results_serology').upsert(payload,{onConflict:'patient_id'}); if(verify) await updateSampleStatus(ptId,'Completed'); toast(verify?'✅ Immunology saved & verified':'💾 Immunology saved','ok'); } catch(e){ toast(e.message,'err'); }
 }
 async function saveMicroEntry(verify=false) {
@@ -13401,7 +13415,10 @@ async function saveMicroEntry(verify=false) {
     if(!check.complete){ toast('⚠️ Cannot verify — missing results for: '+check.missingLabels.join(', ')+' — saved as unverified','warn'); verify=false; }
     else payload.verified_fields=[...new Set([...(existingRow?.verified_fields||[]),...check.requiredFields])];
   }
-  payload.is_verified=verify; payload.verified_at=verify?new Date().toISOString():null;
+  // Only ever SET verified state, never clear it — see saveResultWithSafetyChecks's
+  // doFinalize() for the full explanation (a plain Save after Save & Verify
+  // was silently reverting the row to "Not yet verified").
+  if(verify){ payload.is_verified=true; payload.verified_at=new Date().toISOString(); }
   try { await sb.from('results_microbiology').upsert(payload,{onConflict:'patient_id'}); if(verify) await updateSampleStatus(ptId,'Completed'); toast(verify?'✅ Microbiology saved & verified':'💾 Microbiology saved','ok'); } catch(e){ toast(e.message,'err'); }
 }
 // ── PRINT REPORTS FOR RESULT ENTRY PAGES ─────────────
@@ -14263,7 +14280,10 @@ async function savePcrEntry(verify=false) {
     if(!check.complete){ toast('⚠️ Cannot verify — missing results for: '+check.missingLabels.join(', ')+' — saved as unverified','warn'); verify=false; }
     else payload.verified_fields=[...new Set([...(existingRow?.verified_fields||[]),...check.requiredFields])];
   }
-  payload.is_verified=verify; payload.verified_at=verify?new Date().toISOString():null;
+  // Only ever SET verified state, never clear it — see saveResultWithSafetyChecks's
+  // doFinalize() for the full explanation (a plain Save after Save & Verify
+  // was silently reverting the row to "Not yet verified").
+  if(verify){ payload.is_verified=true; payload.verified_at=new Date().toISOString(); }
   try {
     await sb.from('results_pcr').upsert(payload,{onConflict:'patient_id'});
     if(verify) await updateSampleStatus(ptId,'Completed');
@@ -14354,7 +14374,10 @@ async function saveHistoEntry(verify=false) {
     if(!check.complete){ toast('⚠️ Cannot verify — missing: '+check.missingLabels.join(', ')+' — saved as unverified','warn'); verify=false; }
     else payload.verified_fields=[...new Set([...(existingRow?.verified_fields||[]),...check.requiredFields])];
   }
-  payload.is_verified=verify; payload.verified_at=verify?new Date().toISOString():null;
+  // Only ever SET verified state, never clear it — see saveResultWithSafetyChecks's
+  // doFinalize() for the full explanation (a plain Save after Save & Verify
+  // was silently reverting the row to "Not yet verified").
+  if(verify){ payload.is_verified=true; payload.verified_at=new Date().toISOString(); }
   try {
     await sb.from('results_histopathology').upsert(payload,{onConflict:'patient_id'});
     if(verify) await updateSampleStatus(ptId,'Completed');
@@ -14431,7 +14454,10 @@ async function saveCytoEntry(verify=false) {
     if(!check.complete){ toast('⚠️ Cannot verify — missing: '+check.missingLabels.join(', ')+' — saved as unverified','warn'); verify=false; }
     else payload.verified_fields=[...new Set([...(existingRow?.verified_fields||[]),...check.requiredFields])];
   }
-  payload.is_verified=verify; payload.verified_at=verify?new Date().toISOString():null;
+  // Only ever SET verified state, never clear it — see saveResultWithSafetyChecks's
+  // doFinalize() for the full explanation (a plain Save after Save & Verify
+  // was silently reverting the row to "Not yet verified").
+  if(verify){ payload.is_verified=true; payload.verified_at=new Date().toISOString(); }
   try {
     await sb.from('results_cytology').upsert(payload,{onConflict:'patient_id'});
     if(verify) await updateSampleStatus(ptId,'Completed');
