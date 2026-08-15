@@ -8907,7 +8907,10 @@ async function refreshNotifications(){
           sb.from('radiology_requests').select('patient_id').in('patient_id',ids).in('status',['Reported','Verified']),
         ]);
         const currentByPt=mostRecentSampleByPatient(allSamples);
-        const readyIds=new Set([...[...currentByPt.values()].filter(s=>['Completed','Released'].includes(s.status)).map(s=>s.patient_id),...(doneRad||[]).map(r=>r.patient_id)]);
+        // 'Released' only — 'Completed' means verified but not yet released,
+        // and this bell is exactly what click-through-navigates a doctor to
+        // loadActiveOrders()'s View Result button, which has the same gate.
+        const readyIds=new Set([...[...currentByPt.values()].filter(s=>s.status==='Released').map(s=>s.patient_id),...(doneRad||[]).map(r=>r.patient_id)]);
         resultsReady=queuePts.filter(p=>readyIds.has(p.id));
       }
     }
@@ -10556,7 +10559,9 @@ async function loadDoctorQueue() {
       sb.from('radiology_requests').select('patient_id').in('patient_id',ids).in('status',['Reported','Verified']),
     ]);
     const currentByPt=mostRecentSampleByPatient(allSamples);
-    const readyIds=new Set([...[...currentByPt.values()].filter(s=>['Completed','Released'].includes(s.status)).map(s=>s.patient_id),...(doneRad||[]).map(r=>r.patient_id)]);
+    // 'Released' only — see loadActiveOrders()'s labResultsReady for why
+    // 'Completed' (verified but not yet released) must not count as ready.
+    const readyIds=new Set([...[...currentByPt.values()].filter(s=>s.status==='Released').map(s=>s.patient_id),...(doneRad||[]).map(r=>r.patient_id)]);
     body.innerHTML = data.map(p => renderDocQueueCard(p, readyIds.has(p.id))).join('');
   } catch(e){ body.innerHTML='<div style="padding:10px;color:var(--red);font-size:.78rem">'+escapeHtml(e.message)+'</div>'; }
 }
@@ -11324,15 +11329,16 @@ async function loadActiveOrders() {
     const allDoctorOrders=ordersRes.data||[];
     // A specific test's own result can't be checked individually (results_*
     // tables are one row per patient covering every test in that
-    // department, not one row per ordered test) — sample_records.status
-    // reaching Completed/Released is the same granularity the rest of the
-    // app already treats as "this patient's lab work for this visit is
-    // ready", so View Result uses that as its readiness signal too. Reads
-    // the CURRENT (most recently created) specimen's status specifically —
-    // an older, already-released specimen from an earlier order this same
-    // visit must never make a freshly-ordered, not-yet-collected test look
-    // ready.
-    const labResultsReady=['Completed','Released'].includes(sample?.status);
+    // department, not one row per ordered test), so sample_records.status
+    // reaching 'Released' specifically is what gates View Result — 'Completed'
+    // means verified but NOT YET released, and a verified-but-unreleased
+    // result must never be viewable here (only Release, a distinct explicit
+    // action, is allowed to make a result visible outside the Lab module).
+    // Reads the CURRENT (most recently created) specimen's status
+    // specifically — an older, already-released specimen from an earlier
+    // order this same visit must never make a freshly-ordered, not-yet-
+    // collected test look ready.
+    const labResultsReady=sample?.status==='Released';
     const nonRadOrders=allDoctorOrders.filter(o=>o.order_type!=='Radiology').map(o=>({
       order_type:o.order_type, order_detail:o.order_detail, status:o.status, ordered_at:o.ordered_at,
       orderedByLabel:o.ordered_by||'—', payment_deferred:o.payment_deferred, payment_deferred_by_name:o.payment_deferred_by_name,
@@ -11483,11 +11489,22 @@ async function loadConsultationSignOffState(patientId){
 let _pendingSignOffPatientId=null;
 // Requiring a separate, prior manual Save click before this was an easy way
 // to hit a confusing "save notes first" error after the doctor had, in
-// fact, already typed notes — just not clicked Save yet. Auto-saving any
-// unsaved Notes-tab edits here (same saveConsultation() logic, same DB
-// write) means Complete & Sign Off works as one action regardless of
-// whether Save was clicked first, while a genuinely note-less attempt
-// still correctly blocks below.
+// fact, already typed notes — just not clicked Save yet.
+//
+// Previously this auto-saved only when _docNotesDirty was set, then ran a
+// SEPARATE query to check a doctor_consultations row existed before
+// proceeding — which could race/stale against the save that had just
+// happened (seen live: a green "Consultation saved" toast firing
+// immediately followed by "Save consultation notes before completing this
+// visit" for the same action). Now it unconditionally calls
+// saveConsultation() itself first, using the CURRENT form field values,
+// which both guarantees a fresh doctor_consultations row exists for
+// _docPt.id at this exact moment (no separate existence check needed at
+// all) and reuses that function's own guardVisitNotLocked() call — which
+// reads the authoritative patients.visit_status flag — to correctly block
+// with its own clear message if this visit was already signed off,
+// instead of a second, separate read of doctor_consultations.is_signed_off
+// that could equally race.
 async function completeAndSignOffVisit(){
   if(!sb){ toast('Select patient first','err'); return; }
   // Defensive guard: same rationale as saveConsultation() above — _docPt
@@ -11495,26 +11512,8 @@ async function completeAndSignOffVisit(){
   // reads _docPt.id, or a stale/incorrect caller would otherwise produce a
   // confusing downstream database error instead of a clear message.
   if(!_docPt || typeof _docPt!=='object' || !_docPt.id){ toast('No valid patient selected — please reselect the patient and try again','err'); return; }
-  if(_docNotesDirty){ if(!(await saveConsultation())) return; }
+  if(!(await saveConsultation())) return;
   try{
-    let {data:existing}=await sb.from('doctor_consultations').select('id,is_signed_off').eq('patient_id',_docPt.id).order('created_at',{ascending:false}).limit(1).maybeSingle();
-    if(!existing){
-      // Seen live: a note saves successfully (green "Consultation saved"
-      // toast fires from saveConsultation() above) yet this immediate
-      // re-read of the same row comes back empty, so the doctor got a
-      // false "save notes first" block on a note that, in fact, had just
-      // saved. Rather than trust one read-after-write, retry once — a
-      // second save is harmless (doctor_consultations is append-only, see
-      // Phase 2) — and only report the block if the form is genuinely
-      // empty and a retry still finds nothing.
-      const hasContent = ['doc-complaint','doc-hpi','doc-dx1','doc-plan'].some(id=>document.getElementById(id)?.value?.trim());
-      if(hasContent){
-        if(!(await saveConsultation())) return;
-        ({data:existing} = await sb.from('doctor_consultations').select('id,is_signed_off').eq('patient_id',_docPt.id).order('created_at',{ascending:false}).limit(1).maybeSingle());
-      }
-      if(!existing){ toast('⚠️ Save consultation notes before completing this visit','err'); return; }
-    }
-    if(existing.is_signed_off){ toast('This visit is already signed off','warn'); return; }
     _pendingSignOffPatientId=_docPt.id;
     if(confirm('Schedule a follow-up for this patient?')){
       const suggested=new Date(); suggested.setDate(suggested.getDate()+CFG.followupWindowDays);
@@ -12674,7 +12673,14 @@ async function fetchPatientHistoryEvents(pt){
   });
   resultTableNames.forEach((tname,i)=>{
     const meta=PTH_RESULT_TABLES[tname];
-    (resultRows[i]?.data||[]).forEach(r=>events.push({t:new Date(r.analysis_date||r.created_at||pt?.created_at||Date.now()),type:'lab',icon:meta.icon,title:meta.label+' Result'+(r.is_verified?' ✓ Verified':' (unverified)'),detail:pthFormatResultRow(r),color:'var(--teal)',data:r}));
+    // Found during the Doctor-interface release-gating sweep: this fed both
+    // the Patient History Timeline and the Consultation History tab with
+    // EVERY saved result row regardless of release status (only labeling
+    // unverified ones, never hiding them) — no lab role has access to
+    // either page (see README's role table), so this unconditional gate
+    // can't break a legitimate lab QA workflow, only close the same
+    // "unreleased result visible to a non-lab role" gap fixed elsewhere.
+    (resultRows[i]?.data||[]).filter(r=>r.is_released).forEach(r=>events.push({t:new Date(r.analysis_date||r.created_at||pt?.created_at||Date.now()),type:'lab',icon:meta.icon,title:meta.label+' Result ✓ Released',detail:pthFormatResultRow(r),color:'var(--teal)',data:r}));
   });
   events.sort((a,b)=>b.t-a.t);
   return {
