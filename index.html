@@ -21984,7 +21984,25 @@ function refreshAllRangeDisplays(rootSelector){
 // while remaining fully enterable/printable/tagged exactly as before —
 // RESULT_TAGS itself (also used for printAllReports()'s stray-value
 // filtering, see getRequiredFieldsForDept's caller comment) is untouched.
-const OPTIONAL_DESPITE_TAGGED = { hem: new Set(['nrbc','mpv','pdw','neut','lymph','mono','eosi','baso']) };
+// chem: ibil is arithmetic (Total - Direct Bilirubin), rarely a separate
+// measured value and never auto-calculated here (unlike eGFR, which IS
+// wired up from creatinine) -- requiring it blocked Verify on a complete,
+// accurate LFT. ggt is sometimes reported on a separate platform/order
+// from the rest of the LFT panel. ua (uric acid) is its own send-out on
+// many analyzers, not bundled with routine RFT. co2 (total CO2/
+// bicarbonate) needs a method basic ISE-only electrolyte analyzers don't
+// have. ldl is conventionally Friedewald-calculated from TC/HDL/TG (and
+// left blank when TG is too high for the formula to be valid), not
+// directly assayed. troponin_i and hs_tnt are two DIFFERENT analytes
+// (Troponin I vs high-sensitivity Troponin T) that only one platform ever
+// reports -- tagging both as required whenever either "Troponin I" or the
+// "Cardiac Enzymes" bundle was ordered meant no lab could ever satisfy
+// both. nt_probnp (heart-failure marker) isn't a core "cardiac enzyme"
+// and is often a separate send-out too.
+const OPTIONAL_DESPITE_TAGGED = {
+  hem: new Set(['nrbc','mpv','pdw','neut','lymph','mono','eosi','baso']),
+  chem: new Set(['ibil','ggt','ua','co2','ldl','troponin_i','hs_tnt','nt_probnp']),
+};
 function getRequiredFieldsForDept(deptKey, testsRequested) {
   const tags = RESULT_TAGS[deptKey]; if(!tags) return [];
   const req = new Set((testsRequested||[]).map(t=>String(t).toLowerCase().trim()));
