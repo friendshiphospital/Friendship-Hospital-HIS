@@ -21923,6 +21923,47 @@ const RESULT_TAGS = {
     vit_d:'Vitamin D', vit_b12:'Vitamin B12', folate:'Folate', ferritin:'Ferritin' }
 };
 
+// Named sub-panels for the Combined Laboratory Report (printAllReports()),
+// mirroring the same card groupings already shown on each department's
+// entry page (e.g. Chemistry's LFT/RFT/Electrolytes/Glucose/Lipid/Cardiac
+// cards) so the printed report reads the same way the results were entered
+// instead of one long undifferentiated list of every column in DB order.
+// Departments not listed here (Serology, PCR, Histopathology, Cytology)
+// only ever have a single card on their entry page, so a flat list is
+// already the correct grouping for them. Any column in a department's
+// DEPT_LOAD_MAP not covered by a panel here (e.g. specimen type) still
+// prints — it just falls into an unlabeled trailing group instead of
+// being silently dropped.
+const RESULT_REPORT_PANELS = {
+  hem: [
+    { label:'Complete Blood Count (CBC)', cols:['wbc','rbc','hgb','hct','mcv','mch','mchc','rdw','nrbc','plt','mpv','pdw','neut','lymph','mono','eosi','baso'] },
+    { label:'Coagulation & Special Tests', cols:['pt','inr','aptt','tt','fibg','ddimer'] },
+    { label:'ESR & Blood Group', cols:['esr','blood_group','rh_factor'] },
+    { label:'Peripheral Blood Film', cols:['film_result','film_comment'] },
+  ],
+  chem: [
+    { label:'Liver Function (LFT)', cols:['tbil','dbil','ibil','alt','ast','alp','ggt','tp','alb'] },
+    { label:'Renal Function (RFT)', cols:['creat','urea','ua','egfr'] },
+    { label:'Electrolytes', cols:['na','k','cl','co2','ca','phos','mg'] },
+    { label:'Glucose & HbA1c', cols:['fbs','rbs','ppbs','hba1c','ins','cpep'] },
+    { label:'Lipid Profile', cols:['tchol','ldl','hdl','trig'] },
+    { label:'Cardiac Markers', cols:['troponin_i','hs_tnt','ck','ckmb','nt_probnp','hs_crp','ldh'] },
+  ],
+  immuno: [
+    { label:'Thyroid Profile', cols:['tsh','ft3','ft4','t3','t4'] },
+    { label:'Fertility / Reproductive Profile', cols:['fsh','lh','estradiol','prog','testosterone','prolactin','bhcg_qual'] },
+    { label:'Tumour Marker Profile', cols:['psa','afp','cea','ca125','ca199'] },
+    { label:'Vitamin & Iron Profile', cols:['vit_d','vit_b12','folate','ferritin'] },
+  ],
+  micro: [
+    { label:'Urinalysis — Physical & Chemical', cols:['ua_color','ua_appear','ua_sg','ua_ph','ua_protein','ua_glucose','ua_ketones','ua_blood','ua_bilirubin','ua_urobilinogen','ua_nitrite','ua_leuk'] },
+    { label:'Urine Microscopy', cols:['ua_wbc','ua_rbc','ua_epith','ua_bacteria','ua_cast_hyal','ua_cast_gran','ua_crystals','ua_yeast'] },
+    { label:'Stool Examination', cols:['st_color','st_consist','st_fob','st_mucus','st_blood','st_wbc','st_rbc','st_ova','st_fat','st_yeast'] },
+    { label:'Culture & Sensitivity', cols:['specimen_type','culture_result','culture_organism','culture_count','culture_notes'] },
+    { label:'CSF Analysis', cols:['csf_appear','csf_wbc','csf_rbc','csf_protein','csf_glucose','csf_ratio','csf_chloride','csf_culture'] },
+  ],
+};
+
 // ══════════════════════════════════════════════════════════════
 // LAB REFERENCE RANGES — SI/Conventional unit-system resolution
 // ══════════════════════════════════════════════════════════════
@@ -22143,10 +22184,22 @@ async function printAllReports() {
       const {data:row} = await sb.from(map.table).select('*').eq('patient_id',_uePatientId).order('created_at',{ascending:false}).limit(1).maybeSingle();
       if(!row) continue;
       const meta = RESULT_META[d], tags = RESULT_TAGS[d];
-      let rows = '', hasRange = !!meta;
-      Object.entries(map.fields)
-        .filter(([col])=>!['analyzer','analysis_date','notes','platform'].includes(col))
-        .forEach(([col,id])=>{
+      const dataCols = Object.keys(map.fields).filter(col=>!['analyzer','analysis_date','notes','platform'].includes(col));
+      // Group columns into the same named panels shown on the entry form
+      // (LFT/RFT/Electrolytes/Glucose/Lipid/Cardiac for Chemistry, CBC/
+      // Coagulation/ESR/Film for Haematology, etc.) instead of one long
+      // undifferentiated list — a flat list made a panel like Lipid Profile
+      // easy to miss among 20+ other Chemistry rows. Columns not covered by
+      // any named panel still print, grouped last under no sub-heading.
+      const panelDefs = RESULT_REPORT_PANELS[d];
+      const panels = panelDefs
+        ? [...panelDefs, {label:null, cols:dataCols.filter(c=>!panelDefs.some(p=>p.cols.includes(c)))}]
+        : [{label:null, cols:dataCols}];
+      let panelsHtml = '', anyRows = false;
+      panels.forEach(panel=>{
+        let rows = '', hasRange = !!meta;
+        panel.cols.forEach(col=>{
+          const id = map.fields[col];
           const val=row[col]; if(val==null||val==='') return;
           if(tags && !wasRequested(tags[col])) return; // not actually ordered — skip even if a stray value exists
           if(meta && meta[col]) {
@@ -22161,15 +22214,20 @@ async function printAllReports() {
             hasRange = false;
           }
         });
-      if(!rows) continue;
-      const thead = hasRange
-        ? '<thead><tr style="background:#1e3a5a;color:#fff"><th style="padding:5px 8px;font-size:8.5pt;text-align:left">Test</th><th style="padding:5px 8px;font-size:8.5pt;text-align:left">Result</th><th style="padding:5px 8px;font-size:8.5pt;text-align:left">Unit</th><th style="padding:5px 8px;font-size:8.5pt;text-align:left">Reference</th><th style="padding:5px 8px;font-size:8.5pt;text-align:left">Flag</th></tr></thead>'
-        : '<thead><tr style="background:#1e3a5a;color:#fff"><th style="padding:5px 8px;font-size:8.5pt;text-align:left">Test</th><th style="padding:5px 8px;font-size:8.5pt;text-align:left" colspan="4">Result</th></tr></thead>';
+        if(!rows) return;
+        anyRows = true;
+        const thead = hasRange
+          ? '<thead><tr style="background:#1e3a5a;color:#fff"><th style="padding:5px 8px;font-size:8.5pt;text-align:left">Test</th><th style="padding:5px 8px;font-size:8.5pt;text-align:left">Result</th><th style="padding:5px 8px;font-size:8.5pt;text-align:left">Unit</th><th style="padding:5px 8px;font-size:8.5pt;text-align:left">Reference</th><th style="padding:5px 8px;font-size:8.5pt;text-align:left">Flag</th></tr></thead>'
+          : '<thead><tr style="background:#1e3a5a;color:#fff"><th style="padding:5px 8px;font-size:8.5pt;text-align:left">Test</th><th style="padding:5px 8px;font-size:8.5pt;text-align:left" colspan="4">Result</th></tr></thead>';
+        panelsHtml += (panel.label?'<div style="font-weight:600;font-size:9pt;color:#334155;margin:10px 0 4px">'+escapeHtml(panel.label)+'</div>':'')+
+          '<table style="width:100%;border-collapse:collapse;margin-bottom:6px">'+thead+'<tbody>'+rows+'</tbody></table>';
+      });
+      if(!anyRows) continue;
       sections += '<div style="margin-bottom:18px">'+
         '<div style="font-weight:700;font-size:10.5pt;color:#0b7a75;margin-bottom:6px;padding-bottom:4px;border-bottom:2px solid #d4f1ef">'+DEPT_META[d].label+
         (row.is_verified?' <span style="font-size:8pt;color:#166534;font-weight:700">✓ Verified</span>':' <span style="font-size:8pt;color:#b45309;font-weight:700">⚠ Not yet verified</span>')+
         (row.is_released?' <span style="font-size:8pt;color:#0b7a75;font-weight:700">📤 Released</span>':'')+
-        '</div><table style="width:100%;border-collapse:collapse">'+thead+'<tbody>'+rows+'</tbody></table>'+
+        '</div>'+panelsHtml+
         (row.notes?'<div style="font-size:8.5pt;color:#475569;margin-top:4px"><strong>Notes:</strong> '+escapeHtml(row.notes)+'</div>':'')+
         '</div>';
     }
