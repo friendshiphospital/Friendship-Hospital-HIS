@@ -21958,11 +21958,23 @@ function refreshAllRangeDisplays(rootSelector){
 // together. micro/pcr/histo/cyto don't share that panel shape (free-text/
 // narrative/multi-target reports), so their checks are intentionally
 // looser -- see each helper.
+// A "CBC (Full Blood Count)" order tags all 17 results_hematology columns
+// (see RESULT_TAGS.hem) as belonging to that one order, including platelet
+// indices, NRBC, and the full 5-part differential — but plenty of real
+// analyzers (3-part-diff instruments especially, common in lower-throughput
+// labs) never report MPV/PDW/NRBC or a differential at all, so requiring
+// them made Verify permanently unreachable on an otherwise complete,
+// accurate CBC. These stay optional for the required-fields gate below
+// while remaining fully enterable/printable/tagged exactly as before —
+// RESULT_TAGS itself (also used for printAllReports()'s stray-value
+// filtering, see getRequiredFieldsForDept's caller comment) is untouched.
+const OPTIONAL_DESPITE_TAGGED = { hem: new Set(['nrbc','mpv','pdw','neut','lymph','mono','eosi','baso']) };
 function getRequiredFieldsForDept(deptKey, testsRequested) {
   const tags = RESULT_TAGS[deptKey]; if(!tags) return [];
   const req = new Set((testsRequested||[]).map(t=>String(t).toLowerCase().trim()));
   if(!req.size) return []; // nothing on record as ordered -- never block (e.g. a walk-in with no formal order)
-  return Object.keys(tags).filter(col=>tags[col].split('|').some(t=>req.has(t.toLowerCase().trim())));
+  const optional = OPTIONAL_DESPITE_TAGGED[deptKey];
+  return Object.keys(tags).filter(col=>!optional?.has(col) && tags[col].split('|').some(t=>req.has(t.toLowerCase().trim())));
 }
 function fieldLabel(deptKey, col) {
   return (RESULT_META[deptKey] && RESULT_META[deptKey][col]?.label) || col;
