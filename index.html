@@ -13229,7 +13229,17 @@ async function saveResultWithSafetyChecks(opts){
     if(gate.eligible){ finalVerify=true; autoVerified=true; }
     else { autoVerifyReason=gate.reason; }
   }
-  if(finalVerify && !(await passesRequiredFieldsGate())) return;
+  // Bug (found live): this used to `return` here without ever calling
+  // doFinalize() when Verify was requested but the required-fields gate
+  // failed — which silently discarded the ENTIRE save, not just the verify
+  // flag. A tech who filled in nine CBC fields and left MPV blank lost all
+  // nine on save, not just the verified status. The delta-breach path just
+  // below already gets this right (downgrades finalVerify but still saves)
+  // -- match that behaviour here instead of aborting.
+  if(finalVerify && !(await passesRequiredFieldsGate())){
+    finalVerify=false; autoVerified=false;
+    autoVerifyReason=autoVerifyReason||'Missing required fields for a test ordered this visit';
+  }
   await doFinalize(finalVerify,autoVerified,autoVerifyReason);
 }
 function refreshAutoVerifyBadge(pageId,autoVerified,verified,reason){
@@ -13298,8 +13308,11 @@ async function saveSeroEntry(verify=false) {
     rf:gn('se-rf'),aso:gn('se-aso'),ige:gn('se-ige'),ana:g('se-ana')};
   if(verify){
     const check=await checkSeroRowVerification(ptId,payload);
-    if(!check.complete){ toast('⚠️ Cannot verify — missing results for: '+check.missingLabels.join(', '),'err'); return; }
-    payload.verified_fields=[...new Set([...check.existingVerifiedFields,...check.requiredFields])];
+    // Downgrade to unverified rather than discarding the whole save when
+    // required fields are missing (see saveResultWithSafetyChecks for the
+    // full explanation of the bug this replaced).
+    if(!check.complete){ toast('⚠️ Cannot verify — missing results for: '+check.missingLabels.join(', ')+' — saved as unverified','warn'); verify=false; }
+    else payload.verified_fields=[...new Set([...check.existingVerifiedFields,...check.requiredFields])];
   }
   payload.is_verified=verify; payload.verified_at=verify?new Date().toISOString():null;
   try { await sb.from('results_serology').upsert(payload,{onConflict:'patient_id'}); if(verify) await updateSampleStatus(ptId,'Completed'); toast(verify?'✅ Serology saved & verified':'💾 Serology saved','ok'); } catch(e){ toast(e.message,'err'); }
@@ -13315,8 +13328,11 @@ async function saveImmunoEntry(verify=false) {
     psa:gn('se-psa'),afp:gn('se-afp'),cea:gn('se-cea'),ca125:gn('se-ca125'),ca199:gn('se-ca199'),vit_d:gn('se-vitd'),vit_b12:gn('se-b12'),folate:gn('se-folate'),ferritin:gn('se-ferr'),bhcg_qual:g('se-bhcg')};
   if(verify){
     const check=await checkSeroRowVerification(ptId,payload);
-    if(!check.complete){ toast('⚠️ Cannot verify — missing results for: '+check.missingLabels.join(', '),'err'); return; }
-    payload.verified_fields=[...new Set([...check.existingVerifiedFields,...check.requiredFields])];
+    // Downgrade to unverified rather than discarding the whole save when
+    // required fields are missing (see saveResultWithSafetyChecks for the
+    // full explanation of the bug this replaced).
+    if(!check.complete){ toast('⚠️ Cannot verify — missing results for: '+check.missingLabels.join(', ')+' — saved as unverified','warn'); verify=false; }
+    else payload.verified_fields=[...new Set([...check.existingVerifiedFields,...check.requiredFields])];
   }
   payload.is_verified=verify; payload.verified_at=verify?new Date().toISOString():null;
   try { await sb.from('results_serology').upsert(payload,{onConflict:'patient_id'}); if(verify) await updateSampleStatus(ptId,'Completed'); toast(verify?'✅ Immunology saved & verified':'💾 Immunology saved','ok'); } catch(e){ toast(e.message,'err'); }
@@ -13336,8 +13352,8 @@ async function saveMicroEntry(verify=false) {
     const {data:pt}=await sb.from('patients').select('tests_requested').eq('id',ptId).maybeSingle();
     const {data:existingRow}=await sb.from('results_microbiology').select('verified_fields').eq('patient_id',ptId).maybeSingle();
     const check=checkMicroVerificationComplete(pt?.tests_requested,payload);
-    if(!check.complete){ toast('⚠️ Cannot verify — missing results for: '+check.missingLabels.join(', '),'err'); return; }
-    payload.verified_fields=[...new Set([...(existingRow?.verified_fields||[]),...check.requiredFields])];
+    if(!check.complete){ toast('⚠️ Cannot verify — missing results for: '+check.missingLabels.join(', ')+' — saved as unverified','warn'); verify=false; }
+    else payload.verified_fields=[...new Set([...(existingRow?.verified_fields||[]),...check.requiredFields])];
   }
   payload.is_verified=verify; payload.verified_at=verify?new Date().toISOString():null;
   try { await sb.from('results_microbiology').upsert(payload,{onConflict:'patient_id'}); if(verify) await updateSampleStatus(ptId,'Completed'); toast(verify?'✅ Microbiology saved & verified':'💾 Microbiology saved','ok'); } catch(e){ toast(e.message,'err'); }
@@ -14198,8 +14214,8 @@ async function savePcrEntry(verify=false) {
     const {data:pt}=await sb.from('patients').select('tests_requested').eq('id',ptId).maybeSingle();
     const {data:existingRow}=await sb.from('results_pcr').select('verified_fields').eq('patient_id',ptId).maybeSingle();
     const check=checkPcrVerificationComplete(pt?.tests_requested,targets);
-    if(!check.complete){ toast('⚠️ Cannot verify — missing results for: '+check.missingLabels.join(', '),'err'); return; }
-    payload.verified_fields=[...new Set([...(existingRow?.verified_fields||[]),...check.requiredFields])];
+    if(!check.complete){ toast('⚠️ Cannot verify — missing results for: '+check.missingLabels.join(', ')+' — saved as unverified','warn'); verify=false; }
+    else payload.verified_fields=[...new Set([...(existingRow?.verified_fields||[]),...check.requiredFields])];
   }
   payload.is_verified=verify; payload.verified_at=verify?new Date().toISOString():null;
   try {
@@ -14289,8 +14305,8 @@ async function saveHistoEntry(verify=false) {
     const {data:pt}=await sb.from('patients').select('tests_requested').eq('id',ptId).maybeSingle();
     const {data:existingRow}=await sb.from('results_histopathology').select('verified_fields').eq('patient_id',ptId).maybeSingle();
     const check=checkHistoVerificationComplete(pt?.tests_requested,payload);
-    if(!check.complete){ toast('⚠️ Cannot verify — missing: '+check.missingLabels.join(', '),'err'); return; }
-    payload.verified_fields=[...new Set([...(existingRow?.verified_fields||[]),...check.requiredFields])];
+    if(!check.complete){ toast('⚠️ Cannot verify — missing: '+check.missingLabels.join(', ')+' — saved as unverified','warn'); verify=false; }
+    else payload.verified_fields=[...new Set([...(existingRow?.verified_fields||[]),...check.requiredFields])];
   }
   payload.is_verified=verify; payload.verified_at=verify?new Date().toISOString():null;
   try {
@@ -14366,8 +14382,8 @@ async function saveCytoEntry(verify=false) {
     const {data:pt}=await sb.from('patients').select('tests_requested').eq('id',ptId).maybeSingle();
     const {data:existingRow}=await sb.from('results_cytology').select('verified_fields').eq('patient_id',ptId).maybeSingle();
     const check=checkCytoVerificationComplete(pt?.tests_requested,payload);
-    if(!check.complete){ toast('⚠️ Cannot verify — missing: '+check.missingLabels.join(', '),'err'); return; }
-    payload.verified_fields=[...new Set([...(existingRow?.verified_fields||[]),...check.requiredFields])];
+    if(!check.complete){ toast('⚠️ Cannot verify — missing: '+check.missingLabels.join(', ')+' — saved as unverified','warn'); verify=false; }
+    else payload.verified_fields=[...new Set([...(existingRow?.verified_fields||[]),...check.requiredFields])];
   }
   payload.is_verified=verify; payload.verified_at=verify?new Date().toISOString():null;
   try {
@@ -21958,11 +21974,23 @@ function refreshAllRangeDisplays(rootSelector){
 // together. micro/pcr/histo/cyto don't share that panel shape (free-text/
 // narrative/multi-target reports), so their checks are intentionally
 // looser -- see each helper.
+// A "CBC (Full Blood Count)" order tags all 17 results_hematology columns
+// (see RESULT_TAGS.hem) as belonging to that one order, including platelet
+// indices, NRBC, and the full 5-part differential — but plenty of real
+// analyzers (3-part-diff instruments especially, common in lower-throughput
+// labs) never report MPV/PDW/NRBC or a differential at all, so requiring
+// them made Verify permanently unreachable on an otherwise complete,
+// accurate CBC. These stay optional for the required-fields gate below
+// while remaining fully enterable/printable/tagged exactly as before —
+// RESULT_TAGS itself (also used for printAllReports()'s stray-value
+// filtering, see getRequiredFieldsForDept's caller comment) is untouched.
+const OPTIONAL_DESPITE_TAGGED = { hem: new Set(['nrbc','mpv','pdw','neut','lymph','mono','eosi','baso']) };
 function getRequiredFieldsForDept(deptKey, testsRequested) {
   const tags = RESULT_TAGS[deptKey]; if(!tags) return [];
   const req = new Set((testsRequested||[]).map(t=>String(t).toLowerCase().trim()));
   if(!req.size) return []; // nothing on record as ordered -- never block (e.g. a walk-in with no formal order)
-  return Object.keys(tags).filter(col=>tags[col].split('|').some(t=>req.has(t.toLowerCase().trim())));
+  const optional = OPTIONAL_DESPITE_TAGGED[deptKey];
+  return Object.keys(tags).filter(col=>!optional?.has(col) && tags[col].split('|').some(t=>req.has(t.toLowerCase().trim())));
 }
 function fieldLabel(deptKey, col) {
   return (RESULT_META[deptKey] && RESULT_META[deptKey][col]?.label) || col;
