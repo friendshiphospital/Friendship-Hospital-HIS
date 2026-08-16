@@ -10,7 +10,7 @@ const { makeSuite } = require('./helpers/test-kit');
 // releaseResults() itself writes. deptReleased is a short-key -> boolean
 // map, e.g. { hem: true, chem: false }.
 const TABLE_TO_DEPT = { results_hematology:'hem', results_chemistry:'chem', results_serology:'sero', results_microbiology:'micro', results_pcr:'pcr', results_histopathology:'histo', results_cytology:'cyto' };
-function initScriptOrdersTab({ deptReleased, radRequests, testsRequested }) {
+function initScriptOrdersTab({ deptReleased, radRequests, testsRequested, throwForTables }) {
   return `
     localStorage.setItem('sb_url','https://mock.supabase.co');
     localStorage.setItem('sb_key','mock-anon-key');
@@ -18,6 +18,22 @@ function initScriptOrdersTab({ deptReleased, radRequests, testsRequested }) {
     window.__mock = { printCalls: [] };
     const __tableToDept = ${JSON.stringify(TABLE_TO_DEPT)};
     const __deptReleased = ${JSON.stringify(deptReleased || {})};
+    const __throwFor = new Set(${JSON.stringify(throwForTables || [])});
+    // Simulates a genuinely rejected query (network blip, transient error)
+    // for one specific department's results table — every chain method
+    // returns itself so any call sequence reaches the same rejection.
+    function throwingChainable() {
+      const self = {
+        eq(){ return self; }, in(){ return self; }, or(){ return self; }, not(){ return self; },
+        ilike(){ return self; }, like(){ return self; }, order(){ return self; }, limit(){ return self; },
+        gte(){ return self; }, lte(){ return self; }, gt(){ return self; }, lt(){ return self; }, neq(){ return self; },
+        select(){ return self; },
+        maybeSingle(){ return Promise.reject(new Error('simulated network failure')); },
+        single(){ return Promise.reject(new Error('simulated network failure')); },
+        then(_resolve, reject){ return Promise.reject(new Error('simulated network failure')).catch(reject); },
+      };
+      return self;
+    }
     window.supabase = { createClient: () => ({
       auth: { signInWithPassword: async()=>({data:{user:{id:'u1'}},error:null}), getSession: async()=>({data:{session:null}}), signOut: async()=>({error:null}) },
       from: (table) => {
@@ -25,6 +41,7 @@ function initScriptOrdersTab({ deptReleased, radRequests, testsRequested }) {
         if (table === 'doctor_orders') return chainable(null, []);
         if (table === 'radiology_requests') return chainable(null, ${JSON.stringify(radRequests || [])});
         if (table === 'patients') return chainable({ tests_requested: ${JSON.stringify(testsRequested || [])}, created_at: '2026-01-01T08:00:00Z' }, []);
+        if (__throwFor.has(table)) return throwingChainable();
         if (__tableToDept[table]) return chainable({ is_released: !!__deptReleased[__tableToDept[table]] }, []);
         return chainable(null, []);
       },
@@ -210,6 +227,36 @@ module.exports = async function run(context, baseUrl) {
     await page.waitForTimeout(150);
     const html = await page.evaluate(() => document.getElementById('active-orders-list').innerHTML);
     t.check('an unreleased Chemistry order shows no View Result button even though Haematology was already released for this patient', !html.includes('View Result'));
+    await page.close();
+  }
+
+  // --- TEST 8: a genuinely failed lookup for ONE department (simulating a
+  // network blip / transient error reading results_chemistry) must not
+  // blank the whole Orders list for the patient. Confirmed live: this used
+  // to be one un-isolated Promise.all — one rejected department lookup
+  // rejected the whole thing, which loadActiveOrders()'s own pre-existing
+  // blanket catch(e){} then swallowed, leaving the Orders tab showing
+  // nothing at all (not even unrelated Haematology results, Radiology
+  // studies, or Nursing orders) instead of just hiding that one
+  // department's View Result button. ---
+  {
+    const page = await context.newPage();
+    await page.addInitScript(initScriptOrdersTab({
+      deptReleased: { hem: true },
+      testsRequested: ['CBC', 'Fasting Blood Sugar'],
+      throwForTables: ['results_chemistry'],
+    }));
+    await loginAsDoctor(page, baseUrl);
+    await page.evaluate(() => { _docPt = { id: 'p1', name: 'Test Patient' }; });
+    await page.evaluate(() => goPage('consultation'));
+    await page.waitForTimeout(100);
+    await page.evaluate(() => loadActiveOrders());
+    await page.waitForTimeout(150);
+    const html = await page.evaluate(() => document.getElementById('active-orders-list').innerHTML);
+    t.check('a failed Chemistry lookup does not blank the whole Orders list — the unrelated CBC order still renders', html.includes('CBC'));
+    t.check('a failed Chemistry lookup does not blank the whole Orders list — the Fasting Blood Sugar order still renders too (just without its own View Result button)', html.includes('Fasting Blood Sugar'));
+    const viewResultCount = (html.match(/View Result/g) || []).length;
+    t.check('the unaffected, already-released Haematology result still shows its View Result button despite the Chemistry lookup failing', viewResultCount === 1);
     await page.close();
   }
 
