@@ -11365,10 +11365,21 @@ async function loadActiveOrders() {
     const labTestNames=new Set([...labOrderedDetails,...regTestNames]);
     const deptKeysNeeded=[...new Set([...labTestNames].map(resolveDeptShortKeyForTest).filter(Boolean))];
     const deptReleased={};
+    // Each department's lookup is isolated in its own try/catch — this runs
+    // one extra query per distinct department on every Orders-tab load, up
+    // from the single sample_records query before, so a transient failure
+    // on any ONE of them (RLS edge case, a dropped connection, whatever)
+    // must not take the rest down with it. Before this, a single rejected
+    // promise here failed the whole Promise.all, which loadActiveOrders()'s
+    // own pre-existing blanket catch(e){} then swallowed silently — so one
+    // bad department query could blank the ENTIRE Orders list for that
+    // patient, not just hide that department's View Result button.
     await Promise.all(deptKeysNeeded.map(async shortKey=>{
       const map=DEPT_LOAD_MAP[shortKey]; if(!map) return;
-      const {data}=await sb.from(map.table).select('is_released').eq('patient_id',_docPt.id).order('created_at',{ascending:false}).limit(1).maybeSingle();
-      deptReleased[shortKey]=!!data?.is_released;
+      try{
+        const {data}=await sb.from(map.table).select('is_released').eq('patient_id',_docPt.id).order('created_at',{ascending:false}).limit(1).maybeSingle();
+        deptReleased[shortKey]=!!data?.is_released;
+      }catch(e){ deptReleased[shortKey]=false; }
     }));
     const isLabTestReleased=(testName)=>{ const k=resolveDeptShortKeyForTest(testName); return !!k && !!deptReleased[k]; };
     const nonRadOrders=allDoctorOrders.filter(o=>o.order_type!=='Radiology').map(o=>({
