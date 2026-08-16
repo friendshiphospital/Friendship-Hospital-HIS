@@ -11290,18 +11290,27 @@ Object.entries(TEST_CATALOG).forEach(([catKey,tests])=>{
   if(!deptKey) return;
   (tests||[]).forEach(t=>{ TEST_NAME_TO_DEPT_SHORT[t]=deptKey; });
 });
-function resolveDeptFullNameForTest(testName){
+// Same resolution as resolveDeptFullNameForTest() below, but returns the
+// DEPT_META/DEPT_LOAD_MAP short key (e.g. 'hem') instead of the full-word
+// string printResultByDept() keys off of — needed wherever the caller has
+// to look up that department's OWN results table (is_verified/is_released),
+// not just build an onclick target.
+function resolveDeptShortKeyForTest(testName){
   const raw=(testName||'').trim();
-  if(TEST_NAME_TO_DEPT_SHORT[raw]) return DEPT_SHORT_TO_FULL[TEST_NAME_TO_DEPT_SHORT[raw]]||null;
+  if(TEST_NAME_TO_DEPT_SHORT[raw]) return TEST_NAME_TO_DEPT_SHORT[raw];
   // Fallback for names outside the catalog (legacy/freeform order_detail
   // values) — same keyword-substring approach loadWorklist()'s dept filter
   // already uses.
   const t=raw.toLowerCase();
   for(const shortKey of Object.keys(DEPT_META)){
     const kws=DEPT_META[shortKey].keywords||[];
-    if(kws.some(k=>t.includes(String(k).toLowerCase()))) return DEPT_SHORT_TO_FULL[shortKey]||null;
+    if(kws.some(k=>t.includes(String(k).toLowerCase()))) return shortKey;
   }
   return null;
+}
+function resolveDeptFullNameForTest(testName){
+  const shortKey=resolveDeptShortKeyForTest(testName);
+  return shortKey?(DEPT_SHORT_TO_FULL[shortKey]||null):null;
 }
 // Same exact-match-first, keyword-fallback approach as
 // resolveDeptFullNameForTest(), but for the reverse direction (does THIS
@@ -11320,36 +11329,61 @@ async function loadActiveOrders() {
   const el=document.getElementById('active-orders-list');
   if(!el||!_docPt?.id||!sb) return;
   try {
-    const [ordersRes,radRes,ptRes,sample]=await Promise.all([
+    const [ordersRes,radRes,ptRes]=await Promise.all([
       sb.from('doctor_orders').select('*').eq('patient_id',_docPt.id).neq('status','Cancelled').order('ordered_at',{ascending:false}).limit(20),
       sb.from('radiology_requests').select('id,imaging_type,urgency,status,requesting_doctor,created_at,payment_deferred,payment_deferred_by_name').eq('patient_id',_docPt.id).order('created_at',{ascending:false}).limit(20),
       sb.from('patients').select('tests_requested,created_at').eq('id',_docPt.id).maybeSingle(),
-      getCurrentSampleRecord(_docPt.id,'status'),
     ]);
     const allDoctorOrders=ordersRes.data||[];
-    // A specific test's own result can't be checked individually (results_*
-    // tables are one row per patient covering every test in that
-    // department, not one row per ordered test), so sample_records.status
-    // reaching 'Released' specifically is what gates View Result — 'Completed'
-    // means verified but NOT YET released, and a verified-but-unreleased
-    // result must never be viewable here (only Release, a distinct explicit
-    // action, is allowed to make a result visible outside the Lab module).
-    // Reads the CURRENT (most recently created) specimen's status
-    // specifically — an older, already-released specimen from an earlier
-    // order this same visit must never make a freshly-ordered, not-yet-
-    // collected test look ready.
-    const labResultsReady=sample?.status==='Released';
+    const labOrderedDetails=new Set(allDoctorOrders.filter(o=>o.order_type==='Lab').map(o=>o.order_detail));
+    const regTestNames=((ptRes.data?.tests_requested)||[]).filter(t=>!labOrderedDetails.has(t));
+    // View Result must be gated PER DEPARTMENT, not off one shared flag —
+    // this used to read sample_records.status (the CURRENT/most-recently-
+    // created specimen's status) as a single 'Released' bit for every
+    // ordered Lab test. But sample_records is one row per SPECIMEN/ORDER-
+    // BATCH (migration_v2.47) while release is a per-DEPARTMENT action
+    // (releaseResults(dept) only flips that one department's own
+    // results_<dept> table). Confirmed live, that mismatch cuts both ways:
+    //  - placing a NEW lab order after an earlier department's results were
+    //    already released creates a fresh Pending sample_records row, which
+    //    then reads as "current" here — hiding View Result for the
+    //    already-released, still entirely valid earlier department's
+    //    results too.
+    //  - the reverse also happened: releasing just ONE department of a
+    //    multi-department order flipped the single shared
+    //    sample_records.status to 'Released', which wrongly enabled View
+    //    Result — and a real printResultByDept() call — for a DIFFERENT
+    //    department's results that were still unverified/unreleased.
+    //    printHemReport()/printChemReport()/etc. have no is_released check
+    //    of their own; they trust this gate completely, so this was a
+    //    genuine premature-disclosure gap, not just a display glitch.
+    // Fix: resolve each Lab test to its own department (same lookup
+    // resolveDeptFullNameForTest() already uses for the button's onclick
+    // target) and gate on THAT department's own results_<dept>.is_released
+    // — the same column releaseResults()/DEPT_LOAD_MAP already treat as the
+    // single source of truth for "has this department actually released."
+    const labTestNames=new Set([...labOrderedDetails,...regTestNames]);
+    const deptKeysNeeded=[...new Set([...labTestNames].map(resolveDeptShortKeyForTest).filter(Boolean))];
+    const deptReleased={};
+    await Promise.all(deptKeysNeeded.map(async shortKey=>{
+      const map=DEPT_LOAD_MAP[shortKey]; if(!map) return;
+      const {data}=await sb.from(map.table).select('is_released').eq('patient_id',_docPt.id).order('created_at',{ascending:false}).limit(1).maybeSingle();
+      deptReleased[shortKey]=!!data?.is_released;
+    }));
+    const isLabTestReleased=(testName)=>{ const k=resolveDeptShortKeyForTest(testName); return !!k && !!deptReleased[k]; };
     const nonRadOrders=allDoctorOrders.filter(o=>o.order_type!=='Radiology').map(o=>({
       order_type:o.order_type, order_detail:o.order_detail, status:o.status, ordered_at:o.ordered_at,
       orderedByLabel:o.ordered_by||'—', payment_deferred:o.payment_deferred, payment_deferred_by_name:o.payment_deferred_by_name,
       id:o.id, cancellable:true,
-      canView:o.order_type==='Lab'&&labResultsReady,
+      canView:o.order_type==='Lab'&&isLabTestReleased(o.order_detail),
     }));
-    const labOrderedDetails=new Set(allDoctorOrders.filter(o=>o.order_type==='Lab').map(o=>o.order_detail));
-    const regRows=((ptRes.data?.tests_requested)||[]).filter(t=>!labOrderedDetails.has(t)).map(t=>({
-      order_type:'Lab', order_detail:t, status:labResultsReady?'Completed':'Pending', ordered_at:ptRes.data?.created_at,
-      orderedByLabel:'📋 Reception (at Registration)', id:null, cancellable:false, canView:labResultsReady,
-    }));
+    const regRows=regTestNames.map(t=>{
+      const released=isLabTestReleased(t);
+      return {
+        order_type:'Lab', order_detail:t, status:released?'Completed':'Pending', ordered_at:ptRes.data?.created_at,
+        orderedByLabel:'📋 Reception (at Registration)', id:null, cancellable:false, canView:released,
+      };
+    });
     const radRows=(radRes.data||[]).map(r=>({
       order_type:'Radiology', order_detail:r.imaging_type||'—', status:r.status, ordered_at:r.created_at,
       orderedByLabel:r.requesting_doctor?('Dr. '+r.requesting_doctor):'📋 Reception (at Registration)',
