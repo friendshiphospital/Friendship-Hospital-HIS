@@ -12535,7 +12535,14 @@ async function logCriticalValues(ptId,payload,dept) {
       const {data:pt}=await sb.from('patients').select('mrn,lab_no').eq('id',ptId).maybeSingle();
       if(pt){ inserts.forEach(i=>{ i.mrn=pt.mrn||null; i.lab_no=pt.lab_no||null; }); }
     }catch(e){}
-    try{ await sb.from('critical_values').insert(inserts); }catch(e){}
+    // A silently-failed critical value write is a patient-safety gap, not
+    // a cosmetic one — never swallow this. Left un-wrapped (no try/catch)
+    // so a genuine insert failure propagates to logCriticalValues()'s one
+    // caller, doFinalize() in saveResultWithSafetyChecks(), whose existing
+    // catch(e){ toast(e.message,'err') } already correctly turns this into
+    // a visible error instead of the normal "saved & verified" toast.
+    const {error}=await sb.from('critical_values').insert(inserts);
+    if(error) throw error;
   }
 }
 
@@ -12912,10 +12919,22 @@ async function buildWorklistSampleMap(ids){
 // along by a status change meant for the newer one.
 async function updateSampleStatus(patientId, status, extra={}){
   if(!sb||!patientId) return;
-  try{
-    const current=await getCurrentSampleRecord(patientId,'id');
-    if(current) await sb.from('sample_records').update({status, ...extra}).eq('id',current.id);
-  }catch(e){ /* best-effort — a missing sample_records row shouldn't block the actual save/release */ }
+  // No current sample_records row at all is a genuinely fine, expected case
+  // (matches the original intent below) — nothing to update yet, not an
+  // error. A real failure on the update ITSELF, once a row is known to
+  // exist, must NOT be swallowed the same way: found live, this silently
+  // ate genuine write failures (RLS denial, a trigger error, etc.) right
+  // alongside the "row doesn't exist yet" case, so sample_records.status
+  // could stay stuck on its old value (e.g. never actually reach
+  // 'Released') while the calling save/release function went on to show
+  // its normal success toast — which is exactly why a released result
+  // could show no "View Result" option in the Doctor interface with no
+  // error ever surfacing anywhere.
+  const current=await getCurrentSampleRecord(patientId,'id');
+  if(current){
+    const {error}=await sb.from('sample_records').update({status, ...extra}).eq('id',current.id);
+    if(error) throw error;
+  }
   // Every department's verify flow (Hem/Chem/Sero/Immuno/Micro/PCR/Histo/
   // Cyto) already calls this with 'Completed' on verify and 'Released' on
   // release — hooking the visit-status check here covers all of them from
@@ -13046,7 +13065,11 @@ async function releaseResults(dept) {
     }
     const sampleRec = await getCurrentSampleRecord(ptId,'payment_deferred');
     if(!(await checkReleasePaymentGate(ptId, sampleRec?.payment_deferred, 'Results release'))) return;
-    await sb.from(map.table).update({is_released:true, released_at:new Date().toISOString(), released_by:currentProfile?.id}).eq('patient_id',ptId);
+    // Same "check the returned error" fix as the save-path upserts — an
+    // unchecked .update() here would let this function fall through to the
+    // success toast below even if the release itself never actually wrote.
+    const {error:relErr} = await sb.from(map.table).update({is_released:true, released_at:new Date().toISOString(), released_by:currentProfile?.id}).eq('patient_id',ptId);
+    if(relErr) throw relErr;
     await updateSampleStatus(ptId,'Released');
     toast('📤 '+meta.label.replace(/^\S+\s/,'')+' results released','ok');
     // sample_records.status just became 'Released' — if this order was a
@@ -21972,7 +21995,11 @@ async function releaseAllUnifiedEntry() {
       const {data:existing} = await sb.from(map.table).select('is_verified,has_critical').eq('patient_id',_uePatientId).order('created_at',{ascending:false}).limit(1).maybeSingle();
       if(existing && existing.is_verified) {
         if(existing.has_critical && !(await confirmCriticalRelease(_uePatientId, d))){ declined++; continue; }
-        await sb.from(map.table).update({is_released:true, released_at:new Date().toISOString(), released_by:currentProfile?.id}).eq('patient_id',_uePatientId);
+        // Check the returned error — an unchecked .update() would let this
+        // count as released++ even if the write itself never actually
+        // happened (same class of bug as the save-path upserts).
+        const {error:relErr} = await sb.from(map.table).update({is_released:true, released_at:new Date().toISOString(), released_by:currentProfile?.id}).eq('patient_id',_uePatientId);
+        if(relErr) throw relErr;
         released++;
       } else if(existing) blocked++;
     } catch(e){ console.warn(d,e.message); errored.push(DEPT_META[d].label+': '+e.message); }
@@ -21983,7 +22010,14 @@ async function releaseAllUnifiedEntry() {
   else if(errored.length) toast('⚠️ Release failed for: '+errored.join('; ')+(blocked?' — '+blocked+' other section(s) not yet verified':''),'err');
   else if(declined && !blocked) toast('Release cancelled — results remain verified but unreleased','warn');
   else toast('⚠️ Nothing released — verify results first','err');
-  if(released) await updateSampleStatus(_uePatientId,'Released');
+  // updateSampleStatus() can now throw on a genuine write failure (see its
+  // own fix) — this call previously had no try/catch of its own, so an
+  // error here would have escaped as an unhandled rejection AFTER the
+  // "released" toast above already fired. Report it explicitly instead.
+  if(released){
+    try{ await updateSampleStatus(_uePatientId,'Released'); }
+    catch(e){ console.warn('updateSampleStatus failed after release',e.message); toast('⚠️ Released, but sample status could not be updated: '+e.message,'err'); }
+  }
 }
 
 // Combines every department's saved results for this patient into ONE print
