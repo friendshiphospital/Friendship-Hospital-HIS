@@ -7899,12 +7899,20 @@ function priceHint(name, category) {
 // attribute first so a second call (patient switch, cache warming up after
 // the first render) never double-appends the price. Options with no value
 // (placeholder "Select…") or no price match are left exactly as they were.
+// IMPORTANT: these <option> tags (r-rad-type, ord-rad-type) have no explicit
+// value="" attribute, so their live .value mirrors their text content --
+// rewriting textContent below would otherwise silently rewrite .value too,
+// corrupting the exact-name match every RAD_PRICE_CODE/resolvePriceCode()
+// lookup (and the radiology_requests.imaging_type this select ultimately
+// feeds) depends on. Pinning value=base BEFORE the first textContent edit
+// anchors it to the original name permanently, decoupling it from any later
+// display-text change.
 async function injectSelectPrices(selectId, category){
   const sel=document.getElementById(selectId); if(!sel) return;
   await ensurePriceList();
   [...sel.options].forEach(opt=>{
     if(!opt.value) return;
-    if(opt.dataset.baseLabel==null) opt.dataset.baseLabel=opt.textContent;
+    if(opt.dataset.baseLabel==null){ opt.dataset.baseLabel=opt.textContent; opt.value=opt.dataset.baseLabel; }
     const base=opt.dataset.baseLabel;
     opt.textContent=base+priceHintText(base,category);
   });

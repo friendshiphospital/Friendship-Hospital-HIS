@@ -20,13 +20,15 @@ const PROC_PRICES = [
   { code:'NRS026', name:'Blood Glucose Point-of-Care Test', price:1000, category:'nursing' },
 ];
 
-function initScript(role, extra) {
+function initScript(role, patientsRows, invoiceRows) {
   return `
     localStorage.setItem('sb_url','https://mock.supabase.co');
     localStorage.setItem('sb_key','mock-anon-key');
     ${CHAINABLE_MOCK_SRC}
     window.__mock = { doctorOrderInserts: [], invoiceInserts: [], patientUpdates: [] };
     const procPrices = ${JSON.stringify(PROC_PRICES)};
+    const patientsRows = ${JSON.stringify(patientsRows||[])};
+    const invoiceRows = ${JSON.stringify(invoiceRows||[])};
     window.supabase = { createClient: () => ({
       auth: { signInWithPassword: async()=>({data:{user:{id:'u1'}},error:null}), getSession: async()=>({data:{session:null}}), signOut: async()=>({error:null}) },
       from: (table) => {
@@ -38,20 +40,17 @@ function initScript(role, extra) {
         }
         if (table === 'price_list') { const c = chainable(null, procPrices); c.select = () => c; c.in = () => c; c.eq = () => c; return c; }
         if (table === 'invoices') {
-          const c = chainable(null, []);
+          const c = chainable(null, invoiceRows);
+          c.select = () => c; c.gte = () => c; c.lte = () => c; c.order = () => c;
           c.insert = (payload) => { window.__mock.invoiceInserts.push(payload); return { select: () => Promise.resolve({ data: [{ id: 'inv-new' }], error: null }) }; };
           return c;
         }
         if (table === 'patients') {
-          const c = chainable(null, []);
+          const c = chainable(null, patientsRows);
+          c.select = () => c; c.or = () => c; c.order = () => c; c.limit = () => c; c.eq = () => c;
           c.update = (payload) => { window.__mock.patientUpdates.push(payload); return { eq: () => Promise.resolve({ data: null, error: null }) }; };
-          c.eq = () => c;
-          c.or = () => c;
-          c.order = () => c;
-          c.limit = () => c;
           return c;
         }
-        ${extra||''}
         return chainable(null, []);
       },
       rpc: () => Promise.resolve({ data: null, error: null }),
@@ -131,14 +130,7 @@ module.exports = async function run(context, baseUrl) {
   // --- Nursing "Procedures" tab: nurse can search, select a patient (with real payment_status), and place a procedure order ---
   {
     const page = await context.newPage();
-    await page.addInitScript(initScript('nurse', `
-        if (table === 'patients') {
-          const c = chainable(null, [{ id:'p3', name:'Ward Patient', mrn:'MRN-3', payment_status:'paid', ward:'Medical' }]);
-          c.select = () => c; c.or = () => c; c.order = () => c; c.limit = () => c; c.eq = () => c;
-          c.update = (payload) => { window.__mock.patientUpdates.push(payload); return { eq: () => Promise.resolve({ data: null, error: null }) }; };
-          return c;
-        }
-    `));
+    await page.addInitScript(initScript('nurse', [{ id:'p3', name:'Ward Patient', mrn:'MRN-3', payment_status:'paid', ward:'Medical' }]));
     await login(page, baseUrl, 'nurse@example.com');
     await page.evaluate(() => goPage('nursing'));
     await page.waitForTimeout(100);
@@ -175,9 +167,7 @@ module.exports = async function run(context, baseUrl) {
       { invoice_no:'INV3', payment_status:'insurance_pending', net_amount:2000, currency:'SDG', created_at:'2026-01-15T00:00:00Z' },
     ];
     const page = await context.newPage();
-    await page.addInitScript(initScript('receptionist', `
-        if (table === 'invoices') { const c = chainable(null, ${JSON.stringify(invoiceRows)}); c.select = () => c; c.gte = () => c; c.lte = () => c; c.order = () => c; return c; }
-    `));
+    await page.addInitScript(initScript('receptionist', [], invoiceRows));
     await login(page, baseUrl, 'reception@example.com');
 
     const stats = await page.evaluate(async () => computeBillingStats('2026-01-01', '2026-01-31'));
