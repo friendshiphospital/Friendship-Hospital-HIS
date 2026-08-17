@@ -189,6 +189,7 @@ module.exports = async function run(context, baseUrl) {
     await page.addInitScript(initScript());
     await login(page, baseUrl, 'admin@example.com');
     await page.evaluate(() => goPage('register'));
+    await page.evaluate(() => regGoStep(2)); // "Referring Doctor" lives on step 2 ("Visit & Tests"), hidden (display:none) on step 1 by default
     await page.evaluate(() => populateDoctorDropdown());
     await page.waitForTimeout(100);
     const optionCount = await page.evaluate(() => document.querySelectorAll('#r-doc-clinic-group option').length);
