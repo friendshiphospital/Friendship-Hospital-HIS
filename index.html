@@ -3076,6 +3076,7 @@ html[dir="rtl"] body{direction:rtl;}
                   <option>Elective</option><option>Emergency</option>
                   <option>Planned Surgery</option><option>Maternity</option>
                 </select>
+                <div id="r-adm-fee-note" style="font-size:.68rem;color:var(--slate);margin-top:3px"></div>
               </div>
               <div class="fg"><label class="fl" data-i18n="reg_preferred_ward">Preferred Ward</label>
                 <select class="fc" id="r-adm-ward">
@@ -7738,12 +7739,104 @@ const RAD_PRICE_CODE = {
   "DEXA Scan (bone density)":"RAD030",
 };
 const FLAT_FEE_PRICE_CODE = { 'Registration Fee':'REG001', 'Consultation Fee':'CON000', 'Admission Fee (one-time)':'ADM008' };
+// Procedures ordering (Price Visibility / Procedures Phase). IMPORTANT: this
+// deliberately does NOT introduce a new price_list category='procedure' —
+// see PRICE_LIST_SEED (~line 18429) which already has a full 'nursing'
+// category (NRS001–NRS025) covering almost every common ward procedure
+// (Wound Dressing, IV Cannula Insertion, Catheterisation, NG Tube, Suture
+// Removal, Nebulisation, Oxygen Therapy, ECG, etc.) with its own already-
+// considered pricing. Duplicating those as new 'procedure'-category rows
+// with different estimated prices for the exact same clinical action would
+// leave two conflicting prices for "Wound Dressing" with no way to tell
+// which is authoritative. Instead this maps each orderable procedure's
+// display name straight to that EXISTING NRS code (resolvePriceCode() only
+// ever looks up price_list by `code`, never by its `category` column — see
+// resolvePricedLines() — so a price_list row's category is purely
+// admin-page/report display metadata, not part of price resolution, and
+// reusing an NRS-categorized row here changes nothing about it). Only
+// FOUR genuinely-missing procedures got new rows (NRS026–NRS029, migration
+// migration_v2.51_procedures_ordering.sql) — continuing the same numbering
+// and category, not fragmenting one coherent list into two. Passing
+// category:'procedure' to chargeForNewOrder()/resolvePricedLines() (as
+// specified) still works correctly purely because PRICE_CODE_MAP.procedure
+// points at this map of codes below.
+const PROCEDURE_PRICE_CODE = {
+  'IV Cannula Insertion':'NRS001',
+  'IV Infusion Setup (per bag)':'NRS002',
+  'IM Injection':'NRS003',
+  'IV Injection / Bolus':'NRS004',
+  'SC Injection (per dose)':'NRS005',
+  'Blood Transfusion (per unit, excluding blood)':'NRS006',
+  'Urinary Catheter Insertion (IDC)':'NRS007',
+  'Urinary Catheter Care (daily)':'NRS008',
+  'Nasogastric Tube Insertion (NGT)':'NRS009',
+  'Wound Dressing — Simple':'NRS010',
+  'Wound Dressing — Complex':'NRS011',
+  'Pressure Ulcer Dressing':'NRS012',
+  'Suture Removal':'NRS013',
+  'Plaster of Paris (POP) Application':'NRS014',
+  'Plaster Removal':'NRS015',
+  'Nebulisation (per session)':'NRS016',
+  'Oxygen Therapy (per hour)':'NRS017',
+  'Suctioning':'NRS018',
+  'Enema Administration':'NRS019',
+  'Nasogastric Feeding (per session)':'NRS020',
+  'ECG Recording':'NRS021',
+  'Vital Signs Monitoring (continuous, per shift)':'NRS022',
+  'Bladder Irrigation':'NRS023',
+  'CVP Line Care (daily)':'NRS024',
+  'Tracheostomy Care (daily)':'NRS025',
+  // Genuinely missing from the existing NRS001–025 nursing catalog —
+  // new rows, same category/numbering convention, seeded in
+  // migration_v2.51_procedures_ordering.sql (not applied — for review).
+  'Blood Glucose Point-of-Care Test':'NRS026',
+  'Ear Syringing / Irrigation':'NRS027',
+  'Drain Removal':'NRS028',
+  'Physiotherapy Session':'NRS029',
+};
 // Combined, category-scoped view so callers can resolve a (name,category) pair
 // without caring which specific catalog it came from.
-const PRICE_CODE_MAP = { lab: LAB_PRICE_CODE, radiology: RAD_PRICE_CODE, consultation: FLAT_FEE_PRICE_CODE, registration: FLAT_FEE_PRICE_CODE, admission: FLAT_FEE_PRICE_CODE };
+const PRICE_CODE_MAP = { lab: LAB_PRICE_CODE, radiology: RAD_PRICE_CODE, consultation: FLAT_FEE_PRICE_CODE, registration: FLAT_FEE_PRICE_CODE, admission: FLAT_FEE_PRICE_CODE, procedure: PROCEDURE_PRICE_CODE };
 function resolvePriceCode(name, category) {
   const map = PRICE_CODE_MAP[category];
   return (map && map[name]) || null;
+}
+// priceHint() — Price Visibility feature: returns a small, muted inline
+// price suffix (e.g. " — 3,500 SDG") for an orderable item, resolved via
+// the exact same resolvePriceCode()/_priceList lookup resolvePricedLines()
+// itself uses for real billing, so what's shown here can never drift from
+// what actually gets charged. Returns '' (nothing extra) when there's no
+// matching price_list row, exactly as specified — never a guessed price.
+// Callers needing plain text for a <select><option> (which can't contain
+// HTML) should use priceHintText() instead.
+function priceHintText(name, category) {
+  const code = resolvePriceCode(name, category);
+  if (!code) return '';
+  const row = _priceList.find(p => p.code === code);
+  if (!row || row.price == null) return '';
+  return ' — ' + Number(row.price).toLocaleString() + ' ' + CFG.currency;
+}
+function priceHint(name, category) {
+  const suffix = priceHintText(name, category);
+  return suffix ? '<span style="color:var(--slate);font-weight:400;font-size:.9em">'+escapeHtml(suffix)+'</span>' : '';
+}
+// injectSelectPrices() — Price Visibility feature for plain <select><option>
+// pickers (radiology imaging type), which can't contain the priceHint()
+// <span> markup like a checkbox label can. Appends the same priceHintText()
+// suffix as plain text onto each option whose value has a matching
+// price_list row, remembering each option's original label in a data
+// attribute first so a second call (patient switch, cache warming up after
+// the first render) never double-appends the price. Options with no value
+// (placeholder "Select…") or no price match are left exactly as they were.
+async function injectSelectPrices(selectId, category){
+  const sel=document.getElementById(selectId); if(!sel) return;
+  await ensurePriceList();
+  [...sel.options].forEach(opt=>{
+    if(!opt.value) return;
+    if(opt.dataset.baseLabel==null) opt.dataset.baseLabel=opt.textContent;
+    const base=opt.dataset.baseLabel;
+    opt.textContent=base+priceHintText(base,category);
+  });
 }
 // Single shared price-lookup used by every module that bills an ordered
 // item against price_list (Registration, Doctor Consultation's post-
@@ -8174,7 +8267,7 @@ function goPage(p) {
   else if(p==='theatre'){ run(loadOTSchedule); run(loadSurgeonDropdown); setD('ot-date',td); setD('ot-sched-date',td); }
   else if(p==='nursing'){ run(loadNursingQueue); run(loadNursingOrders); setD('ho-date',td); setEl('vs-by',currentProfile?.full_name||''); }
   else if(p==='fluid-chart'){ setD('fc-date',td); run(loadFluidChart); }
-  else if(p==='consultation'){ run(loadDoctorQueue); run(buildOrderTestPanel); setD('doc-date',td); }
+  else if(p==='consultation'){ run(loadDoctorQueue); run(buildOrderTestPanel); run(()=>injectSelectPrices('ord-rad-type','radiology')); setD('doc-date',td); }
   else if(p==='appointments'){ run(loadAppointments); run(loadApptDoctors); run(loadFollowUpsDue); setD('appt-date',td); setD('appt-filter-date',td); }
   else if(p==='billing'){ run(loadBilling); }
   else if(p==='prices') run(loadPriceEditor);
@@ -11127,13 +11220,16 @@ function switchOrderTestTab(tab,btn) {
   if(btn) btn.classList.add('active');
 }
 
-function buildOrderTestPanel() {
+async function buildOrderTestPanel() {
   const el=document.getElementById('doc-order-tests'); if(!el) return;
+  // Price Visibility feature — needs _priceList populated before rendering
+  // each test's price suffix; ensurePriceList() is a no-op once cached.
+  await ensurePriceList();
   // Always rebuild so switching patients resets checked state
   const catalog=TEST_CATALOG;
   el.innerHTML=Object.entries(catalog).map(([tab,tests])=>
     '<div id="order-tc-panel-'+tab+'" style="display:'+(tab==='hem'?'grid':'none')+';grid-template-columns:repeat(2,1fr);gap:4px;padding:4px">'+
-    tests.map(t=>'<label class="tc-item" style="font-size:.72rem;padding:5px 8px"><input type="checkbox" class="order-test-chk" value="'+t+'"> '+t+'</label>').join('')+
+    tests.map(t=>'<label class="tc-item" style="font-size:.72rem;padding:5px 8px"><input type="checkbox" class="order-test-chk" value="'+t+'"> '+t+priceHint(t,'lab')+'</label>').join('')+
     '</div>').join('');
 }
 
@@ -11970,8 +12066,18 @@ async function updateApptStatus(id,status) {
   try { await sb.from('appointments').update({status}).eq('id',id); toast('Status updated','ok'); loadAppointments(); } catch(e){ toast(e.message,'err'); }
 }
 // ── REGISTER PATIENT ──────────────────────────────────
-function initRegForm() {
-  Object.entries(TEST_CATALOG).forEach(([tab,tests])=>{ const el=document.getElementById('tc-panel-'+tab); if(!el) return; el.innerHTML=tests.map(t=>'<label class="tc-item"><input type="checkbox" class="test-chk" value="'+t+'" onchange="updateTestSummary()"> '+t+'</label>').join(''); });
+async function initRegForm() {
+  // Price Visibility feature — populate _priceList before rendering each
+  // test's price suffix; ensurePriceList() resolves near-instantly once
+  // cached, so this doesn't meaningfully delay the rest of this function.
+  await ensurePriceList();
+  Object.entries(TEST_CATALOG).forEach(([tab,tests])=>{ const el=document.getElementById('tc-panel-'+tab); if(!el) return; el.innerHTML=tests.map(t=>'<label class="tc-item"><input type="checkbox" class="test-chk" value="'+t+'" onchange="updateTestSummary()"> '+t+priceHint(t,'lab')+'</label>').join(''); });
+  injectSelectPrices('r-rad-type','radiology');
+  // Admission Fee is one flat price_list row (ADM008) regardless of which
+  // Admission Type is selected (see buildAutoInvoiceLines()) — shown once
+  // below the select rather than repeated identically on every option.
+  const admFeeNote=document.getElementById('r-adm-fee-note');
+  if(admFeeNote){ const suffix=priceHintText('Admission Fee (one-time)','admission'); admFeeNote.textContent=suffix?'Admission Fee (one-time, any type):'+suffix.replace(' — ',' '):''; }
   // _regDestinations is a persistent global, not reset by anything except
   // clearRegForm() ("Register Another Patient") -- entering Register any
   // other way (sidebar, launcher tile, global search, browser back/forward)
