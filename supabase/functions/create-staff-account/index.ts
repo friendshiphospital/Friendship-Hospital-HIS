@@ -29,7 +29,7 @@
 //
 // CALL (from index.html, already signed in as an admin):
 //   const { data, error } = await sb.functions.invoke('create-staff-account', {
-//     body: { full_name, email, password, role, department, phone, national_id, hire_date, qualifications }
+//     body: { full_name, email, password, role, department, phone, national_id, hire_date, qualifications, specialty }
 //   });
 // supabase-js attaches the caller's current session JWT to the request
 // automatically — that JWT is what this function verifies server-side
@@ -119,6 +119,10 @@ Deno.serve(async (req) => {
   const national_id = body.national_id ? String(body.national_id) : null;
   const hire_date = body.hire_date ? String(body.hire_date) : null;
   const qualifications = body.qualifications ? String(body.qualifications) : null;
+  // Doctor specialty routing (migration_v2.50) — only meaningful for
+  // role='doctor', but accepted here regardless and just stored as given;
+  // index.html only ever sends it for role='doctor' (null otherwise).
+  const specialty = body.specialty ? String(body.specialty) : null;
 
   if (!full_name || !email || !password || !role) {
     return json({ error: "full_name, email, password, and role are required" }, 400);
@@ -154,6 +158,7 @@ Deno.serve(async (req) => {
       national_id,
       hire_date,
       qualifications,
+      specialty,
       status: "active",
       user_id: created.user.id,
     })

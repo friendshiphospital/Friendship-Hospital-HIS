@@ -4255,7 +4255,7 @@ html[dir="rtl"] body{direction:rtl;}
           </div>
           <div class="g2">
             <div class="fg"><label class="fl">Role *</label>
-              <select class="fc" id="stf-role">
+              <select class="fc" id="stf-role" onchange="updateStaffRoleFields()">
                 <option value="admin">🔴 Admin</option>
                 <option value="doctor">🩺 Doctor</option>
                 <option value="nurse">💉 Nurse</option>
@@ -4284,6 +4284,9 @@ html[dir="rtl"] body{direction:rtl;}
                 <option>Reception</option>
               </select>
             </div>
+          </div>
+          <div class="fg" id="stf-specialty-wrap" style="display:none"><label class="fl">Specialty</label>
+            <select class="fc" id="stf-specialty"></select>
           </div>
           <div class="g2">
             <div class="fg"><label class="fl">Phone</label>
@@ -4422,12 +4425,20 @@ html[dir="rtl"] body{direction:rtl;}
     <div class="card"><div class="card-hd"><span class="card-title">🩺 Add Doctor</span></div><div class="card-body">
       <input type="hidden" id="dr-edit-id">
       <div class="fg"><label class="fl">Full Name *</label><input class="fc" id="dr-name"></div>
-      <div class="fg"><label class="fl">Specialty</label><select class="fc" id="dr-spec"><option>General Practitioner</option><option>Internal Medicine</option><option>General Surgery</option><option>Obstetrics &amp; Gynecology</option><option>Pediatrics</option><option>Orthopedic Surgery</option><option>Cardiology</option><option>Neurology</option><option>Anaesthesiology</option><option>Radiology</option><option>Pathology</option><option>Other</option></select></div>
+      <div class="fg"><label class="fl">Specialty</label><select class="fc" id="dr-spec"></select></div>
       <div class="g2">
         <div class="fg"><label class="fl">Phone</label><input class="fc" id="dr-phone"></div>
         <div class="fg"><label class="fl">License No.</label><input class="fc" id="dr-license"></div>
       </div>
       <div class="fg"><label class="fl">Email</label><input class="fc" id="dr-email" type="email"></div>
+      <div class="g2">
+        <div class="fg"><label class="fl">Doctor Type</label>
+          <select class="fc" id="dr-type"><option value="GP">GP</option><option value="Specialist">Specialist</option><option value="Consultant">Consultant</option></select>
+        </div>
+        <div class="fg"><label class="fl">Consultation Fee (leave blank for default)</label>
+          <input class="fc" id="dr-fee" type="number" min="0" step="0.01" placeholder="Uses Settings default">
+        </div>
+      </div>
       <button class="btn btn-p" onclick="saveDoctor()" style="width:100%;justify-content:center">💾 Save Doctor</button>
     </div></div>
     <div class="card"><div class="card-hd"><span class="card-title">🩺 Doctors List</span>
@@ -4695,6 +4706,12 @@ html[dir="rtl"] body{direction:rtl;}
       <div class="fg"><label class="fl">Report Footer Text — Radiology</label><textarea class="fc" id="cfg-rad-footer" rows="2">This report is for the referring clinician's use. For queries contact the Radiology department.</textarea></div>
       <div class="fg"><label class="fl">Report Footer Text — Doctor</label><textarea class="fc" id="cfg-doctor-footer" rows="2">This document is issued by the treating physician. For medical queries, contact Friendship Hospital.</textarea></div>
       <div class="fg"><label class="fl">Report Footer Text — Nursing</label><textarea class="fc" id="cfg-nursing-footer" rows="2">This is a clinical nursing record. For queries contact the Nursing Department.</textarea></div>
+      <div class="g3">
+        <div class="fg"><label class="fl">Default Consultation Fee — GP</label><input class="fc" type="number" min="0" step="0.01" id="cfg-fee-gp" placeholder="0.00"></div>
+        <div class="fg"><label class="fl">Default Consultation Fee — Specialist</label><input class="fc" type="number" min="0" step="0.01" id="cfg-fee-specialist" placeholder="0.00"></div>
+        <div class="fg"><label class="fl">Default Consultation Fee — Consultant</label><input class="fc" type="number" min="0" step="0.01" id="cfg-fee-consultant" placeholder="0.00"></div>
+      </div>
+      <div style="font-size:.7rem;color:var(--slate);margin:-6px 0 10px">Charged at Registration for the "Doctor" visit destination, in <span id="cfg-fee-currency-hint">SDG</span> — used whenever the selected doctor (Doctor Management) has no consultation fee of their own set for their doctor type.</div>
       <div class="g2">
         <div class="fg"><label class="fl">Unpaid Invoice Alert (hours)</label><input class="fc" type="number" min="1" id="cfg-unpaid-alert-hours" placeholder="72"></div>
         <div class="fg"><label class="fl">Pending Admission Alert (hours)</label><input class="fc" type="number" min="1" id="cfg-admission-alert-hours" placeholder="4"></div>
@@ -7048,6 +7065,17 @@ const PTH_TREND_ANALYTES = {
 };
 let _fcPt = null;
 
+// Shared specialty option list — the single source of truth for both the
+// Doctor Management form (dr-spec, doctors.specialty) and the Staff
+// Management form's doctor-role Specialty field (stf-specialty,
+// staff.specialty), so the two option sets can never drift apart. Exact
+// same values the doctors table's dr-spec select already used before this
+// constant existed.
+const SPECIALTY_OPTIONS = ['General Practitioner','Internal Medicine','General Surgery','Obstetrics & Gynecology','Pediatrics','Orthopedic Surgery','Cardiology','Neurology','Anaesthesiology','Radiology','Pathology','Other'];
+function specialtyOptionsHtml(selected){
+  return SPECIALTY_OPTIONS.map(s=>'<option'+(s===selected?' selected':'')+'>'+s+'</option>').join('');
+}
+
 const CFG = {
   get name(){ return localStorage.getItem('cfg_hosp_name')||'Friendship Hospital — Al Damazin'; },
   get addr(){ return localStorage.getItem('cfg_addr1')||'Al Damazin, Blue Nile State, Sudan'; },
@@ -7083,6 +7111,18 @@ const CFG = {
   // contact"). Same localStorage-only, per-deployment config pattern.
   get labSupervisorNotifyEmail(){ return localStorage.getItem('cfg_labsup_notify_email')||''; },
   get discountOverrideThreshold(){ return parseFloat(localStorage.getItem('cfg_discount_override_pct'))||15; },
+  // Doctor specialty routing (migration_v2.50) — default consultation fees
+  // per doctors.doctor_type, used by buildAutoInvoiceLines() whenever the
+  // selected doctor's own doctors.consultation_fee is null. Same
+  // localStorage-only, per-deployment config pattern as everything else in
+  // CFG; 0 is a legitimate configured default (free), not "unset" — an
+  // admin who hasn't visited Settings yet just gets 0 until they do.
+  get feeGP(){ return parseFloat(localStorage.getItem('cfg_fee_gp'))||0; },
+  set feeGP(v){ localStorage.setItem('cfg_fee_gp', v); },
+  get feeSpecialist(){ return parseFloat(localStorage.getItem('cfg_fee_specialist'))||0; },
+  set feeSpecialist(v){ localStorage.setItem('cfg_fee_specialist', v); },
+  get feeConsultant(){ return parseFloat(localStorage.getItem('cfg_fee_consultant'))||0; },
+  set feeConsultant(v){ localStorage.setItem('cfg_fee_consultant', v); },
   // Follow-Up Visit Policy (Phase 5 Admin Settings) — read here in Phase 4
   // too, only for the default date suggestion when a doctor schedules a
   // follow-up (completeAndSignOffVisit()). Default window matches what was
@@ -7810,8 +7850,14 @@ async function resolvePricedLines(items) {
   // priceKey lets a caller give a line a dynamic display name (e.g. "Admission
   // — Elective (initial fee)") while still resolving its price by the fixed
   // catalog key ("Admission Fee (one-time)") that PRICE_CODE_MAP actually knows.
+  // overridePrice (Doctor specialty routing, migration_v2.50) lets a caller
+  // give a line a price resolved OUTSIDE price_list entirely — e.g.
+  // buildAutoInvoiceLines()'s per-doctor consultation_fee — bypassing the
+  // code lookup below for that one line while every other item, and every
+  // other existing caller that never sets it, keeps resolving exactly as
+  // before.
   const withCodes = items.map(i => ({ ...i, _code: resolvePriceCode(i.priceKey||i.name, i.category) }));
-  const codes = [...new Set(withCodes.filter(i=>i._code).map(i=>i._code))];
+  const codes = [...new Set(withCodes.filter(i=>i._code && i.overridePrice==null).map(i=>i._code))];
   let priceByCode = {};
   if (codes.length && sb) {
     try {
@@ -7821,6 +7867,10 @@ async function resolvePricedLines(items) {
   }
   return withCodes.map(i => {
     const qty = i.qty || 1;
+    if(i.overridePrice!=null){
+      const unit=i.overridePrice;
+      return { name: i.name, category: i.category, qty, unit_price: unit, total_price: unit*qty, priced: true, code: i._code };
+    }
     const hasPrice = i._code != null && priceByCode[i._code] != null;
     const unit = hasPrice ? priceByCode[i._code] : 0;
     return { name: i.name, category: i.category, qty, unit_price: unit, total_price: unit*qty, priced: hasPrice, code: i._code };
@@ -8370,6 +8420,10 @@ function loadSettings() {
   const ane=document.getElementById('cfg-admin-notify-email'); if(ane) ane.value=CFG.adminNotifyEmail;
   const lse=document.getElementById('cfg-labsup-notify-email'); if(lse) lse.value=CFG.labSupervisorNotifyEmail;
   const dot=document.getElementById('cfg-discount-override-pct'); if(dot) dot.value=CFG.discountOverrideThreshold;
+  const feeGp=document.getElementById('cfg-fee-gp'); if(feeGp) feeGp.value=CFG.feeGP;
+  const feeSpec=document.getElementById('cfg-fee-specialist'); if(feeSpec) feeSpec.value=CFG.feeSpecialist;
+  const feeCons=document.getElementById('cfg-fee-consultant'); if(feeCons) feeCons.value=CFG.feeConsultant;
+  const feeCurHint=document.getElementById('cfg-fee-currency-hint'); if(feeCurHint) feeCurHint.textContent=CFG.currency;
   const pinCard=document.getElementById('cfg-override-pin-card'); if(pinCard) pinCard.style.display = currentProfile?.role==='admin' ? '' : 'none';
   const cu=document.getElementById('cfg-sb-url'); if(cu) cu.value=localStorage.getItem('sb_url')||'';
   const ck=document.getElementById('cfg-sb-key'); if(ck) ck.value=localStorage.getItem('sb_key')||'';
@@ -8492,6 +8546,9 @@ function saveSettings() {
   localStorage.setItem('cfg_admin_notify_email', g('cfg-admin-notify-email')||'admin@hospital.com');
   localStorage.setItem('cfg_labsup_notify_email', g('cfg-labsup-notify-email'));
   const dot=parseFloat(g('cfg-discount-override-pct')); localStorage.setItem('cfg_discount_override_pct', (isNaN(dot)||dot<0)?15:dot);
+  const feeGp=parseFloat(g('cfg-fee-gp')); localStorage.setItem('cfg_fee_gp', (isNaN(feeGp)||feeGp<0)?0:feeGp);
+  const feeSpec=parseFloat(g('cfg-fee-specialist')); localStorage.setItem('cfg_fee_specialist', (isNaN(feeSpec)||feeSpec<0)?0:feeSpec);
+  const feeCons=parseFloat(g('cfg-fee-consultant')); localStorage.setItem('cfg_fee_consultant', (isNaN(feeCons)||feeCons<0)?0:feeCons);
   const st=document.getElementById('cfg-status'); if(st){ st.textContent='✅ Settings saved'; setTimeout(()=>st.textContent='',3000); }
   toast('Settings saved','ok');
   refreshNotifications();
@@ -8987,7 +9044,23 @@ async function refreshNotifications(){
     let resultsReady=[];
     if(currentProfile?.role==='doctor'||currentProfile?.role==='admin'){
       const since24h=new Date(now-24*3600000).toISOString();
-      const {data:queuePts}=await sb.from('patients').select('id,name,first_name,last_name,mrn,lab_no,visit_destination,created_at').ilike('visit_destination','%doctor%').gte('created_at',since24h).limit(50);
+      // Doctor specialty routing (migration_v2.50) — same additive filter
+      // as loadDoctorQueue(): a doctor with a specialty configured only
+      // gets "Results Ready" bell notices for their own specialty's
+      // patients. specDocIds stays null (no filter, current behavior)
+      // unless this IS a specialty-configured doctor.
+      let specDocIds=null;
+      if(currentProfile?.role==='doctor' && currentProfile?.specialty){
+        const {data:specDocs}=await sb.from('doctors').select('id').eq('specialty',currentProfile.specialty);
+        specDocIds=(specDocs||[]).map(d=>d.id);
+      }
+      let queuePts=[];
+      if(!specDocIds || specDocIds.length){
+        let queuePtsQ=sb.from('patients').select('id,name,first_name,last_name,mrn,lab_no,visit_destination,created_at').ilike('visit_destination','%doctor%').gte('created_at',since24h).limit(50);
+        if(specDocIds) queuePtsQ=queuePtsQ.in('doctor_id',specDocIds);
+        const {data}=await queuePtsQ;
+        queuePts=data||[];
+      }
       if(queuePts?.length){
         const ids=queuePts.map(p=>p.id);
         const [{data:allSamples},{data:doneRad}]=await Promise.all([
@@ -10627,7 +10700,7 @@ async function loadDoctorQueue() {
   try {
     const dest = window._docFilter||'';
     let q = sb.from('patients')
-      .select('id,name,first_name,last_name,mrn,lab_no,tests_requested,age,age_unit,sex,priority,diagnosis,doctor,source,ward,payment_status,visit_destination,visit_status,created_at')
+      .select('id,name,first_name,last_name,mrn,lab_no,tests_requested,age,age_unit,sex,priority,diagnosis,doctor,doctor_id,source,ward,payment_status,visit_destination,visit_status,created_at')
       .order('created_at',{ascending:false}).limit(50);
     // Default: show today's patients for all destinations
     // Filter buttons narrow down by destination
@@ -10637,6 +10710,20 @@ async function loadDoctorQueue() {
       // "All" tab: show last 48h patients across all destinations
       const since48h = new Date(Date.now()-48*3600*1000).toISOString();
       q = q.gte('created_at', since48h);
+    }
+    // Doctor specialty routing (migration_v2.50) — additive filtering, not
+    // a new access restriction: a logged-in doctor whose staff row has a
+    // specialty set only sees doctor-destined patients whose patients.
+    // doctor_id resolves to a doctors row with a matching specialty. Admin
+    // (or any doctor account with no specialty configured yet) sees every
+    // patient unfiltered, exactly like before this existed — supabase-js
+    // doesn't do SQL joins, so this resolves the matching doctors.id set
+    // first, then filters patients by .in('doctor_id', ...).
+    if(currentProfile?.role==='doctor' && currentProfile?.specialty){
+      const {data:specDocs}=await sb.from('doctors').select('id').eq('specialty',currentProfile.specialty);
+      const specDocIds=(specDocs||[]).map(d=>d.id);
+      if(!specDocIds.length){ body.innerHTML='<div class="empty-state"><div class="empty-icon">🩺</div><div class="empty-title">No patients</div></div>'; return; }
+      q = q.in('doctor_id', specDocIds);
     }
     const {data} = await q;
     if(!data?.length){body.innerHTML='<div class="empty-state"><div class="empty-icon">🩺</div><div class="empty-title">No patients</div></div>';return;}
@@ -12149,7 +12236,7 @@ async function submitRegistration() {
         phone:g('r-phone'), national_id:g('r-national-id'),
         next_of_kin_name:g('r-kin-name'), next_of_kin_phone:g('r-kin-phone'),
         patient_type:g('r-patient-type'), ward:g('r-ward'), source:g('r-ward'),
-        doctor:getRegDoctor(), diagnosis:(destDetail+g('r-diagnosis')).trim(),
+        doctor:getRegDoctor(), doctor_id:getRegDoctorId(), diagnosis:(destDetail+g('r-diagnosis')).trim(),
         insurance_company:g('r-ins-co')||g('r-pay-ins-co'),
         insurance_no:g('r-ins-no')||g('r-pay-ins-no'),
         tests_requested:tests, priority:g('r-priority'),
@@ -12189,7 +12276,7 @@ async function submitRegistration() {
 
     // Auto-create ONE invoice covering every selected destination (lab + radiology + doctor + admission + registration)
     const invNo = genOfflineId('INV');
-    const lineItems = await buildAutoInvoiceLines(tests, destList);
+    const lineItems = await buildAutoInvoiceLines(tests, destList, getRegDoctorId());
     // Unpriced items (priced:false) still appear on the saved invoice's own
     // line_items for the record, but never contribute to what's actually
     // charged -- matching the same never-silently-zero rule the registration
@@ -12265,11 +12352,34 @@ async function submitRegistration() {
   } catch(e){ toast(e.message,'err'); } finally{ if(btn) btn.disabled=false; }
 }
 function getRegDoctor() { const val=document.getElementById('r-doc')?.value||''; if(val==='__external__') return document.getElementById('r-doc-ext')?.value||''; return val; }
-function onDoctorSelect(val) { const ext=document.getElementById('r-doc-ext'); if(ext) ext.style.display=val==='__external__'?'':'none'; }
+// Additive alongside getRegDoctor() (unchanged, still returns the display
+// name stored in patients.doctor for backward compatibility) — reads the
+// doctors.id populateDoctorDropdown() below stamps onto each real clinic-
+// doctor <option> as data-id, so the registration invoice/queue-filtering
+// code has a reliable id to key off instead of parsing the name back out.
+// Returns null for "Select…", "External / Other", or anything else without
+// a data-id (i.e. no specific doctor selected).
+function getRegDoctorId() { const opt=document.getElementById('r-doc')?.selectedOptions?.[0]; return opt?.dataset?.id || null; }
+function onDoctorSelect(val) {
+  const ext=document.getElementById('r-doc-ext'); if(ext) ext.style.display=val==='__external__'?'':'none';
+  // Live-refresh the invoice preview so switching doctors immediately shows
+  // that doctor's real consultation fee — buildRegInvoicePreview() already
+  // no-ops harmlessly if the preview panel isn't visible yet (earlier wizard step).
+  buildRegInvoicePreview();
+}
 // clearRegForm and loadRecentPatients moved to receptionist section above
 async function populateDoctorDropdown() {
   const grp=document.getElementById('r-doc-clinic-group'); if(!grp) return;
-  const render = (data) => { if(data?.length) grp.innerHTML=data.map(d=>'<option value="'+escapeHtml(d.name)+'">'+escapeHtml(d.name)+(d.specialty?' — '+escapeHtml(d.specialty):'')+'</option>').join(''); };
+  const render = (data) => {
+    if(!data?.length) return;
+    // Sorted by specialty then name so doctors of the same specialty sit
+    // together in the list — makes the specialty already shown in each
+    // option ("Name — Specialty") actually useful for picking the right
+    // doctor, without restructuring the single flat <optgroup> this
+    // <select> has always used.
+    const sorted=[...data].sort((a,b)=>(a.specialty||'').localeCompare(b.specialty||'')||(a.name||'').localeCompare(b.name||''));
+    grp.innerHTML=sorted.map(d=>'<option value="'+escapeHtml(d.name)+'" data-id="'+escapeHtml(d.id)+'">'+escapeHtml(d.name)+(d.specialty?' — '+escapeHtml(d.specialty):'')+'</option>').join('');
+  };
   if(sb && navigator.onLine) {
     try {
       const {data}=await sb.from('doctors').select('id,name,specialty').order('name');
@@ -14049,7 +14159,15 @@ function onPayMethodChange() {
   if(warning) warning.style.display = (status==='unpaid'||status==='insurance_pending') ? '' : 'none';
 }
 
-async function buildAutoInvoiceLines(tests, destinations) {
+// defaultFeeForDoctorType() — Doctor specialty routing (migration_v2.50):
+// the Settings default consultation fee for a doctor_type, used whenever a
+// specific doctor's own doctors.consultation_fee is null.
+function defaultFeeForDoctorType(doctorType){
+  if(doctorType==='Specialist') return CFG.feeSpecialist;
+  if(doctorType==='Consultant') return CFG.feeConsultant;
+  return CFG.feeGP;
+}
+async function buildAutoInvoiceLines(tests, destinations, doctorId) {
   // destinations may be a comma-string ("lab,radiology"), an array, or a Set — normalise to an array
   const dests = destinations instanceof Set ? [...destinations]
     : Array.isArray(destinations) ? destinations
@@ -14057,7 +14175,27 @@ async function buildAutoInvoiceLines(tests, destinations) {
   // Every item this registration bills — resolved by resolvePricedLines() in
   // ONE batched, code-based query (see the PRICING block near TEST_CATALOG).
   const wanted = [];
-  if(dests.includes('doctor')) wanted.push({name:'Consultation Fee', category:'consultation'});
+  if(dests.includes('doctor')) {
+    // Doctor specialty routing (migration_v2.50): a SPECIFIC doctor selected
+    // at Registration (doctorId, from getRegDoctorId()) is charged their own
+    // real consultation fee — that doctor's own doctors.consultation_fee if
+    // set, else the Settings default for their doctor_type — instead of the
+    // flat price_list 'Consultation Fee' item every registration used to
+    // charge regardless of who was seeing the patient. No doctor selected
+    // at all (doctorId null/undefined — e.g. registration left it blank)
+    // falls through to that exact original flat-fee line, unchanged.
+    let consultLine = {name:'Consultation Fee', category:'consultation'};
+    if(doctorId && sb){
+      try{
+        const {data:doc} = await sb.from('doctors').select('consultation_fee,doctor_type').eq('id',doctorId).maybeSingle();
+        if(doc){
+          const fee = doc.consultation_fee!=null ? doc.consultation_fee : defaultFeeForDoctorType(doc.doctor_type);
+          if(fee!=null && !isNaN(fee)) consultLine = {name:'Consultation Fee', category:'consultation', overridePrice:fee};
+        }
+      }catch(e){}
+    }
+    wanted.push(consultLine);
+  }
   if(dests.includes('radiology')) {
     const imagingType = document.getElementById('r-rad-type')?.value || null;
     if(imagingType) wanted.push({name:imagingType, category:'radiology'});
@@ -14081,7 +14219,7 @@ async function buildRegInvoicePreview() {
   const totalEl = document.getElementById('reg-inv-total');
   if(!linesEl) return;
   linesEl.innerHTML = '<div style="color:var(--slate);font-size:.78rem">Calculating…</div>';
-  const lines = await buildAutoInvoiceLines(tests, _regDestinations);
+  const lines = await buildAutoInvoiceLines(tests, _regDestinations, getRegDoctorId());
   // priced:false items never contribute to the total — a "-" that both means
   // "genuinely free" and "we don't know the price" is exactly the ambiguity
   // that let the CBC/LFT bug reach a real invoice unnoticed. An unpriced item
@@ -18665,13 +18803,21 @@ function filterStaff(q) {
 // in the Supabase dashboard, then paste the UUID here" flow, which is how
 // staff rows with no (or a mismatched) user_id happened in the first
 // place.
+// Same conditional-field-visibility pattern as updateFollowupPricingValueVisibility()/
+// updateRadSafetyFields() — Specialty is meaningful only for role='doctor'
+// staff accounts (matches staff.specialty's own column comment), so it
+// stays hidden for every other role rather than cluttering the form.
+function updateStaffRoleFields(){
+  const wrap=document.getElementById('stf-specialty-wrap');
+  if(wrap) wrap.style.display=(document.getElementById('stf-role')?.value==='doctor')?'':'none';
+}
 async function saveStaff() {
   if(!sb){toast('Not connected','err');return;}
   const g=id=>document.getElementById(id)?.value||'';
   if(!g('stf-name')){toast('Full name required','err');return;}
   const editId=g('stf-edit-id');
   if(editId){
-    const payload={full_name:g('stf-name'),role:g('stf-role'),department:g('stf-dept'),phone:g('stf-phone'),email:g('stf-email'),status:g('stf-status'),hire_date:g('stf-hire-date')||null,qualifications:g('stf-qualifications'),national_id:g('stf-national-id')};
+    const payload={full_name:g('stf-name'),role:g('stf-role'),department:g('stf-dept'),phone:g('stf-phone'),email:g('stf-email'),status:g('stf-status'),hire_date:g('stf-hire-date')||null,qualifications:g('stf-qualifications'),national_id:g('stf-national-id'),specialty:g('stf-role')==='doctor'?(g('stf-specialty')||null):null};
     try {
       await sb.from('staff').update(payload).eq('id',editId);
       toast('\u2705 Staff updated','ok');
@@ -18690,6 +18836,7 @@ async function saveStaff() {
       department:g('stf-dept')||null, phone:g('stf-phone')||null,
       national_id:g('stf-national-id')||null, hire_date:g('stf-hire-date')||null,
       qualifications:g('stf-qualifications')||null,
+      specialty:g('stf-role')==='doctor'?(g('stf-specialty')||null):null,
     }});
     if(error || data?.error) throw new Error(data?.error || error.message || 'Failed to create staff account');
     toast('\u2705 Staff account created \u2014 they can sign in immediately','ok');
@@ -18717,6 +18864,8 @@ async function editStaff(id) {
     document.getElementById('stf-hire-date').value=s.hire_date||'';
     document.getElementById('stf-qualifications').value=s.qualifications||'';
     document.getElementById('stf-national-id').value=s.national_id||'';
+    const stfSpec=document.getElementById('stf-specialty'); if(stfSpec) stfSpec.value=s.specialty||'';
+    updateStaffRoleFields();
     document.getElementById('stf-form-title').textContent='\u270f\ufe0f Edit Staff Member';
     const newFields=document.getElementById('stf-new-account-fields'); if(newFields) newFields.style.display='none';
     const editNote=document.getElementById('stf-edit-account-note'); if(editNote) editNote.style.display='';
@@ -18733,10 +18882,11 @@ async function deleteStaff(id) {
 }
 
 function clearStaffForm() {
-  ['stf-edit-id','stf-name','stf-phone','stf-email','stf-national-id','stf-hire-date','stf-qualifications','stf-login-email','stf-password'].forEach(id=>{const el=document.getElementById(id);if(el) el.value='';});
+  ['stf-edit-id','stf-name','stf-phone','stf-email','stf-national-id','stf-hire-date','stf-qualifications','stf-login-email','stf-password','stf-specialty'].forEach(id=>{const el=document.getElementById(id);if(el) el.value='';});
   document.getElementById('stf-form-title').textContent='\u2795 Add Staff Member';
   const newFields=document.getElementById('stf-new-account-fields'); if(newFields) newFields.style.display='';
   const editNote=document.getElementById('stf-edit-account-note'); if(editNote) editNote.style.display='none';
+  updateStaffRoleFields();
 }
 
 function renderPermissionsMatrix() {
@@ -18807,10 +18957,12 @@ async function loadDoctors() {
   try {
     const {data}=await sb.from('doctors').select('*').order('name');
     if(!data?.length){body.innerHTML='<div class="empty-state"><div class="empty-icon">🩺</div><div class="empty-title">No doctors registered</div></div>';return;}
-    body.innerHTML='<div style="overflow-x:auto"><table class="tbl" id="dr-table"><thead><tr><th>Name</th><th>Specialty</th><th>Phone</th><th>Email</th><th>License</th><th>Actions</th></tr></thead><tbody>'+
+    body.innerHTML='<div style="overflow-x:auto"><table class="tbl" id="dr-table"><thead><tr><th>Name</th><th>Specialty</th><th>Type</th><th>Fee</th><th>Phone</th><th>Email</th><th>License</th><th>Actions</th></tr></thead><tbody>'+
       data.map(d=>'<tr>'+
         '<td style="font-weight:600">Dr. '+escapeHtml(d.name||d.full_name||'—')+'</td>'+
         '<td style="font-size:.78rem"><span class="bdg bdg-b">'+escapeHtml(d.specialty||d.specialization||'—')+'</span></td>'+
+        '<td style="font-size:.75rem">'+escapeHtml(d.doctor_type||'GP')+'</td>'+
+        '<td style="font-size:.75rem">'+(d.consultation_fee!=null?Number(d.consultation_fee).toFixed(2)+' '+CFG.currency:'<span style="color:var(--slate)">Default</span>')+'</td>'+
         '<td style="font-size:.75rem">'+escapeHtml(d.phone||'—')+'</td>'+
         '<td style="font-size:.72rem">'+escapeHtml(d.email||'—')+'</td>'+
         '<td style="font-size:.72rem;font-family:DM Mono,monospace">'+escapeHtml(d.license_no||d.license||'—')+'</td>'+
@@ -18833,12 +18985,15 @@ async function saveDoctor() {
   const g=id=>document.getElementById(id)?.value||'';
   if(!g('dr-name')){toast('Doctor name required','err');return;}
   const editId=g('dr-edit-id');
-  const payload={name:g('dr-name'),specialty:g('dr-spec'),phone:g('dr-phone'),email:g('dr-email'),license_no:g('dr-license')};
+  const feeRaw=g('dr-fee');
+  const fee=feeRaw===''?null:parseFloat(feeRaw);
+  const payload={name:g('dr-name'),specialty:g('dr-spec'),phone:g('dr-phone'),email:g('dr-email'),license_no:g('dr-license'),doctor_type:g('dr-type')||'GP',consultation_fee:(fee!=null&&!isNaN(fee))?fee:null};
   try {
     if(editId){await sb.from('doctors').update(payload).eq('id',editId);toast('\u2705 Doctor updated','ok');}
     else{await sb.from('doctors').insert(payload);toast('\u2705 Doctor saved','ok');}
-    ['dr-edit-id','dr-name','dr-phone','dr-email','dr-license'].forEach(id=>{const el=document.getElementById(id);if(el) el.value='';});
-    loadDoctors(); loadDoctorDropdowns();
+    ['dr-edit-id','dr-name','dr-phone','dr-email','dr-license','dr-fee'].forEach(id=>{const el=document.getElementById(id);if(el) el.value='';});
+    const drType=document.getElementById('dr-type'); if(drType) drType.value='GP';
+    loadDoctors(); loadDoctorDropdowns(); populateDoctorDropdown();
   } catch(e){toast(e.message,'err');}
 }
 
@@ -18853,6 +19008,8 @@ async function editDoctor(id) {
     document.getElementById('dr-phone').value=d.phone||'';
     document.getElementById('dr-email').value=d.email||'';
     document.getElementById('dr-license').value=d.license_no||d.license||'';
+    const drType=document.getElementById('dr-type'); if(drType) drType.value=d.doctor_type||'GP';
+    const drFee=document.getElementById('dr-fee'); if(drFee) drFee.value=d.consultation_fee!=null?d.consultation_fee:'';
   } catch(e){toast(e.message,'err');}
 }
 
@@ -19468,6 +19625,13 @@ window.addEventListener('DOMContentLoaded',()=>{
   ['adm-date','ot-date','ot-sched-date','appt-date','appt-filter-date','ho-date','qc-result-date','tat-filter-date','fc-date'].forEach(id=>{ const el=document.getElementById(id); if(!el) return; if(el.type==='datetime-local') el.value=td16; else el.value=td; });
   ['lh-from','ar-date-from','pth-from'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=new Date(Date.now()-7*864e5).toISOString().slice(0,10); });
   ['lh-to','ar-date-to','pth-to'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=td; });
+  // Populate the Doctor Management + Staff Management specialty selects
+  // from the one shared SPECIALTY_OPTIONS constant here, once, rather than
+  // hardcoding the same option list twice in static HTML — the two forms
+  // can then never drift apart.
+  const drSpec=document.getElementById('dr-spec'); if(drSpec) drSpec.innerHTML=specialtyOptionsHtml();
+  const stfSpec=document.getElementById('stf-specialty'); if(stfSpec) stfSpec.innerHTML='<option value="">Select…</option>'+specialtyOptionsHtml();
+  updateStaffRoleFields();
 });
 
 
