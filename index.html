@@ -985,6 +985,7 @@ html[dir="rtl"] body{direction:rtl;}
     <button class="tab" onclick="switchNurseTab('risk',this)">⚠️ Risk Assessment</button>
     <button class="tab" onclick="switchNurseTab('wound',this)">🩹 Wound / Pressure</button>
     <button class="tab" onclick="switchNurseTab('handover',this)">📝 Handover</button>
+    <button class="tab" onclick="switchNurseTab('procedures',this)">💉 Procedures</button>
   </div>
 
   <!-- ── TAB: QUEUE ── -->
@@ -1494,6 +1495,38 @@ html[dir="rtl"] body{direction:rtl;}
       </div>
     </div>
   </div>
+
+  <!-- ── TAB: PROCEDURES (Price Visibility / Procedures Phase) ── -->
+  <!-- Same orderable-procedures catalog as the Doctor Orders "Procedure"
+       tab (buildOrderProcedurePanel()/PROCEDURE_PRICE_CODE/chargeForNewOrder)
+       so a nurse can log+bill a procedure performed on their own initiative
+       (e.g. a POC glucose test, a dressing change) without needing a doctor
+       to place the order first — writes the same doctor_orders row shape,
+       just with the nurse as ordered_by. -->
+  <div id="nrs-tab-procedures" style="display:none">
+    <div class="card" style="margin-bottom:10px">
+      <div class="card-body" style="padding:10px 14px">
+        <div class="fg">
+          <label class="fl">Search Patient</label>
+          <div class="srch"><span>🔍</span><input id="nrs-proc-search" placeholder="Name or MRN…" oninput="searchNrsProcPatient(this.value)"></div>
+          <div id="nrs-proc-search-results" style="display:none;border:1.5px solid var(--teal);border-radius:7px;background:#fff;max-height:160px;overflow-y:auto;margin-top:4px;z-index:50;position:relative"></div>
+        </div>
+        <div id="nrs-proc-pt-banner" style="display:none;background:var(--teal-lt);border:1.5px solid var(--teal2);border-radius:9px;padding:10px 14px;margin-top:8px">
+          <div style="font-weight:700;color:var(--ink)" id="nrs-proc-pt-name">—</div>
+          <div style="font-size:.72rem;color:var(--slate);margin-top:2px" id="nrs-proc-pt-meta">—</div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-body">
+        <div id="nrs-order-procedures" style="max-height:260px;overflow-y:auto"></div>
+        <div class="fg" style="margin-top:8px"><label class="fl">Notes</label>
+          <input class="fc" id="nrs-proc-notes" placeholder="Site, indication, special instructions…">
+        </div>
+        <button class="btn btn-p btn-sm" onclick="submitNrsProcedureOrder()" style="margin-top:8px">🩹 Place Procedure Order</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <div class="page" id="page-fluid-chart">
@@ -1850,6 +1883,7 @@ html[dir="rtl"] body{direction:rtl;}
             <button class="tab" onclick="switchOrderType('diet',this)">🥗 Diet</button>
             <button class="tab" onclick="switchOrderType('physio',this)">🏃 Physio</button>
             <button class="tab" onclick="switchOrderType('other',this)">📝 Other</button>
+            <button class="tab" onclick="switchOrderType('procedure',this)">🩹 Procedure</button>
           </div>
           <!-- Lab -->
           <div id="order-tab-lab">
@@ -2048,6 +2082,14 @@ html[dir="rtl"] body{direction:rtl;}
               <textarea class="fc" id="ord-other-detail" rows="3" placeholder="Specify the order in full…"></textarea>
             </div>
             <button class="btn btn-p btn-sm" onclick="submitOtherOrder()" style="margin-top:8px">📝 Save Order</button>
+          </div>
+          <!-- Procedure (Price Visibility / Procedures Phase) -->
+          <div id="order-tab-procedure" style="display:none">
+            <div id="doc-order-procedures" style="max-height:220px;overflow-y:auto;margin-top:8px"></div>
+            <div class="fg" style="margin-top:8px"><label class="fl">Notes</label>
+              <input class="fc" id="ord-proc-notes" placeholder="Site, indication, special instructions…">
+            </div>
+            <button class="btn btn-p btn-sm" onclick="submitProcedureOrder()" style="margin-top:8px">🩹 Place Procedure Order</button>
           </div>
 
           <!-- Active orders list -->
@@ -2495,6 +2537,30 @@ html[dir="rtl"] body{direction:rtl;}
       </div>
       <div id="bill-table-body"><div class="spin-center"><div class="spinner"></div>Loading…</div></div>
     </div>
+  </div>
+
+  <!-- Billing Report (Price Visibility / Billing Report Phase, Part B) —
+       reuses computeBillingStats(), the exact same calculation
+       renderStatsBilling() on the (admin/lab-supervisor-only) Statistics
+       page already uses, so billing staff (receptionist/cashier — who do
+       NOT have 'statistics' in ROLE_PAGES, and this deliberately does not
+       change that) get the same figures for a date range of their choice
+       without needing Statistics access. -->
+  <div class="card" style="margin-top:14px">
+    <div class="card-hd">
+      <span class="card-title">📊 Billing Report</span>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <button class="btn btn-s btn-sm" onclick="billingReportQuickRange('month')">Last Month</button>
+        <button class="btn btn-s btn-sm" onclick="billingReportQuickRange('year')">Last Year</button>
+        <input class="fc" type="date" id="bill-rpt-from" style="padding:5px 9px;font-size:.78rem;width:135px">
+        <span style="font-size:.75rem;color:var(--slate)">to</span>
+        <input class="fc" type="date" id="bill-rpt-to" style="padding:5px 9px;font-size:.78rem;width:135px">
+        <button class="btn btn-p btn-sm" onclick="runBillingReport()">Run Report</button>
+        <button class="btn btn-s btn-sm" onclick="exportBillingReportExcel()">📊 Excel</button>
+        <button class="btn btn-s btn-sm" onclick="printBillingReport()">🖨 Print</button>
+      </div>
+    </div>
+    <div class="card-body" id="bill-rpt-body"><div class="empty-state">Choose a range and click Run Report</div></div>
   </div>
 </div>
 
@@ -7042,7 +7108,7 @@ if ('serviceWorker' in navigator) {
 }
 
 let sb = null, currentUser = null, currentProfile = null;
-let currentPt = null, _admPt = null, _otPt = null, _vsPt = null;
+let currentPt = null, _admPt = null, _otPt = null, _vsPt = null, _nrsProcPt = null;
 let _docPt = null, _billPt = null, _scPt = null, _radPt = null, _rptPt = null;
 // Tracks whether the Notes tab has unsaved edits since the last save/patient
 // switch, so completeAndSignOffVisit() can auto-save before signing off
@@ -7741,22 +7807,24 @@ const RAD_PRICE_CODE = {
 const FLAT_FEE_PRICE_CODE = { 'Registration Fee':'REG001', 'Consultation Fee':'CON000', 'Admission Fee (one-time)':'ADM008' };
 // Procedures ordering (Price Visibility / Procedures Phase). IMPORTANT: this
 // deliberately does NOT introduce a new price_list category='procedure' —
-// see PRICE_LIST_SEED (~line 18429) which already has a full 'nursing'
-// category (NRS001–NRS025) covering almost every common ward procedure
-// (Wound Dressing, IV Cannula Insertion, Catheterisation, NG Tube, Suture
-// Removal, Nebulisation, Oxygen Therapy, ECG, etc.) with its own already-
-// considered pricing. Duplicating those as new 'procedure'-category rows
-// with different estimated prices for the exact same clinical action would
-// leave two conflicting prices for "Wound Dressing" with no way to tell
-// which is authoritative. Instead this maps each orderable procedure's
+// see seedDefaultPrices()'s prices array (~line 18154) which already has a
+// full 'nursing' category (NRS001–NRS025) covering almost every common ward
+// procedure (Wound Dressing, IV Cannula Insertion, Catheterisation, NG Tube,
+// Suture Removal, Nebulisation, Oxygen Therapy, ECG, etc.) with its own
+// already-considered pricing. Duplicating those as new 'procedure'-category
+// rows with different estimated prices for the exact same clinical action
+// would leave two conflicting prices for "Wound Dressing" with no way to
+// tell which is authoritative. Instead this maps each orderable procedure's
 // display name straight to that EXISTING NRS code (resolvePriceCode() only
 // ever looks up price_list by `code`, never by its `category` column — see
 // resolvePricedLines() — so a price_list row's category is purely
 // admin-page/report display metadata, not part of price resolution, and
-// reusing an NRS-categorized row here changes nothing about it). Only
-// FOUR genuinely-missing procedures got new rows (NRS026–NRS029, migration
-// migration_v2.51_procedures_ordering.sql) — continuing the same numbering
-// and category, not fragmenting one coherent list into two. Passing
+// reusing an NRS-categorized row here changes nothing about it). Only FOUR
+// genuinely-missing procedures got new rows (NRS026–NRS029), appended to
+// that same seedDefaultPrices() array — continuing the same numbering
+// and category, not fragmenting one coherent list into two, and not
+// requiring a SQL migration (price_list has no SQL seed file; every row in
+// it, old and new, is seeded by that one JS admin action). Passing
 // category:'procedure' to chargeForNewOrder()/resolvePricedLines() (as
 // specified) still works correctly purely because PRICE_CODE_MAP.procedure
 // points at this map of codes below.
@@ -7786,9 +7854,12 @@ const PROCEDURE_PRICE_CODE = {
   'Bladder Irrigation':'NRS023',
   'CVP Line Care (daily)':'NRS024',
   'Tracheostomy Care (daily)':'NRS025',
-  // Genuinely missing from the existing NRS001–025 nursing catalog —
-  // new rows, same category/numbering convention, seeded in
-  // migration_v2.51_procedures_ordering.sql (not applied — for review).
+  // Genuinely missing from the existing NRS001–025 nursing catalog — new
+  // rows, same category/numbering convention. price_list has no SQL seed
+  // file of its own (see seedDefaultPrices()'s "Load Defaults" admin
+  // action, ~line 18149) — these four are simply appended to that
+  // function's existing prices array (upsert onConflict:'code'), the same
+  // mechanism every other price_list row in this app was seeded through.
   'Blood Glucose Point-of-Care Test':'NRS026',
   'Ear Syringing / Irrigation':'NRS027',
   'Drain Removal':'NRS028',
@@ -8267,7 +8338,7 @@ function goPage(p) {
   else if(p==='theatre'){ run(loadOTSchedule); run(loadSurgeonDropdown); setD('ot-date',td); setD('ot-sched-date',td); }
   else if(p==='nursing'){ run(loadNursingQueue); run(loadNursingOrders); setD('ho-date',td); setEl('vs-by',currentProfile?.full_name||''); }
   else if(p==='fluid-chart'){ setD('fc-date',td); run(loadFluidChart); }
-  else if(p==='consultation'){ run(loadDoctorQueue); run(buildOrderTestPanel); run(()=>injectSelectPrices('ord-rad-type','radiology')); setD('doc-date',td); }
+  else if(p==='consultation'){ run(loadDoctorQueue); run(buildOrderTestPanel); run(buildOrderProcedurePanel); run(()=>injectSelectPrices('ord-rad-type','radiology')); setD('doc-date',td); }
   else if(p==='appointments'){ run(loadAppointments); run(loadApptDoctors); run(loadFollowUpsDue); setD('appt-date',td); setD('appt-filter-date',td); }
   else if(p==='billing'){ run(loadBilling); }
   else if(p==='prices') run(loadPriceEditor);
@@ -8778,13 +8849,22 @@ async function renderStatsNursing(from,to){
   document.getElementById('stats-body').innerHTML='<div class="stat-grid">'+statCard('Vitals Recorded',vitals||0,'var(--teal)')+statCard('New Admissions',newAdms||0,'#3b82f6')+statCard('Currently Active Admissions',activeAdms||0,'#22c55e')+'</div>';
   _statsExport={title:'Nursing', headers:['Metric','Value'], rows:[['Vitals Recorded',vitals||0],['New Admissions',newAdms||0],['Currently Active Admissions',activeAdms||0]]};
 }
-async function renderStatsBilling(from,to){
+// Shared billing calculation — pulled out of renderStatsBilling() so the
+// Billing page's own date-range report (Part B, below) can reuse the exact
+// same figures instead of a second, potentially-drifting implementation.
+// Pure data: no DOM writes, just the invoices row set plus its revenue/
+// paid/unpaid/insurance-pending totals for the given [from,to) window.
+async function computeBillingStats(from,to){
   const {data:invs}=await sb.from('invoices').select('invoice_no,payment_status,net_amount,currency,created_at').gte('created_at',from).lte('created_at',to).order('created_at',{ascending:false});
   const rows=invs||[];
   const revenue=rows.reduce((s,i)=>s+(i.net_amount||0),0);
   const paid=rows.filter(i=>i.payment_status==='paid').reduce((s,i)=>s+(i.net_amount||0),0);
   const unpaid=rows.filter(i=>i.payment_status==='unpaid').reduce((s,i)=>s+(i.net_amount||0),0);
   const insPending=rows.filter(i=>i.payment_status==='insurance_pending').reduce((s,i)=>s+(i.net_amount||0),0);
+  return {rows,revenue,paid,unpaid,insPending};
+}
+async function renderStatsBilling(from,to){
+  const {rows,revenue,paid,unpaid,insPending}=await computeBillingStats(from,to);
   let html='<div class="stat-grid">'+statCard('Total Invoices',rows.length,'var(--teal)')+statCard('Revenue',revenue.toFixed(0)+' '+CFG.currency,'#22c55e')+statCard('Paid',paid.toFixed(0)+' '+CFG.currency,'#22c55e')+statCard('Unpaid',unpaid.toFixed(0)+' '+CFG.currency,'#ef4444')+statCard('Insurance Pending',insPending.toFixed(0)+' '+CFG.currency,'#f59e0b')+'</div>';
   html+=statsRawTable(['Invoice No.','Status','Amount','Date'], rows.map(i=>[i.invoice_no,i.payment_status,(i.net_amount||0).toFixed(2)+' '+(i.currency||CFG.currency),fmtDate(i.created_at)]));
   document.getElementById('stats-body').innerHTML=html;
@@ -8920,6 +9000,69 @@ function exportStatsPDF(){
     + '<div style="margin:10px 0;font-size:9.5pt;color:#475569">Period: '+fmtDate(from)+' – '+fmtDate(to)+'</div>'
     + table + printFooter('general');
   openPrintWin(html, 'Statistics — '+title);
+}
+// ── Billing Report (Price Visibility / Billing Report Phase, Part B) ────
+// Lives on the Billing page itself (not Statistics — receptionist/cashier
+// don't have 'statistics' in ROLE_PAGES and this deliberately doesn't
+// grant it) but reuses computeBillingStats(), the same calculation
+// renderStatsBilling() above uses, via its own #bill-rpt-from/#bill-rpt-to
+// date inputs and #bill-rpt-body render target so it never collides with
+// the Statistics tab's #stats-from/#stats-to/#stats-body/_statsExport
+// state if both happen to have been visited in the same session.
+let _billingReportExport={title:'Billing Report',headers:[],rows:[]};
+function billingReportDateRange(){
+  const f=document.getElementById('bill-rpt-from'), t=document.getElementById('bill-rpt-to');
+  if(f && !f.value){ const d=new Date(); d.setMonth(d.getMonth()-1); f.value=d.toISOString().slice(0,10); }
+  if(t && !t.value){ t.value=today(); }
+  return { from:f.value+'T00:00:00', to:t.value+'T23:59:59' };
+}
+function billingReportQuickRange(range){
+  const f=document.getElementById('bill-rpt-from'), t=document.getElementById('bill-rpt-to');
+  if(!f||!t) return;
+  const now=new Date();
+  if(range==='month'){ const start=new Date(now.getFullYear(),now.getMonth()-1,now.getDate()); f.value=start.toISOString().slice(0,10); }
+  else if(range==='year'){ const start=new Date(now.getFullYear()-1,now.getMonth(),now.getDate()); f.value=start.toISOString().slice(0,10); }
+  t.value=today();
+  runBillingReport();
+}
+async function runBillingReport(){
+  const body=document.getElementById('bill-rpt-body'); if(!body) return;
+  if(!sb){ body.innerHTML='<div class="empty-state">Not connected</div>'; return; }
+  body.innerHTML='<div class="spin-center"><div class="spinner"></div>Loading…</div>';
+  const {from,to}=billingReportDateRange();
+  try{
+    const {rows,revenue,paid,unpaid,insPending}=await computeBillingStats(from,to);
+    const headers=['Invoice No.','Status','Amount','Date'];
+    const tableRows=rows.map(i=>[i.invoice_no,i.payment_status,(i.net_amount||0).toFixed(2)+' '+(i.currency||CFG.currency),fmtDate(i.created_at)]);
+    body.innerHTML='<div class="stat-grid">'
+      +statCard('Total Invoices',rows.length,'var(--teal)')
+      +statCard('Revenue',revenue.toFixed(0)+' '+CFG.currency,'#22c55e')
+      +statCard('Paid',paid.toFixed(0)+' '+CFG.currency,'#22c55e')
+      +statCard('Unpaid',unpaid.toFixed(0)+' '+CFG.currency,'#ef4444')
+      +statCard('Insurance Pending',insPending.toFixed(0)+' '+CFG.currency,'#f59e0b')
+      +'</div>'+statsRawTable(headers,tableRows);
+    _billingReportExport={title:'Billing Report',headers,rows:tableRows};
+  }catch(e){ body.innerHTML='<div class="empty-state">'+escapeHtml(e.message)+'</div>'; }
+}
+function exportBillingReportExcel(){
+  const {headers,rows}=_billingReportExport;
+  if(!rows.length){ toast('No data to export for this range — run the report first','err'); return; }
+  const esc=v=>{ const s=String(v??''); return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s; };
+  const csv=[headers.map(esc).join(','), ...rows.map(r=>r.map(esc).join(','))].join('\r\n');
+  const blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download='Billing Report — '+today()+'.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
+function printBillingReport(){
+  const {title,headers,rows}=_billingReportExport;
+  if(!rows.length){ toast('No data to print — run the report first','err'); return; }
+  const {from,to}=billingReportDateRange();
+  const table='<table><thead><tr>'+headers.map(h=>'<th>'+escapeHtml(h)+'</th>').join('')+'</tr></thead><tbody>'+rows.map(r=>'<tr>'+r.map(c=>'<td>'+escapeHtml(c??'—')+'</td>').join('')+'</tr>').join('')+'</tbody></table>';
+  const html = printHeader(title)
+    + '<div style="margin:10px 0;font-size:9.5pt;color:#475569">Period: '+fmtDate(from)+' – '+fmtDate(to)+'</div>'
+    + table + printFooter('general');
+  openPrintWin(html, title);
 }
 function printHeader(docType) {
   return '<div style="border-bottom:2px solid #0b7a75;padding-bottom:10px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:flex-start"><div><div style="font-size:16pt;font-weight:800;color:#0b7a75;font-family:DM Serif Display,serif">🏥 FRIENDSHIP HOSPITAL — AL DAMAZIN</div><div style="font-size:9pt;color:#64748b;margin-top:2px">Al Damazin, Blue Nile State, Sudan</div><div style="font-size:8.5pt;color:#64748b;margin-top:1px">Tel: '+escapeHtml(CFG.phone)+'  |  Email: '+escapeHtml(CFG.email)+'</div></div><div style="text-align:right"><div style="font-size:10pt;font-weight:700;color:#1e3a5a">'+escapeHtml(docType)+'</div></div></div>';
@@ -11204,7 +11347,7 @@ async function loadDischargeTabAdmission() {
 }
 
 function switchOrderType(t,btn) {
-  ['lab','radiology','bloodbank','nursing','diet','physio','other'].forEach(x=>{
+  ['lab','radiology','bloodbank','nursing','diet','physio','other','procedure'].forEach(x=>{
     const el=document.getElementById('order-tab-'+x); if(el) el.style.display=x===t?'':'none';
   });
   document.querySelectorAll('#doc-tab-orders .tabs .tab').forEach(b=>b.classList.remove('active'));
@@ -11231,6 +11374,19 @@ async function buildOrderTestPanel() {
     '<div id="order-tc-panel-'+tab+'" style="display:'+(tab==='hem'?'grid':'none')+';grid-template-columns:repeat(2,1fr);gap:4px;padding:4px">'+
     tests.map(t=>'<label class="tc-item" style="font-size:.72rem;padding:5px 8px"><input type="checkbox" class="order-test-chk" value="'+t+'"> '+t+priceHint(t,'lab')+'</label>').join('')+
     '</div>').join('');
+}
+
+// Procedures ordering (Price Visibility / Procedures Phase) — mirrors
+// buildOrderTestPanel()'s pattern exactly (multi-select checkboxes with a
+// live price hint), fed from PROCEDURE_PRICE_CODE instead of TEST_CATALOG.
+// Shared by the Doctor Orders "Procedure" tab (#doc-order-procedures) and
+// Nursing's own "Procedures" tab (#nrs-order-procedures) — same catalog,
+// same pricing, one render function instead of two copies to keep in sync.
+async function buildOrderProcedurePanel(containerId) {
+  const el=document.getElementById(containerId||'doc-order-procedures'); if(!el) return;
+  await ensurePriceList();
+  el.innerHTML=Object.keys(PROCEDURE_PRICE_CODE).map(name=>
+    '<label class="tc-item" style="font-size:.72rem;padding:5px 8px;display:block"><input type="checkbox" class="order-proc-chk" value="'+escAttr(name)+'"> '+escapeHtml(name)+priceHint(name,'procedure')+'</label>').join('');
 }
 
 async function submitLabOrder() {
@@ -11435,6 +11591,35 @@ async function _submitOtherOrder() {
     advanceVisitStatus(_docPt.id,'Orders Pending');
     toast('\u2705 Order saved','ok'); document.getElementById('ord-other-detail').value=''; loadActiveOrders();
   } catch(e){toast(e.message,'err');}
+}
+
+// Procedures ordering (Price Visibility / Procedures Phase) \u2014 same
+// multi-select-checkboxes-into-doctor_orders shape as submitLabOrder(),
+// minus the sample_records/lab_no plumbing (procedures aren't specimens).
+// Shared with Nursing's own Procedures tab via _submitProcedureOrderFor()
+// below so both callers get identical payment-gate/charge/doctor_orders
+// behaviour instead of two parallel implementations drifting apart.
+async function submitProcedureOrder() {
+  if(!sb||!_docPt){toast('Select patient first','err');return;}
+  if(!(await guardVisitNotLocked(_docPt.id,'Placing a procedure order'))) return;
+  const checked=[...document.querySelectorAll('#doc-order-procedures .order-proc-chk:checked')].map(c=>c.value);
+  if(!checked.length){toast('Select at least one procedure','err');return;}
+  const notes=document.getElementById('ord-proc-notes')?.value||'';
+  const orderedBy=document.getElementById('doc-doctor-name')?.value||currentProfile?.full_name;
+  if(!isPaymentCleared(_docPt)){
+    checkPaymentGate(_docPt,'Procedure Order',()=>_submitProcedureOrderFor(_docPt,checked,notes,orderedBy,()=>{document.querySelectorAll('#doc-order-procedures .order-proc-chk:checked').forEach(c=>c.checked=false);const n=document.getElementById('ord-proc-notes');if(n)n.value='';loadActiveOrders();}));
+    return;
+  }
+  await _submitProcedureOrderFor(_docPt,checked,notes,orderedBy,()=>{document.querySelectorAll('#doc-order-procedures .order-proc-chk:checked').forEach(c=>c.checked=false);const n=document.getElementById('ord-proc-notes');if(n)n.value='';loadActiveOrders();});
+}
+async function _submitProcedureOrderFor(pt,checked,notes,orderedBy,onDone) {
+  try {
+    await sb.from('doctor_orders').insert(checked.map(name=>({patient_id:pt.id,order_type:'Procedure',order_detail:name,notes,ordered_by:orderedBy||currentProfile?.full_name,ordered_at:new Date().toISOString(),status:'Pending',created_by:currentProfile?.id})));
+    await chargeForNewOrder(pt, checked.map(name=>({name,category:'procedure'})), 'procedure');
+    advanceVisitStatus(pt.id,'Orders Pending');
+    toast('\u2705 Procedure order placed: '+checked.join(', '),'ok');
+  } catch(e){toast(e.message,'err');}
+  if(onDone) onDone();
 }
 
 // Merges three sources into one Orders list so the doctor sees what
@@ -15910,6 +16095,53 @@ async function searchDocPatient(q) {
   } catch(e){ body.innerHTML='<div style="padding:10px;color:var(--red);font-size:.78rem">'+escapeHtml(e.message)+'</div>'; }
 }
 
+// ── NURSING — Procedures tab (Price Visibility / Procedures Phase) ──────
+// Own patient search (not the shared _vsPt from the Vitals tab above) so
+// that isPaymentCleared()/checkPaymentGate()/chargeForNewOrder() — which
+// all read pt.payment_status — get the FULL patient row, the same shape
+// selectDocPatient() receives on the Doctor side. _vsPt is deliberately
+// NOT reused here: it only carries id/admission_id/name/ward/bed/
+// admission_no (see loadVitalsForPatient()), with no payment_status, which
+// would make every procedure order for an admitted patient look "unpaid"
+// regardless of their real billing state.
+async function searchNrsProcPatient(q) {
+  const res=document.getElementById('nrs-proc-search-results'); if(!res) return;
+  if(!q||q.length<2||!sb){ res.style.display='none'; return; }
+  try {
+    const {data} = await sb.from('patients')
+      .select('id,name,first_name,last_name,mrn,payment_status,lab_no,ward,visit_status')
+      .or(`name.ilike.%${q}%,mrn.ilike.%${q}%,first_name.ilike.%${q}%,last_name.ilike.%${q}%`)
+      .order('created_at',{ascending:false}).limit(8);
+    if(!data?.length){ res.style.display='none'; return; }
+    res.style.display='block';
+    res.innerHTML=data.map(p=>{
+      const rawName=p.name||fullName(p);
+      return '<div onclick="selectNrsProcPatient('+JSON.stringify(p).replace(/"/g,'&quot;')+')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:.81rem" onmouseover="this.style.background=\'#f0f9ff\'" onmouseout="this.style.background=\'#fff\'"><strong>'+escapeHtml(rawName)+'</strong> <span style="color:var(--slate);font-size:.72rem">'+escapeHtml(p.mrn||'')+(p.ward?' · '+escapeHtml(p.ward):'')+'</span></div>';
+    }).join('');
+  } catch(e){}
+}
+function selectNrsProcPatient(p) {
+  _nrsProcPt=p;
+  document.getElementById('nrs-proc-search-results').style.display='none';
+  document.getElementById('nrs-proc-search').value='';
+  const banner=document.getElementById('nrs-proc-pt-banner'); if(banner) banner.style.display='';
+  const nameEl=document.getElementById('nrs-proc-pt-name'); if(nameEl) nameEl.textContent=p.name||fullName(p);
+  const metaEl=document.getElementById('nrs-proc-pt-meta'); if(metaEl) metaEl.textContent=(p.mrn||'—')+' · '+(p.ward||'OPD/Walk-in');
+}
+async function submitNrsProcedureOrder() {
+  if(!sb||!_nrsProcPt){toast('Select patient first','err');return;}
+  if(!(await guardVisitNotLocked(_nrsProcPt.id,'Placing a procedure order'))) return;
+  const checked=[...document.querySelectorAll('#nrs-order-procedures .order-proc-chk:checked')].map(c=>c.value);
+  if(!checked.length){toast('Select at least one procedure','err');return;}
+  const notes=document.getElementById('nrs-proc-notes')?.value||'';
+  const onDone=()=>{document.querySelectorAll('#nrs-order-procedures .order-proc-chk:checked').forEach(c=>c.checked=false);const n=document.getElementById('nrs-proc-notes');if(n)n.value='';};
+  if(!isPaymentCleared(_nrsProcPt)){
+    checkPaymentGate(_nrsProcPt,'Procedure Order',()=>_submitProcedureOrderFor(_nrsProcPt,checked,notes,currentProfile?.full_name,onDone));
+    return;
+  }
+  await _submitProcedureOrderFor(_nrsProcPt,checked,notes,currentProfile?.full_name,onDone);
+}
+
 // ── NURSING — NEW FUNCTIONS ───────────────────────────────
 function calcMAP() {
   const sys = parseFloat(document.getElementById('vs-sys')?.value)||0;
@@ -16887,7 +17119,7 @@ function selectVitalsFromQueue(ptId, ptName) {
 
 // Nursing tab switcher
 function switchNurseTab(tab, btn) {
-  ['queue','vitals','meds','risk','wound','handover'].forEach(t=>{
+  ['queue','vitals','meds','risk','wound','handover','procedures'].forEach(t=>{
     const el=document.getElementById('nrs-tab-'+t); if(el) el.style.display=t===tab?'':'none';
   });
   document.querySelectorAll('#page-nursing .tabs .tab').forEach(b=>b.classList.remove('active'));
@@ -16899,6 +17131,7 @@ function switchNurseTab(tab, btn) {
     loadRecentHandovers();
   }
   if(tab==='vitals'){ startVitalsClock(); renderTransfusionVitalsTagBanner(); }
+  if(tab==='procedures'){ buildOrderProcedurePanel('nrs-order-procedures'); }
 }
 
 async function loadRecentHandovers() {
@@ -18557,6 +18790,15 @@ async function seedDefaultPrices() {
     {code:'NRS023',name:'Bladder Irrigation',category:'nursing',price:3000,currency:'SDG'},
     {code:'NRS024',name:'CVP Line Care (daily)',category:'nursing',price:3000,currency:'SDG'},
     {code:'NRS025',name:'Tracheostomy Care (daily)',category:'nursing',price:5000,currency:'SDG'},
+    // Procedures ordering feature (see PROCEDURE_PRICE_CODE) — four
+    // genuinely new ward procedures not already covered by NRS001-025.
+    // Prices are REASONED ESTIMATES scaled against the existing NRS001-025
+    // range (1,000-5,000 SDG) — NOT confirmed real Friendship Hospital
+    // rates; flagged for admin review same as the rest of this feature.
+    {code:'NRS026',name:'Blood Glucose Point-of-Care Test',category:'nursing',price:1000,currency:'SDG'},
+    {code:'NRS027',name:'Ear Syringing / Irrigation',category:'nursing',price:1500,currency:'SDG'},
+    {code:'NRS028',name:'Drain Removal',category:'nursing',price:1500,currency:'SDG'},
+    {code:'NRS029',name:'Physiotherapy Session',category:'nursing',price:2500,currency:'SDG'},
 
     // ── THEATRE / SURGERY ─────────────────────────────────
     {code:'OT001',name:'Anaesthesia — General (up to 1 hour)',category:'theatre',price:20000,currency:'SDG'},
