@@ -24,6 +24,16 @@
 const fs = require('fs');
 const path = require('path');
 
+function isJsdelivrScriptUrl(url, expectedPath) {
+  try {
+    const parsed = new URL(url);
+    return parsed.hostname === 'cdn.jsdelivr.net'
+      && parsed.pathname.includes(expectedPath);
+  } catch (_) {
+    return false;
+  }
+}
+
 // Keep in sync with the exact <script src> versions in index.html's <head>,
 // and with the filenames actually present in tests/vendor/cdn-mirror/.
 const MIRRORS = [
@@ -33,7 +43,7 @@ const MIRRORS = [
     // request time) — this file is a snapshot of that resolution taken
     // 2026-08-18 (npm dist-tags.latest 2.112.3). See the vendor README
     // before assuming this is "the" version pinned by index.html.
-    match: (url) => url.includes('cdn.jsdelivr.net') && url.includes('/npm/@supabase/supabase-js@2/dist/umd/supabase.js'),
+    match: (url) => isJsdelivrScriptUrl(url, '/npm/@supabase/supabase-js@2/dist/umd/supabase.js'),
     file: 'supabase-js@2.112.3.umd.js',
     // This build's UMD wrapper is a bare `var supabase = (function(){...})()`
     // at script scope, which unconditionally clobbers window.supabase —
@@ -52,11 +62,11 @@ const MIRRORS = [
     wrapPreservingMock: true,
   },
   {
-    match: (url) => url.includes('cdn.jsdelivr.net') && url.includes('/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js'),
+    match: (url) => isJsdelivrScriptUrl(url, '/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js'),
     file: 'jsbarcode@3.11.5.all.min.js',
   },
   {
-    match: (url) => url.includes('cdn.jsdelivr.net') && url.includes('/npm/html5-qrcode@2.3.8/html5-qrcode.min.js'),
+    match: (url) => isJsdelivrScriptUrl(url, '/npm/html5-qrcode@2.3.8/html5-qrcode.min.js'),
     file: 'html5-qrcode@2.3.8.min.js',
   },
 ];
