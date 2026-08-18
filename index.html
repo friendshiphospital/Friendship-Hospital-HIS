@@ -13740,6 +13740,7 @@ async function saveResultWithSafetyChecks(opts){
       const {error}=await sb.from(table).upsert(payload,{onConflict:'patient_id'});
       if(error) throw error;
       await logResultHistory(table,payload);
+      await logLabResultHistory(deptKey,ptId,payload);
       if(hasCrit) await logCriticalValues(ptId,payload,deptLabel);
       if(finalVerify) await updateSampleStatus(ptId,'Completed');
       const pendingMsg='💾 '+successLabel+' saved — pending tech sign-off'+(autoVerifyReason?' (Auto-Verify skipped: '+autoVerifyReason+')':'');
@@ -13878,7 +13879,7 @@ async function saveSeroEntry(verify=false) {
   // a DB-level failure — capturing and throwing that error here is what
   // actually routes a genuine write failure into the catch block below
   // instead of a false "saved & verified" success toast.
-  try { const {error}=await sb.from('results_serology').upsert(payload,{onConflict:'patient_id'}); if(error) throw error; if(verify) await updateSampleStatus(ptId,'Completed'); toast(verify?'✅ Serology saved & verified':'💾 Serology saved','ok'); } catch(e){ toast(e.message,'err'); }
+  try { const {error}=await sb.from('results_serology').upsert(payload,{onConflict:'patient_id'}); if(error) throw error; await logLabResultHistory('sero',ptId,payload); if(verify) await updateSampleStatus(ptId,'Completed'); toast(verify?'✅ Serology saved & verified':'💾 Serology saved','ok'); } catch(e){ toast(e.message,'err'); }
 }
 async function saveImmunoEntry(verify=false) {
   if(!sb||!document.getElementById('immuno-entry-pt-id')?.value){ toast('No patient loaded','err'); return; }
@@ -13905,7 +13906,7 @@ async function saveImmunoEntry(verify=false) {
   // a DB-level failure — capturing and throwing that error here is what
   // actually routes a genuine write failure into the catch block below
   // instead of a false "saved & verified" success toast.
-  try { const {error}=await sb.from('results_serology').upsert(payload,{onConflict:'patient_id'}); if(error) throw error; if(verify) await updateSampleStatus(ptId,'Completed'); toast(verify?'✅ Immunology saved & verified':'💾 Immunology saved','ok'); } catch(e){ toast(e.message,'err'); }
+  try { const {error}=await sb.from('results_serology').upsert(payload,{onConflict:'patient_id'}); if(error) throw error; await logLabResultHistory('immuno',ptId,payload); if(verify) await updateSampleStatus(ptId,'Completed'); toast(verify?'✅ Immunology saved & verified':'💾 Immunology saved','ok'); } catch(e){ toast(e.message,'err'); }
 }
 async function saveMicroEntry(verify=false) {
   if(!sb||!document.getElementById('micro-entry-pt-id')?.value){ toast('No patient loaded','err'); return; }
@@ -13933,7 +13934,7 @@ async function saveMicroEntry(verify=false) {
   // a DB-level failure — capturing and throwing that error here is what
   // actually routes a genuine write failure into the catch block below
   // instead of a false "saved & verified" success toast.
-  try { const {error}=await sb.from('results_microbiology').upsert(payload,{onConflict:'patient_id'}); if(error) throw error; if(verify) await updateSampleStatus(ptId,'Completed'); toast(verify?'✅ Microbiology saved & verified':'💾 Microbiology saved','ok'); } catch(e){ toast(e.message,'err'); }
+  try { const {error}=await sb.from('results_microbiology').upsert(payload,{onConflict:'patient_id'}); if(error) throw error; await logLabResultHistory('micro',ptId,payload); if(verify) await updateSampleStatus(ptId,'Completed'); toast(verify?'✅ Microbiology saved & verified':'💾 Microbiology saved','ok'); } catch(e){ toast(e.message,'err'); }
 }
 // ── PRINT REPORTS FOR RESULT ENTRY PAGES ─────────────
 // Shared patient info banner for every lab report (single-section and
@@ -14833,6 +14834,7 @@ async function savePcrEntry(verify=false) {
     // below instead of a false "saved & verified" success toast.
     const {error}=await sb.from('results_pcr').upsert(payload,{onConflict:'patient_id'});
     if(error) throw error;
+    await logLabResultHistory('pcr',ptId,payload);
     if(verify) await updateSampleStatus(ptId,'Completed');
     toast(verify?'✅ PCR saved & verified':'💾 PCR results saved','ok');
   } catch(e){ toast(e.message,'err'); }
@@ -14932,6 +14934,7 @@ async function saveHistoEntry(verify=false) {
     // below instead of a false "saved & verified" success toast.
     const {error}=await sb.from('results_histopathology').upsert(payload,{onConflict:'patient_id'});
     if(error) throw error;
+    await logLabResultHistory('histo',ptId,payload);
     if(verify) await updateSampleStatus(ptId,'Completed');
     toast(verify?'✅ Histopathology saved & verified':'💾 Histopathology saved','ok');
   } catch(e){ toast(e.message,'err'); }
@@ -15017,6 +15020,7 @@ async function saveCytoEntry(verify=false) {
     // below instead of a false "saved & verified" success toast.
     const {error}=await sb.from('results_cytology').upsert(payload,{onConflict:'patient_id'});
     if(error) throw error;
+    await logLabResultHistory('cyto',ptId,payload);
     if(verify) await updateSampleStatus(ptId,'Completed');
     toast(verify?'✅ Cytology saved & verified':'💾 Cytology saved','ok');
   } catch(e){ toast(e.message,'err'); }
@@ -22615,7 +22619,17 @@ const RESULT_META = {
     troponin_i:{label:'Troponin I',unit:'ng/mL',lo:0,hi:0.04}, hs_tnt:{label:'hs-TnT',unit:'ng/L',lo:0,hi:14}, ck:{label:'CK Total',unit:'U/L',lo:30,hi:200}, ckmb:{label:'CK-MB',unit:'U/L',lo:0,hi:25}, nt_probnp:{label:'NT-proBNP',unit:'pg/mL',lo:0,hi:125}, hs_crp:{label:'hs-CRP',unit:'mg/L',lo:0,hi:5}, ldh:{label:'LDH',unit:'U/L',lo:140,hi:280}
   },
   sero: {
-    rf:{label:'RF',unit:'IU/mL',lo:0,hi:14}, aso:{label:'ASO',unit:'IU/mL',lo:0,hi:200}, ige:{label:'IgE (Total)',unit:'IU/mL',lo:0,hi:100}
+    rf:{label:'RF',unit:'IU/mL',lo:0,hi:14}, aso:{label:'ASO',unit:'IU/mL',lo:0,hi:200}, ige:{label:'IgE (Total)',unit:'IU/mL',lo:0,hi:100},
+    // Qualitative (Reactive/Non-Reactive/titre) fields — no numeric range
+    // applies, so lo/hi are left null. Added for the Lab Investigation
+    // History feature (logLabResultHistory()/extractFlatLabHistoryRows()),
+    // which needs a clean display label for every Serology field, not just
+    // the three numeric ones above. Labels match the visible entry-form
+    // <label> text exactly (index.html ~line 5232-5253).
+    hiv:{label:'HIV Ag/Ab',unit:'',lo:null,hi:null}, hbsag:{label:'HBsAg',unit:'',lo:null,hi:null}, hcv:{label:'HCV Antibody',unit:'',lo:null,hi:null},
+    rpr:{label:'RPR / VDRL',unit:'',lo:null,hi:null}, tpha:{label:'TPHA',unit:'',lo:null,hi:null}, hpylori:{label:'H. Pylori Ag (Stool)',unit:'',lo:null,hi:null},
+    brucella:{label:'Brucella Ab',unit:'',lo:null,hi:null}, widal_o:{label:'Widal O',unit:'',lo:null,hi:null}, widal_h:{label:'Widal H',unit:'',lo:null,hi:null},
+    ana:{label:'ANA (Antinuclear Ab)',unit:'',lo:null,hi:null}, anti_ccp:{label:'Anti-CCP',unit:'',lo:null,hi:null}
   },
   immuno: {
     tsh:{label:'TSH',unit:'mIU/L',lo:0.4,hi:4.0}, ft4:{label:'Free T4',unit:'pmol/L',lo:9,hi:25}, ft3:{label:'Free T3',unit:'pmol/L',lo:3.5,hi:7.8},
@@ -22623,7 +22637,9 @@ const RESULT_META = {
     fsh:{label:'FSH',unit:'IU/L',lo:1,hi:12}, lh:{label:'LH',unit:'IU/L',lo:1,hi:12}, estradiol:{label:'Oestradiol',unit:'pmol/L',lo:0,hi:999},
     prog:{label:'Progesterone',unit:'nmol/L',lo:0,hi:89}, testosterone:{label:'Testosterone',unit:'nmol/L',lo:0,hi:31}, prolactin:{label:'Prolactin',unit:'mIU/L',lo:72,hi:511},
     psa:{label:'PSA',unit:'ng/mL',lo:0,hi:4}, afp:{label:'AFP',unit:'IU/mL',lo:0,hi:5.8}, cea:{label:'CEA',unit:'ng/mL',lo:0,hi:5}, ca125:{label:'CA-125',unit:'U/mL',lo:0,hi:35}, ca199:{label:'CA 19-9',unit:'U/mL',lo:0,hi:37},
-    vit_d:{label:'Vitamin D',unit:'nmol/L',lo:50,hi:250}, vit_b12:{label:'Vitamin B12',unit:'pmol/L',lo:145,hi:637}, folate:{label:'Folate',unit:'nmol/L',lo:7,hi:46}, ferritin:{label:'Ferritin',unit:'µg/L',lo:15,hi:200}
+    vit_d:{label:'Vitamin D',unit:'nmol/L',lo:50,hi:250}, vit_b12:{label:'Vitamin B12',unit:'pmol/L',lo:145,hi:637}, folate:{label:'Folate',unit:'nmol/L',lo:7,hi:46}, ferritin:{label:'Ferritin',unit:'µg/L',lo:15,hi:200},
+    // Qualitative — same reasoning as Serology's additions above.
+    bhcg_qual:{label:'Pregnancy Test (βHCG)',unit:'',lo:null,hi:null}
   }
 };
 
@@ -22641,6 +22657,168 @@ const RESULT_TAGS = {
     psa:'PSA (Tumour Marker)', afp:'🔹 Tumour Marker Profile (AFP+CEA+CA125+CA19.9)|AFP (Tumour Marker)', cea:'🔹 Tumour Marker Profile (AFP+CEA+CA125+CA19.9)|CEA (Tumour Marker)', ca125:'🔹 Tumour Marker Profile (AFP+CEA+CA125+CA19.9)|CA-125', ca199:'🔹 Tumour Marker Profile (AFP+CEA+CA125+CA19.9)|CA-19.9',
     vit_d:'Vitamin D', vit_b12:'Vitamin B12', folate:'Folate', ferritin:'Ferritin' }
 };
+
+// ══════════════════════════════════════════════════════════════
+// PATIENT LAB INVESTIGATION HISTORY (Phase 2)
+// ══════════════════════════════════════════════════════════════
+// Writes one EAV row per test/analyte to lab_result_history for every
+// department save — see migration_v2.51_lab_investigation_history.sql.
+// Additive alongside each save's existing upsert (and, for Haematology/
+// Chemistry, alongside their separate existing logResultHistory() call —
+// see RESULT_HISTORY_TABLE above): best-effort, wrapped so a failure here
+// can never block or alter the save it rides along with.
+//
+// Bookkeeping fields present in DEPT_LOAD_MAP.fields that are never a
+// test/analyte in their own right. Reuses PTH_RESULT_SKIP_FIELDS'
+// vocabulary (Patient History Timeline's own result-row formatter already
+// draws this same line) plus a few keys PTH_RESULT_SKIP_FIELDS doesn't
+// need to know about (DEPT_LOAD_MAP-only bookkeeping columns).
+const LAB_HISTORY_SKIP_FIELDS = new Set([...PTH_RESULT_SKIP_FIELDS, 'specimen', 'received_by', 'platform']);
+
+// Clean display labels for the handful of fields with no RESULT_META entry
+// at all (narrative/free-text — no reference range of any kind applies).
+// Every numeric AND qualitative Haematology/Chemistry/Serology/Immunology
+// field already has a RESULT_META entry (see the additions above this
+// block); this only covers what RESULT_META structurally can't hold.
+const LAB_HISTORY_EXTRA_LABELS = {
+  hem: { blood_group:'Blood Group', rh_factor:'Rh Factor', film_result:'Peripheral Blood Film', film_comment:'Blood Film Comment' },
+};
+
+// Shared extractor for the four departments whose save*Entry() payload is
+// flat {field_code: value}, matching DEPT_LOAD_MAP[deptKey].fields 1:1 —
+// Haematology, Chemistry, Serology, Immunology. Microbiology/PCR/
+// Histopathology/Cytology have their own extractors below: their payloads
+// carry nested jsonb panels (PCR's targets, Microbiology's sensitivity,
+// Histopathology's ihc_results) or are almost entirely free-text narrative
+// (Histopathology/Cytology), neither of which fits this same flat-field
+// loop.
+function extractFlatLabHistoryRows(deptKey, payload){
+  const fieldMap = DEPT_LOAD_MAP[deptKey]?.fields || {};
+  const rows = [];
+  Object.keys(fieldMap).forEach(code=>{
+    if(LAB_HISTORY_SKIP_FIELDS.has(code)) return;
+    const raw = payload[code];
+    if(raw==null || raw==='') return;
+    const meta = RESULT_META[deptKey]?.[code];
+    const label = meta?.label || LAB_HISTORY_EXTRA_LABELS[deptKey]?.[code] || code;
+    const isNumericField = !!meta && meta.lo!=null && meta.hi!=null;
+    const num = isNumericField ? parseFloat(raw) : NaN;
+    let flag=null;
+    if(isNumericField && !isNaN(num)){ flag = num>meta.hi ? 'H' : num<meta.lo ? 'L' : 'N'; }
+    rows.push({
+      test_code: code, test_name: label, value: String(raw),
+      value_numeric: (isNumericField && !isNaN(num)) ? num : null,
+      unit: meta?.unit || null,
+      ref_range_lo: isNumericField ? meta.lo : null,
+      ref_range_hi: isNumericField ? meta.hi : null,
+      ref_range_text: isNumericField ? (meta.lo+' – '+meta.hi) : null,
+      flag,
+    });
+  });
+  return rows;
+}
+// Microbiology: the UA/Stool/CSF/Culture fields are flat (reuses the same
+// generic loop above), plus the antibiotic-sensitivity panel — a nested
+// {amox:'S',...} object, not a DEPT_LOAD_MAP field — unpacked into one row
+// per antibiotic tested.
+const MICRO_SENSITIVITY_LABELS = {amox:'Amoxicillin',amp:'Ampicillin',coamox:'Co-Amoxiclav',pip:'Piperacillin',ceft:'Ceftriaxone',cefaz:'Cefazolin',cipro:'Ciprofloxacin',levo:'Levofloxacin',gent:'Gentamicin',amik:'Amikacin',mero:'Meropenem',imi:'Imipenem',tmp:'Trimethoprim-Sulfa',nitro:'Nitrofurantoin',vanc:'Vancomycin',clinda:'Clindamycin',azithro:'Azithromycin',metro:'Metronidazole'};
+function extractMicroLabHistoryRows(payload){
+  const rows = extractFlatLabHistoryRows('micro', payload);
+  Object.entries(payload.sensitivity||{}).forEach(([abx,result])=>{
+    if(!result) return;
+    rows.push({ test_code:'sen_'+abx, test_name:'Sensitivity — '+(MICRO_SENSITIVITY_LABELS[abx]||abx), value:result, value_numeric:null, unit:null, ref_range_lo:null, ref_range_hi:null, ref_range_text:null, flag:null });
+  });
+  return rows;
+}
+// PCR: payload.tests.targets is a jsonb array of {target,result,ct_value}
+// (see DEPT_LOAD_MAP.pcr's afterLoad restore step and savePcrEntry()) —
+// one EAV row per target's qualitative result, plus a second row for its
+// Ct value where one was entered (a distinct measurable quantity, not part
+// of the same "value").
+function extractPcrLabHistoryRows(payload){
+  const rows = [];
+  (payload?.tests?.targets||[]).forEach((t,i)=>{
+    if(!t.target && !t.result) return;
+    const name = t.target || ('PCR Target '+(i+1));
+    if(t.result) rows.push({ test_code:null, test_name:name, value:t.result, value_numeric:null, unit:null, ref_range_lo:null, ref_range_hi:null, ref_range_text:null, flag:null });
+    if(t.ct_value!=null) rows.push({ test_code:null, test_name:name+' — Ct Value', value:String(t.ct_value), value_numeric:t.ct_value, unit:'Ct', ref_range_lo:null, ref_range_hi:null, ref_range_text:null, flag:null });
+  });
+  return rows;
+}
+// Histopathology: almost entirely narrative (gross/microscopic/diagnosis),
+// plus payload.tests.adequacy and payload.ihc_results (a nested
+// {marker:{result,intensity,percent}} object — see DEPT_LOAD_MAP.histo's
+// afterLoad restore step and saveHistoEntry()). No numeric range applies
+// to any of this, so every row here is flag:null/unit:null — the point is
+// a browsable date-ordered trail of diagnoses and IHC panels, not
+// high/low flagging.
+function extractHistoLabHistoryRows(payload){
+  const rows = [];
+  const add=(code,name,val)=>{ if(val) rows.push({ test_code:code, test_name:name, value:String(val), value_numeric:null, unit:null, ref_range_lo:null, ref_range_hi:null, ref_range_text:null, flag:null }); };
+  add('specimen_site','Specimen Site',payload.specimen_site);
+  add('gross_description','Gross Description',payload.gross_description);
+  add('microscopic','Microscopic Description',payload.microscopic);
+  add('diagnosis','Diagnosis',payload.diagnosis);
+  add('grade','Grade',payload.grade);
+  add('stage','Stage',payload.stage);
+  add('adequacy','Specimen Adequacy',payload?.tests?.adequacy);
+  Object.entries(payload.ihc_results||{}).forEach(([marker,v])=>{
+    if(!v?.result) return;
+    const detail=[v.intensity,v.percent?v.percent+'%':''].filter(Boolean).join(' · ');
+    rows.push({ test_code:null, test_name:marker+' (IHC)', value:v.result, value_numeric:null, unit:null, ref_range_lo:null, ref_range_hi:null, ref_range_text:detail||null, flag:null });
+  });
+  return rows;
+}
+// Cytology: entirely narrative, same treatment as Histopathology above.
+function extractCytoLabHistoryRows(payload){
+  const rows = [];
+  const add=(code,name,val)=>{ if(val) rows.push({ test_code:code, test_name:name, value:String(val), value_numeric:null, unit:null, ref_range_lo:null, ref_range_hi:null, ref_range_text:null, flag:null }); };
+  add('specimen_type','Specimen Type',payload.specimen_type);
+  add('adequacy','Specimen Adequacy',payload.adequacy);
+  add('findings','Findings',payload.findings);
+  add('diagnosis','Diagnosis',payload.diagnosis);
+  add('recommendation','Recommendation',payload.recommendation);
+  add('background','Background',payload?.tests?.background);
+  return rows;
+}
+const LAB_HISTORY_EXTRACTORS = {
+  hem: p=>extractFlatLabHistoryRows('hem',p), chem: p=>extractFlatLabHistoryRows('chem',p),
+  sero: p=>extractFlatLabHistoryRows('sero',p), immuno: p=>extractFlatLabHistoryRows('immuno',p),
+  micro: extractMicroLabHistoryRows, pcr: extractPcrLabHistoryRows,
+  histo: extractHistoLabHistoryRows, cyto: extractCytoLabHistoryRows,
+};
+// Single write path every department's save*Entry() calls (directly, or —
+// for Haematology/Chemistry — via saveResultWithSafetyChecks()'s
+// doFinalize()) right after its own upsert succeeds. Never throws: a
+// failure here (migration not yet applied on an older deployment, a
+// network hiccup) must never surface as a failed save when the actual
+// current-panel upsert already succeeded.
+async function logLabResultHistory(deptKey, ptId, payload){
+  if(!sb || !ptId) return;
+  try{
+    const extractor = LAB_HISTORY_EXTRACTORS[deptKey];
+    if(!extractor) return;
+    const rows = extractor(payload);
+    if(!rows.length) return;
+    let mrn=null, labNo=null;
+    try{
+      const {data:pt} = await sb.from('patients').select('mrn,lab_no').eq('id',ptId).maybeSingle();
+      mrn = pt?.mrn||null; labNo = pt?.lab_no||null;
+    }catch(e){ /* history row still worth writing without mrn/sample_id */ }
+    const savedAt = new Date().toISOString();
+    const commonFields = {
+      patient_id: ptId, mrn, department: deptKey,
+      source_table: DEPT_LOAD_MAP[deptKey]?.table || null,
+      sample_id: labNo,
+      is_verified: !!payload.is_verified,
+      verified_by: payload.is_verified ? (currentProfile?.id||null) : null,
+      verified_at: payload.verified_at || null,
+      created_by: currentProfile?.id || null,
+      saved_at: savedAt,
+    };
+    await sb.from('lab_result_history').insert(rows.map(r=>({...commonFields, ...r})));
+  }catch(e){ /* additive — never block the result save on this */ }
+}
 
 // Named sub-panels for the Combined Laboratory Report (printAllReports()),
 // mirroring the same card groupings already shown on each department's
