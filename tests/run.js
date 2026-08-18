@@ -19,6 +19,7 @@ const fs = require('fs');
 const path = require('path');
 const { loadPlaywright } = require('./helpers/load-playwright');
 const { startStaticServer } = require('./helpers/static-server');
+const { installCdnMirror } = require('./helpers/cdn-mirror');
 
 async function main() {
   const filterArg = process.argv[2];
@@ -42,6 +43,11 @@ async function main() {
     for (const file of testFiles) {
       const runTest = require(path.join(testsDir, file));
       const context = await browser.newContext();
+      // TEST-ONLY: index.html's real <script src="https://cdn.jsdelivr.net/...">
+      // tags are left untouched; this only reroutes those specific requests
+      // inside this Playwright context so the suite can run while jsdelivr
+      // is blocked by the sandbox proxy. See tests/helpers/cdn-mirror.js.
+      await installCdnMirror(context);
       let suite;
       try {
         suite = await runTest(context, baseUrl);
