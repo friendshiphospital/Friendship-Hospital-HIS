@@ -58,6 +58,34 @@ official npm CDN mirrors jsdelivr's own `npm/` namespace) and its SHA-1
 verified against the registry's own `dist.shasum` for that exact version
 before being copied in — same bytes jsdelivr would have served.
 
+## Why wrapPreservingMock (supabase-js only)
+
+This mirror's first working version served the vendored file byte-for-byte,
+unwrapped — and it broke the suite badly (715 passed / 143 failed, versus a
+baseline of ~975-996 passed / ~19-21 failed on earlier runs against the real
+CDN). Root cause, confirmed with a minimal Playwright probe: `2.112.3`'s UMD
+build is a bare `var supabase = (function(){...})(...)` at script scope.
+Every test's `page.addInitScript()` installs `window.supabase = {
+createClient: mockFn, ... }` *before* any page script runs (Playwright
+guarantees init scripts run first on every navigation) — but a plain
+`<script src>` executing afterward with `var supabase = ...` unconditionally
+reassigns that same global, silently replacing the mock with the real
+(non-functional against a fake `mock.supabase.co` URL) client. Every test
+that depends on its mocked `sb.from(...)` data landing in the DOM then times
+out waiting for elements that never populate — which is exactly the
+"unrelated features breaking everywhere" pattern that first run produced.
+
+This must have worked differently against whatever version jsdelivr was
+actually resolving `@2` to during this project's earlier passing runs — this
+mirror doesn't have access to jsdelivr right now to confirm which version or
+UMD shape that was. Rather than depend on that, `cdn-mirror.js` wraps the
+vendored file in an IIFE so its internal `var supabase` stays local and never
+touches `window.supabase` — except that the wrapper explicitly restores the
+real library as `window.supabase` when no mock was present beforehand, so
+the two test files that never install a mock (`lab-result-view-link-audit`,
+`launcher-tiles` — neither logs in or calls `initSupabase()`) see the same
+behavior an unwrapped script would have given them.
+
 ## Refreshing this mirror
 
 ```bash

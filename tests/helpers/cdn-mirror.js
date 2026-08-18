@@ -35,6 +35,21 @@ const MIRRORS = [
     // before assuming this is "the" version pinned by index.html.
     match: (url) => url.includes('cdn.jsdelivr.net') && url.includes('/npm/@supabase/supabase-js@2/dist/umd/supabase.js'),
     file: 'supabase-js@2.112.3.umd.js',
+    // This build's UMD wrapper is a bare `var supabase = (function(){...})()`
+    // at script scope, which unconditionally clobbers window.supabase —
+    // confirmed by direct Playwright probe. Every test's page.addInitScript
+    // installs its own `window.supabase = { createClient: mockFn, ... }`
+    // BEFORE this script tag runs (addInitScript always runs first), and
+    // the app's initSupabase() (index.html ~line 8150) expects that mock to
+    // still be in place afterward, not the real library. wrapPreservingMock
+    // scopes the real `var supabase` locally so it never touches
+    // window.supabase when a mock is already present, restoring the
+    // (apparently long-relied-on) behavior of whatever jsdelivr was
+    // actually serving during this project's earlier successful runs — see
+    // the vendor README's "Why wrapPreservingMock" section. The two test
+    // files that never install a mock still get the real library exposed
+    // as window.supabase exactly as an un-wrapped script would.
+    wrapPreservingMock: true,
   },
   {
     match: (url) => url.includes('cdn.jsdelivr.net') && url.includes('/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js'),
@@ -62,7 +77,15 @@ async function installCdnMirror(contextOrPage) {
       route.abort('failed');
       return;
     }
-    const body = fs.readFileSync(path.join(VENDOR_DIR, mirror.file));
+    let body = fs.readFileSync(path.join(VENDOR_DIR, mirror.file), 'utf8');
+    if (mirror.wrapPreservingMock) {
+      body = '(function(){\n'
+        + 'var __mockPresent = (typeof window.supabase !== "undefined") && window.supabase !== null;\n'
+        + 'var __mock = window.supabase;\n'
+        + body + '\n'
+        + 'window.supabase = __mockPresent ? __mock : supabase;\n'
+        + '})();\n';
+    }
     route.fulfill({ status: 200, contentType: 'text/javascript; charset=utf-8', body });
   });
 }
