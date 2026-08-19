@@ -577,25 +577,22 @@ html[dir="rtl"] body{direction:rtl;}
       <div class="sb-item" data-p="validation" onclick="goPage('validation')"><span class="ic">📐</span><span data-i18n="nav_validation">Analyzer Validation</span></div>
       <div class="sb-item" data-p="reference-ranges" onclick="goPage('reference-ranges')"><span class="ic">📏</span><span data-i18n="nav_reference_ranges">Reference Ranges</span></div>
       <div class="sb-item" data-p="pt-history" onclick="goPage('pt-history')"><span class="ic">🕐</span><span data-i18n="nav_pt_history">Patient Timeline</span></div>
-      <div class="sb-item" data-p="investigation-history" onclick="goPage('investigation-history')"><span class="ic">🧪</span><span data-i18n="nav_investigation_history">Lab Investigation History</span></div>
     </div>
-    <!-- Radiology Phase 5: 'pt-history' and 'investigation-history' are
-         added here even though radiologist already had 'pt-history' in
-         ROLE_PAGES — the sidebar itself never linked to it, so it was
-         granted but unreachable. Same gap "the earlier pt-history access
-         fix" (Doctor/Nursing groups below) already closed for those two
-         modules; Radiology was missed at the time. -->
+    <!-- Radiology Phase 5: 'pt-history' is added here even though
+         radiologist already had it in ROLE_PAGES — the sidebar itself
+         never linked to it, so it was granted but unreachable. Same gap
+         "the earlier pt-history access fix" (Doctor/Nursing groups below)
+         already closed for those two modules; Radiology was missed at the
+         time. -->
     <div class="sb-group" data-module="radiology">
       <div class="sb-lbl" data-i18n="navgrp_radiology">🩻 Radiology</div>
       <div class="sb-item" data-p="radiology" onclick="goPage('radiology')"><span class="ic">🩻</span><span data-i18n="nav_radiology">Radiology</span></div>
       <div class="sb-item" data-p="pt-history" onclick="goPage('pt-history')"><span class="ic">🕐</span><span data-i18n="nav_pt_history">Patient Timeline</span></div>
-      <div class="sb-item" data-p="investigation-history" onclick="goPage('investigation-history')"><span class="ic">🧪</span><span data-i18n="nav_investigation_history">Lab Investigation History</span></div>
     </div>
     <div class="sb-group" data-module="doctor">
       <div class="sb-lbl" data-i18n="navgrp_doctor">🩺 Doctor</div>
       <div class="sb-item" data-p="consultation" onclick="goPage('consultation')"><span class="ic">📋</span><span data-i18n="nav_consultation">Doctor Orders</span></div>
       <div class="sb-item" data-p="pt-history" onclick="goPage('pt-history')"><span class="ic">🕐</span><span data-i18n="nav_pt_history">Patient Timeline</span></div>
-      <div class="sb-item" data-p="investigation-history" onclick="goPage('investigation-history')"><span class="ic">🧪</span><span data-i18n="nav_investigation_history">Lab Investigation History</span></div>
     </div>
     <div class="sb-group" data-module="nursing">
       <div class="sb-lbl" data-i18n="navgrp_nursing">🧑‍⚕️ Nursing</div>
@@ -604,7 +601,6 @@ html[dir="rtl"] body{direction:rtl;}
       <div class="sb-item" data-p="infection" onclick="goPage('infection')"><span class="ic">🦠</span><span data-i18n="nav_infection">Infection Flags</span></div>
       <div class="sb-item" data-p="handover" onclick="goPage('handover')"><span class="ic">📋</span><span data-i18n="nav_handover">Handover Notes</span></div>
       <div class="sb-item" data-p="pt-history" onclick="goPage('pt-history')"><span class="ic">🕐</span><span data-i18n="nav_pt_history">Patient Timeline</span></div>
-      <div class="sb-item" data-p="investigation-history" onclick="goPage('investigation-history')"><span class="ic">🧪</span><span data-i18n="nav_investigation_history">Lab Investigation History</span></div>
     </div>
     <div class="sb-group" data-module="admissions">
       <div class="sb-lbl" data-i18n="navgrp_admissions">🛏 Admissions</div>
@@ -1787,7 +1783,7 @@ html[dir="rtl"] body{direction:rtl;}
           <div style="background:#eff6ff;border-radius:8px;padding:10px 12px;margin-bottom:12px">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
               <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:#1d4ed8">🧪 Lab Investigations</div>
-              <button class="btn btn-s btn-xs" onclick="goPage('investigation-history')">Full History →</button>
+              <button class="btn btn-s btn-xs" onclick="openLabHistoryFromDoctor()">Full History →</button>
             </div>
             <div id="doc-lab-invest-body"><div class="empty-state" style="padding:8px;font-size:.76rem">No lab results on file for this patient yet</div></div>
           </div>
@@ -4996,51 +4992,37 @@ html[dir="rtl"] body{direction:rtl;}
       </div>
     </div>
   </div>
-</div>
-
-<!-- ── Patient Lab Investigation History (Phase 3) ──────────────────────
-     Browsable multi-visit lab history, pulled from lab_result_history
-     (see migration_v2.51 / logLabResultHistory() in the <script> block) —
-     not the single-row current-panel tables Patient History Timeline's
-     own trend card is limited to. Own page (not a tab bolted onto
-     Patient History Timeline) so it has room to grow; patient lookup
-     below mirrors searchPtHistory()/selectPthPatient() exactly (same
-     query shape, same result-list rendering), the established pattern
-     every per-page patient search in this app follows rather than a
-     single shared search function every page would need to adapt to its
-     own DOM ids and post-selection behaviour. -->
-<div class="page" id="page-investigation-history">
-  <div class="card" style="margin-bottom:14px">
-    <div class="card-hd"><span class="card-title">🧪 Lab Investigation History</span></div>
-    <div class="card-body">
-      <div class="fg">
-        <label class="fl">Search Patient</label>
-        <div class="srch"><span>🔍</span><input id="invh-search" placeholder="Name, MRN, lab no…" oninput="searchInvHistoryPatient(this.value)"></div>
-        <div id="invh-results" style="display:none;border:1.5px solid var(--teal);border-radius:7px;background:#fff;max-height:180px;overflow-y:auto;margin-top:4px;z-index:50;position:relative"></div>
-      </div>
-    </div>
-  </div>
-  <div id="invh-pt-banner" style="display:none" class="pt-banner">
-    <div class="pb-i"><div class="pb-l">Patient</div><div class="pb-v" id="invh-pt-name">—</div></div>
-    <div class="pb-i"><div class="pb-l">MRN</div><div class="pb-v" id="invh-pt-mrn">—</div></div>
-    <div class="pb-i"><div class="pb-l">Age / Sex</div><div class="pb-v" id="invh-pt-agesex">—</div></div>
-  </div>
-  <div id="invh-main" style="display:none">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+  <!-- ── Lab Investigation Browser — folded into Patient History Timeline
+       instead of the standalone "Lab Investigation History" page it
+       started as. Same underlying data (lab_result_history, see
+       migration_v2.51 / logLabResultHistory()) and same rendering
+       (renderInvHistoryList()/renderInvHistoryDetailTable() below,
+       unchanged) — only the patient lookup changed: this card now loads
+       off _pthPt (Timeline's own search/selection, above) instead of a
+       second search bar, since a standalone page duplicating Timeline's
+       patient search was the actual problem being fixed here. Shown only
+       once _invHistRows has something to browse; stays hidden (not an
+       error) for a patient with no lab_result_history rows yet — e.g. a
+       brand-new registration, or an existing patient whose results
+       predate migration_v2.51 and haven't been backfilled (Settings →
+       Lab Investigation History Backfill). -->
+  <div class="card" id="pth-labhist-card" style="display:none;margin-top:14px">
+    <div class="card-hd"><span class="card-title">🧪 Lab Investigation Browser</span>
       <div class="tabs" style="margin:0">
         <button class="tab active" onclick="setInvHistoryView('test',this)">📋 Group by Test</button>
         <button class="tab" onclick="setInvHistoryView('date',this)">📅 Group by Date</button>
       </div>
-      <button class="btn btn-s btn-sm" onclick="loadInvHistoryData()">↻</button>
     </div>
-    <div class="g2" style="align-items:start">
-      <div class="card">
-        <div class="card-hd"><span class="card-title" id="invh-list-title">Tests</span></div>
-        <div id="invh-list" style="padding:8px;max-height:600px;overflow-y:auto"><div class="empty-state">Select a patient</div></div>
-      </div>
-      <div class="card">
-        <div class="card-hd"><span class="card-title" id="invh-detail-title">Results</span></div>
-        <div id="invh-detail" style="padding:14px;max-height:600px;overflow-y:auto"><div class="empty-state"><div class="empty-icon">👆</div><div class="empty-title">Select a test or date</div></div></div>
+    <div class="card-body">
+      <div class="g2" style="align-items:start">
+        <div class="card">
+          <div class="card-hd"><span class="card-title" id="invh-list-title">Tests</span></div>
+          <div id="invh-list" style="padding:8px;max-height:500px;overflow-y:auto"><div class="empty-state">Select a patient</div></div>
+        </div>
+        <div class="card">
+          <div class="card-hd"><span class="card-title" id="invh-detail-title">Results</span></div>
+          <div id="invh-detail" style="padding:14px;max-height:500px;overflow-y:auto"><div class="empty-state"><div class="empty-icon">👆</div><div class="empty-title">Select a test or date</div></div></div>
+        </div>
       </div>
     </div>
   </div>
@@ -7333,16 +7315,15 @@ const CFG = {
 const BLOOD_SHELF_LIFE_CFG_KEY={'Whole Blood':'bloodShelfWholeBlood','Packed RBC':'bloodShelfPrbc',Platelets:'bloodShelfPlatelets',FFP:'bloodShelfFfp',Cryoprecipitate:'bloodShelfCryo'};
 
 const ROLE_PAGES = {
-  admin:['dashboard','admission','theatre','consultation','nursing','fluid-chart','appointments','infection','handover','register','worklist','samples','set-printer','hem-entry','chem-entry','sero-entry','immuno-entry','micro-entry','pcr-entry','histo-entry','cyto-entry','unified-entry','allresults','criticals','reports','print-reports-hub','rad-print','billing','prices','pt-history','investigation-history','labhistory','tat','inventory','bloodbank','qc','validation','reference-ranges','staff','doctors','radiology','analyzer','delivery','settings','statistics'],
-  doctor:['dashboard','admission','theatre','consultation','nursing','fluid-chart','allresults','criticals','radiology','bloodbank','pt-history','investigation-history'],
-  nurse:['dashboard','nursing','fluid-chart','admission','criticals','bloodbank','pt-history','investigation-history','inventory','handover','infection','samples'],
-  lab_tech:['dashboard','worklist','samples','set-printer','hem-entry','chem-entry','sero-entry','immuno-entry','micro-entry','pcr-entry','histo-entry','cyto-entry','unified-entry','allresults','criticals','reports','tat','inventory','delivery','qc','validation','labhistory','bloodbank','pt-history','investigation-history'],
-  lab_supervisor:['register','worklist','samples','set-printer','hem-entry','chem-entry','sero-entry','immuno-entry','micro-entry','unified-entry','allresults','criticals','reports','qc','validation','labhistory','tat','inventory','delivery','staff','bloodbank','pt-history','investigation-history'],
+  admin:['dashboard','admission','theatre','consultation','nursing','fluid-chart','appointments','infection','handover','register','worklist','samples','set-printer','hem-entry','chem-entry','sero-entry','immuno-entry','micro-entry','pcr-entry','histo-entry','cyto-entry','unified-entry','allresults','criticals','reports','print-reports-hub','rad-print','billing','prices','pt-history','labhistory','tat','inventory','bloodbank','qc','validation','reference-ranges','staff','doctors','radiology','analyzer','delivery','settings','statistics'],
+  doctor:['dashboard','admission','theatre','consultation','nursing','fluid-chart','allresults','criticals','radiology','bloodbank','pt-history'],
+  nurse:['dashboard','nursing','fluid-chart','admission','criticals','bloodbank','pt-history','inventory','handover','infection','samples'],
+  lab_tech:['dashboard','worklist','samples','set-printer','hem-entry','chem-entry','sero-entry','immuno-entry','micro-entry','pcr-entry','histo-entry','cyto-entry','unified-entry','allresults','criticals','reports','tat','inventory','delivery','qc','validation','labhistory','bloodbank','pt-history'],
+  lab_supervisor:['register','worklist','samples','set-printer','hem-entry','chem-entry','sero-entry','immuno-entry','micro-entry','unified-entry','allresults','criticals','reports','qc','validation','labhistory','tat','inventory','delivery','staff','bloodbank','pt-history'],
   receptionist:['register','appointments','billing','prices','worklist','dashboard','infection','print-reports-hub','reports','rad-print'],
   cashier:['billing','prices'],
   theatre_nurse:['theatre','nursing','fluid-chart','criticals','pt-history','inventory','admission'],
-  // Radiology Phase 5: 'investigation-history' is the new page this phase
-  // adds. 'pt-history' is ALSO added here as a related fix, not scope
+  // Radiology Phase 5: 'pt-history' is added here as a fix, not scope
   // creep — radiologist already had 'pt-history' granted in ROLE_PAGES
   // (so the client-side check never blocked it), but the sidebar itself
   // (see the #sidebar radiology sb-group) and MODULE_PAGES.radiology
@@ -7350,7 +7331,7 @@ const ROLE_PAGES = {
   // page they already had permission for. Same shape as "the earlier
   // pt-history access fix" this task referenced (Doctor/Nursing sidebar
   // links added after being found ROLE_PAGES-granted but unreachable).
-  radiologist:['radiology','dashboard','pt-history','investigation-history','inventory'],
+  radiologist:['radiology','dashboard','pt-history','inventory'],
 };
 
 const PAGE_TITLES = {
@@ -7363,7 +7344,7 @@ const PAGE_TITLES = {
   'unified-entry':'Enter Results',
   allresults:'All Results',criticals:'Critical Values',reports:'Print Reports',
   billing:'Billing & Invoices',prices:'Price List',
-  'pt-history':'Patient History Timeline','investigation-history':'Lab Investigation History',labhistory:'Lab History',
+  'pt-history':'Patient History Timeline',labhistory:'Lab History',
   tat:'TAT Tracker',inventory:'Inventory',bloodbank:'Blood Bank',qc:'QC Module','reference-ranges':'Lab Reference Ranges',
   staff:'Staff Management',doctors:'Doctors',radiology:'Radiology',
   delivery:'Result Delivery',settings:'Settings',
@@ -7386,12 +7367,12 @@ const PAGE_TITLES = {
 const MODULE_PAGES = {
   reception:      { label:'Reception',      icon:'🏥', pages:['register','appointments','print-reports-hub'] },
   phlebotomy:     { label:'Phlebotomy',      icon:'💉', pages:['samples','set-printer'] },
-  laboratory:     { label:'Laboratory',      icon:'🔬', pages:['worklist','unified-entry','hem-entry','chem-entry','sero-entry','immuno-entry','micro-entry','pcr-entry','histo-entry','cyto-entry','reports','allresults','labhistory','criticals','qc','analyzer','validation','reference-ranges','tat','pt-history','investigation-history'] },
+  laboratory:     { label:'Laboratory',      icon:'🔬', pages:['worklist','unified-entry','hem-entry','chem-entry','sero-entry','immuno-entry','micro-entry','pcr-entry','histo-entry','cyto-entry','reports','allresults','labhistory','criticals','qc','analyzer','validation','reference-ranges','tat','pt-history'] },
   // 'pt-history' added here too (Radiology Phase 5) — see the matching
   // comment on ROLE_PAGES.radiologist for why.
-  radiology:      { label:'Radiology',       icon:'🩻', pages:['radiology','rad-print','pt-history','investigation-history'] },
-  doctor:         { label:'Doctor',          icon:'🩺', pages:['consultation','pt-history','investigation-history'] },
-  nursing:        { label:'Nursing',         icon:'🧑‍⚕️', pages:['nursing','fluid-chart','infection','handover','pt-history','investigation-history'] },
+  radiology:      { label:'Radiology',       icon:'🩻', pages:['radiology','rad-print','pt-history'] },
+  doctor:         { label:'Doctor',          icon:'🩺', pages:['consultation','pt-history'] },
+  nursing:        { label:'Nursing',         icon:'🧑‍⚕️', pages:['nursing','fluid-chart','infection','handover','pt-history'] },
   // Split from the original combined "Admissions" tile (previously
   // pages:['admission','theatre']) into two top-level tiles — Bed
   // Management (IPD) and Theatre/OT — so each is reachable on its own. No
@@ -7552,7 +7533,7 @@ const I18N = {
     nav_histo_entry:'Histopathology', nav_cyto_entry:'Cytology', nav_allresults:'All Results',
     nav_criticals:'Critical Values', nav_reports:'Print Reports',
     nav_billing_full:'Billing & Invoices', nav_prices:'Price List',
-    nav_pt_history:'Patient Timeline', nav_investigation_history:'Lab Investigation History', nav_labhistory:'Lab History', nav_tat:'TAT Tracker',
+    nav_pt_history:'Patient Timeline', nav_labhistory:'Lab History', nav_tat:'TAT Tracker',
     nav_inventory:'Inventory', nav_qc:'QC Module',
     nav_statistics:'Statistics', nav_staff:'Staff', nav_doctors:'Doctors', nav_radiology:'Radiology',
     nav_analyzer:'Analyzer Interface', nav_validation:'Analyzer Validation', nav_delivery:'Result Delivery', nav_settings:'Settings',
@@ -7568,7 +7549,7 @@ const I18N = {
     'page_micro-entry':'Microbiology Result Entry', 'page_unified-entry':'Enter Results',
     page_allresults:'All Results', page_criticals:'Critical Values', page_reports:'Print Reports',
     page_billing:'Billing & Invoices', page_prices:'Price List',
-    'page_pt-history':'Patient History Timeline', 'page_investigation-history':'Lab Investigation History', page_labhistory:'Lab History',
+    'page_pt-history':'Patient History Timeline', page_labhistory:'Lab History',
     page_tat:'TAT Tracker', page_inventory:'Inventory', page_qc:'QC Module',
     page_staff:'Staff Management', page_doctors:'Doctors', page_radiology:'Radiology',
     page_delivery:'Result Delivery', page_settings:'Settings',
@@ -7627,7 +7608,7 @@ const I18N = {
     nav_histo_entry:'علم الأنسجة المرضي', nav_cyto_entry:'علم الخلايا', nav_allresults:'جميع النتائج',
     nav_criticals:'القيم الحرجة', nav_reports:'طباعة التقارير',
     nav_billing_full:'الفواتير والحسابات', nav_prices:'قائمة الأسعار',
-    nav_pt_history:'الجدول الزمني للمريض', nav_investigation_history:'تاريخ الفحوصات المخبرية', nav_labhistory:'سجل المختبر', nav_tat:'متتبع وقت الإنجاز',
+    nav_pt_history:'الجدول الزمني للمريض', nav_labhistory:'سجل المختبر', nav_tat:'متتبع وقت الإنجاز',
     nav_inventory:'المخزون', nav_qc:'وحدة ضبط الجودة',
     nav_statistics:'الإحصائيات', nav_staff:'الموظفون', nav_doctors:'الأطباء', nav_radiology:'الأشعة',
     nav_analyzer:'واجهة المحلل', nav_validation:'التحقق من صحة المحلل', nav_delivery:'تسليم النتائج', nav_settings:'الإعدادات',
@@ -7643,7 +7624,7 @@ const I18N = {
     'page_micro-entry':'إدخال نتائج الأحياء الدقيقة', 'page_unified-entry':'إدخال النتائج',
     page_allresults:'جميع النتائج', page_criticals:'القيم الحرجة', page_reports:'طباعة التقارير',
     page_billing:'الفواتير والحسابات', page_prices:'قائمة الأسعار',
-    'page_pt-history':'الجدول الزمني لتاريخ المريض', 'page_investigation-history':'تاريخ الفحوصات المخبرية', page_labhistory:'سجل المختبر',
+    'page_pt-history':'الجدول الزمني لتاريخ المريض', page_labhistory:'سجل المختبر',
     page_tat:'متتبع وقت الإنجاز', page_inventory:'المخزون', page_qc:'وحدة ضبط الجودة',
     page_staff:'إدارة الموظفين', page_doctors:'الأطباء', page_radiology:'الأشعة',
     page_delivery:'تسليم النتائج', page_settings:'الإعدادات',
@@ -13267,6 +13248,12 @@ async function loadPthTimeline() {
     renderPthTimeline();
     if(_pthHemHistory.length||_pthChemHistory.length){ document.getElementById('pth-trends-card').style.display=''; renderPthTrend(); }
   } catch(e){ console.error(e); if(tl) tl.innerHTML='<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-title">Could not load history</div><div style="font-size:.8rem;color:var(--slate);margin-top:4px">'+escapeHtml(e.message||'Unknown error')+'</div></div>'; }
+  // Lab Investigation Browser card — same patient Timeline already has
+  // selected, no second search. Loaded alongside (not blocking) the rest
+  // of the timeline; its own try/catch in loadInvHistoryData() keeps a
+  // failure here from breaking the timeline above.
+  _invHistPt=_pthPt;
+  await loadInvHistoryData();
 }
 function setPthFilter(f,btn) {
   _pthFilter=f; document.querySelectorAll('[onclick*="setPthFilter"]').forEach(b=>b.classList.remove('active')); if(btn) btn.classList.add('active'); renderPthTimeline();
@@ -22987,41 +22974,22 @@ async function backfillLabResultHistory() {
 }
 
 // ══════════════════════════════════════════════════════════════
-// PATIENT LAB INVESTIGATION HISTORY — browser (Phase 3)
+// PATIENT LAB INVESTIGATION HISTORY — browser
+// Folded into Patient History Timeline's own #pth-labhist-card (see
+// page-pt-history in the HTML) instead of living on its own page —
+// there is no separate patient search here any more; _invHistPt is
+// just Timeline's own _pthPt, set by loadPthTimeline() below. The
+// standalone page this used to be (searchInvHistoryPatient()/
+// selectInvHistoryPatient(), reimplementing Patient History Timeline's
+// own searchPtHistory()/selectPthPatient() patient lookup) is gone —
+// two entry points into the same patient's lab data was the actual bug
+// being fixed, not a missing feature.
 // ══════════════════════════════════════════════════════════════
 let _invHistPt = null, _invHistRows = [], _invHistView = 'test', _invHistSelectedKey = null;
 
-// Patient lookup — same query shape and result-list rendering as
-// searchPtHistory()/selectPthPatient() (Patient History Timeline), the
-// established per-page pattern every patient search in this app follows
-// (see also searchDocPatient(), searchNrsProcPatient()) rather than a
-// single shared function every page's own DOM ids/post-selection
-// behaviour would have to be threaded through.
-async function searchInvHistoryPatient(q) {
-  const res=document.getElementById('invh-results'); if(!res) return;
-  if(!q||q.length<2){ res.style.display='none'; return; }
-  if(!sb) return;
-  try {
-    const {data}=await sb.from('patients').select('id,name,first_name,last_name,mrn,lab_no,age,age_unit,sex')
-      .or('name.ilike.%'+q+'%,mrn.ilike.%'+q+'%,lab_no.ilike.%'+q+'%').limit(8);
-    if(!data?.length){ res.style.display='none'; return; }
-    res.style.display='block';
-    res.innerHTML=data.map(p=>'<div onclick="selectInvHistoryPatient('+JSON.stringify(p).replace(/"/g,'&quot;')+')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:.81rem" onmouseover="this.style.background=\'#f0f9ff\'" onmouseout="this.style.background=\'#fff\'"><strong>'+escapeHtml(p.name||fullName(p))+'</strong> <span style="color:var(--slate);font-size:.72rem">'+escapeHtml(p.mrn||p.lab_no||'')+' · '+(p.age||'?')+(p.age_unit||'')+' / '+(p.sex||'')+'</span></div>').join('');
-  } catch(e){}
-}
-async function selectInvHistoryPatient(p) {
-  _invHistPt=p;
-  document.getElementById('invh-results').style.display='none';
-  document.getElementById('invh-search').value=p.name||fullName(p);
-  document.getElementById('invh-pt-banner').style.display='flex';
-  document.getElementById('invh-pt-name').textContent=p.name||fullName(p);
-  document.getElementById('invh-pt-mrn').textContent=p.mrn||p.lab_no||'—';
-  document.getElementById('invh-pt-agesex').textContent=(p.age||'?')+(p.age_unit||'y')+'/'+(p.sex||'');
-  document.getElementById('invh-main').style.display='block';
-  await loadInvHistoryData();
-}
 async function loadInvHistoryData() {
-  if(!sb||!_invHistPt) return;
+  const cardEl=document.getElementById('pth-labhist-card');
+  if(!sb||!_invHistPt){ if(cardEl) cardEl.style.display='none'; return; }
   const listEl=document.getElementById('invh-list'); if(listEl) listEl.innerHTML='<div class="spin-center"><div class="spinner"></div>Loading…</div>';
   // Same MRN-merge pattern runDeltaCheck()/loadPthTimeline() already use
   // (see their own "allIdsForMrn" resolution) — a follow-up/re-
@@ -23038,14 +23006,23 @@ async function loadInvHistoryData() {
   try{
     const {data}=await sb.from('lab_result_history').select('*').in('patient_id',allIdsForMrn).order('saved_at',{ascending:false});
     _invHistRows = data||[];
-  }catch(e){ _invHistRows=[]; if(listEl) listEl.innerHTML='<div class="empty-state">'+escapeHtml(e.message)+'</div>'; return; }
+  }catch(e){
+    _invHistRows=[];
+    if(cardEl) cardEl.style.display='';
+    if(listEl) listEl.innerHTML='<div class="empty-state">'+escapeHtml(e.message)+'</div>';
+    return;
+  }
+  // Hidden (not an error) for a patient with nothing to browse yet — a
+  // brand-new registration, or existing results that predate
+  // migration_v2.51 and haven't been backfilled (Settings page).
+  if(cardEl) cardEl.style.display=_invHistRows.length?'':'none';
   _invHistSelectedKey=null;
   renderInvHistoryList();
   const detailEl=document.getElementById('invh-detail'); if(detailEl) detailEl.innerHTML='<div class="empty-state"><div class="empty-icon">👆</div><div class="empty-title">Select a test or date</div></div>';
 }
 function setInvHistoryView(view,btn){
   _invHistView=view;
-  document.querySelectorAll('#invh-main .tabs .tab').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('#pth-labhist-card .tabs .tab').forEach(b=>b.classList.remove('active'));
   if(btn) btn.classList.add('active');
   _invHistSelectedKey=null;
   renderInvHistoryList();
@@ -23145,6 +23122,17 @@ async function loadDocLabInvestigations(ptId){
     const rows=data.filter(r=>r.saved_at===latestSavedAt);
     body.innerHTML='<div style="font-size:.7rem;color:var(--slate);margin-bottom:6px">'+rows.length+' result'+(rows.length>1?'s':'')+' from '+fmtDT(latestSavedAt)+'</div>'+renderInvHistoryDetailTable(rows);
   }catch(e){ body.innerHTML='<div class="empty-state" style="padding:8px;font-size:.76rem">'+escapeHtml(e.message)+'</div>'; }
+}
+// "Full History →" button on the Consultation Lab Investigations panel —
+// deep-links into Patient History Timeline's own Lab Investigation
+// Browser card (#pth-labhist-card) for the same patient, rather than a
+// second page. Same setTimeout-after-goPage convention already used by
+// openEnterModalDept() to let the target page's DOM exist before acting
+// on it.
+function openLabHistoryFromDoctor() {
+  if(!_docPt) return;
+  goPage('pt-history');
+  setTimeout(()=>selectPthPatient(_docPt),300);
 }
 
 // Named sub-panels for the Combined Laboratory Report (printAllReports()),
