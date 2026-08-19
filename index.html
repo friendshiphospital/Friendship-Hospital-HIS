@@ -4827,6 +4827,11 @@ html[dir="rtl"] body{direction:rtl;}
         </div>
         <div id="cfg-conn-status" style="margin-top:8px;font-size:.78rem"></div>
       </div></div>
+      <div class="card"><div class="card-hd"><span class="card-title">🕓 Lab Investigation History Backfill</span></div><div class="card-body">
+        <div style="font-size:.72rem;color:var(--slate);margin-bottom:8px">The Lab Investigation History browser (Laboratory/Doctor/Nurse/Radiology) only shows results saved <em>after</em> <code>migration_v2.51</code> was applied — by design, nothing was backfilled automatically. Run this once to add every existing lab result on file to the browser. Safe to re-run: patients/departments that already have history are skipped, never duplicated.</div>
+        <button class="btn btn-p" onclick="backfillLabResultHistory()">🕓 Backfill Existing Lab Results</button>
+        <div id="backfill-status" style="margin-top:8px;font-size:.78rem"></div>
+      </div></div>
       <div class="card"><div class="card-hd"><span class="card-title">📲 SMS / Messaging Provider</span></div><div class="card-body">
         <div style="font-size:.72rem;color:var(--slate);margin-bottom:8px">The gateway URL and API key are configured server-side only, as Supabase Edge Function secrets — see <code>supabase/functions/send-sms</code> — so the key is never stored in this browser. Run <code>supabase secrets set SMS_API_URL=... SMS_API_KEY=...</code> once to configure the provider. Sender ID isn't sensitive and can still be set per deployment here.</div>
         <div class="fg"><label class="fl">Sender ID</label><input class="fc" id="cfg-sms-sender-id" placeholder="FriendshipHosp"></div>
@@ -22901,6 +22906,84 @@ async function logLabResultHistory(deptKey, ptId, payload){
     };
     await sb.from('lab_result_history').insert(rows.map(r=>({...commonFields, ...r})));
   }catch(e){ /* additive — never block the result save on this */ }
+}
+
+// ── ONE-TIME ADMIN BACKFILL — lab_result_history (Settings page) ──────
+// migration_v2.51 deliberately shipped with NO backfill (see its own
+// header comment) — history only starts accumulating from the first save
+// AFTER the migration ran. Any patient whose results were entered before
+// that (and never re-saved since) legitimately has zero lab_result_history
+// rows, which is exactly what made the Investigation History browser look
+// empty/broken for real patients with real multi-visit results — confirmed
+// live via a Phase 0 diagnostic simulation (both the write path and the
+// browse/query path work correctly for anything saved after the
+// migration; the gap is purely pre-migration data that was never backfilled).
+// Reuses the exact same LAB_HISTORY_EXTRACTORS every live save already
+// goes through, so a backfilled row and a freshly-saved row for the same
+// test are indistinguishable in shape — never a second, drifting copy of
+// the field/label/range logic. Admin-only (Settings page is already
+// ROLE_PAGES-gated to admin) and idempotent: a (patient_id, department)
+// pair that already has ANY lab_result_history rows is skipped entirely,
+// so re-running this after some patients have already had a fresh live
+// save (which correctly created its own history) never creates
+// duplicate/stale rows.
+const BACKFILL_SOURCE_TABLES = {
+  hem:{table:'results_hematology'}, chem:{table:'results_chemistry'},
+  sero:{table:'results_serology'}, immuno:{table:'results_serology'},
+  micro:{table:'results_microbiology'}, pcr:{table:'results_pcr'},
+  histo:{table:'results_histopathology'}, cyto:{table:'results_cytology'},
+};
+async function backfillLabResultHistory() {
+  if(!sb) return;
+  const statusEl=document.getElementById('backfill-status');
+  if(!confirm('This scans every existing lab result (Haematology, Chemistry, Serology, Immunology, Microbiology, PCR, Histopathology, Cytology) and adds any missing entries to the Lab Investigation History browser. Patients/departments that already have history rows are skipped — safe to re-run. This may take a while on a large database. Continue?')) return;
+  if(statusEl) statusEl.textContent='Running…';
+  let inserted=0; const patientsCovered=new Set(); let skipped=0; const errors=[];
+  try {
+    const {data:existingRows}=await sb.from('lab_result_history').select('patient_id,department');
+    const already=new Set((existingRows||[]).map(r=>r.patient_id+'|'+r.department));
+    const patientsCache={};
+    const getPatient=async(id)=>{
+      if(patientsCache[id]!==undefined) return patientsCache[id];
+      try{ const {data}=await sb.from('patients').select('mrn,lab_no').eq('id',id).maybeSingle(); patientsCache[id]=data||null; }
+      catch(e){ patientsCache[id]=null; }
+      return patientsCache[id];
+    };
+    for(const [deptKey,src] of Object.entries(BACKFILL_SOURCE_TABLES)){
+      let sourceRows=[];
+      try{ const {data,error}=await sb.from(src.table).select('*'); if(error) throw error; sourceRows=data||[]; }
+      catch(e){ errors.push(src.table+': '+e.message); continue; }
+      for(const row of sourceRows){
+        const ptId=row.patient_id; if(!ptId) continue;
+        const key=ptId+'|'+deptKey;
+        if(already.has(key)){ skipped++; continue; }
+        const extractor=LAB_HISTORY_EXTRACTORS[deptKey];
+        const rows=extractor?extractor(row):[];
+        already.add(key); // mark visited either way, so a re-run never re-checks an empty/no-op row
+        if(!rows.length) continue;
+        const pt=await getPatient(ptId);
+        const savedAt=row.analysis_date?new Date(row.analysis_date).toISOString():(row.created_at||new Date().toISOString());
+        const commonFields={
+          patient_id:ptId, mrn:pt?.mrn||null, department:deptKey, source_table:src.table,
+          sample_id:pt?.lab_no||null, is_verified:!!row.is_verified,
+          verified_by:row.is_verified?(row.performed_by||null):null, verified_at:row.verified_at||null,
+          created_by:row.performed_by||null, saved_at:savedAt,
+        };
+        try{
+          await sb.from('lab_result_history').insert(rows.map(r=>({...commonFields,...r})));
+          inserted+=rows.length; patientsCovered.add(ptId);
+        }catch(e){ errors.push(src.table+' (patient '+ptId+'): '+e.message); }
+      }
+    }
+  } catch(e) {
+    if(statusEl) statusEl.textContent='❌ '+e.message;
+    toast('Backfill failed: '+e.message,'err');
+    return;
+  }
+  const summary='✅ Backfill complete — '+inserted+' history row'+(inserted!==1?'s':'')+' added across '+patientsCovered.size+' patient visit'+(patientsCovered.size!==1?'s':'')+(skipped?(' · '+skipped+' already had history'):'')+(errors.length?(' · '+errors.length+' error(s), see console'):'');
+  if(statusEl) statusEl.textContent=summary;
+  if(errors.length) console.warn('Lab history backfill errors:',errors);
+  toast(summary,'ok');
 }
 
 // ══════════════════════════════════════════════════════════════
