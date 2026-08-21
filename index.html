@@ -12458,9 +12458,42 @@ async function submitRegistration() {
     const isInpatient = g('r-patient-type')==='Inpatient';
     const existingMrn = g('r-existing-mrn');
     const fullnameForMaster=[g('r-fname'),g('r-mname'),g('r-lname')].filter(Boolean).join(' ');
+    // phone stored as the same canonical digits-only string validated
+    // above (phoneDigits), not whatever raw formatting the receptionist
+    // happened to type — otherwise "0912345678" and "091-234-5678" for
+    // the same person land as two different literal strings and every
+    // phone-based lookup (this safety net, the follow-up-pricing phone
+    // fallback, the typing-time duplicate hint) silently stops matching
+    // them as the same patient.
     const masterFields = {first_name:g('r-fname'), middle_name:g('r-mname'), last_name:g('r-lname'), name:fullnameForMaster,
-      age:g('r-age')||null, age_unit:g('r-age-unit'), sex:g('r-sex'), dob:g('r-dob')||null, phone:g('r-phone'), national_id:g('r-national-id')};
+      age:g('r-age')||null, age_unit:g('r-age-unit'), sex:g('r-sex'), dob:g('r-dob')||null, phone:phoneDigits, national_id:g('r-national-id')};
     let mrn = existingMrn;
+    if(!mrn){
+      // Safety net for a returning patient the receptionist didn't
+      // manually match — missed or ignored the phone-typing hint
+      // (onPhoneNumberInput) or the manual search box, both of which only
+      // ever populate r-existing-mrn if actually clicked. Before minting
+      // a brand-new permanent identity, do one last authoritative check
+      // against patients_master (not the per-visit patients table) for
+      // this exact phone number. Applies identically whether this is a
+      // normal walk-in or a follow-up visit — both submit through this
+      // exact same function, so this is the one place a fix here covers
+      // both paths at once, rather than patching each separately.
+      // Confirmed live: a returning patient's follow-up visit got a
+      // brand-new MRN instead of reusing their real one because this
+      // exact gap let it through — checkAndApplyFollowUpPricing() below
+      // already detects "this phone matches an open follow-up under a
+      // different mrn" but only ever asks about pricing, never identity.
+      try{
+        const {data:phoneMatches} = await sb.from('patients_master').select('mrn,name').eq('phone',phoneDigits);
+        if(phoneMatches?.length){
+          const match=phoneMatches[0];
+          if(confirm('A patient record already exists for this phone number — '+(match.name||'this number')+' (MRN '+match.mrn+'). Is this the same person?\n\nOK — register this visit under their existing MRN '+match.mrn+'.\nCancel — register as a new, separate patient.')){
+            mrn = match.mrn;
+          }
+        }
+      }catch(e){}
+    }
     if(!mrn){
       // Brand new person — permanent MRN, generated once, never again.
       mrn = await getNextNumber('mrn');
@@ -12476,7 +12509,7 @@ async function submitRegistration() {
     // (existingMrn) plus the entered phone, so a brand-new mrn can still be
     // matched against an open follow-up under a DIFFERENT known mrn sharing
     // this phone number (see checkAndApplyFollowUpPricing's phone fallback).
-    const followUpMatch = await checkAndApplyFollowUpPricing(mrn, {wasManualMatch:!!existingMrn, phone:g('r-phone')});
+    const followUpMatch = await checkAndApplyFollowUpPricing(mrn, {wasManualMatch:!!existingMrn, phone:phoneDigits});
     // Per-visit File Number, Lab No., Radiology No. — generated fresh every
     // time, even for a returning patient. Wrapped in a retry loop: if the
     // insert still hits a unique-constraint collision (23505) despite the
@@ -12495,7 +12528,7 @@ async function submitRegistration() {
         id:newPtId, mrn, visit_no:visitNo, lab_no:labNo,
         first_name:g('r-fname'), middle_name:g('r-mname'), last_name:g('r-lname'), name:fullname,
         age:g('r-age'), age_unit:g('r-age-unit'), sex:g('r-sex'), dob:g('r-dob')||null,
-        phone:g('r-phone'), national_id:g('r-national-id'),
+        phone:phoneDigits, national_id:g('r-national-id'),
         next_of_kin_name:g('r-kin-name'), next_of_kin_phone:g('r-kin-phone'),
         patient_type:g('r-patient-type'), ward:g('r-ward'), source:g('r-ward'),
         doctor:getRegDoctor(), doctor_id:getRegDoctorId(), diagnosis:(destDetail+g('r-diagnosis')).trim(),
