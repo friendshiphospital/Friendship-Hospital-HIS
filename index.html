@@ -14453,13 +14453,28 @@ async function buildAutoInvoiceLines(tests, destinations, doctorId) {
     // charge regardless of who was seeing the patient. No doctor selected
     // at all (doctorId null/undefined — e.g. registration left it blank)
     // falls through to that exact original flat-fee line, unchanged.
+    //
+    // fee>0 (not just !=null/!isNaN) is required here: CFG.feeGP/
+    // feeSpecialist/feeConsultant (Settings → Consultation Fee defaults)
+    // can never actually be "unset" once anyone has saved the Settings
+    // page for ANY reason — both the getter (`parseFloat(...)||0`) and
+    // saveSettings() (`isNaN(fee)||fee<0 ? 0 : fee`) coerce a blank field
+    // straight to 0, indistinguishable from "an admin deliberately typed
+    // 0." Without this guard, an unconfigured default silently produced
+    // overridePrice:0 — a real invoice line that looks fully priced but
+    // charges nothing, bypassing the price_list 'Consultation Fee' entry
+    // entirely. A genuinely free consultation has an existing, explicit
+    // mechanism (mark the invoice payment_status 'waived') — this is not
+    // it. Falling through here still resolves through the exact same
+    // shared resolvePricedLines()/price_list lookup every other item on
+    // this invoice uses, not a second path.
     let consultLine = {name:'Consultation Fee', category:'consultation'};
     if(doctorId && sb){
       try{
         const {data:doc} = await sb.from('doctors').select('consultation_fee,doctor_type').eq('id',doctorId).maybeSingle();
         if(doc){
           const fee = doc.consultation_fee!=null ? doc.consultation_fee : defaultFeeForDoctorType(doc.doctor_type);
-          if(fee!=null && !isNaN(fee)) consultLine = {name:'Consultation Fee', category:'consultation', overridePrice:fee};
+          if(fee!=null && !isNaN(fee) && fee>0) consultLine = {name:'Consultation Fee', category:'consultation', overridePrice:fee};
         }
       }catch(e){}
     }
