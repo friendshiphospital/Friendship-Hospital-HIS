@@ -12814,7 +12814,7 @@ async function openWlQuickHistory(patientId){
   try {
     const {data:pt}=await sb.from('patients').select('id,mrn,name,first_name,last_name,created_at').eq('id',patientId).maybeSingle();
     if(nameEl) nameEl.textContent=pt?(pt.name||fullName(pt)):'';
-    const result=await fetchPatientHistoryEvents(pt||{id:patientId});
+    const result=await fetchPatientHistoryEvents(pt||{id:patientId},{includeBilling:false});
     _wlQhEvents=result.events;
     if(!body) return;
     if(!_wlQhEvents.length){ body.innerHTML='<div class="empty-state">No previous history found</div>'; return; }
@@ -13193,7 +13193,15 @@ function pthFormatResultRow(r){
 // this role, a migration not yet applied, anything -- can never take the
 // whole Promise.all down with it or leave a caller stuck on a spinner
 // forever; callers still see everything else that DID load.
-async function fetchPatientHistoryEvents(pt){
+async function fetchPatientHistoryEvents(pt,opts){
+  // includeBilling defaults true so the full Patient History Timeline page
+  // (loadPthTimeline, which has its own explicit "Billing" filter tab) keeps
+  // seeing invoice events exactly as before. The read-only inline "History
+  // tab" summaries on Consultation (loadPatientHistory) and the Lab
+  // Worklist (openWlQuickHistory) pass includeBilling:false — clinicians in
+  // those views don't need billing info, and Reception/Billing already have
+  // their own dedicated invoice views untouched by this.
+  const includeBilling=opts?.includeBilling!==false;
   const ptId=pt?.id;
   const resultTableNames=Object.keys(PTH_RESULT_TABLES);
   let allIdsForMrn=[ptId];
@@ -13227,7 +13235,7 @@ async function fetchPatientHistoryEvents(pt){
   (adms.data||[]).forEach(a=>events.push({t:new Date(a.admission_date),type:'admission',icon:'🛏',title:'Admitted — '+escapeHtml(a.ward||''),detail:escapeHtml(a.primary_diagnosis||'—')+' | Dr. '+escapeHtml(a.admitting_doctor||'—')+' | '+escapeHtml(a.status),color:'var(--blue)',data:a}));
   (crits.data||[]).forEach(c=>events.push({t:new Date(c.created_at),type:'lab',icon:'🚨',title:'Critical: '+escapeHtml(c.parameter),detail:'Value: '+escapeHtml(c.value)+' | '+(c.is_acknowledged?'Acknowledged':'⚠️ Unacknowledged'),color:'var(--red)',data:c}));
   (rads.data||[]).forEach(r=>events.push({t:new Date(r.created_at),type:'radiology',icon:'🩻',title:escapeHtml(r.imaging_type||'Radiology'),detail:escapeHtml(r.urgency||'')+' | '+escapeHtml(r.status||'Requested'),color:'var(--sero)',data:r}));
-  (invs.data||[]).forEach(i=>events.push({t:new Date(i.created_at),type:'billing',icon:'💰',title:'Invoice '+escapeHtml(i.invoice_no||''),detail:((i.net_amount||0).toFixed(2))+' '+escapeHtml(i.currency||CFG.currency)+' | '+escapeHtml(i.payment_status),color:'var(--amber)',data:i}));
+  if(includeBilling) (invs.data||[]).forEach(i=>events.push({t:new Date(i.created_at),type:'billing',icon:'💰',title:'Invoice '+escapeHtml(i.invoice_no||''),detail:((i.net_amount||0).toFixed(2))+' '+escapeHtml(i.currency||CFG.currency)+' | '+escapeHtml(i.payment_status),color:'var(--amber)',data:i}));
   (consents.data||[]).forEach(c=>events.push({t:new Date(c.consent_date||c.created_at),type:'consent',icon:'📝',title:'Consent — '+escapeHtml(c.consent_type||'—'),detail:escapeHtml(c.procedure_description||'—')+' | Signed by '+escapeHtml(c.signee_name||'—')+' | Dr. '+escapeHtml(c.performed_by_name||'—'),color:'#0e7490',data:c}));
   (consults.data||[]).forEach(c=>events.push({t:new Date(c.consultation_date||c.created_at),type:'consultation',icon:'🩺',title:'Doctor Visit'+(c.visit_type?' — '+escapeHtml(c.visit_type):''),detail:(c.primary_diagnosis?'Dx: '+escapeHtml(c.primary_diagnosis)+' — ':'')+escapeHtml(c.chief_complaint||'—')+(c.consulting_doctor?' | Dr. '+escapeHtml(c.consulting_doctor):''),color:'#7c3aed',data:c}));
   (rxs.data||[]).forEach(r=>{
@@ -16015,7 +16023,7 @@ async function loadPatientHistory(ptId) {
   if(container) container.innerHTML='<div class="spin-center"><div class="spinner"></div>Loading…</div>';
   try {
     const {data:pt}=await sb.from('patients').select('id,mrn,created_at').eq('id',ptId).maybeSingle();
-    const result=await fetchPatientHistoryEvents(pt||{id:ptId});
+    const result=await fetchPatientHistoryEvents(pt||{id:ptId},{includeBilling:false});
     _docHistoryEvents=result.events;
     if(!container) return;
     if(!_docHistoryEvents.length){ container.innerHTML='<div class="empty-state">No previous history found</div>'; return; }
