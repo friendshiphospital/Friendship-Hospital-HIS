@@ -13270,7 +13270,26 @@ function renderHistoryEventDetail(e){
   let html='<div style="border-left:4px solid '+e.color+';padding-left:12px;margin-bottom:12px"><div style="font-size:1.1rem">'+e.icon+' <strong>'+e.title+'</strong></div><div style="font-size:.75rem;color:var(--slate);margin-top:3px">'+fmtDT(e.t)+'</div></div>';
   const kvTable=rows=>'<table style="width:100%;border-collapse:collapse">'+rows.filter(([,v])=>v).map(([k,v])=>'<tr style="border-bottom:1px solid var(--border)"><td style="padding:5px 8px;font-size:.75rem;color:var(--slate);width:40%">'+k+'</td><td style="padding:5px 8px;font-size:.8rem;font-weight:600;white-space:pre-wrap">'+escapeHtml(v)+'</td></tr>').join('')+'</table>';
   if(e.type==='admission'){ html+=kvTable([['Admission No',d.admission_no],['Ward/Bed',(d.ward||'—')+' / '+(d.bed||'—')],['Doctor',d.admitting_doctor],['Diagnosis',d.primary_diagnosis],['Status',d.status],['Admitted',fmtDT(d.admission_date)],['Discharged',d.discharge_date?fmtDT(d.discharge_date):'Still admitted']]); }
-  else if(e.type==='consultation'){ html+=kvTable([['Chief Complaint',d.chief_complaint],['Primary Diagnosis',d.primary_diagnosis],['Secondary Diagnosis',d.secondary_diagnosis],['Management Plan',d.management_plan],['Disposition',d.disposition],['Follow-up',d.followup],['Doctor',d.consulting_doctor]]); }
+  else if(e.type==='consultation'){
+    // Previously only 7 of saveConsultation()'s ~24 saved fields were shown
+    // here — the actual clinical narrative (HPI, PMH, drug/family/social
+    // history, allergies, physical exam findings) never appeared anywhere
+    // in the History tab, not even after clicking into this event's own
+    // detail panel. A doctor reviewing a patient's past visit could see
+    // THAT a diagnosis was made but not the notes behind it. Now shows
+    // every field saveConsultation() actually persists, in the same
+    // clinical order the entry form uses (complaint/HPI → history →
+    // exam → diagnosis → plan), reusing the same kvTable renderer.
+    html+=kvTable([
+      ['Chief Complaint',d.chief_complaint],['Duration',d.duration],['History of Presenting Illness',d.hpi],
+      ['Past Medical History',d.pmh],['Drug History / Current Medications',d.current_medications],
+      ['Family History',d.family_history],['Social History',d.social_history],['Allergies',d.allergies],
+      ['General Exam',d.general_exam],['CVS Exam',d.cvs_exam],['Respiratory Exam',d.resp_exam],
+      ['Abdominal Exam',d.abdominal_exam],['CNS Exam',d.cns_exam],['MSK Exam',d.msk_exam],['Other Findings',d.other_exam],
+      ['Primary Diagnosis',d.primary_diagnosis],['ICD-10',d.icd10],['Secondary Diagnosis',d.secondary_diagnosis],['Differential Diagnosis',d.differential_diagnosis],
+      ['Management Plan',d.management_plan],['Disposition',d.disposition],['Follow-up',d.followup],['Prognosis',d.prognosis],['Doctor',d.consulting_doctor],
+    ]);
+  }
   else if(e.type==='billing'){ html+='<div style="margin-bottom:8px;display:flex;justify-content:space-between;font-size:.82rem"><span>Invoice: <strong>'+escapeHtml(d.invoice_no||'—')+'</strong></span><span>'+escapeHtml(d.payment_status?.toUpperCase()||'')+'</span></div>'; const items=d.line_items||[]; html+=items.length?'<table style="width:100%;border-collapse:collapse">'+items.slice(0,8).map(i=>'<tr style="border-bottom:1px solid var(--border)"><td style="padding:4px 8px;font-size:.78rem">'+escapeHtml(i.name)+'</td><td style="padding:4px 8px;text-align:right;font-size:.78rem;font-weight:600">'+((i.total_price||0).toFixed(2))+'</td></tr>').join('')+'<tr style="background:var(--teal-lt)"><td style="padding:5px 8px;font-weight:700">Total</td><td style="padding:5px 8px;text-align:right;font-weight:800;color:var(--teal)">'+((d.net_amount||0).toFixed(2))+' '+escapeHtml(d.currency||CFG.currency)+'</td></tr></table>':'<div style="font-size:.78rem;color:var(--slate)">No line items</div>'; }
   else if(e.type==='radiology'){ html+=kvTable([['Imaging Type',d.imaging_type],['Urgency',d.urgency],['Status',d.status],['Indication',d.indication],['Clinical History',d.history],['Radiologist',d.radiologist],['Technique',d.technique],['Findings / Report',d.report],['Impression',d.impression],['Recommendation',d.recommendation]]); }
   else if(e.type==='prescription'){ const items=Array.isArray(d.items)?d.items:[]; html+=items.length?'<table style="width:100%;border-collapse:collapse">'+items.map(it=>'<tr style="border-bottom:1px solid var(--border)"><td style="padding:5px 8px;font-size:.78rem;font-weight:600">'+escapeHtml(it.drug||it.name||'—')+'</td><td style="padding:5px 8px;font-size:.73rem;color:var(--slate)">'+escapeHtml([it.dose,it.route,it.freq,it.duration].filter(Boolean).join(' · ')||'—')+'</td></tr>').join('')+'</table>':'<div style="font-size:.78rem;color:var(--slate)">No items recorded</div>'; if(d.notes) html+='<div style="margin-top:8px;font-size:.78rem;color:var(--ink2)">Note: '+escapeHtml(d.notes)+'</div>'; }
