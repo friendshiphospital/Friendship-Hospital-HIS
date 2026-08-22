@@ -116,6 +116,38 @@ module.exports = async function run(context, baseUrl) {
     await page.close();
   }
 
+  // --- Phase 2 hardening: even if the error-detail extraction ITSELF
+  // misbehaves (malformed/unreadable context.json(), simulating some
+  // future bug in the diagnostic path added above), the shift workflow
+  // must still never be blocked -- the outer try/catch in
+  // dispatchShiftEmail() must swallow that too and still produce a
+  // (fallback) toast, never an uncaught exception. ---
+  {
+    const page = await context.newPage();
+    await page.addInitScript(initScript(`
+      () => ({
+        data: null,
+        error: {
+          message: 'Edge Function returned a non-2xx status code',
+          context: { status: 500, json: async () => { throw new Error('body already consumed'); } },
+        },
+      })
+    `));
+    await login(page, baseUrl);
+    let pageError = null;
+    page.on('pageerror', e => { pageError = e.message; });
+    const toasts = await captureToasts(page);
+    await page.evaluate(() => { openShiftModal(); });
+    await page.waitForTimeout(100);
+    await page.evaluate(() => submitOpenShift());
+    await page.waitForTimeout(300);
+    const shiftOpened = await page.evaluate(() => typeof _activeShift !== 'undefined' && !!_activeShift);
+    t.check('a malformed/throwing error.context.json() still never blocks the shift from opening', shiftOpened);
+    t.check('no uncaught page error is thrown even when the diagnostic extraction itself fails', !pageError);
+    t.check('a warning toast still fires (falls back to the generic message rather than crashing silently)', toasts.some(x => x.kind === 'warn'));
+    await page.close();
+  }
+
   // --- The success path is unaffected ---
   {
     const page = await context.newPage();
