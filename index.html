@@ -17791,6 +17791,18 @@ async function openXReportModal(){
 // Non-blocking by design (never awaited at the call site) — a slow or
 // unreachable email endpoint must never hold up shift open/close for the
 // person standing at the counter. See supabase/functions/reception-shift-notify.
+//
+// Error detail extraction matches runEdgeFunctionHealthCheck() (Settings
+// page) exactly, not a second scheme: supabase-js shapes a non-2xx
+// functions.invoke() response as an error whose own .message is always
+// the same generic "Edge Function returned a non-2xx status code" —
+// reception-shift-notify's actual diagnostic (missing RESEND_API_KEY,
+// the provider's own rejection reason, etc.) only reaches
+// error.context.json(). Without reading that, every failure surfaced as
+// the same useless generic toast regardless of real cause — confirmed
+// live: simulating the exact "RESEND_API_KEY not set" response the
+// function returns still toasted only the generic message, hiding the
+// one detail an admin actually needs to fix it.
 async function dispatchShiftEmail(kind, shiftRow){
   if(!sb) return;
   try {
@@ -17798,7 +17810,11 @@ async function dispatchShiftEmail(kind, shiftRow){
       body: { kind, shift: shiftRow, admin_email: CFG.adminNotifyEmail }
     });
     if(error) throw error;
-  } catch(e) { toast('⚠️ Shift email notification failed to send: '+(e.message||'unknown error'),'warn'); }
+  } catch(e) {
+    let detail=e.message||'unknown error';
+    try{ const ctx=await e.context?.json?.(); if(ctx?.error) detail=ctx.error; }catch(ctxErr){}
+    toast('⚠️ Shift email notification failed to send: '+detail,'warn');
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════
