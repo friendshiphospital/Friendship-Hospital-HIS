@@ -135,7 +135,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);font
    page system at all, since it's the thing you navigate FROM, not a
    destination page. */
 #launcher-screen{display:none;position:fixed;inset:0;background:url('assets/branding/login-bg-glow.png') no-repeat top left/45% auto,linear-gradient(160deg,var(--bg) 0%,#eaf2f7 100%);z-index:250;overflow-y:auto;}
-#launcher-screen.show{display:block;}
+#launcher-screen.show{display:block;animation:pagein .2s ease;}
 .launcher-topbar{display:flex;justify-content:space-between;align-items:center;padding:16px 24px;}
 .launcher-topbar .lt-brand{font-family:'DM Serif Display',serif;color:var(--ink2);font-size:1rem;}
 .launcher-hd{padding:14px 22px 6px;text-align:center;}
@@ -263,7 +263,9 @@ html[dir="rtl"] body{direction:rtl;}
 .tab{padding:5px 12px;border-radius:5px;font-size:.76rem;font-weight:600;cursor:pointer;border:none;background:transparent;color:var(--slate);font-family:'DM Sans',sans-serif;transition:all .15s;}
 .tab.active{background:var(--teal);color:#fff;}
 /* PAGE VISIBILITY */
-.page{display:none;}.page.active{display:block;width:100%;}
+.page{display:none;}.page.active{display:block;width:100%;animation:pagein .2s ease;}
+@keyframes pagein{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:translateY(0);}}
+@media (prefers-reduced-motion:reduce){.page.active,#launcher-screen.show{animation:none!important;}}
 /* SEARCH */
 .srch{display:flex;align-items:center;gap:7px;border:1.5px solid var(--border);border-radius:7px;padding:6px 11px;background:#fafbfd;min-width:200px;transition:border-color .18s;}
 .srch:focus-within{border-color:var(--teal);background:#fff;}
