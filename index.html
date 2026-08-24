@@ -21,6 +21,17 @@
   --blue-tint:#eff6ff;--blue-solid:#3b82f6;
   --slate:#64748b;--slate-lt:#f1f5f9;--slate-dk:#475569;--border:#e2e8f3;--bg:#f4f7fb;--card:#fff;
   --dark-bg:#1e293b;--dark-fg:#e2e8f0;
+  /* ── Elevation (visual redesign Phase 2) ─────────────────────────
+     One restrained shadow scale, reused everywhere a surface needs to
+     read as "raised" — cards, launcher tiles, dashboard/KPI panels.
+     Two-layer soft shadows (a tight low-opacity layer + a wider
+     diffuse one), not a single hard drop-shadow — this is clinical
+     software, so kept subtle rather than skeuomorphic. -sm for
+     small/compact surfaces (KPI boxes, ward cards), -md for primary
+     content cards and launcher tiles, -hover for the existing
+     hover-lift interactions (unchanged in strength, just centralized). */
+  --shadow-sm:0 1px 2px rgba(14,25,40,.05),0 1px 4px rgba(14,25,40,.05);
+  --shadow-md:0 1px 3px rgba(14,25,40,.05),0 3px 10px rgba(14,25,40,.06);
   /* ── Unified status-color system (visual redesign Phase 1) ──────────
      One semantic meaning = one pair of variables, used identically
      everywhere via statusBadge()/paymentTag()/.bdg-* — not a per-page
@@ -135,7 +146,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);font
 .launcher-continue .lc-l{font-size:.63rem;text-transform:uppercase;letter-spacing:.5px;opacity:.85;}
 .launcher-continue .lc-v{font-size:.94rem;font-weight:700;margin-top:3px;}
 .launcher-grid{max-width:920px;margin:28px auto 44px;padding:0 22px;display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px;}
-.launcher-tile{background:var(--card);border:1.5px solid var(--border);border-radius:16px;padding:28px 14px;text-align:center;cursor:pointer;transition:all .18s;box-shadow:0 2px 10px rgba(14,25,40,.05);}
+.launcher-tile{background:var(--card);border:1.5px solid var(--border);border-radius:16px;padding:28px 14px;text-align:center;cursor:pointer;transition:all .18s;box-shadow:var(--shadow-md);}
 .launcher-tile:hover{transform:translateY(-3px);box-shadow:0 12px 28px rgba(11,122,117,.15);border-color:var(--teal2);}
 .launcher-tile .lt-ic{font-size:2.2rem;margin-bottom:9px;}
 .launcher-tile .lt-lbl{font-size:.86rem;font-weight:700;color:var(--ink2);}
@@ -167,7 +178,7 @@ html[dir="rtl"] body{direction:rtl;}
 .btn-r{background:var(--red);color:#fff;}.btn-r:hover:not(:disabled){background:#991b1b;}
 .btn-sm{padding:5px 10px;font-size:.74rem;}.btn-xs{padding:3px 8px;font-size:.68rem;}
 /* CARDS */
-.card{background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:16px;}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:16px;box-shadow:var(--shadow-md);}
 .card-clickable{transition:transform .12s,box-shadow .12s;}
 .card-clickable:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(11,122,117,.12);border-color:var(--teal);}
 .card-hd{padding:12px 17px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;}
@@ -175,7 +186,7 @@ html[dir="rtl"] body{direction:rtl;}
 .card-body{padding:17px;}
 /* STAT GRID */
 .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(115px,1fr));gap:11px;margin-bottom:16px;}
-.stat-box{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:13px 14px;position:relative;overflow:hidden;}
+.stat-box{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:13px 14px;position:relative;overflow:hidden;box-shadow:var(--shadow-sm);}
 .stat-box::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--ac,var(--teal));}
 .stat-n{font-family:'DM Serif Display',serif;font-size:1.75rem;color:var(--ink);line-height:1;}
 .stat-l{font-size:.66rem;color:var(--slate);margin-top:2px;font-weight:500;}
@@ -295,7 +306,7 @@ html[dir="rtl"] body{direction:rtl;}
 .shift-required-banner p{color:#78350f;font-size:.84rem;margin-bottom:12px}
 /* KPI grid reused by Close-Shift / X-Report modals */
 .kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:14px}
-.kpi-box{background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:10px 12px;text-align:center}
+.kpi-box{background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:10px 12px;text-align:center;box-shadow:var(--shadow-sm)}
 .kpi-box .kpi-n{font-family:'DM Serif Display',serif;font-size:1.25rem;color:var(--teal)}
 .kpi-box .kpi-l{font-size:.63rem;text-transform:uppercase;letter-spacing:.3px;color:var(--slate);margin-top:2px}
 .recon-row{display:flex;justify-content:space-between;font-size:.82rem;padding:6px 0;border-bottom:1px solid var(--border)}
@@ -334,7 +345,7 @@ html[dir="rtl"] body{direction:rtl;}
 .sec-hdr{background:linear-gradient(90deg,var(--ink2),var(--ink3));color:rgba(255,255,255,.88);padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.7px;}
 /* WARD CENSUS */
 .ward-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:16px;}
-.ward-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:13px 14px;cursor:pointer;transition:box-shadow .15s;}
+.ward-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:13px 14px;cursor:pointer;transition:box-shadow .15s;box-shadow:var(--shadow-sm);}
 .ward-card:hover{box-shadow:0 4px 16px rgba(11,122,117,.13);}
 .ward-name{font-size:.76rem;font-weight:700;color:var(--ink2);margin-bottom:6px;}
 .ward-occ{font-family:'DM Serif Display',serif;font-size:1.5rem;color:var(--ink);}
