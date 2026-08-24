@@ -12,6 +12,17 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=DM+Mono:wght@400;500;700&display=swap');
 :root{
   --ink:#0e1928;--ink2:#1e3a5a;--ink3:#3d5a80;
+  /* Fixed dark-navy chrome (sidebar, auth screen, toasts, dark table
+     headers) -- identical to --ink/--ink2/--ink3's light-mode values,
+     but NOT redefined under [data-theme="dark"] below, unlike --ink
+     itself. Those surfaces are deliberately dark regardless of theme
+     (their text is white/light either way), so they must not flip to
+     a light background when --ink becomes a light text color in dark
+     mode -- that would leave white sidebar text illegible on a now-light
+     sidebar. Kept as separate tokens instead of reusing --ink so the
+     two roles (theme-aware body text vs. always-dark chrome) can vary
+     independently. */
+  --navy:#0e1928;--navy2:#1e3a5a;--navy3:#3d5a80;
   --teal:#0b7a75;--teal2:#94d2bd;--teal-lt:#d4f1ef;
   --red:#b91c1c;--red-lt:#fee2e2;--red-tint:#fff1f2;--red-border:#fca5a5;
   --blue:#1d4ed8;--blue-lt:#dbeafe;
@@ -20,6 +31,14 @@
   --purple:#6b21a8;--purple-lt:#f3e8ff;
   --blue-tint:#eff6ff;--blue-solid:#3b82f6;
   --slate:#64748b;--slate-lt:#f1f5f9;--slate-dk:#475569;--border:#e2e8f3;--bg:#f4f7fb;--card:#fff;
+  /* Recessed light-panel background used pervasively across result-entry
+     readonly fields, info callouts, registration step indicators, and
+     table-header/hover tints -- consolidates several near-identical,
+     visually-indistinguishable shades (#fafbfd/#f8fafd/#f8fbff/#f1f5fb/
+     #f8fffe) that had drifted apart across the file into one token,
+     so dark mode (below) only needs to redefine it once. */
+  --surface2:#f8fafd;
+  --launcher-glow:#eaf2f7;
   --dark-bg:#1e293b;--dark-fg:#e2e8f0;
   /* ── Elevation (visual redesign Phase 2) ─────────────────────────
      One restrained shadow scale, reused everywhere a surface needs to
@@ -57,6 +76,49 @@
   --sero:#7c3aed;--sero-bg:#f5f3ff;
   --sw:256px;--hh:56px;
 }
+/* ── Dark theme (visual redesign Phase 5) ──────────────────────────────
+   Every token above redefined for dark backgrounds -- a systematic
+   variable swap, not per-element overrides. Toggled via
+   documentElement[data-theme="dark"] (see toggleDarkMode()); the light
+   palette above stays the default with no attribute present.
+   Design notes:
+   - Status/semantic text colors (--red/--blue/--green/--amber/--purple)
+     are brightened versions of their light-mode hex -- a dark-on-dark
+     red like #b91c1c is illegible on a #0f172a background. Their -lt
+     "badge background" pairs become dark, desaturated tints instead of
+     pale washes, keeping the same badge-text-on-badge-bg contrast
+     relationship the light theme has, just inverted.
+   - --card sits one step lighter than --bg (the same relationship as
+     light mode's white-card-on-pale-bg), so .card/.stat-box/.kpi-box
+     still read as "raised" surfaces, reinforced by Phase 2's shadows
+     (kept as-is -- a black shadow still reads as depth on a dark
+     surface, same as it does on light).
+   - Department colors (--hem/--chem/--micro/--sero) get brightened text
+     + dark tinted backgrounds for the same legibility reason as status
+     colors, keeping each department's hue identity recognizable.
+   - Printed reports (printHeader()/openPrintWin() and friends) build
+     their own standalone <style> in a popup window and never read these
+     variables at all -- intentionally left as fixed light/white
+     regardless of in-app theme, same as how OS/browser dark mode
+     doesn't affect what a physical printer outputs. */
+:root[data-theme="dark"]{
+  --ink:#e8edf5;--ink2:#c3d0e3;--ink3:#9fb1cc;
+  --teal:#2dd4c7;--teal2:#5eead4;--teal-lt:#0f3d3a;
+  --red:#f87171;--red-lt:#4c1d1d;--red-tint:#3a1a1a;--red-border:#7f2b2b;
+  --blue:#60a5fa;--blue-lt:#1e3a5f;
+  --green:#4ade80;--green-lt:#153a26;--green-solid:#22c55e;
+  --amber:#fbbf24;--amber-lt:#4a3418;--amber-tint:#3a2a14;--amber-solid:#f59e0b;--amber-border:#8a5a1e;
+  --purple:#c084fc;--purple-lt:#3b2555;
+  --blue-tint:#16283f;--blue-solid:#60a5fa;
+  --slate:#94a3b8;--slate-lt:#1e293b;--slate-dk:#cbd5e1;--border:#2d3f56;--bg:#0f172a;--card:#1a2436;
+  --surface2:#0f1c2e;
+  --launcher-glow:#16213a;
+  --dark-bg:#0b1220;--dark-fg:#e2e8f0;
+  --hem:#fb7185;--hem-bg:#3a1520;
+  --chem:#7dd3fc;--chem-bg:#0c2d3f;
+  --micro:#86efac;--micro-bg:#12301f;
+  --sero:#c4b5fd;--sero-bg:#2a2050;
+}
 *{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);font-size:14px;line-height:1.5;overflow:hidden;height:100vh;}
 
@@ -71,11 +133,11 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);font
 .pay-tag-refunded { background:var(--purple-lt); color:var(--purple); padding:2px 8px; border-radius:20px; font-size:.68rem; font-weight:700; }
 .pay-tag-void { background:var(--slate-lt); color:var(--slate-dk); padding:2px 8px; border-radius:20px; font-size:.68rem; font-weight:700; text-decoration:line-through; }
 .dest-card.selected { border-color:var(--teal)!important; background:var(--teal-lt); }
-.dest-card:hover    { border-color:var(--teal2)!important; background:#f8fffe; }
+.dest-card:hover    { border-color:var(--teal2)!important; background:var(--surface2); }
 .reg-blocked-banner { background:#fef9c3; border:2px solid #eab308; border-radius:10px; padding:12px 16px; display:flex; align-items:center; gap:12px; font-size:.82rem; margin-bottom:10px; }
 
 /* AUTH */
-#auth-screen{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--ink) 0%,var(--ink2) 55%,var(--ink3) 100%);z-index:9999;}
+#auth-screen{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--navy) 0%,var(--navy2) 55%,var(--navy3) 100%);z-index:9999;}
 .auth-card{background:#fff url('assets/branding/login-bg-glow.png') no-repeat top left/cover;border-radius:18px;width:100%;max-width:420px;padding:36px 32px;box-shadow:0 24px 80px rgba(0,0,0,.35);}
 .auth-logo{text-align:center;margin-bottom:18px;}
 .auth-logo h1{font-family:'DM Serif Display',serif;font-size:1.5rem;color:var(--ink);margin-top:7px;}
@@ -109,7 +171,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);font
 #app{display:none;position:fixed;top:0;left:0;right:0;bottom:0;flex-direction:row;}
 #app.visible{display:flex;}
 /* SIDEBAR */
-#sidebar{width:var(--sw);background:var(--ink);min-height:100vh;position:fixed;left:0;top:0;bottom:0;display:flex;flex-direction:column;z-index:300;overflow-y:auto;}
+#sidebar{width:var(--sw);background:var(--navy);min-height:100vh;position:fixed;left:0;top:0;bottom:0;display:flex;flex-direction:column;z-index:300;overflow-y:auto;}
 .sb-brand{padding:18px 16px 14px;border-bottom:1px solid rgba(255,255,255,.07);}
 .sb-brand h1{font-family:'DM Serif Display',serif;color:#fff;font-size:1.08rem;}
 .sb-brand .sub{color:rgba(255,255,255,.35);font-size:.64rem;margin-top:2px;}
@@ -134,7 +196,14 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);font
    one of the existing .page divs — it isn't part of the ROLE_PAGES/goPage
    page system at all, since it's the thing you navigate FROM, not a
    destination page. */
-#launcher-screen{display:none;position:fixed;inset:0;background:url('assets/branding/login-bg-glow.png') no-repeat top left/45% auto,linear-gradient(160deg,var(--bg) 0%,#eaf2f7 100%);z-index:250;overflow-y:auto;}
+#launcher-screen{display:none;position:fixed;inset:0;background:url('assets/branding/login-bg-glow.png') no-repeat top left/45% auto,linear-gradient(160deg,var(--bg) 0%,var(--launcher-glow) 100%);z-index:250;overflow-y:auto;}
+/* The branding glow PNG has an opaque light background baked into the
+   asset itself -- a gradient-color-stop fix alone can't make it blend
+   with a dark page, it just leaves a visible light rectangle at its
+   fixed top-left 45% placement. Simplest reliable fix: don't render that
+   decorative layer at all in dark mode, keep only the gradient beneath
+   it (same one this rule already uses). */
+:root[data-theme="dark"] #launcher-screen{background:linear-gradient(160deg,var(--bg) 0%,var(--launcher-glow) 100%);}
 #launcher-screen.show{display:block;animation:pagein .2s ease;}
 .launcher-topbar{display:flex;justify-content:space-between;align-items:center;padding:16px 24px;}
 .launcher-topbar .lt-brand{font-family:'DM Serif Display',serif;color:var(--ink2);font-size:1rem;}
@@ -192,10 +261,10 @@ html[dir="rtl"] body{direction:rtl;}
 .stat-l{font-size:.66rem;color:var(--slate);margin-top:2px;font-weight:500;}
 /* TABLES */
 .tbl{width:max-content;min-width:100%;border-collapse:collapse;}
-.tbl th{background:#f8fafd;padding:8px 13px;text-align:left;font-size:.65rem;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);white-space:nowrap;}
-.tbl td{padding:9px 13px;font-size:.81rem;border-bottom:1px solid #f1f5fb;vertical-align:middle;}
+.tbl th{background:var(--surface2);padding:8px 13px;text-align:left;font-size:.65rem;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);white-space:nowrap;}
+.tbl td{padding:9px 13px;font-size:.81rem;border-bottom:1px solid var(--surface2);vertical-align:middle;}
 .tbl tr:last-child td{border-bottom:none;}
-.tbl tr:hover td{background:#f8fbff;}
+.tbl tr:hover td{background:var(--surface2);}
 .tbl .acts{display:flex;gap:4px;flex-wrap:nowrap;}
 /* BADGES */
 .bdg{display:inline-flex;align-items:center;padding:2px 7px;border-radius:20px;font-size:.66rem;font-weight:700;white-space:nowrap;gap:3px;}
@@ -253,8 +322,8 @@ html[dir="rtl"] body{direction:rtl;}
 .fg{margin-bottom:11px;}
 .fl{display:block;font-size:.68rem;font-weight:700;color:var(--ink2);margin-bottom:4px;text-transform:uppercase;letter-spacing:.3px;}
 .fl .req{color:var(--red);}
-.fc{width:100%;padding:8px 11px;border:1.5px solid var(--border);border-radius:7px;font-family:'DM Sans',sans-serif;font-size:.83rem;color:var(--ink);background:#fafbfd;outline:none;transition:border-color .18s,box-shadow .18s;}
-.fc:focus{border-color:var(--teal);box-shadow:0 0 0 3px rgba(11,122,117,.09);background:#fff;}
+.fc{width:100%;padding:8px 11px;border:1.5px solid var(--border);border-radius:7px;font-family:'DM Sans',sans-serif;font-size:.83rem;color:var(--ink);background:var(--surface2);outline:none;transition:border-color .18s,box-shadow .18s;}
+.fc:focus{border-color:var(--teal);box-shadow:0 0 0 3px rgba(11,122,117,.09);background:var(--card);}
 .g2{display:grid;grid-template-columns:1fr 1fr;gap:11px;}
 .g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:11px;}
 .g4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:11px;}
@@ -267,8 +336,8 @@ html[dir="rtl"] body{direction:rtl;}
 @keyframes pagein{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:translateY(0);}}
 @media (prefers-reduced-motion:reduce){.page.active,#launcher-screen.show{animation:none!important;}}
 /* SEARCH */
-.srch{display:flex;align-items:center;gap:7px;border:1.5px solid var(--border);border-radius:7px;padding:6px 11px;background:#fafbfd;min-width:200px;transition:border-color .18s;}
-.srch:focus-within{border-color:var(--teal);background:#fff;}
+.srch{display:flex;align-items:center;gap:7px;border:1.5px solid var(--border);border-radius:7px;padding:6px 11px;background:var(--surface2);min-width:200px;transition:border-color .18s;}
+.srch:focus-within{border-color:var(--teal);background:var(--card);}
 .srch input{border:none;background:transparent;font-family:'DM Sans',sans-serif;font-size:.82rem;outline:none;color:var(--ink);width:100%;}
 /* MODALS */
 .ov{display:none;position:fixed;inset:0;background:rgba(10,20,35,.58);z-index:900;align-items:center;justify-content:center;padding:14px;backdrop-filter:blur(3px);}
@@ -328,7 +397,7 @@ html[dir="rtl"] body{direction:rtl;}
 .pb-i .pb-v{color:#fff;font-weight:600;font-size:.79rem;margin-top:1px;}
 /* TOAST */
 #toast-wrap{position:fixed;bottom:20px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:7px;pointer-events:none;}
-.toast{background:var(--ink);color:#fff;padding:11px 16px;border-radius:9px;font-size:.8rem;font-weight:500;box-shadow:0 8px 30px rgba(0,0,0,.22);animation:tin .25s ease;display:flex;align-items:center;gap:8px;max-width:310px;}
+.toast{background:var(--navy);color:#fff;padding:11px 16px;border-radius:9px;font-size:.8rem;font-weight:500;box-shadow:0 8px 30px rgba(0,0,0,.22);animation:tin .25s ease;display:flex;align-items:center;gap:8px;max-width:310px;}
 .toast.ok{background:var(--green);}.toast.err{background:var(--red);}.toast.warn{background:#b45309;}
 @keyframes tin{from{transform:translateX(18px);opacity:0}to{transform:translateX(0);opacity:1}}
 /* LAYOUTS */
@@ -337,12 +406,12 @@ html[dir="rtl"] body{direction:rtl;}
 /* RESULT TABLE */
 .rt{width:100%;border-collapse:collapse;}
 .rt-wrap{overflow-x:auto;}
-.rt th{background:var(--ink);color:rgba(255,255,255,.75);padding:7px 11px;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;text-align:left;}
-.rt td{padding:4px 7px;border-bottom:1px solid #f1f5fb;vertical-align:middle;font-size:.81rem;}
+.rt th{background:var(--navy);color:rgba(255,255,255,.75);padding:7px 11px;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;text-align:left;}
+.rt td{padding:4px 7px;border-bottom:1px solid var(--surface2);vertical-align:middle;font-size:.81rem;}
 .rt tr:last-child td{border-bottom:none;}
-.rt tr:hover td{background:#f8fbff;}
+.rt tr:hover td{background:var(--surface2);}
 .rt .tn{font-weight:500;color:var(--ink2);}
-.rt input,.rt select{width:100%;padding:5px 8px;border:1.5px solid var(--border);border-radius:5px;font-size:.81rem;font-family:'DM Sans',sans-serif;outline:none;transition:border-color .15s;background:#fff;}
+.rt input,.rt select{width:100%;padding:5px 8px;border:1.5px solid var(--border);border-radius:5px;font-size:.81rem;font-family:'DM Sans',sans-serif;outline:none;transition:border-color .15s;background:var(--card);}
 .rt input:focus,.rt select:focus{border-color:var(--teal);}
 .sec-hdr{background:linear-gradient(90deg,var(--ink2),var(--ink3));color:rgba(255,255,255,.88);padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.7px;}
 /* WARD CENSUS */
@@ -356,12 +425,12 @@ html[dir="rtl"] body{direction:rtl;}
 .ward-bar-fill{height:100%;border-radius:3px;transition:width .3s;}
 /* TEST GRID */
 .tc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;}
-.tc-item{display:flex;align-items:center;gap:7px;padding:7px 10px;border:1.5px solid var(--border);border-radius:7px;cursor:pointer;font-size:.78rem;font-weight:500;transition:all .15s;background:#fafbfd;}
+.tc-item{display:flex;align-items:center;gap:7px;padding:7px 10px;border:1.5px solid var(--border);border-radius:7px;cursor:pointer;font-size:.78rem;font-weight:500;transition:all .15s;background:var(--surface2);}
 .tc-item:hover{border-color:var(--teal);background:var(--teal-lt);}
 .tc-item input{accent-color:var(--teal);}
 /* VITAL SIGNS */
 .pain-bar{display:flex;gap:3px;align-items:center;margin-top:4px;}
-.pain-num{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700;cursor:pointer;border:1.5px solid var(--border);background:#fafbfd;transition:all .15s;}
+.pain-num{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700;cursor:pointer;border:1.5px solid var(--border);background:var(--surface2);transition:all .15s;}
 .pain-num.active{color:#fff;}
 .pain-0,.pain-1,.pain-2,.pain-3{--pc:#16a34a;}
 .pain-4,.pain-5,.pain-6{--pc:var(--amber-solid);}
@@ -369,7 +438,7 @@ html[dir="rtl"] body{direction:rtl;}
 .pain-num.active{background:var(--pc);border-color:var(--pc);}
 /* ACTIVITY FEED */
 .act-feed{display:flex;flex-direction:column;gap:6px;}
-.act-item{display:flex;align-items:flex-start;gap:10px;padding:9px 12px;background:#f8fafd;border-radius:8px;border-left:3px solid var(--border);}
+.act-item{display:flex;align-items:flex-start;gap:10px;padding:9px 12px;background:var(--surface2);border-radius:8px;border-left:3px solid var(--border);}
 .act-icon{font-size:1rem;flex-shrink:0;margin-top:1px;}
 .act-body{flex:1;min-width:0;}
 .act-text{font-size:.79rem;font-weight:500;color:var(--ink);}
@@ -383,7 +452,7 @@ html[dir="rtl"] body{direction:rtl;}
 .ot-meta{font-size:.7rem;color:var(--slate);margin-top:2px;}
 /* CHECKLIST */
 .chk-item{display:flex;align-items:center;gap:9px;padding:7px 10px;border:1px solid var(--border);border-radius:7px;margin-bottom:5px;font-size:.8rem;cursor:pointer;transition:background .12s;}
-.chk-item:hover{background:#f8fafd;}
+.chk-item:hover{background:var(--surface2);}
 .chk-item input{accent-color:var(--teal);width:16px;height:16px;flex-shrink:0;}
 /* ADMISSION DETAIL */
 .adm-tab-content{display:none;padding:14px 0;}
@@ -405,7 +474,7 @@ html[dir="rtl"] body{direction:rtl;}
 .empty-title{font-family:'DM Serif Display',serif;font-size:1rem;color:var(--ink2);margin-bottom:5px;}
 .empty-sub{font-size:.78rem;}
 /* TIMELINE */
-.tl-item{display:flex;gap:10px;padding:9px 10px;border-radius:8px;margin-bottom:6px;cursor:pointer;border-left:3px solid var(--teal);background:#fafbfd;transition:background .12s;}
+.tl-item{display:flex;gap:10px;padding:9px 10px;border-radius:8px;margin-bottom:6px;cursor:pointer;border-left:3px solid var(--teal);background:var(--surface2);transition:background .12s;}
 .tl-item:hover{background:var(--teal-lt);}
 /* FLUID CHART */
 .fc-table td,.fc-table th{padding:5px 8px;text-align:center;border:1px solid var(--border);font-size:.78rem;}
@@ -457,7 +526,7 @@ html[dir="rtl"] body{direction:rtl;}
 #conn-badge.offline .dot{background:#ef4444;}
 #conn-badge.syncing .dot{background:#f59e0b;animation:pulse-dot 1s infinite;}
 @keyframes pulse-dot{0%{box-shadow:0 0 0 0 rgba(34,197,94,.4);}70%{box-shadow:0 0 0 5px rgba(34,197,94,0);}100%{box-shadow:0 0 0 0 rgba(34,197,94,0);}}
-#sync-panel{display:none;position:fixed;bottom:16px;left:16px;width:340px;max-height:70vh;overflow-y:auto;background:#fff;border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,.25);z-index:900;border:1.5px solid var(--border);}
+#sync-panel{display:none;position:fixed;bottom:16px;left:16px;width:340px;max-height:70vh;overflow-y:auto;background:var(--card);border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,.25);z-index:900;border:1.5px solid var(--border);}
 #sync-panel.open{display:block;}
 #sync-panel .sp-hd{padding:12px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;font-weight:700;font-size:.85rem;}
 #sync-panel .sp-body{padding:10px 14px;}
@@ -670,6 +739,9 @@ html[dir="rtl"] body{direction:rtl;}
         <button onclick="setLanguage('en')" id="lang-btn-en" style="flex:1;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.18);color:#fff;border-radius:6px;padding:6px;font-size:.72rem;cursor:pointer;font-family:'DM Sans',sans-serif;font-weight:700">EN</button>
         <button onclick="setLanguage('ar')" id="lang-btn-ar" style="flex:1;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.7);border-radius:6px;padding:6px;font-size:.72rem;cursor:pointer;font-family:'DM Sans',sans-serif;font-weight:700">AR</button>
       </div>
+      <button onclick="toggleDarkMode()" id="dark-mode-btn" title="Toggle dark mode" style="margin-top:6px;width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.7);border-radius:6px;padding:6px;font-size:.73rem;cursor:pointer;font-family:'DM Sans',sans-serif;font-weight:700;display:flex;align-items:center;justify-content:center;gap:6px">
+        <span id="dark-mode-icon">🌙</span><span id="dark-mode-label">Dark Mode</span>
+      </button>
       <button onclick="doLogout()" style="margin-top:8px;width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.55);border-radius:6px;padding:6px;font-size:.73rem;cursor:pointer;font-family:'DM Sans',sans-serif;">⏻ Sign Out</button>
     </div>
   </nav>
@@ -688,14 +760,14 @@ html[dir="rtl"] body{direction:rtl;}
            than being wired into goPage() per page like everything else. -->
       <div id="gs-wrap" style="position:relative;flex:1;max-width:360px">
         <div class="srch" style="width:100%"><span>🔍</span><input id="gs-input" placeholder="Search patients, lab no, invoice no…" oninput="globalSearch(this.value)" onkeydown="if(event.key==='Escape')closeGlobalSearch()"></div>
-        <div id="gs-results" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1.5px solid var(--teal);border-radius:8px;margin-top:4px;max-height:340px;overflow-y:auto;z-index:300;box-shadow:0 10px 28px rgba(0,0,0,.18)"></div>
+        <div id="gs-results" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--card);border:1.5px solid var(--teal);border-radius:8px;margin-top:4px;max-height:340px;overflow-y:auto;z-index:300;box-shadow:0 10px 28px rgba(0,0,0,.18)"></div>
       </div>
       <div style="display:flex;align-items:center;gap:8px">
         <div id="notif-bell-wrap" style="position:relative">
           <button class="btn btn-s btn-sm" onclick="toggleNotifPanel()" title="Notifications" style="position:relative">
             🔔<span id="notif-bell-count" style="display:none;position:absolute;top:-6px;right:-6px;background:#ef4444;color:#fff;border-radius:10px;font-size:.62rem;font-weight:700;padding:1px 5px;min-width:16px;text-align:center;line-height:1.4">0</span>
           </button>
-          <div id="notif-panel" style="display:none;position:absolute;top:100%;right:0;margin-top:6px;width:340px;max-height:420px;overflow-y:auto;background:#fff;border:1.5px solid var(--teal);border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,.2);z-index:300">
+          <div id="notif-panel" style="display:none;position:absolute;top:100%;right:0;margin-top:6px;width:340px;max-height:420px;overflow-y:auto;background:var(--card);border:1.5px solid var(--teal);border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,.2);z-index:300">
             <div style="padding:10px 12px;border-bottom:1px solid var(--border);font-weight:700;font-size:.82rem;display:flex;justify-content:space-between;align-items:center">
               <span>🔔 Notifications</span>
               <button class="btn btn-s btn-xs" onclick="refreshNotifications()">↻</button>
@@ -1585,7 +1657,7 @@ html[dir="rtl"] body{direction:rtl;}
     <div style="overflow-x:auto;padding:14px">
       <table class="fc-table" style="width:100%;border-collapse:collapse;min-width:900px">
         <thead>
-          <tr style="background:var(--ink);color:#fff">
+          <tr style="background:var(--navy);color:#fff">
             <th style="padding:7px 10px;width:80px">Time</th>
             <th colspan="3" style="padding:7px 10px;border-left:2px solid rgba(255,255,255,.2)">INTAKE (mL)</th>
             <th colspan="4" style="padding:7px 10px;border-left:2px solid rgba(255,255,255,.2)">OUTPUT (mL)</th>
@@ -1609,7 +1681,7 @@ html[dir="rtl"] body{direction:rtl;}
           <tr><td colspan="10" style="padding:30px;text-align:center;color:var(--slate)">Select a patient and date to load chart</td></tr>
         </tbody>
         <tfoot id="fc-totals">
-          <tr style="background:#f8fafd;font-weight:800;border-top:2px solid var(--border)">
+          <tr style="background:var(--surface2);font-weight:800;border-top:2px solid var(--border)">
             <td style="padding:8px 10px">24hr TOTAL</td>
             <td id="fc-total-iv" style="padding:8px 10px;text-align:center;color:var(--blue)">—</td>
             <td style="padding:8px 10px;text-align:center">—</td><td style="padding:8px 10px;text-align:center">—</td>
@@ -1710,7 +1782,7 @@ html[dir="rtl"] body{direction:rtl;}
       <!-- ── TAB: CONSULTATION NOTES ── -->
       <div id="doc-tab-notes" class="card" style="border-radius:0 10px 10px 10px">
         <div class="card-body">
-          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#f8fafd;border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin-bottom:12px">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin-bottom:12px">
             <span style="font-size:.8rem;font-weight:700;color:var(--ink)">⚡ Quick Templates</span>
             <select class="fc" id="doc-quick-template" style="max-width:280px" onchange="applyQuickTemplate(this.value,this.options[this.selectedIndex].text);this.value=''">
               <option value="">Choose a preset…</option>
@@ -1897,27 +1969,27 @@ html[dir="rtl"] body{direction:rtl;}
           <div id="doc-vitals-trend" style="display:none;margin-top:16px">
             <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:var(--slate);margin-bottom:8px">📈 Trends (last visits)</div>
             <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px">
-              <div style="background:#f8fafd;border-radius:8px;padding:8px 10px">
+              <div style="background:var(--surface2);border-radius:8px;padding:8px 10px">
                 <div style="font-size:.68rem;font-weight:700;color:#0369a1">BP — Systolic (mmHg)</div>
                 <canvas id="doc-trend-bp" style="width:100%;height:70px;display:block"></canvas>
                 <div id="doc-trend-bp-n" style="font-size:.62rem;color:var(--slate);margin-top:2px">—</div>
               </div>
-              <div style="background:#f8fafd;border-radius:8px;padding:8px 10px">
+              <div style="background:var(--surface2);border-radius:8px;padding:8px 10px">
                 <div style="font-size:.68rem;font-weight:700;color:var(--green)">Heart Rate (bpm)</div>
                 <canvas id="doc-trend-hr" style="width:100%;height:70px;display:block"></canvas>
                 <div id="doc-trend-hr-n" style="font-size:.62rem;color:var(--slate);margin-top:2px">—</div>
               </div>
-              <div style="background:#f8fafd;border-radius:8px;padding:8px 10px">
+              <div style="background:var(--surface2);border-radius:8px;padding:8px 10px">
                 <div style="font-size:.68rem;font-weight:700;color:#c2410c">Temperature (°C)</div>
                 <canvas id="doc-trend-temp" style="width:100%;height:70px;display:block"></canvas>
                 <div id="doc-trend-temp-n" style="font-size:.62rem;color:var(--slate);margin-top:2px">—</div>
               </div>
-              <div style="background:#f8fafd;border-radius:8px;padding:8px 10px">
+              <div style="background:var(--surface2);border-radius:8px;padding:8px 10px">
                 <div style="font-size:.68rem;font-weight:700;color:#7c3aed">SpO₂ (%)</div>
                 <canvas id="doc-trend-spo2" style="width:100%;height:70px;display:block"></canvas>
                 <div id="doc-trend-spo2-n" style="font-size:.62rem;color:var(--slate);margin-top:2px">—</div>
               </div>
-              <div style="background:#f8fafd;border-radius:8px;padding:8px 10px">
+              <div style="background:var(--surface2);border-radius:8px;padding:8px 10px">
                 <div style="font-size:.68rem;font-weight:700;color:#b45309">Blood Glucose (mmol/L)</div>
                 <canvas id="doc-trend-gluc" style="width:100%;height:70px;display:block"></canvas>
                 <div id="doc-trend-gluc-n" style="font-size:.62rem;color:var(--slate);margin-top:2px">—</div>
@@ -2193,7 +2265,7 @@ html[dir="rtl"] body{direction:rtl;}
             <button class="btn btn-p" onclick="savePrescription()" style="flex:1;justify-content:center">💾 Save Prescription</button>
             <button class="btn btn-s" onclick="printPrescription()" style="flex:1;justify-content:center">🖨 Print Prescription</button>
           </div>
-          <div id="rx-stock-summary" style="display:none;margin-top:10px;background:#f8fafd;border-radius:8px;padding:10px 12px"></div>
+          <div id="rx-stock-summary" style="display:none;margin-top:10px;background:var(--surface2);border-radius:8px;padding:10px 12px"></div>
         </div>
       </div>
 
@@ -2366,7 +2438,7 @@ html[dir="rtl"] body{direction:rtl;}
       <!-- ── TAB: HISTORY ── -->
       <div id="doc-tab-history" class="card" style="display:none;border-radius:0 10px 10px 10px">
         <div class="card-body">
-          <div style="font-size:.68rem;color:var(--slate);background:#f8fafd;border:1px solid var(--border);border-radius:6px;padding:6px 10px;margin-bottom:10px">📖 Read-only summary across every past visit under this patient's MRN — consultations, prescriptions, radiology and lab results from all departments. This never affects the Orders/Rx/Notes tabs for today's visit.</div>
+          <div style="font-size:.68rem;color:var(--slate);background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;margin-bottom:10px">📖 Read-only summary across every past visit under this patient's MRN — consultations, prescriptions, radiology and lab results from all departments. This never affects the Orders/Rx/Notes tabs for today's visit.</div>
           <div id="doc-history-body"><div class="empty-state">Select a patient to view history</div></div>
           <div id="doc-history-detail"></div>
         </div>
@@ -2484,7 +2556,7 @@ html[dir="rtl"] body{direction:rtl;}
           </div>
 
           <!-- Totals -->
-          <div style="background:#f8fafd;border-radius:8px;padding:10px 12px;margin-bottom:10px">
+          <div style="background:var(--surface2);border-radius:8px;padding:10px 12px;margin-bottom:10px">
             <div style="display:flex;justify-content:space-between;font-size:.8rem;margin-bottom:4px"><span style="color:var(--slate)">Subtotal</span><span id="bill-subtotal" style="font-weight:600">0.00 SDG</span></div>
             <div style="display:flex;justify-content:space-between;align-items:center;font-size:.8rem;margin-bottom:4px">
               <span style="color:var(--slate)">Discount (SDG)</span>
@@ -2801,7 +2873,7 @@ html[dir="rtl"] body{direction:rtl;}
   <div class="mo mo-lg">
     <div class="mo-hd"><h3>🕐 Quick History — <span id="wl-qh-name"></span></h3><button class="mo-x" onclick="closeOv('wl-quick-history-ov')">✕</button></div>
     <div class="mo-b">
-      <div style="font-size:.68rem;color:var(--slate);background:#f8fafd;border:1px solid var(--border);border-radius:6px;padding:6px 10px;margin-bottom:10px">📖 Read-only quick view across every past visit under this patient's MRN. For the full interactive Timeline (trends, filters, admin actions), use "Open Full Timeline" below.</div>
+      <div style="font-size:.68rem;color:var(--slate);background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;margin-bottom:10px">📖 Read-only quick view across every past visit under this patient's MRN. For the full interactive Timeline (trends, filters, admin actions), use "Open Full Timeline" below.</div>
       <div id="wl-qh-body"><div class="empty-state">Loading…</div></div>
       <div id="wl-qh-detail"></div>
     </div>
@@ -2976,9 +3048,9 @@ html[dir="rtl"] body{direction:rtl;}
   <!-- Step indicator -->
   <div id="reg-steps-bar" style="display:flex;margin-bottom:16px;border-radius:9px;overflow:hidden;border:1.5px solid var(--border)">
     <div id="reg-step-1" style="flex:1;padding:9px;background:var(--teal);color:#fff;font-size:.74rem;font-weight:700;text-align:center;transition:all .2s">① Patient Info</div>
-    <div id="reg-step-2" style="flex:1;padding:9px;background:#f8fafd;color:var(--slate);font-size:.74rem;font-weight:600;text-align:center;border-left:1px solid var(--border);transition:all .2s">② Visit & Tests</div>
-    <div id="reg-step-3" style="flex:1;padding:9px;background:#f8fafd;color:var(--slate);font-size:.74rem;font-weight:600;text-align:center;border-left:1px solid var(--border);transition:all .2s">③ Payment</div>
-    <div id="reg-step-4" style="flex:1;padding:9px;background:#f8fafd;color:var(--slate);font-size:.74rem;font-weight:600;text-align:center;border-left:1px solid var(--border);transition:all .2s">④ Done</div>
+    <div id="reg-step-2" style="flex:1;padding:9px;background:var(--surface2);color:var(--slate);font-size:.74rem;font-weight:600;text-align:center;border-left:1px solid var(--border);transition:all .2s">② Visit & Tests</div>
+    <div id="reg-step-3" style="flex:1;padding:9px;background:var(--surface2);color:var(--slate);font-size:.74rem;font-weight:600;text-align:center;border-left:1px solid var(--border);transition:all .2s">③ Payment</div>
+    <div id="reg-step-4" style="flex:1;padding:9px;background:var(--surface2);color:var(--slate);font-size:.74rem;font-weight:600;text-align:center;border-left:1px solid var(--border);transition:all .2s">④ Done</div>
   </div>
 
   <div class="split2">
@@ -4447,7 +4519,7 @@ html[dir="rtl"] body{direction:rtl;}
               <input class="fc" id="stf-password" type="password" placeholder="At least 8 characters" minlength="8">
             </div>
           </div>
-          <div id="stf-edit-account-note" style="display:none;background:#f8fafd;border:1.5px solid var(--border);border-radius:8px;padding:10px 12px;font-size:.75rem;color:var(--slate);margin-bottom:10px;line-height:1.6">
+          <div id="stf-edit-account-note" style="display:none;background:var(--surface2);border:1.5px solid var(--border);border-radius:8px;padding:10px 12px;font-size:.75rem;color:var(--slate);margin-bottom:10px;line-height:1.6">
             ℹ️ Login credentials aren't changed here. This updates the staff record's details and role only.
           </div>
           <div style="display:flex;gap:8px;margin-top:4px">
@@ -4709,7 +4781,7 @@ html[dir="rtl"] body{direction:rtl;}
         <div class="card-hd"><span class="card-title" style="color:#6366f1">📝 Write Report</span></div>
         <div class="card-body">
           <input type="hidden" id="rad-rep-id">
-          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#f8fafd;border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin-bottom:10px">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin-bottom:10px">
             <span style="font-size:.8rem;font-weight:700;color:var(--ink)">⚡ Quick Templates</span>
             <select class="fc" id="rad-quick-template" style="max-width:260px" onchange="applyRadTemplate(this.value,this.options[this.selectedIndex].text);this.value=''">
               <option value="">Choose a preset…</option>
@@ -5109,11 +5181,11 @@ html[dir="rtl"] body{direction:rtl;}
               <tr data-test="CBC (Full Blood Count)"><td class="tn">Basophils %</td><td><input id="he-baso" type="number" step="0.1" class="fc" style="padding:4px 7px" oninput="flagHem(this,0,1,'he-baso-flag');calcAbsCounts()"></td><td>%</td><td>0 – 1</td><td id="he-baso-flag"></td></tr>
 
               <tr class="sec-hdr"><td colspan="5">Absolute Differential (auto-calculated)</td></tr>
-              <tr data-test="CBC (Full Blood Count)"><td class="tn">Neutrophils Abs.</td><td><input id="he-neut-abs" class="fc" style="padding:4px 7px;background:#f8fafd" readonly></td><td>×10³/µL</td><td>1.8 – 7.7</td><td></td></tr>
-              <tr data-test="CBC (Full Blood Count)"><td class="tn">Lymphocytes Abs.</td><td><input id="he-lymph-abs" class="fc" style="padding:4px 7px;background:#f8fafd" readonly></td><td>×10³/µL</td><td>1.0 – 4.8</td><td></td></tr>
-              <tr data-test="CBC (Full Blood Count)"><td class="tn">Monocytes Abs.</td><td><input id="he-mono-abs" class="fc" style="padding:4px 7px;background:#f8fafd" readonly></td><td>×10³/µL</td><td>0.2 – 1.0</td><td></td></tr>
-              <tr data-test="CBC (Full Blood Count)"><td class="tn">Eosinophils Abs.</td><td><input id="he-eosi-abs" class="fc" style="padding:4px 7px;background:#f8fafd" readonly></td><td>×10³/µL</td><td>0.02 – 0.5</td><td></td></tr>
-              <tr data-test="CBC (Full Blood Count)"><td class="tn">Basophils Abs.</td><td><input id="he-baso-abs" class="fc" style="padding:4px 7px;background:#f8fafd" readonly></td><td>×10³/µL</td><td>0 – 0.1</td><td></td></tr>
+              <tr data-test="CBC (Full Blood Count)"><td class="tn">Neutrophils Abs.</td><td><input id="he-neut-abs" class="fc" style="padding:4px 7px;background:var(--surface2)" readonly></td><td>×10³/µL</td><td>1.8 – 7.7</td><td></td></tr>
+              <tr data-test="CBC (Full Blood Count)"><td class="tn">Lymphocytes Abs.</td><td><input id="he-lymph-abs" class="fc" style="padding:4px 7px;background:var(--surface2)" readonly></td><td>×10³/µL</td><td>1.0 – 4.8</td><td></td></tr>
+              <tr data-test="CBC (Full Blood Count)"><td class="tn">Monocytes Abs.</td><td><input id="he-mono-abs" class="fc" style="padding:4px 7px;background:var(--surface2)" readonly></td><td>×10³/µL</td><td>0.2 – 1.0</td><td></td></tr>
+              <tr data-test="CBC (Full Blood Count)"><td class="tn">Eosinophils Abs.</td><td><input id="he-eosi-abs" class="fc" style="padding:4px 7px;background:var(--surface2)" readonly></td><td>×10³/µL</td><td>0.02 – 0.5</td><td></td></tr>
+              <tr data-test="CBC (Full Blood Count)"><td class="tn">Basophils Abs.</td><td><input id="he-baso-abs" class="fc" style="padding:4px 7px;background:var(--surface2)" readonly></td><td>×10³/µL</td><td>0 – 0.1</td><td></td></tr>
             </tbody>
           </table>
         </div>
@@ -5205,8 +5277,8 @@ html[dir="rtl"] body{direction:rtl;}
           <tr><td class="tn">GGT</td><td><input id="ce-ggt" type="number" step="1" class="fc" style="padding:3px 6px" oninput="flagChem(this,0,51,'ce-ggt-f')"></td><td id="ce-ggt-range" data-refrange="chem.ggt" style="font-size:.68rem">0–51 U/L</td><td id="ce-ggt-f"></td></tr>
           <tr><td class="tn">Total Protein</td><td><input id="ce-tp" type="number" step="0.1" class="fc" style="padding:3px 6px" oninput="flagChem(this,60,83,'ce-tp-f');calcGlobAG()"></td><td id="ce-tp-range" data-refrange="chem.tp" style="font-size:.68rem">60–83 g/L</td><td id="ce-tp-f"></td></tr>
           <tr><td class="tn">Albumin</td><td><input id="ce-alb" type="number" step="0.1" class="fc" style="padding:3px 6px" oninput="flagChem(this,35,50,'ce-alb-f',true);calcGlobAG()"></td><td id="ce-alb-range" data-refrange="chem.alb" style="font-size:.68rem">35–50 g/L</td><td id="ce-alb-f"></td></tr>
-          <tr><td class="tn">Globulin</td><td><input id="ce-glob" class="fc" style="padding:3px 6px;background:#f8fafd" readonly placeholder="Auto"></td><td style="font-size:.68rem">23–35 g/L</td><td></td></tr>
-          <tr><td class="tn">A/G Ratio</td><td><input id="ce-ag" class="fc" style="padding:3px 6px;background:#f8fafd" readonly placeholder="Auto"></td><td style="font-size:.68rem">1.0–2.5</td><td></td></tr>
+          <tr><td class="tn">Globulin</td><td><input id="ce-glob" class="fc" style="padding:3px 6px;background:var(--surface2)" readonly placeholder="Auto"></td><td style="font-size:.68rem">23–35 g/L</td><td></td></tr>
+          <tr><td class="tn">A/G Ratio</td><td><input id="ce-ag" class="fc" style="padding:3px 6px;background:var(--surface2)" readonly placeholder="Auto"></td><td style="font-size:.68rem">1.0–2.5</td><td></td></tr>
         </tbody></table>
       </div>
     </div>
@@ -5220,7 +5292,7 @@ html[dir="rtl"] body{direction:rtl;}
             <tr><td class="tn">Creatinine</td><td><input id="ce-creat" type="number" step="1" class="fc" style="padding:3px 6px" oninput="flagChem(this,62,106,'ce-creat-f',true);calcEgfr()"></td><td id="ce-creat-range" data-refrange="chem.creat" style="font-size:.68rem">M:62–106 µmol/L</td><td id="ce-creat-f"></td></tr>
             <tr><td class="tn">Urea (BUN)</td><td><input id="ce-urea" type="number" step="0.1" class="fc" style="padding:3px 6px" oninput="flagChem(this,2.5,7.8,'ce-urea-f',true)"></td><td id="ce-urea-range" data-refrange="chem.urea" style="font-size:.68rem">2.5–7.8 mmol/L</td><td id="ce-urea-f"></td></tr>
             <tr><td class="tn">Uric Acid</td><td><input id="ce-ua" type="number" step="0.01" class="fc" style="padding:3px 6px" oninput="flagChem(this,0.2,0.42,'ce-ua-f')"></td><td id="ce-ua-range" data-refrange="chem.ua" style="font-size:.68rem">0.20–0.42 mmol/L</td><td id="ce-ua-f"></td></tr>
-            <tr><td class="tn">eGFR</td><td><input id="ce-egfr" class="fc" style="padding:3px 6px;background:#f8fafd" readonly placeholder="Auto from Creat"></td><td id="ce-egfr-range" data-refrange="chem.egfr" style="font-size:.68rem">&gt;60 mL/min/1.73m²</td><td></td></tr>
+            <tr><td class="tn">eGFR</td><td><input id="ce-egfr" class="fc" style="padding:3px 6px;background:var(--surface2)" readonly placeholder="Auto from Creat"></td><td id="ce-egfr-range" data-refrange="chem.egfr" style="font-size:.68rem">&gt;60 mL/min/1.73m²</td><td></td></tr>
           </tbody></table>
         </div>
       </div>
@@ -6238,7 +6310,7 @@ html[dir="rtl"] body{direction:rtl;}
   <div class="mo">
     <div class="mo-hd"><h3>🔗 Manual Mapping</h3><button class="mo-x" onclick="closeOv('manual-map-ov')">✕</button></div>
     <div class="mo-b">
-      <div style="font-size:.72rem;color:var(--slate);background:#f8fafd;border:1px solid var(--border);border-radius:6px;padding:6px 10px;margin-bottom:10px">This instrument's test code isn't automatically recognized. Choose which result field this value belongs to, then confirm — it will import into whichever patient is currently loaded on that department's entry page, same as an automatic mapping.</div>
+      <div style="font-size:.72rem;color:var(--slate);background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;margin-bottom:10px">This instrument's test code isn't automatically recognized. Choose which result field this value belongs to, then confirm — it will import into whichever patient is currently loaded on that department's entry page, same as an automatic mapping.</div>
       <div class="fg"><label class="fl">Analyzer Test Code</label><div class="fc" style="background:var(--bg);font-family:'DM Mono',monospace" id="mm-test-code">—</div></div>
       <div class="fg"><label class="fl">Raw Value</label><div class="fc" style="background:var(--bg);font-weight:700" id="mm-raw-value">—</div></div>
       <div class="fg"><label class="fl">Department</label><select class="fc" id="mm-dept" onchange="populateManualMapFieldOptions()"></select></div>
@@ -6378,7 +6450,7 @@ html[dir="rtl"] body{direction:rtl;}
       <button class="btn btn-p btn-sm" onclick="openRefRangeForm()">+ Add Range</button>
     </div>
   </div>
-  <div style="font-size:.72rem;color:var(--slate);background:#f8fafd;border:1px solid var(--border);border-radius:6px;padding:6px 10px;margin-bottom:12px">
+  <div style="font-size:.72rem;color:var(--slate);background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;margin-bottom:12px">
     📖 SI is this lab's current default and stays unaffected by this page. A row with a Conventional range filled in becomes available wherever Settings → Lab Unit System is switched to Conventional/US — result entry pages and printed reports display and convert the value, but the value actually saved in the database is always the original SI value entered by the tech.
   </div>
   <div style="display:grid;grid-template-columns:360px 1fr;gap:14px">
@@ -6490,7 +6562,7 @@ html[dir="rtl"] body{direction:rtl;}
       </div>
       <div class="fg"><label class="fl">Procedures Performed</label><textarea class="fc" id="disch-procedures" rows="2"></textarea></div>
       <div class="fg"><label class="fl">Condition at Discharge</label><select class="fc" id="disch-condition"><option>Stable</option><option>Fair</option><option>Poor</option><option>Critical</option></select></div>
-      <div id="disch-lab-summary" style="background:#f8fafd;border:1px solid var(--border);border-radius:9px;padding:11px 14px;margin-bottom:11px">
+      <div id="disch-lab-summary" style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:11px 14px;margin-bottom:11px">
         <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:var(--slate);margin-bottom:8px">Last Lab Values</div>
         <div id="disch-lab-rows"><div style="font-size:.75rem;color:var(--slate)">Loading…</div></div>
       </div>
@@ -6834,7 +6906,7 @@ html[dir="rtl"] body{direction:rtl;}
         <div class="fg"><label class="fl">ICD-10 Code</label><input class="fc" id="icf-icd" placeholder="e.g. J18.9"></div>
       </div>
       <div class="fg"><label class="fl">Clinical Summary</label><textarea class="fc" id="icf-summary" rows="3"></textarea></div>
-      <div class="fg"><label class="fl">Services Billed</label><div id="icf-services-list" style="background:#f8fafd;border:1px solid var(--border);border-radius:8px;padding:10px;min-height:60px;font-size:.8rem"></div></div>
+      <div class="fg"><label class="fl">Services Billed</label><div id="icf-services-list" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px;min-height:60px;font-size:.8rem"></div></div>
       <div style="display:flex;justify-content:space-between;padding:8px 0;font-weight:700;border-top:1px solid var(--border);margin-top:8px">
         <span>Total Claim Amount:</span><span id="icf-total" style="color:var(--teal)">0.00 SDG</span>
       </div>
@@ -7723,6 +7795,25 @@ function setLanguage(lang){
 // script runs after the body markup, so the auth screen + sidebar are
 // already present) — covers the pre-login screen too, not just post-login.
 setLanguage(currentLang);
+
+// ── Dark mode (visual redesign Phase 5) ────────────────────────────────
+// A systematic CSS-variable swap (see :root[data-theme="dark"] in <style>)
+// toggled via one attribute, not per-element overrides. Persisted the same
+// way setLanguage() persists language, and applied immediately on load so
+// there's no light-mode flash before the app finishes initializing.
+let darkMode = localStorage.getItem('dark_mode')==='1';
+function applyDarkModeUI(){
+  document.documentElement.setAttribute('data-theme', darkMode ? 'dark' : 'light');
+  const icon=document.getElementById('dark-mode-icon'), label=document.getElementById('dark-mode-label');
+  if(icon) icon.textContent = darkMode ? '☀️' : '🌙';
+  if(label) label.textContent = darkMode ? 'Light Mode' : 'Dark Mode';
+}
+function toggleDarkMode(){
+  darkMode = !darkMode;
+  localStorage.setItem('dark_mode', darkMode ? '1' : '0');
+  applyDarkModeUI();
+}
+applyDarkModeUI();
 
 const CRIT_RANGES = {
   hgb:{lo:7.0,hi:20.0,unit:'g/dL',section:'Haematology'},
@@ -9237,7 +9328,7 @@ function printFooter(section) {
 }
 function openPrintWin(html, title='Print') {
   const w=window.open('','_blank','width=900,height=750'); if(!w){ toast('Allow popups','warn'); return; }
-  w.document.write('<!DOCTYPE html><html><head><title>'+escapeHtml(title)+'</title><link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"><style>@page{size:A4;margin:15mm}*{box-sizing:border-box}body{font-family:DM Sans,sans-serif;font-size:10.5pt;color:#0e1928;background:#fff;padding:5mm}table{width:100%;border-collapse:collapse}th{background:#f8fafd;padding:5px 9px;font-size:9pt;text-align:left;border-bottom:1px solid #e2e8f3}td{padding:5px 9px;font-size:9.5pt;border-bottom:1px solid #f1f5fb}.no-print{display:flex;background:#0e1928;color:#fff;padding:8px 14px;justify-content:space-between;align-items:center;gap:10px}@media print{.no-print{display:none!important}}</style></head><body><div class="no-print"><span style="font-size:.82rem"><strong>🏥 Friendship Hospital — Al Damazin</strong></span><button onclick="window.print()" style="background:#0b7a75;color:#fff;border:none;padding:8px 18px;border-radius:6px;font-size:.82rem;font-weight:700;cursor:pointer">🖨️ Print</button></div><div style="padding:5mm">'+html+'</div></body></html>');
+  w.document.write('<!DOCTYPE html><html><head><title>'+escapeHtml(title)+'</title><link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"><style>@page{size:A4;margin:15mm}*{box-sizing:border-box}body{font-family:DM Sans,sans-serif;font-size:10.5pt;color:#0e1928;background:#fff;padding:5mm}table{width:100%;border-collapse:collapse}th{background:var(--surface2);padding:5px 9px;font-size:9pt;text-align:left;border-bottom:1px solid #e2e8f3}td{padding:5px 9px;font-size:9.5pt;border-bottom:1px solid var(--surface2)}.no-print{display:flex;background:#0e1928;color:#fff;padding:8px 14px;justify-content:space-between;align-items:center;gap:10px}@media print{.no-print{display:none!important}}</style></head><body><div class="no-print"><span style="font-size:.82rem"><strong>🏥 Friendship Hospital — Al Damazin</strong></span><button onclick="window.print()" style="background:#0b7a75;color:#fff;border:none;padding:8px 18px;border-radius:6px;font-size:.82rem;font-weight:700;cursor:pointer">🖨️ Print</button></div><div style="padding:5mm">'+html+'</div></body></html>');
   w.document.close();
   // Callers that need to draw into the print window afterward (e.g.
   // JsBarcode against an <svg> inside it, as printInventoryBarcodeLabel()/
@@ -10696,7 +10787,7 @@ async function printOTSchedule() {
     if(!data?.length){ toast('No operations scheduled','warn'); return; }
     const sc=b=>b?'☑':'☐';
     const html=printHeader('Operating Theatre Schedule')+'<div style="text-align:center;margin-bottom:14px"><div style="font-size:12pt;font-weight:700;color:#1e3a5a">OPERATING THEATRE SCHEDULE</div><div style="font-size:10pt;color:#64748b">Date: '+fmtDate(d)+'</div></div><table><thead><tr style="background:#0e1928;color:#fff"><th style="padding:7px 10px;font-size:8.5pt;text-align:left">Time</th><th style="padding:7px 10px;font-size:8.5pt;text-align:left">Patient</th><th style="padding:7px 10px;font-size:8.5pt;text-align:left">Operation</th><th style="padding:7px 10px;font-size:8.5pt;text-align:left">Surgeon</th><th style="padding:7px 10px;font-size:8.5pt;text-align:left">Anaesthetist</th><th style="padding:7px 10px;font-size:8.5pt;text-align:center">Room</th><th style="padding:7px 10px;font-size:8.5pt;text-align:center">ASA</th><th style="padding:7px 10px;font-size:8.5pt;text-align:center">Status</th></tr></thead><tbody>'+
-      data.map((b,i)=>'<tr style="background:'+(i%2===0?'#fff':'#f8fafd')+';border-bottom:1px solid #e2e8f3"><td style="padding:8px 10px;font-weight:700;font-family:monospace">'+(b.start_time||'—')+'</td><td style="padding:8px 10px"><div style="font-weight:700">'+escapeHtml(b.patients?.name||fullName(b.patients)||'—')+'</div><div style="font-size:8pt;color:#64748b">'+escapeHtml(b.patients?.mrn||'')+'</div></td><td style="padding:8px 10px"><div style="font-weight:600">'+escapeHtml(b.operation_name||'—')+'</div><div style="font-size:8pt;color:#64748b">'+(b.operation_type||'')+' · '+(b.anaesthesia_type||'')+'</div></td><td style="padding:8px 10px;font-size:9pt">'+escapeHtml(b.surgeon||'—')+'<br><span style="font-size:8pt;color:#64748b">Asst: '+escapeHtml(b.assistant_surgeon||'—')+'</span></td><td style="padding:8px 10px;font-size:9pt">'+escapeHtml(b.anaesthetist||'—')+'</td><td style="padding:8px 10px;text-align:center;font-weight:700;color:#0b7a75">'+(b.theatre_room||'—')+'</td><td style="padding:8px 10px;text-align:center;font-weight:700">'+(b.asa_class||'—')+'</td><td style="padding:8px 10px;text-align:center"><span style="padding:2px 8px;border-radius:12px;font-size:8pt;font-weight:700;background:'+(b.status==='Completed'?'var(--green-lt)':b.status==='In Progress'?'var(--amber-lt)':'var(--blue-lt)')+';color:'+(b.status==='Completed'?'var(--green)':b.status==='In Progress'?'var(--amber)':'var(--blue)')+'">'+(b.status||'—')+'</span></td></tr>'+
+      data.map((b,i)=>'<tr style="background:'+(i%2===0?'#fff':'var(--surface2)')+';border-bottom:1px solid #e2e8f3"><td style="padding:8px 10px;font-weight:700;font-family:monospace">'+(b.start_time||'—')+'</td><td style="padding:8px 10px"><div style="font-weight:700">'+escapeHtml(b.patients?.name||fullName(b.patients)||'—')+'</div><div style="font-size:8pt;color:#64748b">'+escapeHtml(b.patients?.mrn||'')+'</div></td><td style="padding:8px 10px"><div style="font-weight:600">'+escapeHtml(b.operation_name||'—')+'</div><div style="font-size:8pt;color:#64748b">'+(b.operation_type||'')+' · '+(b.anaesthesia_type||'')+'</div></td><td style="padding:8px 10px;font-size:9pt">'+escapeHtml(b.surgeon||'—')+'<br><span style="font-size:8pt;color:#64748b">Asst: '+escapeHtml(b.assistant_surgeon||'—')+'</span></td><td style="padding:8px 10px;font-size:9pt">'+escapeHtml(b.anaesthetist||'—')+'</td><td style="padding:8px 10px;text-align:center;font-weight:700;color:#0b7a75">'+(b.theatre_room||'—')+'</td><td style="padding:8px 10px;text-align:center;font-weight:700">'+(b.asa_class||'—')+'</td><td style="padding:8px 10px;text-align:center"><span style="padding:2px 8px;border-radius:12px;font-size:8pt;font-weight:700;background:'+(b.status==='Completed'?'var(--green-lt)':b.status==='In Progress'?'var(--amber-lt)':'var(--blue-lt)')+';color:'+(b.status==='Completed'?'var(--green)':b.status==='In Progress'?'var(--amber)':'var(--blue)')+'">'+(b.status||'—')+'</span></td></tr>'+
         '<tr style="background:#f8f9fa"><td colspan="8" style="padding:4px 10px 10px"><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;font-size:8pt">'+
         sc(b.pre_op_checklist?.consent)+' Consent &nbsp;'+sc(b.pre_op_checklist?.fast)+' Fasting &nbsp;'+sc(b.pre_op_checklist?.xm)+' Blood X-match &nbsp;'+sc(b.pre_op_checklist?.labs)+' Pre-op labs &nbsp;'+sc(b.pre_op_checklist?.allergy)+' Allergies &nbsp;'+sc(b.pre_op_checklist?.iv)+' IV access &nbsp;'+sc(b.pre_op_checklist?.site)+' Site marked &nbsp;'+sc(b.pre_op_checklist?.anaes)+' Anaes. assessment'+
         '</div></td></tr>').join('')+
@@ -11403,7 +11494,7 @@ async function loadDocVitals(ptId) {
       '<div style="background:#f0fdf4;border-radius:8px;padding:10px;text-align:center"><div style="font-size:.68rem;color:var(--green);font-weight:700;text-transform:uppercase">HR</div><div style="font-size:1.1rem;font-weight:800;color:'+(data.heart_rate>100||data.heart_rate<60?'#f59e0b':'var(--ink)')+'">'+( data.heart_rate||'—')+'</div><div style="font-size:.65rem;color:var(--slate)">bpm</div></div>'+
       '<div style="background:#fff7ed;border-radius:8px;padding:10px;text-align:center"><div style="font-size:.68rem;color:#c2410c;font-weight:700;text-transform:uppercase">Temp</div><div style="font-size:1.1rem;font-weight:800;color:'+(data.temperature>38.5?'var(--red)':'var(--ink)')+'">'+( data.temperature||'—')+'\u00b0C</div><div style="font-size:.65rem;color:var(--slate)">\u00b0Celsius</div></div>'+
       '<div style="background:#faf5ff;border-radius:8px;padding:10px;text-align:center"><div style="font-size:.68rem;color:#7c3aed;font-weight:700;text-transform:uppercase">SpO\u2082</div><div style="font-size:1.1rem;font-weight:800;color:'+(data.spo2<94?'var(--red)':'var(--ink)')+'">'+( data.spo2||'—')+'%</div><div style="font-size:.65rem;color:var(--slate)">oxygen sat</div></div></div>'+
-      (news!=null?'<div style="text-align:center;padding:10px;border-radius:8px;background:#f8fafd;margin-bottom:10px"><div style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:var(--slate)">NEWS2</div><div style="font-size:1.4rem;font-weight:900;color:'+nc+'">'+news+'</div><div style="font-size:.72rem;font-weight:700;color:'+nc+'">'+(news>=7?'\ud83d\udea8 HIGH RISK':news>=5?'\u26a0\ufe0f MEDIUM RISK':news>=1?'\ud83d\udfe1 LOW RISK':'\ud83d\udfe2 NORMAL')+'</div></div>':'')+
+      (news!=null?'<div style="text-align:center;padding:10px;border-radius:8px;background:var(--surface2);margin-bottom:10px"><div style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:var(--slate)">NEWS2</div><div style="font-size:1.4rem;font-weight:900;color:'+nc+'">'+news+'</div><div style="font-size:.72rem;font-weight:700;color:'+nc+'">'+(news>=7?'\ud83d\udea8 HIGH RISK':news>=5?'\u26a0\ufe0f MEDIUM RISK':news>=1?'\ud83d\udfe1 LOW RISK':'\ud83d\udfe2 NORMAL')+'</div></div>':'')+
       '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:.78rem">'+
       '<div><span style="color:var(--slate)">RR:</span> <strong>'+(data.respiratory_rate||'—')+'/min</strong></div>'+
       '<div><span style="color:var(--slate)">Pain:</span> <strong>'+(data.pain_score!=null?data.pain_score:'—')+'/10</strong></div>'+
@@ -12282,9 +12373,9 @@ function printPrescription() {
     '<div><div style="font-size:8pt;color:#64748b">Date</div><div>'+today()+'</div></div></div>'+
     '<table style="width:100%;border-collapse:collapse"><thead><tr style="background:#1e3a5a;color:#fff">'+
     '<th style="padding:6px 8px;font-size:8.5pt;text-align:left">Drug</th><th style="padding:6px 8px;text-align:left">Dose</th><th style="padding:6px 8px;text-align:left">Route</th><th style="padding:6px 8px;text-align:left">Frequency</th><th style="padding:6px 8px;text-align:left">Duration</th><th style="padding:6px 8px;text-align:left">Instructions</th></tr></thead>'+
-    '<tbody>'+rx.map((r,n)=>'<tr style="border-bottom:1px solid #f1f5fb;background:'+(n%2?'#f8fafd':'#fff')+'">'+
+    '<tbody>'+rx.map((r,n)=>'<tr style="border-bottom:1px solid var(--surface2);background:'+(n%2?'var(--surface2)':'#fff')+'">'+
       '<td style="padding:6px 8px;font-size:9.5pt;font-weight:700">'+escapeHtml(r.drug)+'</td><td style="padding:6px 8px;font-size:9pt">'+escapeHtml(r.dose)+'</td><td style="padding:6px 8px;font-size:9pt">'+escapeHtml(r.route)+'</td><td style="padding:6px 8px;font-size:9pt">'+escapeHtml(r.freq)+'</td><td style="padding:6px 8px;font-size:9pt">'+escapeHtml(r.dur)+'</td><td style="padding:6px 8px;font-size:9pt;color:#64748b">'+escapeHtml(r.inst)+'</td></tr>').join('')+'</tbody></table>'+
-    (document.getElementById('rx-notes')?.value?'<div style="background:#f8fafd;border-left:3px solid var(--teal);padding:10px 12px;margin-top:12px;font-size:9pt">'+escapeHtml(document.getElementById('rx-notes').value)+'</div>':'')+
+    (document.getElementById('rx-notes')?.value?'<div style="background:var(--surface2);border-left:3px solid var(--teal);padding:10px 12px;margin-top:12px;font-size:9pt">'+escapeHtml(document.getElementById('rx-notes').value)+'</div>':'')+
     '<div style="margin-top:30px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;text-align:center">'+
     '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">'+dn+'<br>Prescribing Doctor</div>'+
     '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">Signature &amp; Stamp</div>'+
@@ -12306,9 +12397,9 @@ function printSickLeave() {
     '<div style="text-align:center;margin:16px 0"><div style="font-size:13pt;font-weight:800;color:#0b7a75;text-transform:uppercase;letter-spacing:1px">Medical Certificate</div></div>'+
     '<table style="width:100%;border-collapse:collapse;margin-bottom:14px">'+
     '<tr style="border-bottom:1px solid #e2e8f0"><td style="width:40%;padding:8px;font-size:9pt;font-weight:600;color:#64748b">Patient Name</td><td style="padding:8px;font-size:10pt;font-weight:700">'+escapeHtml(_docPt.name||fullName(_docPt))+'</td></tr>'+
-    '<tr style="border-bottom:1px solid #e2e8f0;background:#f8fafd"><td style="padding:8px;font-size:9pt;font-weight:600;color:#64748b">MRN</td><td style="padding:8px;font-size:9pt">'+escapeHtml(_docPt.mrn||'—')+'</td></tr>'+
+    '<tr style="border-bottom:1px solid #e2e8f0;background:var(--surface2)"><td style="padding:8px;font-size:9pt;font-weight:600;color:#64748b">MRN</td><td style="padding:8px;font-size:9pt">'+escapeHtml(_docPt.mrn||'—')+'</td></tr>'+
     '<tr style="border-bottom:1px solid #e2e8f0"><td style="padding:8px;font-size:9pt;font-weight:600;color:#64748b">Diagnosis</td><td style="padding:8px;font-size:9.5pt;font-weight:700">'+g('sl-dx')+'</td></tr>'+
-    '<tr style="border-bottom:1px solid #e2e8f0;background:#f8fafd"><td style="padding:8px;font-size:9pt;font-weight:600;color:#64748b">Rest Period</td><td style="padding:8px;font-size:9.5pt;font-weight:700">'+g('sl-days')+' days</td></tr>'+
+    '<tr style="border-bottom:1px solid #e2e8f0;background:var(--surface2)"><td style="padding:8px;font-size:9pt;font-weight:600;color:#64748b">Rest Period</td><td style="padding:8px;font-size:9.5pt;font-weight:700">'+g('sl-days')+' days</td></tr>'+
     '<tr style="border-bottom:1px solid #e2e8f0"><td style="padding:8px;font-size:9pt;font-weight:600;color:#64748b">From / To</td><td style="padding:8px;font-size:9pt">'+g('sl-from')+' \u2014 '+g('sl-to')+'</td></tr>'+
     '<tr><td style="padding:8px;font-size:9pt;font-weight:600;color:#64748b">Fitness Statement</td><td style="padding:8px;font-size:9.5pt;font-weight:700">'+g('sl-fit')+'</td></tr></table>'+
     '<div style="margin-top:30px;display:grid;grid-template-columns:1fr 1fr;gap:30px;text-align:center">'+
@@ -12330,7 +12421,7 @@ function printReferral() {
     '<p style="font-size:9.5pt">I would be grateful if you could kindly see and manage the following patient:</p>'+
     '<table style="width:100%;border-collapse:collapse;margin-bottom:14px">'+
     '<tr style="border-bottom:1px solid #e2e8f0"><td style="width:35%;padding:7px 8px;font-size:9pt;font-weight:600;color:#64748b">Patient</td><td style="padding:7px 8px;font-size:9.5pt;font-weight:700">'+escapeHtml(_docPt.name||fullName(_docPt))+'</td></tr>'+
-    '<tr style="border-bottom:1px solid #e2e8f0;background:#f8fafd"><td style="padding:7px 8px;font-size:9pt;font-weight:600;color:#64748b">Age/Sex</td><td style="padding:7px 8px;font-size:9pt">'+escapeHtml((_docPt.age||'?')+(_docPt.age_unit||'y'))+' / '+escapeHtml(_docPt.sex||'')+'</td></tr>'+
+    '<tr style="border-bottom:1px solid #e2e8f0;background:var(--surface2)"><td style="padding:7px 8px;font-size:9pt;font-weight:600;color:#64748b">Age/Sex</td><td style="padding:7px 8px;font-size:9pt">'+escapeHtml((_docPt.age||'?')+(_docPt.age_unit||'y'))+' / '+escapeHtml(_docPt.sex||'')+'</td></tr>'+
     '<tr style="border-bottom:1px solid #e2e8f0"><td style="padding:7px 8px;font-size:9pt;font-weight:600;color:#64748b">Diagnosis</td><td style="padding:7px 8px;font-size:9.5pt;font-weight:700">'+dx+'</td></tr>'+
     '<tr><td style="padding:7px 8px;font-size:9pt;font-weight:600;color:#64748b">Urgency</td><td style="padding:7px 8px;font-size:9.5pt;font-weight:700;color:'+(g('ref-urgency')==='Emergency'?'var(--red)':g('ref-urgency')==='Urgent'?'#f59e0b':'var(--green)')+'">'+g('ref-urgency')+'</td></tr></table>'+
     '<div style="margin-bottom:12px"><div style="font-size:8pt;font-weight:700;text-transform:uppercase;color:#64748b;margin-bottom:4px">Reason for Referral</div><div style="font-size:9.5pt;line-height:1.6;white-space:pre-wrap">'+g('ref-reason')+'</div></div>'+
@@ -13011,7 +13102,7 @@ function printWorklist() {
     '<th style="padding:5px 8px;font-size:8.5pt;text-align:left">Lab No</th><th style="padding:5px 8px;text-align:left">Patient</th><th style="padding:5px 8px;text-align:left">Age/Sex</th><th style="padding:5px 8px;text-align:left">Tests</th><th style="padding:5px 8px;text-align:left">Priority</th><th style="padding:5px 8px;text-align:left">Sample</th><th style="padding:5px 8px;text-align:left">Source</th><th style="padding:5px 8px;text-align:left">Time</th></tr></thead><tbody>'+
     [...rows].filter(r=>r.style.display!=='none').map((r,i)=>{
       const c=r.querySelectorAll('td');
-      return '<tr style="background:'+(i%2?'#f8fafd':'#fff')+';border-bottom:1px solid #e2e8f0">'+
+      return '<tr style="background:'+(i%2?'var(--surface2)':'#fff')+';border-bottom:1px solid #e2e8f0">'+
         '<td style="padding:4px 8px;font-size:9pt;font-family:monospace">'+escapeHtml(c[0]?.textContent||'')+'</td>'+
         '<td style="padding:4px 8px;font-size:9pt;font-weight:600">'+escapeHtml(c[2]?.textContent||'')+'</td>'+
         '<td style="padding:4px 8px;font-size:8.5pt">'+escapeHtml(c[3]?.textContent||'')+'</td>'+
@@ -13155,9 +13246,9 @@ async function printCriticalNotice(id) {
       '<div style="font-size:13pt;font-weight:900;color:var(--red)">\ud83d\udea8 CRITICAL VALUE</div></div>'+
       '<table style="width:100%;border-collapse:collapse;margin-bottom:14px">'+
       '<tr style="border-bottom:1px solid #e2e8f0"><td style="width:40%;padding:8px;font-size:9pt;font-weight:600;color:#64748b">Patient</td><td style="padding:8px;font-size:10pt;font-weight:700">'+escapeHtml(pt.name||'—')+'</td></tr>'+
-      '<tr style="border-bottom:1px solid #e2e8f0;background:#f8fafd"><td style="padding:8px;font-size:9pt;font-weight:600;color:#64748b">MRN</td><td style="padding:8px">'+escapeHtml(pt.mrn||pt.lab_no||'—')+'</td></tr>'+
+      '<tr style="border-bottom:1px solid #e2e8f0;background:var(--surface2)"><td style="padding:8px;font-size:9pt;font-weight:600;color:#64748b">MRN</td><td style="padding:8px">'+escapeHtml(pt.mrn||pt.lab_no||'—')+'</td></tr>'+
       '<tr style="border-bottom:1px solid #e2e8f0"><td style="padding:8px;font-size:9pt;font-weight:600;color:#64748b">Critical Value</td><td style="padding:8px;font-size:13pt;font-weight:900;color:var(--red)">'+(c.parameter||'—')+': '+(c.value||'—')+' '+(c.unit||'')+'</td></tr>'+
-      '<tr style="border-bottom:1px solid #e2e8f0;background:#f8fafd"><td style="padding:8px;font-size:9pt;font-weight:600;color:#64748b">Reference</td><td style="padding:8px;font-size:9pt">'+(c.reference||'—')+'</td></tr>'+
+      '<tr style="border-bottom:1px solid #e2e8f0;background:var(--surface2)"><td style="padding:8px;font-size:9pt;font-weight:600;color:#64748b">Reference</td><td style="padding:8px;font-size:9pt">'+(c.reference||'—')+'</td></tr>'+
       '<tr style="border-bottom:1px solid #e2e8f0"><td style="padding:8px;font-size:9pt;font-weight:600;color:#64748b">Time Reported</td><td style="padding:8px;font-size:9pt">'+fmtDT(c.created_at)+'</td></tr>'+
       '<tr><td style="padding:8px;font-size:9pt;font-weight:600;color:#64748b">Clinician Notified</td><td style="padding:8px;font-size:9pt;font-weight:700">'+escapeHtml(c.clinician_notified||'—')+'</td></tr></table>'+
       '<div style="margin-top:20px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;text-align:center">'+
@@ -13385,7 +13476,7 @@ function renderHistoryEventDetail(e){
   else if(e.type==='billing'){ html+='<div style="margin-bottom:8px;display:flex;justify-content:space-between;font-size:.82rem"><span>Invoice: <strong>'+escapeHtml(d.invoice_no||'—')+'</strong></span><span>'+escapeHtml(d.payment_status?.toUpperCase()||'')+'</span></div>'; const items=d.line_items||[]; html+=items.length?'<table style="width:100%;border-collapse:collapse">'+items.slice(0,8).map(i=>'<tr style="border-bottom:1px solid var(--border)"><td style="padding:4px 8px;font-size:.78rem">'+escapeHtml(i.name)+'</td><td style="padding:4px 8px;text-align:right;font-size:.78rem;font-weight:600">'+((i.total_price||0).toFixed(2))+'</td></tr>').join('')+'<tr style="background:var(--teal-lt)"><td style="padding:5px 8px;font-weight:700">Total</td><td style="padding:5px 8px;text-align:right;font-weight:800;color:var(--teal)">'+((d.net_amount||0).toFixed(2))+' '+escapeHtml(d.currency||CFG.currency)+'</td></tr></table>':'<div style="font-size:.78rem;color:var(--slate)">No line items</div>'; }
   else if(e.type==='radiology'){ html+=kvTable([['Imaging Type',d.imaging_type],['Urgency',d.urgency],['Status',d.status],['Indication',d.indication],['Clinical History',d.history],['Radiologist',d.radiologist],['Technique',d.technique],['Findings / Report',d.report],['Impression',d.impression],['Recommendation',d.recommendation]]); }
   else if(e.type==='prescription'){ const items=Array.isArray(d.items)?d.items:[]; html+=items.length?'<table style="width:100%;border-collapse:collapse">'+items.map(it=>'<tr style="border-bottom:1px solid var(--border)"><td style="padding:5px 8px;font-size:.78rem;font-weight:600">'+escapeHtml(it.drug||it.name||'—')+'</td><td style="padding:5px 8px;font-size:.73rem;color:var(--slate)">'+escapeHtml([it.dose,it.route,it.freq,it.duration].filter(Boolean).join(' · ')||'—')+'</td></tr>').join('')+'</table>':'<div style="font-size:.78rem;color:var(--slate)">No items recorded</div>'; if(d.notes) html+='<div style="margin-top:8px;font-size:.78rem;color:var(--ink2)">Note: '+escapeHtml(d.notes)+'</div>'; }
-  else { html+='<div style="font-size:.82rem;color:var(--ink);background:#f8fafd;padding:10px;border-radius:8px">'+e.detail+'</div>'; }
+  else { html+='<div style="font-size:.82rem;color:var(--ink);background:var(--surface2);padding:10px;border-radius:8px">'+e.detail+'</div>'; }
   return html;
 }
 async function loadPthTimeline() {
@@ -14188,7 +14279,7 @@ async function printHemReport() {
     const req=new Set((pt.tests_requested||[]).map(t=>String(t).toLowerCase().trim()));
     const wanted=(tag)=>!req.size || tag.split('|').some(t=>req.has(t.toLowerCase().trim()));
     const ptB=buildLabPtBanner(pt, r.analysis_date||r.created_at);
-    const row=(name,val,unit,lo,hi,tag)=>{ if(!wanted(tag)) return ''; const v=parseFloat(val); const flag=!isNaN(v)?(v>hi?'▲ H':v<lo?'▼ L':''):''; const fc=flag==='▲ H'?'var(--red)':flag==='▼ L'?'var(--blue)':''; return '<tr style="border-bottom:1px solid #f1f5fb"><td style="padding:3px 8px;font-size:9pt">'+name+'</td><td style="padding:3px 8px;font-weight:'+(flag?700:400)+';color:'+(fc||'inherit')+'">'+(val??'—')+'</td><td style="padding:3px 8px;font-size:8pt;color:#64748b">'+unit+'</td><td style="padding:3px 8px;font-size:8pt;color:#64748b">'+lo+' – '+hi+'</td><td style="padding:3px 8px;color:'+fc+';font-weight:700;font-size:8.5pt">'+flag+'</td></tr>'; };
+    const row=(name,val,unit,lo,hi,tag)=>{ if(!wanted(tag)) return ''; const v=parseFloat(val); const flag=!isNaN(v)?(v>hi?'▲ H':v<lo?'▼ L':''):''; const fc=flag==='▲ H'?'var(--red)':flag==='▼ L'?'var(--blue)':''; return '<tr style="border-bottom:1px solid var(--surface2)"><td style="padding:3px 8px;font-size:9pt">'+name+'</td><td style="padding:3px 8px;font-weight:'+(flag?700:400)+';color:'+(fc||'inherit')+'">'+(val??'—')+'</td><td style="padding:3px 8px;font-size:8pt;color:#64748b">'+unit+'</td><td style="padding:3px 8px;font-size:8pt;color:#64748b">'+lo+' – '+hi+'</td><td style="padding:3px 8px;color:'+fc+';font-weight:700;font-size:8.5pt">'+flag+'</td></tr>'; };
     const sh=l=>'<tr style="background:#e0f2fe"><td colspan="5" style="padding:4px 8px;font-weight:700;font-size:8pt;text-transform:uppercase;letter-spacing:.5px;color:#0369a1">'+l+'</td></tr>';
     const sect=(label,rows)=>{ const body=rows.filter(Boolean).join(''); return body ? sh(label)+body : ''; };
     const CBC='CBC (Full Blood Count)';
@@ -14201,7 +14292,7 @@ async function printHemReport() {
       sect('Peripheral Blood Film',[(wanted('Blood Film')&&r.film_result)?'<tr><td style="padding:4px 8px">Blood Film</td><td colspan="3" style="padding:4px 8px">'+escapeHtml(r.film_result)+'</td><td></td></tr>':'']);
     if(!body){ toast('⚠️ No saved results match this patient\'s requested tests — click Save Results first','err'); return; }
     const html=printHeader('Haematology Report — CBC')+ptB+'<table style="width:100%;border-collapse:collapse"><thead><tr style="background:#1e3a5a;color:#fff"><th style="padding:6px 8px;font-size:8.5pt;text-align:left">Parameter</th><th style="padding:6px 8px;font-size:8.5pt;text-align:left">Result</th><th style="padding:6px 8px;font-size:8.5pt;text-align:left">Unit</th><th style="padding:6px 8px;font-size:8.5pt;text-align:left">Reference</th><th style="padding:6px 8px;font-size:8.5pt;text-align:left">Flag</th></tr></thead><tbody>'+body+
-      '</tbody></table>'+(r.notes?'<div style="background:#f8fafd;border-left:3px solid #0b7a75;padding:10px 12px;margin-top:12px;font-size:9pt"><strong>Comments:</strong> '+escapeHtml(r.notes)+'</div>':'')+
+      '</tbody></table>'+(r.notes?'<div style="background:var(--surface2);border-left:3px solid #0b7a75;padding:10px 12px;margin-top:12px;font-size:9pt"><strong>Comments:</strong> '+escapeHtml(r.notes)+'</div>':'')+
       '<div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:20px"><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Medical Laboratory Technologist</div><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Laboratory Supervisor</div></div>'+printFooter('lab');
     openPrintWin(html,'CBC Report');
   } catch(e){ toast(e.message,'err'); }
@@ -14229,7 +14320,7 @@ async function printChemReport() {
         dVal=convertLabValueForDisplay('chem',fieldCode,val);
       }
       const v=parseFloat(dVal); const f=(!isNaN(v)&&dHi!=null&&dLo!=null)?(v>dHi?'▲ H':v<dLo?'▼ L':''):'';
-      return '<tr style="border-bottom:1px solid #f1f5fb"><td style="padding:3px 8px;font-size:9pt">'+name+'</td><td style="padding:3px 8px;color:'+(f==='▲ H'?'var(--red)':f==='▼ L'?'var(--blue)':'inherit')+';font-weight:'+(f?700:400)+'">'+(dVal??'—')+'</td><td style="padding:3px 8px;font-size:8pt;color:#64748b">'+dUnit+'</td><td style="padding:3px 8px;font-size:8pt;color:#64748b">'+(dHi!=null?dLo+'–'+dHi:'—')+'</td><td style="padding:3px 8px;color:'+(f==='▲ H'?'var(--red)':f==='▼ L'?'var(--blue)':'')+';font-weight:700;font-size:8.5pt">'+f+'</td></tr>';
+      return '<tr style="border-bottom:1px solid var(--surface2)"><td style="padding:3px 8px;font-size:9pt">'+name+'</td><td style="padding:3px 8px;color:'+(f==='▲ H'?'var(--red)':f==='▼ L'?'var(--blue)':'inherit')+';font-weight:'+(f?700:400)+'">'+(dVal??'—')+'</td><td style="padding:3px 8px;font-size:8pt;color:#64748b">'+dUnit+'</td><td style="padding:3px 8px;font-size:8pt;color:#64748b">'+(dHi!=null?dLo+'–'+dHi:'—')+'</td><td style="padding:3px 8px;color:'+(f==='▲ H'?'var(--red)':f==='▼ L'?'var(--blue)':'')+';font-weight:700;font-size:8.5pt">'+f+'</td></tr>';
     };
     const sh=l=>'<tr style="background:#e0f7fa"><td colspan="5" style="padding:4px 8px;font-weight:700;font-size:8pt;text-transform:uppercase;letter-spacing:.5px;color:#0369a1">'+l+'</td></tr>';
     const sect=(label,rows)=>{ const body=rows.filter(Boolean).join(''); return body ? sh(label)+body : ''; };
@@ -14250,7 +14341,7 @@ async function printChemReport() {
       (col1?'<table style="width:100%;border-collapse:collapse">'+thead+'<tbody>'+col1+'</tbody></table>':'<div></div>')+
       (col2?'<table style="width:100%;border-collapse:collapse">'+thead+'<tbody>'+col2+'</tbody></table>':'<div></div>')+
       '</div>'+
-      (r.notes?'<div style="background:#f8fafd;border-left:3px solid #0369a1;padding:10px 12px;margin-top:12px;font-size:9pt"><strong>Comments:</strong> '+escapeHtml(r.notes)+'</div>':'')+
+      (r.notes?'<div style="background:var(--surface2);border-left:3px solid #0369a1;padding:10px 12px;margin-top:12px;font-size:9pt"><strong>Comments:</strong> '+escapeHtml(r.notes)+'</div>':'')+
       '<div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:20px"><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Medical Laboratory Technologist</div><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Laboratory Supervisor</div></div>'+printFooter('lab');
     openPrintWin(html,'Chemistry Report');
   } catch(e){ toast(e.message,'err'); }
@@ -14275,12 +14366,12 @@ function regGoStep(n) {
     if(!s) return;
     if(i < n) { s.style.background='var(--teal)'; s.style.color='#fff'; s.style.opacity='.7'; }
     else if(i === n) { s.style.background='var(--teal)'; s.style.color='#fff'; s.style.opacity='1'; }
-    else { s.style.background='#f8fafd'; s.style.color='var(--slate)'; s.style.opacity='1'; }
+    else { s.style.background='var(--surface2)'; s.style.color='var(--slate)'; s.style.opacity='1'; }
   });
   if(n===3) buildRegInvoicePreview();
   // Show reg-step-4 as pending
   const s4 = document.getElementById('reg-step-4');
-  if(s4) { s4.style.background='#f8fafd'; s4.style.color='var(--slate)'; }
+  if(s4) { s4.style.background='var(--surface2)'; s4.style.color='var(--slate)'; }
 }
 
 // ── REGISTRATION: search for an existing patient first ─────
@@ -14823,7 +14914,7 @@ async function generateInsuranceClaim(invId) {
       '<th style="padding:6px 8px;font-size:8.5pt;text-align:right">Unit Price</th>'+
       '<th style="padding:6px 8px;font-size:8.5pt;text-align:right">Total</th></tr></thead>'+
       '<tbody>'+(inv.line_items||[]).map(item=>
-        '<tr style="border-bottom:1px solid #f1f5fb">'+
+        '<tr style="border-bottom:1px solid var(--surface2)">'+
         '<td style="padding:4px 8px;font-size:9pt">'+escapeHtml(item.name)+'</td>'+
         '<td style="padding:4px 8px;font-size:8.5pt;color:#64748b">'+escapeHtml(item.category||'')+'</td>'+
         '<td style="padding:4px 8px;text-align:right;font-size:9pt">'+((item.unit_price||0).toFixed(2))+'</td>'+
@@ -15094,7 +15185,7 @@ async function printPcrReport() {
     const ptB=buildLabPtBanner(pt, r.analysis_date||r.created_at);
     const rows = targets.map(t=>{
       const det=t.result==='Detected',nd=t.result==='Not Detected';
-      return '<tr style="border-bottom:1px solid #f1f5fb">'+
+      return '<tr style="border-bottom:1px solid var(--surface2)">'+
         '<td style="padding:5px 8px;font-size:9pt;font-weight:600">'+escapeHtml(t.target||'—')+'</td>'+
         '<td style="padding:5px 8px;font-weight:700;color:'+(det?'var(--red)':nd?'var(--green)':'var(--amber)')+'">'+(t.result||'—')+'</td>'+
         '<td style="padding:5px 8px;font-size:9pt">'+(t.ct_value!=null?t.ct_value+'':'—')+'</td>'+
@@ -15108,7 +15199,7 @@ async function printPcrReport() {
       '<th style="padding:6px 8px;font-size:8.5pt;text-align:left">Ct Value</th>'+
       '<th style="padding:6px 8px;font-size:8.5pt;text-align:left">Interpretation</th></tr></thead>'+
       '<tbody>'+rows+'</tbody></table>'+
-      (r.notes?'<div style="background:#f8fafd;border-left:3px solid #7c3aed;padding:10px 12px;margin-top:12px;font-size:9pt"><strong>Comments:</strong> '+escapeHtml(r.notes)+'</div>':'')+
+      (r.notes?'<div style="background:var(--surface2);border-left:3px solid #7c3aed;padding:10px 12px;margin-top:12px;font-size:9pt"><strong>Comments:</strong> '+escapeHtml(r.notes)+'</div>':'')+
       '<div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:20px">'+
       '<div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Medical Laboratory Technologist</div>'+
       '<div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Laboratory Supervisor</div></div>'+printFooter('lab');
@@ -15191,7 +15282,7 @@ async function printHistoReport() {
     ]);
     if(!pt||!r){ toast('No results found','err'); return; }
     const ihcRows = Object.entries(r.ihc_results||{}).map(([m,v])=>
-      '<tr style="border-bottom:1px solid #f1f5fb"><td style="padding:4px 8px;font-size:9pt;font-weight:600">'+escapeHtml(m)+'</td>'+
+      '<tr style="border-bottom:1px solid var(--surface2)"><td style="padding:4px 8px;font-size:9pt;font-weight:600">'+escapeHtml(m)+'</td>'+
       '<td style="padding:4px 8px;font-weight:700;color:'+(v.result==='Positive'?'var(--red)':v.result==='Negative'?'var(--green)':'var(--amber)')+'">'+escapeHtml(v.result)+'</td>'+
       '<td style="padding:4px 8px;font-size:9pt">'+escapeHtml(v.intensity)+'</td>'+
       '<td style="padding:4px 8px;font-size:9pt">'+(v.percent?v.percent+'%':'—')+'</td></tr>'
@@ -15215,7 +15306,7 @@ async function printHistoReport() {
       '<th style="padding:5px 8px;font-size:8.5pt;text-align:left">Marker</th><th style="padding:5px 8px;font-size:8.5pt;text-align:left">Result</th>'+
       '<th style="padding:5px 8px;font-size:8.5pt;text-align:left">Intensity</th><th style="padding:5px 8px;font-size:8.5pt;text-align:left">% Positive</th></tr></thead>'+
       '<tbody>'+ihcRows+'</tbody></table></div>':'')+
-      (r.notes?'<div style="background:#f8fafd;border-left:3px solid #b45309;padding:10px 12px;margin-top:8px;font-size:9pt"><strong>Comments:</strong> '+escapeHtml(r.notes)+'</div>':'')+
+      (r.notes?'<div style="background:var(--surface2);border-left:3px solid #b45309;padding:10px 12px;margin-top:8px;font-size:9pt"><strong>Comments:</strong> '+escapeHtml(r.notes)+'</div>':'')+
       '<div style="margin-top:16px;display:grid;grid-template-columns:1fr 1fr;gap:20px">'+
       '<div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Histopathologist</div>'+
       '<div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Date Reported</div></div>'+printFooter('lab');
@@ -15289,7 +15380,7 @@ async function printCytoReport() {
       '<div style="font-size:8pt;color:#0369a1;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Cytological Diagnosis</div>'+
       '<div style="font-size:10.5pt;font-weight:700;line-height:1.5">'+escapeHtml(r.diagnosis||'—')+'</div></div>'+
       (r.recommendation?'<div style="background:#f0fdf4;border-left:4px solid var(--green);padding:10px 12px;border-radius:0 8px 8px 0;margin-bottom:10px;font-size:9.5pt"><strong>Recommendation:</strong> '+r.recommendation+'</div>':'')+
-      (r.notes?'<div style="background:#f8fafd;border-left:3px solid #0369a1;padding:10px 12px;font-size:9pt"><strong>Comments:</strong> '+escapeHtml(r.notes)+'</div>':'')+
+      (r.notes?'<div style="background:var(--surface2);border-left:3px solid #0369a1;padding:10px 12px;font-size:9pt"><strong>Comments:</strong> '+escapeHtml(r.notes)+'</div>':'')+
       '<div style="margin-top:16px;display:grid;grid-template-columns:1fr 1fr;gap:20px">'+
       '<div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Cytologist / Pathologist</div>'+
       '<div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Date Reported</div></div>'+printFooter('lab');
@@ -15312,8 +15403,8 @@ async function printSeroReportFull() {
     const req=new Set((pt.tests_requested||[]).map(t=>String(t).toLowerCase().trim()));
     const wanted=(tag)=>!req.size || tag.split('|').some(t=>req.has(t.toLowerCase().trim()));
     const ptB=buildLabPtBanner(pt, r.analysis_date||r.created_at);
-    const nrow=(name,val,unit,lo,hi,tag)=>{ if(!wanted(tag)) return ''; const v=parseFloat(val);const f=!isNaN(v)?(v>hi?'▲ H':v<lo?'▼ L':''):'';return '<tr style="border-bottom:1px solid #f1f5fb"><td style="padding:3px 8px;font-size:9pt">'+name+'</td><td style="padding:3px 8px;font-weight:'+(f?700:400)+';color:'+(f==='▲ H'?'var(--red)':f==='▼ L'?'var(--blue)':'inherit')+'">'+(val??'—')+'</td><td style="padding:3px 8px;font-size:8pt;color:#64748b">'+unit+'</td><td style="padding:3px 8px;font-size:8pt">'+f+'</td></tr>';};
-    const qrow=(name,val,tag)=>(val&&wanted(tag))?'<tr style="border-bottom:1px solid #f1f5fb"><td style="padding:3px 8px;font-size:9pt">'+name+'</td><td style="padding:3px 8px;font-weight:700;color:'+(val==='Reactive'||val==='Positive'?'var(--red)':val==='Non-Reactive'||val==='Negative'?'var(--green)':'var(--amber)')+'">'+val+'</td></tr>':'';
+    const nrow=(name,val,unit,lo,hi,tag)=>{ if(!wanted(tag)) return ''; const v=parseFloat(val);const f=!isNaN(v)?(v>hi?'▲ H':v<lo?'▼ L':''):'';return '<tr style="border-bottom:1px solid var(--surface2)"><td style="padding:3px 8px;font-size:9pt">'+name+'</td><td style="padding:3px 8px;font-weight:'+(f?700:400)+';color:'+(f==='▲ H'?'var(--red)':f==='▼ L'?'var(--blue)':'inherit')+'">'+(val??'—')+'</td><td style="padding:3px 8px;font-size:8pt;color:#64748b">'+unit+'</td><td style="padding:3px 8px;font-size:8pt">'+f+'</td></tr>';};
+    const qrow=(name,val,tag)=>(val&&wanted(tag))?'<tr style="border-bottom:1px solid var(--surface2)"><td style="padding:3px 8px;font-size:9pt">'+name+'</td><td style="padding:3px 8px;font-weight:700;color:'+(val==='Reactive'||val==='Positive'?'var(--red)':val==='Non-Reactive'||val==='Negative'?'var(--green)':'var(--amber)')+'">'+val+'</td></tr>':'';
     const sh=l=>'<tr style="background:#f5f3ff"><td colspan="4" style="padding:4px 8px;font-weight:700;font-size:8pt;text-transform:uppercase;letter-spacing:.5px;color:#7c3aed">'+l+'</td></tr>';
     const sect=(label,rows)=>{ const body=rows.filter(Boolean).join(''); return body?sh(label)+body:''; };
     const body=
@@ -15323,7 +15414,7 @@ async function printSeroReportFull() {
     const html=printHeader('Serology Report')+ptB+
       '<table style="width:100%;border-collapse:collapse"><thead><tr style="background:#1e3a5a;color:#fff"><th style="padding:5px 8px;font-size:8.5pt;text-align:left">Test</th><th style="padding:5px 8px;font-size:8.5pt;text-align:left">Result</th></tr></thead><tbody>'+body+
       '</tbody></table>'+
-      (r.notes?'<div style="background:#f8fafd;border-left:3px solid #7c3aed;padding:10px 12px;margin-top:12px;font-size:9pt"><strong>Comments:</strong> '+escapeHtml(r.notes)+'</div>':'')+
+      (r.notes?'<div style="background:var(--surface2);border-left:3px solid #7c3aed;padding:10px 12px;margin-top:12px;font-size:9pt"><strong>Comments:</strong> '+escapeHtml(r.notes)+'</div>':'')+
       '<div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:20px"><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Medical Laboratory Technologist</div><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Laboratory Supervisor</div></div>'+printFooter('lab');
     openPrintWin(html,'Serology Report');
   } catch(e){ toast(e.message,'err'); }
@@ -15341,7 +15432,7 @@ async function printImmunoReportFull() {
     const req=new Set((pt.tests_requested||[]).map(t=>String(t).toLowerCase().trim()));
     const wanted=(col)=>{ const tag=RESULT_TAGS.immuno[col]; return !req.size || !tag || tag.split('|').some(t=>req.has(t.toLowerCase().trim())); };
     const ptB=buildLabPtBanner(pt, r.analysis_date||r.created_at);
-    const nrow=(name,val,unit,lo,hi,col)=>{ if(!wanted(col)) return ''; const v=parseFloat(val);const f=!isNaN(v)?(v>hi?'▲ H':v<lo?'▼ L':''):'';return '<tr style="border-bottom:1px solid #f1f5fb"><td style="padding:3px 8px;font-size:9pt">'+name+'</td><td style="padding:3px 8px;font-weight:'+(f?700:400)+';color:'+(f==='▲ H'?'var(--red)':f==='▼ L'?'var(--blue)':'inherit')+'">'+(val??'—')+'</td><td style="padding:3px 8px;font-size:8pt;color:#64748b">'+unit+'</td><td style="padding:3px 8px;font-size:8pt">'+f+'</td></tr>';};
+    const nrow=(name,val,unit,lo,hi,col)=>{ if(!wanted(col)) return ''; const v=parseFloat(val);const f=!isNaN(v)?(v>hi?'▲ H':v<lo?'▼ L':''):'';return '<tr style="border-bottom:1px solid var(--surface2)"><td style="padding:3px 8px;font-size:9pt">'+name+'</td><td style="padding:3px 8px;font-weight:'+(f?700:400)+';color:'+(f==='▲ H'?'var(--red)':f==='▼ L'?'var(--blue)':'inherit')+'">'+(val??'—')+'</td><td style="padding:3px 8px;font-size:8pt;color:#64748b">'+unit+'</td><td style="padding:3px 8px;font-size:8pt">'+f+'</td></tr>';};
     const sh=l=>'<tr style="background:#f5f3ff"><td colspan="4" style="padding:4px 8px;font-weight:700;font-size:8pt;text-transform:uppercase;letter-spacing:.5px;color:#7c3aed">'+l+'</td></tr>';
     const sect=(label,rows)=>{ const body=rows.filter(Boolean).join(''); return body?sh(label)+body:''; };
     const col1 =
@@ -15357,7 +15448,7 @@ async function printImmunoReportFull() {
       (col1?'<table style="width:100%;border-collapse:collapse"><thead><tr style="background:#1e3a5a;color:#fff"><th style="padding:5px 8px;font-size:8.5pt;text-align:left">Test</th><th style="padding:5px 8px;font-size:8.5pt;text-align:left">Result</th><th style="padding:5px 8px;font-size:8.5pt;text-align:left">Unit</th><th>F</th></tr></thead><tbody>'+col1+'</tbody></table>':'<div></div>')+
       (col2?'<table style="width:100%;border-collapse:collapse"><thead><tr style="background:#1e3a5a;color:#fff"><th style="padding:5px 8px;font-size:8.5pt;text-align:left">Test</th><th style="padding:5px 8px;font-size:8.5pt;text-align:left">Result</th></tr></thead><tbody>'+col2+'</tbody></table>':'<div></div>')+
       '</div>'+
-      (r.notes?'<div style="background:#f8fafd;border-left:3px solid #7c3aed;padding:10px 12px;margin-top:12px;font-size:9pt"><strong>Comments:</strong> '+escapeHtml(r.notes)+'</div>':'')+
+      (r.notes?'<div style="background:var(--surface2);border-left:3px solid #7c3aed;padding:10px 12px;margin-top:12px;font-size:9pt"><strong>Comments:</strong> '+escapeHtml(r.notes)+'</div>':'')+
       '<div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:20px"><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Medical Laboratory Technologist</div><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Laboratory Supervisor</div></div>'+printFooter('lab');
     openPrintWin(html,'Immunology Report');
   } catch(e){ toast(e.message,'err'); }
@@ -15378,7 +15469,7 @@ async function printMicroReportFull() {
     const req=new Set((pt.tests_requested||[]).map(t=>String(t).toLowerCase().trim()));
     const wanted=(tag)=>!req.size || tag.split('|').some(t=>req.has(t.toLowerCase().trim()));
     const ptB=buildLabPtBanner(pt, r.analysis_date||r.created_at);
-    const mrow=(name,val,ref)=>'<tr style="border-bottom:1px solid #f1f5fb"><td style="padding:3px 8px;font-size:9pt">'+name+'</td><td style="padding:3px 8px;font-size:9pt">'+escapeHtml(val??'—')+'</td><td style="padding:3px 8px;font-size:8pt;color:#64748b">'+escapeHtml(ref||'')+'</td></tr>';
+    const mrow=(name,val,ref)=>'<tr style="border-bottom:1px solid var(--surface2)"><td style="padding:3px 8px;font-size:9pt">'+name+'</td><td style="padding:3px 8px;font-size:9pt">'+escapeHtml(val??'—')+'</td><td style="padding:3px 8px;font-size:8pt;color:#64748b">'+escapeHtml(ref||'')+'</td></tr>';
     const sh=l=>'<tr style="background:#f0fdf4"><td colspan="3" style="padding:4px 8px;font-weight:700;font-size:8pt;text-transform:uppercase;letter-spacing:.5px;color:#15803d">'+l+'</td></tr>';
     const sect=(label,rows)=>{ const body=rows.filter(Boolean).join(''); return body?sh(label)+body:''; };
     const CULTURE_TAG='Urine Culture & Sensitivity|Blood Culture|Wound Swab C/S|Sputum C/S|Stool Culture|High Vaginal Swab|Throat Swab|CSF Culture';
@@ -15391,7 +15482,7 @@ async function printMicroReportFull() {
     const rightCol =
       (wanted(CULTURE_TAG) ? sect('Culture & Sensitivity',[mrow('Specimen',r.specimen_type,''),mrow('Culture',r.culture_result,''),mrow('Organism',r.culture_organism||'No growth','—')]) : '')+
       (wanted(CULTURE_TAG) && sensEntries.length ? '<table style="width:100%;border-collapse:collapse"><thead><tr style="background:#15803d;color:#fff"><th style="padding:5px 8px;font-size:8.5pt;text-align:left">Antibiotic</th><th style="padding:5px 8px;font-size:8.5pt;text-align:center">Sensitivity</th></tr></thead><tbody>'+
-        sensEntries.map(([k,v])=>'<tr style="border-bottom:1px solid #f1f5fb"><td style="padding:3px 8px;font-size:9pt">'+(abxMap[k]||k)+'</td><td style="padding:3px 8px;text-align:center;font-weight:700;color:'+(v==='S'?'var(--green)':v==='R'?'var(--red)':'var(--amber)')+'">'+v+'</td></tr>').join('')+
+        sensEntries.map(([k,v])=>'<tr style="border-bottom:1px solid var(--surface2)"><td style="padding:3px 8px;font-size:9pt">'+(abxMap[k]||k)+'</td><td style="padding:3px 8px;text-align:center;font-weight:700;color:'+(v==='S'?'var(--green)':v==='R'?'var(--red)':'var(--amber)')+'">'+v+'</td></tr>').join('')+
         '</tbody></table>' : '')+
       (wanted('CSF Analysis') ? sect('CSF Analysis',[mrow('Appearance',r.csf_appear,''),mrow('WBC',r.csf_wbc,'0–5/µL'),mrow('Protein',r.csf_protein,'0.15–0.45 g/L'),mrow('Glucose',r.csf_glucose,'2.2–3.9 mmol/L'),mrow('Culture',r.csf_culture,'')]) : '');
     if(!leftCol && !rightCol){ toast('No matching microbiology results to print','err'); return; }
@@ -15401,7 +15492,7 @@ async function printMicroReportFull() {
       '<div>'+(leftCol?'<table style="width:100%;border-collapse:collapse">'+tableHead+'<tbody>'+leftCol+'</tbody></table>':'')+'</div>'+
       '<div>'+(rightCol?'<table style="width:100%;border-collapse:collapse">'+tableHead+'<tbody>'+rightCol+'</tbody></table>':'')+'</div>'+
       '</div>'+
-      (r.notes?'<div style="background:#f8fafd;border-left:3px solid #15803d;padding:10px 12px;margin-top:12px;font-size:9pt"><strong>Comments:</strong> '+escapeHtml(r.notes)+'</div>':'')+
+      (r.notes?'<div style="background:var(--surface2);border-left:3px solid #15803d;padding:10px 12px;margin-top:12px;font-size:9pt"><strong>Comments:</strong> '+escapeHtml(r.notes)+'</div>':'')+
       '<div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:20px"><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Medical Laboratory Technologist</div><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Laboratory Supervisor</div></div>'+printFooter('lab');
     openPrintWin(html,'Microbiology Report');
   } catch(e){ toast(e.message,'err'); }
@@ -17178,7 +17269,7 @@ async function printVitalsSheet() {
     const {data}=await sb.from('vital_signs').select('*').eq('patient_id',ptId)
       .order('recorded_at',{ascending:false}).limit(24);
     if(!data?.length){toast('No vitals recorded','err');return;}
-    const rows=data.map(v=>`<tr style="border-bottom:1px solid #f1f5fb">
+    const rows=data.map(v=>`<tr style="border-bottom:1px solid var(--surface2)">
       <td style="padding:4px 8px;font-size:9pt">${fmtDT(v.recorded_at)}</td>
       <td style="padding:4px 8px;font-size:9pt;font-weight:600">${v.systolic||'—'}/${v.diastolic||'—'}</td>
       <td style="padding:4px 8px;font-size:9pt">${v.heart_rate||'—'}</td>
@@ -18310,7 +18401,7 @@ async function openBillDetail(id) {
     if(!inv){toast('Invoice not found','err');return;}
     const items = inv.line_items||[];
     const itemRows = items.map(item=>
-      '<tr style="border-bottom:1px solid #f1f5fb">'+
+      '<tr style="border-bottom:1px solid var(--surface2)">'+
       '<td style="padding:5px 8px;font-size:9pt">'+escapeHtml(item.name)+'</td>'+
       '<td style="padding:5px 8px;font-size:9pt;text-align:center">'+(item.qty||1)+'</td>'+
       '<td style="padding:5px 8px;font-size:9pt;text-align:right">'+((item.unit_price||0).toLocaleString('en-US',{minimumFractionDigits:2}))+'</td>'+
@@ -18331,7 +18422,7 @@ async function openBillDetail(id) {
       '<th style="padding:5px 8px;font-size:8.5pt;text-align:left">Item</th><th style="padding:5px 8px;text-align:center">Qty</th>'+
       '<th style="padding:5px 8px;text-align:right">Unit Price</th><th style="padding:5px 8px;text-align:right">Total</th></tr></thead>'+
       '<tbody>'+itemRows+'</tbody></table>'+
-      '<div style="background:#f8fafd;border-radius:8px;padding:10px 12px">'+
+      '<div style="background:var(--surface2);border-radius:8px;padding:10px 12px">'+
       '<div style="display:flex;justify-content:space-between;font-size:.8rem;margin-bottom:4px"><span>Subtotal</span><span>'+((inv.total_amount||0).toLocaleString('en-US',{minimumFractionDigits:2}))+' SDG</span></div>'+
       (inv.discount_amount?'<div style="display:flex;justify-content:space-between;font-size:.8rem;margin-bottom:4px;color:var(--green)"><span>Discount</span><span>-'+((inv.discount_amount||0).toLocaleString('en-US',{minimumFractionDigits:2}))+' SDG</span></div>':'')+
       '<div style="display:flex;justify-content:space-between;font-size:1rem;font-weight:800;color:var(--teal);border-top:1px solid var(--border);padding-top:6px;margin-top:4px"><span>NET TOTAL</span><span>'+((inv.net_amount||inv.total_amount||0).toLocaleString('en-US',{minimumFractionDigits:2}))+' SDG</span></div></div>';
@@ -18396,7 +18487,7 @@ async function printInvoice(id) {
     const newCount = await trackInvoicePrint(inv);
     const items = inv.line_items||[];
     const itemRows = items.map((item,n)=>
-      '<tr style="border-bottom:1px solid #f1f5fb;background:'+(n%2?'#f8fafd':'#fff')+'">'+
+      '<tr style="border-bottom:1px solid var(--surface2);background:'+(n%2?'var(--surface2)':'#fff')+'">'+
       '<td style="padding:5px 8px;font-size:9pt">'+escapeHtml(item.name)+'</td>'+
       '<td style="padding:5px 8px;font-size:9pt;text-align:center">'+(item.qty||1)+'</td>'+
       '<td style="padding:5px 8px;font-size:9pt;text-align:right">'+((item.unit_price||0).toLocaleString('en-US',{minimumFractionDigits:2}))+'</td>'+
@@ -18422,8 +18513,8 @@ async function printInvoice(id) {
       '<th style="padding:6px 8px;font-size:8.5pt;text-align:right">Total (SDG)</th></tr></thead>'+
       '<tbody>'+itemRows+'</tbody>'+
       '<tfoot>'+
-      (inv.discount_amount?'<tr style="background:#f8fafd"><td colspan="3" style="padding:5px 8px;text-align:right;font-size:9pt">Discount</td><td style="padding:5px 8px;text-align:right;font-size:9pt;color:var(--green)">-'+((inv.discount_amount||0).toLocaleString('en-US',{minimumFractionDigits:2}))+'</td></tr>':'')+
-      (inv.insurance_company?'<tr style="background:#f8fafd"><td colspan="3" style="padding:5px 8px;text-align:right;font-size:9pt">Insurance Covered Share</td><td style="padding:5px 8px;text-align:right;font-size:9pt;color:var(--blue)">-'+((inv.insurance_covered||0).toLocaleString('en-US',{minimumFractionDigits:2}))+'</td></tr>':'')+
+      (inv.discount_amount?'<tr style="background:var(--surface2)"><td colspan="3" style="padding:5px 8px;text-align:right;font-size:9pt">Discount</td><td style="padding:5px 8px;text-align:right;font-size:9pt;color:var(--green)">-'+((inv.discount_amount||0).toLocaleString('en-US',{minimumFractionDigits:2}))+'</td></tr>':'')+
+      (inv.insurance_company?'<tr style="background:var(--surface2)"><td colspan="3" style="padding:5px 8px;text-align:right;font-size:9pt">Insurance Covered Share</td><td style="padding:5px 8px;text-align:right;font-size:9pt;color:var(--blue)">-'+((inv.insurance_covered||0).toLocaleString('en-US',{minimumFractionDigits:2}))+'</td></tr>':'')+
       '<tr style="background:#d4f1ef"><td colspan="3" style="padding:7px 8px;text-align:right;font-weight:800;font-size:10.5pt">'+(inv.insurance_company?'PATIENT PAYABLE':'NET TOTAL')+'</td>'+
       '<td style="padding:7px 8px;text-align:right;font-weight:900;font-size:10.5pt;color:#0b7a75">'+((inv.insurance_company?(inv.patient_payable||inv.net_amount):(inv.net_amount||inv.total_amount))||0).toLocaleString('en-US',{minimumFractionDigits:2})+' SDG</td></tr>'+
       '</tfoot></table>'+
@@ -18628,7 +18719,7 @@ async function printPriceList() {
   const rows=prices.map((p,n)=>{
     let catRow='';
     if(p.category!==currentCat){currentCat=p.category;catRow='<tr style="background:#e2e8f0"><td colspan="4" style="padding:5px 8px;font-weight:700;font-size:8pt;text-transform:uppercase;letter-spacing:.4px">'+escapeHtml(p.category)+'</td></tr>';}
-    return catRow+'<tr style="border-bottom:1px solid #f1f5fb;background:'+(n%2?'#f8fafd':'#fff')+'">'+
+    return catRow+'<tr style="border-bottom:1px solid var(--surface2);background:'+(n%2?'var(--surface2)':'#fff')+'">'+
       '<td style="padding:4px 8px;font-size:8.5pt;font-family:monospace">'+escapeHtml(p.code||'—')+'</td>'+
       '<td style="padding:4px 8px;font-size:9pt">'+escapeHtml(p.name||'—')+'</td>'+
       '<td style="padding:4px 8px;font-size:8.5pt">'+(p.category||'—')+'</td>'+
@@ -20863,7 +20954,7 @@ async function printValidationReport(){
         (baImg?'<div><div style="font-size:8pt;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Bland-Altman</div><img src="'+baImg+'" style="width:100%;border:1px solid #e2e8f3;border-radius:6px"></div>':'')+
         '</div>';
     }
-    const row=(k,v)=>'<tr><td style="font-weight:600;padding:5px 8px;border-bottom:1px solid #f1f5fb">'+escapeHtml(k)+'</td><td style="padding:5px 8px;border-bottom:1px solid #f1f5fb">'+escapeHtml(String(v))+'</td></tr>';
+    const row=(k,v)=>'<tr><td style="font-weight:600;padding:5px 8px;border-bottom:1px solid var(--surface2)">'+escapeHtml(k)+'</td><td style="padding:5px 8px;border-bottom:1px solid var(--surface2)">'+escapeHtml(String(v))+'</td></tr>';
     const statsRows=isEP15
       ? [
           ['Grand Mean', r.grand_mean!=null?r.grand_mean.toFixed(3):'—'],
@@ -21184,7 +21275,7 @@ function renderInventoryTable(){
           '<button class="btn btn-s btn-xs" onclick="editInventoryItem(\''+it.id+'\')" title="Edit">✏️</button>'+
           '<button class="btn btn-r btn-xs" onclick="deleteInventoryItem(\''+it.id+'\')" title="Remove">✕</button>'+
         '</div></td></tr>'+
-        '<tr id="inv-batches-row-'+it.id+'" style="display:none"><td colspan="6" style="background:#f8fafd;padding:10px 14px">'+invBatchesPanelHtml(it,itBatches)+'</td></tr>';
+        '<tr id="inv-batches-row-'+it.id+'" style="display:none"><td colspan="6" style="background:var(--surface2);padding:10px 14px">'+invBatchesPanelHtml(it,itBatches)+'</td></tr>';
     }).join('')+'</tbody></table></div>';
 }
 function invBatchesPanelHtml(it,batches){
@@ -23603,12 +23694,12 @@ async function printAllReports() {
           if(meta && meta[col]) {
             const m=meta[col]; const v=parseFloat(val); const flag=!isNaN(v)?(v>m.hi?'▲ H':v<m.lo?'▼ L':''):'';
             const fc=flag==='▲ H'?'var(--red)':flag==='▼ L'?'var(--blue)':'inherit';
-            rows += '<tr style="border-bottom:1px solid #f1f5fb"><td style="padding:3px 8px;font-size:9pt">'+escapeHtml(m.label)+'</td><td style="padding:3px 8px;font-weight:'+(flag?700:400)+';color:'+fc+'">'+escapeHtml(val)+'</td><td style="padding:3px 8px;font-size:8pt;color:#64748b">'+escapeHtml(m.unit)+'</td><td style="padding:3px 8px;font-size:8pt;color:#64748b">'+m.lo+'–'+m.hi+'</td><td style="padding:3px 8px;color:'+fc+';font-weight:700;font-size:8.5pt">'+flag+'</td></tr>';
+            rows += '<tr style="border-bottom:1px solid var(--surface2)"><td style="padding:3px 8px;font-size:9pt">'+escapeHtml(m.label)+'</td><td style="padding:3px 8px;font-weight:'+(flag?700:400)+';color:'+fc+'">'+escapeHtml(val)+'</td><td style="padding:3px 8px;font-size:8pt;color:#64748b">'+escapeHtml(m.unit)+'</td><td style="padding:3px 8px;font-size:8pt;color:#64748b">'+m.lo+'–'+m.hi+'</td><td style="padding:3px 8px;color:'+fc+';font-weight:700;font-size:8.5pt">'+flag+'</td></tr>';
           } else {
             const label=document.getElementById(id)?.closest('tr')?.querySelector('.tn')?.textContent
               || document.getElementById(id)?.closest('.fg')?.querySelector('.fl')?.textContent
               || col;
-            rows += '<tr style="border-bottom:1px solid #f1f5fb"><td style="padding:3px 8px;font-size:9pt">'+escapeHtml(label)+'</td><td style="padding:3px 8px;font-weight:600;color:var(--green)" colspan="4">'+escapeHtml(val)+'</td></tr>';
+            rows += '<tr style="border-bottom:1px solid var(--surface2)"><td style="padding:3px 8px;font-size:9pt">'+escapeHtml(label)+'</td><td style="padding:3px 8px;font-weight:600;color:var(--green)" colspan="4">'+escapeHtml(val)+'</td></tr>';
             hasRange = false;
           }
         });
