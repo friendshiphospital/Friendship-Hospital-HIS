@@ -9030,6 +9030,55 @@ async function renderStatsTrends(){
   _statsExport={title:'Trends', headers:['Month','Patients','Revenue',...deptNames],
     rows:monthKeys.map(m=>[m,volByMonth[m],revByMonth[m].toFixed(2),...deptNames.map(d=>deptByMonth[m][d])])};
 }
+// ── Shared canvas chart helpers (visual redesign Phase 4) ─────────────
+// Every hand-rolled <canvas> line chart in this file (vitals trend, fluid
+// trend, sparklines, the generic drawLineChart, the stats trend line, the
+// QC Levey-Jennings chart) drew its line as a plain moveTo/lineTo polyline
+// with no fill underneath. These two helpers give every one of them the
+// same smoothed-curve + soft gradient-fill treatment from one place,
+// instead of each function reimplementing its own path. Purely a
+// rendering change — takes the same {x,y} points any of them already
+// compute, draws differently, returns nothing. No charting library added,
+// still plain <canvas> per this app's dependency-free convention.
+// Canvas 2D's fillStyle/strokeStyle setter silently ignores anything it
+// can't parse as a plain CSS <color> -- var(--x) references are NOT
+// resolvable there (confirmed live: ctx.strokeStyle='var(--red)' leaves
+// the property unchanged, no error, no visual red). A few chart functions
+// were doing exactly that, so their intended color never actually applied
+// -- not a redesign choice, a pre-existing silent no-op fixed here as part
+// of "consistent color use with Phase 1's palette". Literal values here
+// are kept identical to their :root CSS custom property counterparts.
+const CHART_COLORS = { red:'#b91c1c', blue:'#1d4ed8', green:'#166534', amber:'#92400e', teal:'#0b7a75', slate:'#64748b' };
+function smoothLinePath(ctx, points) {
+  // Quadratic-through-midpoints smoothing: a standard, dependency-free way
+  // to turn a straight-segment polyline into a gently curved line without
+  // overshooting past the actual data points (unlike a full spline).
+  const pts = points.filter(p => p != null);
+  if (pts.length < 2) { if (pts.length === 1) { ctx.moveTo(pts[0].x, pts[0].y); ctx.lineTo(pts[0].x, pts[0].y); } return; }
+  ctx.moveTo(pts[0].x, pts[0].y);
+  for (let i = 1; i < pts.length - 1; i++) {
+    const xc = (pts[i].x + pts[i+1].x) / 2, yc = (pts[i].y + pts[i+1].y) / 2;
+    ctx.quadraticCurveTo(pts[i].x, pts[i].y, xc, yc);
+  }
+  const last = pts.length - 1;
+  ctx.quadraticCurveTo(pts[last-1].x, pts[last-1].y, pts[last].x, pts[last].y);
+}
+function fillSmoothAreaUnder(ctx, points, baseY, rgbaTop) {
+  const pts = points.filter(p => p != null);
+  if (pts.length < 2) return;
+  ctx.save();
+  ctx.beginPath();
+  smoothLinePath(ctx, pts);
+  ctx.lineTo(pts[pts.length-1].x, baseY);
+  ctx.lineTo(pts[0].x, baseY);
+  ctx.closePath();
+  const grad = ctx.createLinearGradient(0, Math.min(...pts.map(p=>p.y)), 0, baseY);
+  grad.addColorStop(0, rgbaTop);
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = grad;
+  ctx.fill();
+  ctx.restore();
+}
 function drawStatsTrendChart(monthKeys,volByMonth,revByMonth){
   const canvas=document.getElementById('stats-trend-canvas'); if(!canvas) return;
   const ctx=canvas.getContext('2d'); const W=canvas.offsetWidth||600,H=180; canvas.width=W; canvas.height=H; ctx.clearRect(0,0,W,H);
@@ -9045,16 +9094,12 @@ function drawStatsTrendChart(monthKeys,volByMonth,revByMonth){
     ctx.fillStyle='#64748b'; ctx.font='9px sans-serif'; ctx.textAlign='center'; ctx.fillText(m.slice(5),x,H-6);
     ctx.fillStyle='#0e1928'; ctx.font='bold 9px sans-serif'; ctx.fillText(String(vols[i]),x,pad.t+dH-barH-4);
   });
+  const revPts=monthKeys.map((m,i)=>({x:pad.l+(i+0.5)/monthKeys.length*dW, y:pad.t+dH-(revs[i]/maxRev)*dH}));
+  ctx.lineJoin='round'; ctx.lineCap='round';
   ctx.beginPath(); ctx.strokeStyle='#0b7a75'; ctx.lineWidth=2.5;
-  monthKeys.forEach((m,i)=>{
-    const x=pad.l+(i+0.5)/monthKeys.length*dW, y=pad.t+dH-(revs[i]/maxRev)*dH;
-    i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
-  });
+  smoothLinePath(ctx, revPts);
   ctx.stroke();
-  monthKeys.forEach((m,i)=>{
-    const x=pad.l+(i+0.5)/monthKeys.length*dW, y=pad.t+dH-(revs[i]/maxRev)*dH;
-    ctx.beginPath(); ctx.arc(x,y,3.5,0,Math.PI*2); ctx.fillStyle='#0b7a75'; ctx.fill();
-  });
+  revPts.forEach(p=>{ ctx.beginPath(); ctx.arc(p.x,p.y,3.5,0,Math.PI*2); ctx.fillStyle='#0b7a75'; ctx.fill(); });
   ctx.fillStyle='#94d2bd'; ctx.fillRect(pad.l,2,8,8);
   ctx.fillStyle='#64748b'; ctx.font='9px sans-serif'; ctx.textAlign='left'; ctx.fillText('Patients',pad.l+11,10);
   ctx.strokeStyle='#0b7a75'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(pad.l+70,6); ctx.lineTo(pad.l+86,6); ctx.stroke();
@@ -10839,14 +10884,18 @@ function drawVitalsTrendChart(data) {
   if(!hrs.length){ canvas.style.display='none'; return; }
   const maxHr=Math.max(...hrs,120), minHr=Math.min(...hrs,40);
   const pad=30, chartH=90;
-  ctx.beginPath(); ctx.strokeStyle='var(--red)'; ctx.lineWidth=2;
-  data.forEach((v,i)=>{ if(!v.heart_rate) return; const x=pad+(i/(data.length-1||1))*(W-2*pad); const y=pad+(1-(v.heart_rate-minHr)/(maxHr-minHr||1))*chartH; i===0?ctx.moveTo(x,y):ctx.lineTo(x,y); });
+  const hrPts=data.map((v,i)=> v.heart_rate ? {x:pad+(i/(data.length-1||1))*(W-2*pad), y:pad+(1-(v.heart_rate-minHr)/(maxHr-minHr||1))*chartH} : null);
+  fillSmoothAreaUnder(ctx, hrPts, pad+chartH, 'rgba(185,28,28,.12)');
+  ctx.lineJoin='round'; ctx.lineCap='round';
+  ctx.beginPath(); ctx.strokeStyle=CHART_COLORS.red; ctx.lineWidth=2;
+  smoothLinePath(ctx, hrPts);
   ctx.stroke();
-  ctx.beginPath(); ctx.strokeStyle='#0369a1'; ctx.lineWidth=2; ctx.setLineDash([4,3]);
-  data.forEach((v,i)=>{ if(!v.temperature) return; const x=pad+(i/(data.length-1||1))*(W-2*pad); const y=pad+(1-(v.temperature-35)/5)*chartH; i===0?ctx.moveTo(x,y):ctx.lineTo(x,y); });
+  const tempPts=data.map((v,i)=> v.temperature ? {x:pad+(i/(data.length-1||1))*(W-2*pad), y:pad+(1-(v.temperature-35)/5)*chartH} : null);
+  ctx.beginPath(); ctx.strokeStyle=CHART_COLORS.blue; ctx.lineWidth=2; ctx.setLineDash([4,3]);
+  smoothLinePath(ctx, tempPts);
   ctx.stroke(); ctx.setLineDash([]);
-  ctx.fillStyle='var(--red)'; ctx.fillRect(8,6,14,10); ctx.fillStyle='#0e1928'; ctx.font='10px sans-serif'; ctx.fillText('HR',26,15);
-  ctx.strokeStyle='#0369a1'; ctx.setLineDash([4,3]); ctx.beginPath(); ctx.moveTo(64,11); ctx.lineTo(78,11); ctx.stroke(); ctx.setLineDash([]); ctx.fillStyle='#0e1928'; ctx.fillText('Temp',82,15);
+  ctx.fillStyle=CHART_COLORS.red; ctx.fillRect(8,6,14,10); ctx.fillStyle='#0e1928'; ctx.font='10px sans-serif'; ctx.fillText('HR',26,15);
+  ctx.strokeStyle=CHART_COLORS.blue; ctx.setLineDash([4,3]); ctx.beginPath(); ctx.moveTo(64,11); ctx.lineTo(78,11); ctx.stroke(); ctx.setLineDash([]); ctx.fillStyle='#0e1928'; ctx.fillText('Temp',82,15);
 }
 async function saveHandover() {
   if(!sb){ toast('Not connected','err'); return; }
@@ -10904,10 +10953,14 @@ function drawFluidTrend(data) {
   ctx.clearRect(0,0,W,150); const pad=40;
   const maxV=Math.max(...data.map(v=>Math.max(v.fluid_in_ml||0,v.urine_output_ml||0)),100)*1.1;
   const toX=(_,i)=>pad+i/(data.length-1||1)*(W-2*pad), toY=v=>10+(1-v/maxV)*120;
-  ctx.beginPath(); ctx.strokeStyle='var(--blue)'; ctx.lineWidth=2; data.forEach((v,i)=>{ const x=toX(null,i),y=toY(v.fluid_in_ml||0); i===0?ctx.moveTo(x,y):ctx.lineTo(x,y); }); ctx.stroke();
-  ctx.beginPath(); ctx.strokeStyle='#0b7a75'; ctx.lineWidth=2; ctx.setLineDash([5,3]); data.forEach((v,i)=>{ const x=toX(null,i),y=toY(v.urine_output_ml||0); i===0?ctx.moveTo(x,y):ctx.lineTo(x,y); }); ctx.stroke(); ctx.setLineDash([]);
-  ctx.fillStyle='var(--blue)'; ctx.fillRect(8,8,14,10); ctx.fillStyle='#0e1928'; ctx.font='9px sans-serif'; ctx.fillText('Fluid In',26,17);
-  ctx.strokeStyle='#0b7a75'; ctx.setLineDash([5,3]); ctx.beginPath(); ctx.moveTo(80,13); ctx.lineTo(94,13); ctx.stroke(); ctx.setLineDash([]); ctx.fillStyle='#0e1928'; ctx.fillText('Urine Out',98,17);
+  const inPts=data.map((v,i)=>({x:toX(null,i),y:toY(v.fluid_in_ml||0)}));
+  const outPts=data.map((v,i)=>({x:toX(null,i),y:toY(v.urine_output_ml||0)}));
+  fillSmoothAreaUnder(ctx, inPts, 130, 'rgba(29,78,216,.10)');
+  ctx.lineJoin='round'; ctx.lineCap='round';
+  ctx.beginPath(); ctx.strokeStyle=CHART_COLORS.blue; ctx.lineWidth=2; smoothLinePath(ctx, inPts); ctx.stroke();
+  ctx.beginPath(); ctx.strokeStyle=CHART_COLORS.teal; ctx.lineWidth=2; ctx.setLineDash([5,3]); smoothLinePath(ctx, outPts); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle=CHART_COLORS.blue; ctx.fillRect(8,8,14,10); ctx.fillStyle='#0e1928'; ctx.font='9px sans-serif'; ctx.fillText('Fluid In',26,17);
+  ctx.strokeStyle=CHART_COLORS.teal; ctx.setLineDash([5,3]); ctx.beginPath(); ctx.moveTo(80,13); ctx.lineTo(94,13); ctx.stroke(); ctx.setLineDash([]); ctx.fillStyle='#0e1928'; ctx.fillText('Urine Out',98,17);
 }
 async function printFluidChart() {
   if(!_fcPt){ toast('No patient loaded','warn'); return; }
@@ -11382,14 +11435,18 @@ function drawSparkline(canvas,data,opts={}) {
     ctx.fillStyle='rgba(11,122,117,.08)';
     ctx.fillRect(pad,Math.min(yHi,yLo),W-2*pad,Math.abs(yLo-yHi));
   }
-  ctx.beginPath(); ctx.strokeStyle=opts.color||'#0b7a75'; ctx.lineWidth=2;
-  data.forEach((d,i)=>{ const x=toX(i),y=toY(d.val); i===0?ctx.moveTo(x,y):ctx.lineTo(x,y); });
+  const lineColor=opts.color||CHART_COLORS.teal;
+  const sparkPts=data.map((d,i)=>({x:toX(i),y:toY(d.val)}));
+  fillSmoothAreaUnder(ctx, sparkPts, H-pad, 'rgba(11,122,117,.10)');
+  ctx.lineJoin='round'; ctx.lineCap='round';
+  ctx.beginPath(); ctx.strokeStyle=lineColor; ctx.lineWidth=2;
+  smoothLinePath(ctx, sparkPts);
   ctx.stroke();
   data.forEach((d,i)=>{
     const x=toX(i),y=toY(d.val);
     const abnormal=opts.lo!=null&&opts.hi!=null&&(d.val<opts.lo||d.val>opts.hi);
     ctx.beginPath(); ctx.arc(x,y,abnormal?3.5:2.5,0,Math.PI*2);
-    ctx.fillStyle=abnormal?'var(--red)':(opts.color||'#0b7a75'); ctx.fill();
+    ctx.fillStyle=abnormal?CHART_COLORS.red:lineColor; ctx.fill();
   });
 }
 async function loadDocVitalsTrend(ptId) {
@@ -15942,17 +15999,20 @@ function drawLineChart(canvas, labels, values, label) {
   ctx.strokeStyle='#e2e8f0'; ctx.lineWidth=1;
   for(let i=0;i<5;i++){const y=pad.t+i*dH/4;ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(W-pad.r,y);ctx.stroke();}
   // Line
-  ctx.strokeStyle='#0b7a75'; ctx.lineWidth=2; ctx.beginPath();
-  values.forEach((v,i)=>{ if(v==null) return; i===0?ctx.moveTo(sx(i),sy(v)):ctx.lineTo(sx(i),sy(v)); });
+  const linePts=values.map((v,i)=> v==null?null:{x:sx(i),y:sy(v)});
+  fillSmoothAreaUnder(ctx, linePts, pad.t+dH, 'rgba(11,122,117,.10)');
+  ctx.lineJoin='round'; ctx.lineCap='round';
+  ctx.strokeStyle=CHART_COLORS.teal; ctx.lineWidth=2; ctx.beginPath();
+  smoothLinePath(ctx, linePts);
   ctx.stroke();
   // Dots
-  ctx.fillStyle='#0b7a75';
+  ctx.fillStyle=CHART_COLORS.teal;
   values.forEach((v,i)=>{ if(v==null) return; ctx.beginPath();ctx.arc(sx(i),sy(v),3,0,Math.PI*2);ctx.fill(); });
   // X labels
-  ctx.fillStyle='#64748b'; ctx.font='9px sans-serif'; ctx.textAlign='center';
+  ctx.fillStyle=CHART_COLORS.slate; ctx.font='9px sans-serif'; ctx.textAlign='center';
   labels.forEach((l,i)=>{ if(i%Math.ceil(labels.length/6)===0) ctx.fillText(l,sx(i),H-4); });
   // Y axis label
-  ctx.fillStyle='#64748b'; ctx.font='9px sans-serif'; ctx.textAlign='left';
+  ctx.fillStyle=CHART_COLORS.slate; ctx.font='9px sans-serif'; ctx.textAlign='left';
   ctx.fillText(label,2,pad.t+8);
 }
 
@@ -20663,22 +20723,22 @@ function drawEP15PrecisionChart(runs,ep15){
     ctx.fillStyle='rgba(59,130,246,.12)';
     ctx.fillRect(pad.l,sy(grandMean+sdW),W-pad.l-pad.r,sy(grandMean-sdW)-sy(grandMean+sdW));
   }
-  ctx.setLineDash([4,3]); ctx.strokeStyle='#0b7a75'; ctx.lineWidth=1.5;
+  ctx.setLineDash([4,3]); ctx.strokeStyle=CHART_COLORS.teal; ctx.lineWidth=1.5;
   ctx.beginPath(); ctx.moveTo(pad.l,sy(grandMean)); ctx.lineTo(W-pad.r,sy(grandMean)); ctx.stroke();
   ctx.setLineDash([]);
   ctx.strokeStyle='#e2e8f3'; ctx.lineWidth=1;
   ctx.beginPath(); ctx.moveTo(pad.l,pad.t); ctx.lineTo(pad.l,H-pad.b); ctx.lineTo(W-pad.r,H-pad.b); ctx.stroke();
   runs.forEach((run,ri)=>{
     const x=sx(ri);
-    ctx.fillStyle='#3b82f6';
+    ctx.fillStyle=CHART_COLORS.blue;
     run.forEach(v=>{ ctx.beginPath(); ctx.arc(x,sy(v),3,0,Math.PI*2); ctx.fill(); });
     const runMean=run.reduce((a,b)=>a+b,0)/run.length;
     ctx.strokeStyle='#1e3a5a'; ctx.lineWidth=2;
     ctx.beginPath(); ctx.moveTo(x-7,sy(runMean)); ctx.lineTo(x+7,sy(runMean)); ctx.stroke();
-    ctx.fillStyle='#64748b'; ctx.font='9px sans-serif'; ctx.textAlign='center';
+    ctx.fillStyle=CHART_COLORS.slate; ctx.font='9px sans-serif'; ctx.textAlign='center';
     ctx.fillText('Run '+(ri+1),x,H-pad.b+14);
   });
-  ctx.fillStyle='#64748b'; ctx.font='9px sans-serif'; ctx.textAlign='right';
+  ctx.fillStyle=CHART_COLORS.slate; ctx.font='9px sans-serif'; ctx.textAlign='right';
   [minV+vPad,grandMean,maxV-vPad].forEach(v=>{ ctx.fillText(v.toFixed(2),pad.l-6,sy(v)+3); });
   ctx.textAlign='left';
   ctx.fillText('Grand Mean '+grandMean.toFixed(3)+(sdW>0?' · SD(within) '+sdW.toFixed(4)+' · bands = ±1SD / ±2SD':''),pad.l,pad.t+2);
@@ -23978,7 +24038,12 @@ async function renderQcChart(){
     }
     const pad={t:20,r:20,b:30,l:50};
     const dW=W-pad.l-pad.r; const dH=H-pad.t-pad.b;
-    const lines=[{y:mean+3*sd,c:'var(--red-lt)',lbl:'+3s'},{y:mean+2*sd,c:'var(--amber-lt)',lbl:'+2s'},{y:mean+sd,c:'var(--green-lt)',lbl:'+1s'},{y:mean,c:'var(--blue-lt)',lbl:'Mean'},{y:mean-sd,c:'var(--green-lt)',lbl:'-1s'},{y:mean-2*sd,c:'var(--amber-lt)',lbl:'-2s'},{y:mean-3*sd,c:'var(--red-lt)',lbl:'-3s'}];
+    // Control-limit line colors: literal hex, not CSS var() -- canvas
+    // strokeStyle can't resolve custom properties (confirmed: it silently
+    // keeps whatever color was set before, so these lines were rendering
+    // in the wrong color, not the intended red/amber/green/blue tiers).
+    // Values match --red-lt/--amber-lt/--green-lt/--blue-lt exactly.
+    const lines=[{y:mean+3*sd,c:'#fee2e2',lbl:'+3s'},{y:mean+2*sd,c:'#fef3c7',lbl:'+2s'},{y:mean+sd,c:'#dcfce7',lbl:'+1s'},{y:mean,c:'#dbeafe',lbl:'Mean'},{y:mean-sd,c:'#dcfce7',lbl:'-1s'},{y:mean-2*sd,c:'#fef3c7',lbl:'-2s'},{y:mean-3*sd,c:'#fee2e2',lbl:'-3s'}];
     const minV=mean-3.5*sd; const maxV=mean+3.5*sd;
     const sy=v=>pad.t+dH-(v-minV)/(maxV-minV)*dH;
     const sx=i=>pad.l+(i/(pts.length-1||1))*dW;
@@ -23987,7 +24052,13 @@ async function renderQcChart(){
       ctx.beginPath(); ctx.moveTo(pad.l,y); ctx.lineTo(W-pad.r,y); ctx.stroke();
       ctx.fillStyle='#64748b'; ctx.font='9px sans-serif'; ctx.textAlign='left'; ctx.fillText(l.lbl,2,y+3);
     });
-    ctx.setLineDash([]); ctx.strokeStyle='#0b7a75'; ctx.lineWidth=2; ctx.beginPath();
+    // Deliberately NOT using smoothLinePath here, unlike the other trend
+    // charts in this file: a Levey-Jennings chart's straight point-to-point
+    // segments are the actual clinical/Westgard-rules convention (ISO
+    // 15189/CLSI GP41) -- a smoothed curve could visually mask a genuine
+    // single-point excursion between two plotted QC runs.
+    ctx.lineJoin='round'; ctx.lineCap='round';
+    ctx.setLineDash([]); ctx.strokeStyle=CHART_COLORS.teal; ctx.lineWidth=2; ctx.beginPath();
     pts.forEach((v,i)=>{ i===0?ctx.moveTo(sx(i),sy(v)):ctx.lineTo(sx(i),sy(v)); }); ctx.stroke();
     // Multi-rule Westgard scan across the whole plotted window \u2014 each
     // point is evaluated against everything up to and including it, so
@@ -23999,23 +24070,23 @@ async function renderQcChart(){
       const rulesHere=evaluateWestgardRules(zSeries.slice(0,i+1));
       const rejectHere=rulesHere.some(r=>WESTGARD_REJECT_RULES.has(r));
       if(rejectHere){ violations++; rulesHere.filter(r=>WESTGARD_REJECT_RULES.has(r)).forEach(r=>{ multiRuleCounts[r]=(multiRuleCounts[r]||0)+1; }); }
-      ctx.fillStyle=rejectHere?'var(--red)':Math.abs(zSeries[i])>=2?'#f59e0b':'#0b7a75';
+      ctx.fillStyle=rejectHere?CHART_COLORS.red:Math.abs(zSeries[i])>=2?CHART_COLORS.amber:CHART_COLORS.teal;
       ctx.beginPath(); ctx.arc(sx(i),sy(v),4,0,Math.PI*2); ctx.fill();
     });
     if(violDiv){
       const ruleBreakdown=Object.entries(multiRuleCounts).map(([r,n])=>r+' \u00d7'+n).join(', ');
       violDiv.innerHTML = violations
         ? '<div style="background:var(--red-lt);border-radius:8px;padding:10px 12px;font-size:.8rem;color:var(--red);font-weight:600">\u26a0\ufe0f '+violations+' Westgard reject-rule violation(s) in this window'+(ruleBreakdown?' \u2014 '+ruleBreakdown:'')+' \u2014 investigate before reporting patient results</div>'
-        : '<div style="background:#f0fdf4;border-radius:8px;padding:10px 12px;font-size:.8rem;color:var(--green)">\u2705 All '+pts.length+' points within control limits (no Westgard reject rules triggered)</div>';
+        : '<div style="background:var(--green-lt);border-radius:8px;padding:10px 12px;font-size:.8rem;color:var(--green)">\u2705 All '+pts.length+' points within control limits (no Westgard reject rules triggered)</div>';
     }
     const sigmaDiv=document.getElementById('qc-sigma-panel');
     if(sigmaDiv){
       const rolling=await computeQcRollingStats(lotId);
       const metric=computeSigmaMetric(lot,rolling);
       if(!lot.analyte){
-        sigmaDiv.innerHTML='<div style="background:#f1f5f9;border-radius:8px;padding:10px 12px;font-size:.78rem;color:var(--slate)">Set this lot\'s Analyte (Control Lots tab) to see its %CV and Six Sigma metric.</div>';
+        sigmaDiv.innerHTML='<div style="background:var(--slate-lt);border-radius:8px;padding:10px 12px;font-size:.78rem;color:var(--slate)">Set this lot\'s Analyte (Control Lots tab) to see its %CV and Six Sigma metric.</div>';
       } else if(!metric){
-        sigmaDiv.innerHTML='<div style="background:#f1f5f9;border-radius:8px;padding:10px 12px;font-size:.78rem;color:var(--slate)">%CV: '+(rolling?.cv!=null?rolling.cv.toFixed(2)+'%':'\u2014')+' (need at least 2 results, and a TEa reference for "'+lot.analyte+'", to compute Sigma)</div>';
+        sigmaDiv.innerHTML='<div style="background:var(--slate-lt);border-radius:8px;padding:10px 12px;font-size:.78rem;color:var(--slate)">%CV: '+(rolling?.cv!=null?rolling.cv.toFixed(2)+'%':'\u2014')+' (need at least 2 results, and a TEa reference for "'+lot.analyte+'", to compute Sigma)</div>';
       } else {
         const band=sigmaBand(metric.sigma);
         sigmaDiv.innerHTML='<div style="background:'+band.bg+';border-radius:8px;padding:10px 12px;font-size:.8rem;color:'+band.color+'">'+
@@ -24023,7 +24094,7 @@ async function renderQcChart(){
           '<div style="font-size:.72rem;margin-top:3px;color:var(--slate)">TEa '+metric.tea+'% \u00b7 Bias '+metric.biasPct.toFixed(2)+'% \u00b7 %CV '+metric.cv.toFixed(2)+'% \u00b7 n='+(rolling?.n||0)+'</div></div>';
       }
     }
-  }catch(e){ ctx.fillStyle='var(--red)'; ctx.font='12px sans-serif'; ctx.textAlign='center'; ctx.fillText('Error: '+e.message,W/2,H/2); }
+  }catch(e){ ctx.fillStyle=CHART_COLORS.red; ctx.font='12px sans-serif'; ctx.textAlign='center'; ctx.fillText('Error: '+e.message,W/2,H/2); }
 }
 // Prints the currently-selected lot's Levey-Jennings chart (as a snapshot
 // image, since it's a <canvas>) alongside its Westgard/Six Sigma summary
