@@ -14,8 +14,23 @@ pass described in the PR/commit that created this folder.
 
 - `index.html` — the full single-file application (HTML/CSS/JS together, matching
   the live app's architecture — there is no build step).
-- `migrations/` — every `migration_v2*.sql` file from the repo, in numeric order,
-  unmodified (see "Data audit" below for why no edits were needed).
+  - ⚠️ **Known staleness (as of 2026-08-24):** this file was cut on 2026-08-14
+    (commit `1cea1a3`) and has **not** been resynced since. The live root
+    `index.html` has since grown by ~1,400 lines — doctor-type/specialty
+    consultation-fee routing, a shared Procedures-ordering component, and a
+    Billing Report section — none of which are in this copy yet. Spot-checked
+    (2026-08-24) that this later growth didn't reintroduce any hardcoded
+    hospital-identity or currency strings (it already follows the same
+    `CFG.name`/`CFG.currency` patterns this template's own de-identification
+    pass established), so the *de-identification is still valid* — this file
+    is just missing recent *features*, not carrying new identity leaks. Before
+    using this template for a real new deployment, either accept it without
+    those newer features, or ask Claude Code to re-cut `template/index.html`
+    from the current root `index.html` (same de-identification pass — no new
+    fixes are expected to be needed, just a resync).
+- `migrations/` — every `migration_v2*.sql` file from the repo (currently 46
+  files, `v2.8` through `v2.52`, kept in sync as of 2026-08-24), unmodified
+  (see "Data audit" below for why no edits were needed).
 - `CLAUDE.md`, `README.md`, `CHANGELOG.md`, `BLOOD_BANK_WALKTHROUGH.md`,
   `proposed-features.md`, `tests-README.md` — full contents of every `.md` file
   in the repo, copied as-is (these describe the app generically; nothing in them
@@ -26,24 +41,59 @@ pass described in the PR/commit that created this folder.
 1. **Create a new Supabase project** (your own — do not reuse Friendship
    Hospital's project). Note its Project URL and `anon public` API key
    (Settings → API). Never use the `service_role` key client-side.
-2. **Run the migrations in order** in the Supabase SQL Editor:
-   `migration_v2.8_rls_security.sql` → `migration_v2.9_sample_source.sql` →
-   `migration_v2.10` → … → `migration_v2.47_sample_records_per_order.sql`
-   (sort by the version number, not filename string order — `v2.9` comes
-   before `v2.10`). Two files share the `v2.45` version number
+2. **Run the migrations in order** in the Supabase SQL Editor. As of
+   2026-08-24, `migrations/` holds 46 files, `migration_v2.8_rls_security.sql`
+   through `migration_v2.52_rls_gap_closure.sql`. Run them **in numeric
+   version order**, not filename string order (`v2.9` sorts before `v2.10`
+   alphabetically the wrong way in a plain file listing):
+   ```
+   v2.8 → v2.9 → v2.10 → v2.11 → v2.12 → v2.13 → v2.14 → v2.15 → v2.16 →
+   v2.17 → v2.18 → v2.19 → v2.20 → v2.21 → v2.22 → v2.23 → v2.24 → v2.25 →
+   v2.26 → v2.27 → v2.28 → v2.29 → v2.30 → v2.31 → v2.32 → v2.33 → v2.34 →
+   v2.35 → v2.36 → v2.37 → v2.38 → v2.39 → v2.40 → v2.41 → v2.42 → v2.43 →
+   v2.44 → v2.45 (both files) → v2.46 → v2.47 → v2.48 → v2.49 → v2.50 →
+   v2.51 → v2.52
+   ```
+   Two files share the `v2.45` version number
    (`migration_v2.45_lab_reference_ranges.sql` and
-   `migration_v2.45_followup_reminders.sql`) — both are independent and order
+   `migration_v2.45_followup_reminders.sql`) — both are independent, order
    between the two of them doesn't matter, but both must run after every
-   lower-numbered file.
+   lower-numbered file and before `v2.46`.
    - Note: there is no base `FriendshipHospital_HIS_v1_Schema.sql` in this
      checkout (see `CLAUDE.md`) — if your Supabase project is completely
      empty, you'll need the original v1 schema file (tables like `patients`,
      `staff`, `invoices`, etc.) before these incremental migrations will apply
      cleanly. These migrations assume that base schema already exists.
-3. **Deploy the Edge Functions** (optional, only for SMS/email/staff-creation/
-   backup-verify features) from `../supabase/functions/` using the Supabase
-   CLI, and configure their secrets (SMS gateway, email provider, etc.) —
-   these live server-side only, never in `index.html`.
+   - `migration_v2.52_rls_gap_closure.sql` is the most recently added file —
+     it closes a real security gap (15 tables had zero row-level security
+     before it). **Do not skip it.**
+3. **Deploy the Edge Functions** from `../supabase/functions/` using the
+   Supabase CLI (`supabase functions deploy <name>` for each of the 5
+   folders: `create-staff-account`, `send-email`, `send-sms`,
+   `reception-shift-notify`, `backup-verify`). `SUPABASE_URL` and
+   `SUPABASE_SERVICE_ROLE_KEY` are injected automatically by the platform for
+   every function — nothing to set for those. Beyond that, each function
+   needs its own secrets configured in **Project Settings → Edge Functions →
+   Secrets** (or `supabase secrets set`):
+
+   | Function | Required for | Secrets to set |
+   |---|---|---|
+   | `create-staff-account` | Creating staff logins from the in-app Staff page | *(none — uses only the auto-injected ones)* |
+   | `send-email` | Generic email dispatch (low-stock alerts, reminders, etc.) | `RESEND_API_KEY` (from [resend.com](https://resend.com) → API Keys), `EMAIL_FROM` |
+   | `send-sms` | SMS/WhatsApp appointment & follow-up reminders | `SMS_API_URL`, `SMS_API_KEY`, `SMS_SENDER_ID` (optional) — from whichever SMS gateway you pick; there's no single universal source, this depends on your provider |
+   | `reception-shift-notify` | Open/Close Shift email notifications | `RESEND_API_KEY`, `EMAIL_FROM` (same Resend account as `send-email`) |
+   | `backup-verify` | Automated backup-verification alert (cron-triggered) | `RESEND_API_KEY`, `EMAIL_FROM`, `ADMIN_EMAIL` (alert recipient), `BACKUP_VERIFY_SECRET` (a secret you invent, used to authenticate the cron trigger's call to this function) |
+
+   ⚠️ **Set `EMAIL_FROM` explicitly — don't rely on the code default.** All
+   three email-sending functions fall back to
+   `"Friendship Hospital HIS <noreply@friendshiphospital.example>"` if
+   `EMAIL_FROM` isn't set, which would put *Friendship Hospital's* name on a
+   different hospital's outgoing email. Set it to something like
+   `"Your Hospital Name <noreply@yourdomain.com>"` — using a sender address
+   on a domain you've verified with your email provider (a free provider
+   sandbox address like `onboarding@resend.dev` also works as a stopgap, but
+   typically only delivers to the account owner's own inbox until a domain is
+   verified).
 4. **Deploy `index.html`** — upload it directly to your static host (e.g.
    Vercel). No build step.
 5. **Open the app** → the "⚙ Supabase Configuration" panel on the login
