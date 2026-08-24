@@ -13,11 +13,33 @@
 :root{
   --ink:#0e1928;--ink2:#1e3a5a;--ink3:#3d5a80;
   --teal:#0b7a75;--teal2:#94d2bd;--teal-lt:#d4f1ef;
-  --red:#b91c1c;--red-lt:#fee2e2;
+  --red:#b91c1c;--red-lt:#fee2e2;--red-tint:#fff1f2;--red-border:#fca5a5;
   --blue:#1d4ed8;--blue-lt:#dbeafe;
-  --green:#166534;--green-lt:#dcfce7;
-  --amber:#92400e;--amber-lt:#fef3c7;
-  --slate:#64748b;--border:#e2e8f3;--bg:#f4f7fb;--card:#fff;
+  --green:#166534;--green-lt:#dcfce7;--green-solid:#16a34a;
+  --amber:#92400e;--amber-lt:#fef3c7;--amber-tint:#fffbeb;--amber-solid:#d97706;--amber-border:#fde68a;
+  --purple:#6b21a8;--purple-lt:#f3e8ff;
+  --blue-tint:#eff6ff;--blue-solid:#3b82f6;
+  --slate:#64748b;--slate-lt:#f1f5f9;--slate-dk:#475569;--border:#e2e8f3;--bg:#f4f7fb;--card:#fff;
+  --dark-bg:#1e293b;--dark-fg:#e2e8f0;
+  /* ── Unified status-color system (visual redesign Phase 1) ──────────
+     One semantic meaning = one pair of variables, used identically
+     everywhere via statusBadge()/paymentTag()/.bdg-* — not a per-page
+     hardcoded hex. Tiers, by role:
+       <name>       — solid text/icon color (badge text, borders)
+       <name>-lt    — light pill/badge background (paired with <name>)
+       <name>-tint  — very light full-row/banner/input wash (lighter
+                      than -lt, for highlighting a whole row or field
+                      rather than a small pill)
+       <name>-solid — vivid, saturated fill for solid buttons, progress
+                      bars, and threshold indicators (needs more
+                      contrast against white text/large areas than the
+                      badge-text shade provides)
+     Meanings: green=success/complete, red=critical/error,
+     amber=warning/pending, blue=info/scheduled, slate=neutral/inactive,
+     purple=refund (a distinct outcome, not warning/error/success).
+     Department identity colors (--hem/--chem/--micro/--sero and their
+     -bg pairs) are a SEPARATE system — lab department branding, not
+     record status — and are intentionally not merged into this one. */
   --hem:#be123c;--hem-bg:#fff1f2;
   --chem:#0369a1;--chem-bg:#e0f2fe;
   --micro:#15803d;--micro-bg:#f0fdf4;
@@ -28,15 +50,15 @@
 body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);font-size:14px;line-height:1.5;overflow:hidden;height:100vh;}
 
 /* ── PAYMENT STATUS STYLES ─────────────────────────── */
-.pay-unpaid   { background:#fef9c3!important; border-left:4px solid #eab308!important; }
-.pay-insurance{ background:#eff6ff!important; border-left:4px solid #3b82f6!important; }
+.pay-unpaid   { background:var(--amber-tint)!important; border-left:4px solid var(--amber-solid)!important; }
+.pay-insurance{ background:var(--blue-tint)!important; border-left:4px solid var(--blue-solid)!important; }
 .pay-blocked  { opacity:.6; pointer-events:none; }
-.pay-tag-unpaid { background:#fef9c3; color:#92400e; padding:2px 8px; border-radius:20px; font-size:.68rem; font-weight:700; }
-.pay-tag-ins   { background:#dbeafe; color:#1d4ed8; padding:2px 8px; border-radius:20px; font-size:.68rem; font-weight:700; }
-.pay-tag-paid  { background:#dcfce7; color:#166534; padding:2px 8px; border-radius:20px; font-size:.68rem; font-weight:700; }
-.pay-tag-partial { background:#fef3c7; color:#b45309; padding:2px 8px; border-radius:20px; font-size:.68rem; font-weight:700; }
-.pay-tag-refunded { background:#f3e8ff; color:#6b21a8; padding:2px 8px; border-radius:20px; font-size:.68rem; font-weight:700; }
-.pay-tag-void { background:#e2e8f0; color:#475569; padding:2px 8px; border-radius:20px; font-size:.68rem; font-weight:700; text-decoration:line-through; }
+.pay-tag-unpaid { background:var(--amber-lt); color:var(--amber); padding:2px 8px; border-radius:20px; font-size:.68rem; font-weight:700; }
+.pay-tag-ins   { background:var(--blue-lt); color:var(--blue); padding:2px 8px; border-radius:20px; font-size:.68rem; font-weight:700; }
+.pay-tag-paid  { background:var(--green-lt); color:var(--green); padding:2px 8px; border-radius:20px; font-size:.68rem; font-weight:700; }
+.pay-tag-partial { background:var(--amber-lt); color:var(--amber); padding:2px 8px; border-radius:20px; font-size:.68rem; font-weight:700; }
+.pay-tag-refunded { background:var(--purple-lt); color:var(--purple); padding:2px 8px; border-radius:20px; font-size:.68rem; font-weight:700; }
+.pay-tag-void { background:var(--slate-lt); color:var(--slate-dk); padding:2px 8px; border-radius:20px; font-size:.68rem; font-weight:700; text-decoration:line-through; }
 .dest-card.selected { border-color:var(--teal)!important; background:var(--teal-lt); }
 .dest-card:hover    { border-color:var(--teal2)!important; background:#f8fffe; }
 .reg-blocked-banner { background:#fef9c3; border:2px solid #eab308; border-radius:10px; padding:12px 16px; display:flex; align-items:center; gap:12px; font-size:.82rem; margin-bottom:10px; }
@@ -64,8 +86,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);font
 .auth-spinner{width:15px;height:15px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;animation:spin .6s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg)}}
 .auth-msg{margin-top:11px;padding:10px 13px;border-radius:8px;font-size:.79rem;font-weight:500;display:none;}
-.auth-msg.err{background:#fff1f2;border:1.5px solid #fca5a5;color:#b91c1c;display:block;}
-.auth-msg.ok{background:#f0fdf4;border:1.5px solid #86efac;color:#166534;display:block;}
+.auth-msg.err{background:var(--red-tint);border:1.5px solid var(--red-border);color:var(--red);display:block;}
+.auth-msg.ok{background:#f0fdf4;border:1.5px solid #86efac;color:var(--green);display:block;}
 .auth-cfg-row{display:flex;align-items:center;gap:6px;padding-top:14px;margin-top:14px;border-top:1px solid var(--border);cursor:pointer;font-size:.72rem;color:var(--slate);font-weight:600;user-select:none;}
 .auth-cfg-row:hover{color:var(--teal);}
 .auth-cfg-body{display:none;margin-top:10px;}
@@ -139,7 +161,7 @@ html[dir="rtl"] body{direction:rtl;}
 .btn{display:inline-flex;align-items:center;gap:5px;padding:7px 14px;border-radius:7px;border:none;font-family:'DM Sans',sans-serif;font-size:.8rem;font-weight:600;cursor:pointer;transition:all .15s;white-space:nowrap;}
 .btn:disabled{opacity:.5;cursor:not-allowed;}
 .btn-p{background:var(--teal);color:#fff;}.btn-p:hover:not(:disabled){background:#096561;}
-.btn-w{background:#d97706;color:#fff;}.btn-w:hover:not(:disabled){background:#b45309;}
+.btn-w{background:var(--amber-solid);color:#fff;}.btn-w:hover:not(:disabled){background:#b45309;}
 .ue-nav-btn:hover{background:var(--bg) !important;}
 .btn-s{background:transparent;border:1.5px solid var(--border);color:var(--ink);}.btn-s:hover{border-color:var(--teal);color:var(--teal);}
 .btn-r{background:var(--red);color:#fff;}.btn-r:hover:not(:disabled){background:#991b1b;}
@@ -170,12 +192,12 @@ html[dir="rtl"] body{direction:rtl;}
 .bdg-r{background:var(--red-lt);color:var(--red);}
 .bdg-a{background:var(--amber-lt);color:var(--amber);}
 .bdg-b{background:var(--blue-lt);color:var(--blue);}
-.bdg-sl{background:#f1f5f9;color:var(--slate);}
+.bdg-sl{background:var(--slate-lt);color:var(--slate);}
 .bdg-t{background:var(--teal-lt);color:var(--teal);}
 /* Distinct from bdg-g on purpose — a signed-off/locked visit must never
    read as "still actionable" at a glance the way green does (see
    guardVisitNotLocked() / statusBadge()). */
-.bdg-dk{background:#1e293b;color:#e2e8f0;}
+.bdg-dk{background:var(--dark-bg);color:var(--dark-fg);}
 /* BED GRID (Bed Management / IPD) */
 .bed-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:9px;}
 .bed-tile{position:relative;border-radius:9px;padding:9px 10px 8px;cursor:pointer;border:1.5px solid transparent;transition:transform .12s,box-shadow .12s;min-height:76px;}
@@ -267,9 +289,9 @@ html[dir="rtl"] body{direction:rtl;}
 .sft-actions .btn:hover{background:rgba(255,255,255,.24)}
 .sft-actions .btn.btn-r{background:#ef4444;border-color:#ef4444}
 /* Warning banner shown in place of a reception page when no shift is active */
-.shift-required-banner{background:#fef3c7;border:1.5px solid #f59e0b;border-radius:10px;padding:22px;text-align:center;margin:20px}
+.shift-required-banner{background:var(--amber-lt);border:1.5px solid #f59e0b;border-radius:10px;padding:22px;text-align:center;margin:20px}
 .shift-required-banner .srb-icon{font-size:2rem;margin-bottom:8px}
-.shift-required-banner h3{font-family:'DM Serif Display',serif;color:#92400e;margin-bottom:6px}
+.shift-required-banner h3{font-family:'DM Serif Display',serif;color:var(--amber);margin-bottom:6px}
 .shift-required-banner p{color:#78350f;font-size:.84rem;margin-bottom:12px}
 /* KPI grid reused by Close-Shift / X-Report modals */
 .kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:14px}
@@ -281,7 +303,7 @@ html[dir="rtl"] body{direction:rtl;}
 .recon-row .rr-v{font-weight:700}
 .variance-pos{color:var(--green)}.variance-neg{color:var(--red)}
 /* Anti-fraud PIN override modal */
-.override-warn{background:#fee2e2;border:1.5px solid #ef4444;border-radius:9px;padding:10px 13px;font-size:.79rem;color:#991b1b;margin-bottom:12px;display:flex;gap:8px;align-items:flex-start}
+.override-warn{background:var(--red-lt);border:1.5px solid #ef4444;border-radius:9px;padding:10px 13px;font-size:.79rem;color:#991b1b;margin-bottom:12px;display:flex;gap:8px;align-items:flex-start}
 /* Patient wallet card */
 .wallet-card{background:linear-gradient(100deg,#0b7a75,#0e5a56);border-radius:10px;padding:12px 15px;color:#fff;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:10px}
 .wallet-card .wc-bal{font-family:'DM Serif Display',serif;font-size:1.3rem}
@@ -329,8 +351,8 @@ html[dir="rtl"] body{direction:rtl;}
 .pain-num{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700;cursor:pointer;border:1.5px solid var(--border);background:#fafbfd;transition:all .15s;}
 .pain-num.active{color:#fff;}
 .pain-0,.pain-1,.pain-2,.pain-3{--pc:#16a34a;}
-.pain-4,.pain-5,.pain-6{--pc:#d97706;}
-.pain-7,.pain-8,.pain-9,.pain-10{--pc:#b91c1c;}
+.pain-4,.pain-5,.pain-6{--pc:var(--amber-solid);}
+.pain-7,.pain-8,.pain-9,.pain-10{--pc:var(--red);}
 .pain-num.active{background:var(--pc);border-color:var(--pc);}
 /* ACTIVITY FEED */
 .act-feed{display:flex;flex-direction:column;gap:6px;}
@@ -376,7 +398,7 @@ html[dir="rtl"] body{direction:rtl;}
 .fc-table td,.fc-table th{padding:5px 8px;text-align:center;border:1px solid var(--border);font-size:.78rem;}
 .fc-table th{background:var(--ink2);color:rgba(255,255,255,.8);font-size:.65rem;font-weight:700;text-transform:uppercase;}
 /* CRIT ALERT */
-.crit-alert{background:#fff1f2;border:2px solid var(--red);border-radius:10px;padding:12px 15px;margin-bottom:14px;display:flex;gap:11px;align-items:flex-start;}
+.crit-alert{background:var(--red-tint);border:2px solid var(--red);border-radius:10px;padding:12px 15px;margin-bottom:14px;display:flex;gap:11px;align-items:flex-start;}
 .ca-icon{font-size:1.4rem;flex-shrink:0;}
 .ca-body h4{color:var(--red);font-size:.87rem;font-weight:700;}
 .ca-body p{font-size:.77rem;color:#7f1d1d;margin-top:3px;}
@@ -415,7 +437,7 @@ html[dir="rtl"] body{direction:rtl;}
 /* OFFLINE / CONNECTION BADGE */
 #conn-badge{display:flex;align-items:center;gap:7px;margin:0 14px 10px;padding:7px 11px;border-radius:8px;cursor:pointer;font-size:.74rem;font-weight:600;transition:background .15s;}
 #conn-badge.online{background:rgba(34,197,94,.12);color:#86efac;}
-#conn-badge.offline{background:rgba(239,68,68,.18);color:#fca5a5;}
+#conn-badge.offline{background:rgba(239,68,68,.18);color:var(--red-border);}
 #conn-badge.syncing{background:rgba(245,158,11,.18);color:#fcd34d;}
 #conn-badge .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
 #conn-badge.online .dot{background:#22c55e;box-shadow:0 0 0 0 rgba(34,197,94,.5);animation:pulse-dot 2s infinite;}
@@ -427,7 +449,7 @@ html[dir="rtl"] body{direction:rtl;}
 #sync-panel .sp-hd{padding:12px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;font-weight:700;font-size:.85rem;}
 #sync-panel .sp-body{padding:10px 14px;}
 .sp-item{padding:8px 10px;border-radius:7px;background:var(--bg);margin-bottom:6px;font-size:.74rem;}
-.sp-item.failed{background:#fee2e2;}
+.sp-item.failed{background:var(--red-lt);}
 .sp-item .sp-tbl{font-weight:700;color:var(--teal);}
 .sp-item .sp-err{color:var(--red);font-size:.68rem;margin-top:3px;}
 </style>
@@ -764,7 +786,7 @@ html[dir="rtl"] body{direction:rtl;}
 
       <!-- Unpaid patients alert -->
       <div class="card" id="dash-unpaid-card">
-        <div class="card-hd"><span class="card-title" style="color:#b91c1c">⚠️ Unpaid / Blocked Patients</span>
+        <div class="card-hd"><span class="card-title" style="color:var(--red)">⚠️ Unpaid / Blocked Patients</span>
           <button class="btn btn-s btn-sm" onclick="goPage('billing')">View Billing →</button>
         </div>
         <div id="dash-unpaid-list" style="padding:10px 14px"><div class="spin-center"><div class="spinner"></div></div></div>
@@ -772,7 +794,7 @@ html[dir="rtl"] body{direction:rtl;}
 
       <!-- Recent STAT orders -->
       <div class="card">
-        <div class="card-hd"><span class="card-title" style="color:#b91c1c">⚡ STAT / Urgent Orders</span></div>
+        <div class="card-hd"><span class="card-title" style="color:var(--red)">⚡ STAT / Urgent Orders</span></div>
         <div id="dash-stat-list" style="padding:10px 14px"><div class="spin-center"><div class="spinner"></div></div></div>
       </div>
     </div>
@@ -1075,7 +1097,7 @@ html[dir="rtl"] body{direction:rtl;}
           </div>
           <!-- Pulse & Resp -->
           <div style="background:#f0fdf4;border-radius:8px;padding:10px 12px;margin-bottom:12px">
-            <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:#166534;margin-bottom:8px">💓 Pulse & Respiration</div>
+            <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:var(--green);margin-bottom:8px">💓 Pulse & Respiration</div>
             <div class="g3">
               <div class="fg"><label class="fl">HR (bpm)</label>
                 <input class="fc" type="number" id="vs-hr" placeholder="80" oninput="flagVital(this,50,100);calcNEWS2()">
@@ -1133,7 +1155,7 @@ html[dir="rtl"] body{direction:rtl;}
           </div>
           <!-- GCS -->
           <div style="background:#fef9c3;border-radius:8px;padding:10px 12px;margin-bottom:12px">
-            <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:#92400e;margin-bottom:8px">🧠 Glasgow Coma Scale (GCS)</div>
+            <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:var(--amber);margin-bottom:8px">🧠 Glasgow Coma Scale (GCS)</div>
             <div class="g3">
               <div class="fg"><label class="fl">Eye Opening (1-4)</label><input class="fc" type="number" id="vs-gcs-e" min="1" max="4" placeholder="4" oninput="calcGCS()"></div>
               <div class="fg"><label class="fl">Verbal (1-5)</label><input class="fc" type="number" id="vs-gcs-v" min="1" max="5" placeholder="5" oninput="calcGCS()"></div>
@@ -1145,16 +1167,16 @@ html[dir="rtl"] body{direction:rtl;}
           <div style="margin-bottom:12px">
             <label class="fl">🩺 Pain Score (0–10) — NRS</label>
             <div class="pain-bar" id="pain-bar" style="display:flex;gap:4px;margin-top:6px">
-              <span class="pain-num pain-0" onclick="setPain(0,this)" style="flex:1;text-align:center;padding:7px 2px;border-radius:6px;cursor:pointer;font-weight:700;font-size:.82rem;background:#dcfce7;color:#166534">0</span>
-              <span class="pain-num pain-1" onclick="setPain(1,this)" style="flex:1;text-align:center;padding:7px 2px;border-radius:6px;cursor:pointer;font-weight:700;font-size:.82rem;background:#dcfce7;color:#166534">1</span>
-              <span class="pain-num pain-2" onclick="setPain(2,this)" style="flex:1;text-align:center;padding:7px 2px;border-radius:6px;cursor:pointer;font-weight:700;font-size:.82rem;background:#dcfce7;color:#166534">2</span>
-              <span class="pain-num pain-3" onclick="setPain(3,this)" style="flex:1;text-align:center;padding:7px 2px;border-radius:6px;cursor:pointer;font-weight:700;font-size:.82rem;background:#fef9c3;color:#92400e">3</span>
-              <span class="pain-num pain-4" onclick="setPain(4,this)" style="flex:1;text-align:center;padding:7px 2px;border-radius:6px;cursor:pointer;font-weight:700;font-size:.82rem;background:#fef9c3;color:#92400e">4</span>
-              <span class="pain-num pain-5" onclick="setPain(5,this)" style="flex:1;text-align:center;padding:7px 2px;border-radius:6px;cursor:pointer;font-weight:700;font-size:.82rem;background:#fef3c7;color:#b45309">5</span>
-              <span class="pain-num pain-6" onclick="setPain(6,this)" style="flex:1;text-align:center;padding:7px 2px;border-radius:6px;cursor:pointer;font-weight:700;font-size:.82rem;background:#fef3c7;color:#b45309">6</span>
-              <span class="pain-num pain-7" onclick="setPain(7,this)" style="flex:1;text-align:center;padding:7px 2px;border-radius:6px;cursor:pointer;font-weight:700;font-size:.82rem;background:#fee2e2;color:#b91c1c">7</span>
-              <span class="pain-num pain-8" onclick="setPain(8,this)" style="flex:1;text-align:center;padding:7px 2px;border-radius:6px;cursor:pointer;font-weight:700;font-size:.82rem;background:#fee2e2;color:#b91c1c">8</span>
-              <span class="pain-num pain-9" onclick="setPain(9,this)" style="flex:1;text-align:center;padding:7px 2px;border-radius:6px;cursor:pointer;font-weight:700;font-size:.82rem;background:#fee2e2;color:#b91c1c">9</span>
+              <span class="pain-num pain-0" onclick="setPain(0,this)" style="flex:1;text-align:center;padding:7px 2px;border-radius:6px;cursor:pointer;font-weight:700;font-size:.82rem;background:var(--green-lt);color:var(--green)">0</span>
+              <span class="pain-num pain-1" onclick="setPain(1,this)" style="flex:1;text-align:center;padding:7px 2px;border-radius:6px;cursor:pointer;font-weight:700;font-size:.82rem;background:var(--green-lt);color:var(--green)">1</span>
+              <span class="pain-num pain-2" onclick="setPain(2,this)" style="flex:1;text-align:center;padding:7px 2px;border-radius:6px;cursor:pointer;font-weight:700;font-size:.82rem;background:var(--green-lt);color:var(--green)">2</span>
+              <span class="pain-num pain-3" onclick="setPain(3,this)" style="flex:1;text-align:center;padding:7px 2px;border-radius:6px;cursor:pointer;font-weight:700;font-size:.82rem;background:#fef9c3;color:var(--amber)">3</span>
+              <span class="pain-num pain-4" onclick="setPain(4,this)" style="flex:1;text-align:center;padding:7px 2px;border-radius:6px;cursor:pointer;font-weight:700;font-size:.82rem;background:#fef9c3;color:var(--amber)">4</span>
+              <span class="pain-num pain-5" onclick="setPain(5,this)" style="flex:1;text-align:center;padding:7px 2px;border-radius:6px;cursor:pointer;font-weight:700;font-size:.82rem;background:var(--amber-lt);color:#b45309">5</span>
+              <span class="pain-num pain-6" onclick="setPain(6,this)" style="flex:1;text-align:center;padding:7px 2px;border-radius:6px;cursor:pointer;font-weight:700;font-size:.82rem;background:var(--amber-lt);color:#b45309">6</span>
+              <span class="pain-num pain-7" onclick="setPain(7,this)" style="flex:1;text-align:center;padding:7px 2px;border-radius:6px;cursor:pointer;font-weight:700;font-size:.82rem;background:var(--red-lt);color:var(--red)">7</span>
+              <span class="pain-num pain-8" onclick="setPain(8,this)" style="flex:1;text-align:center;padding:7px 2px;border-radius:6px;cursor:pointer;font-weight:700;font-size:.82rem;background:var(--red-lt);color:var(--red)">8</span>
+              <span class="pain-num pain-9" onclick="setPain(9,this)" style="flex:1;text-align:center;padding:7px 2px;border-radius:6px;cursor:pointer;font-weight:700;font-size:.82rem;background:var(--red-lt);color:var(--red)">9</span>
               <span class="pain-num pain-10" onclick="setPain(10,this)" style="flex:1;text-align:center;padding:7px 2px;border-radius:6px;cursor:pointer;font-weight:700;font-size:.82rem;background:#7f1d1d;color:#fff">10</span>
             </div>
             <input type="hidden" id="vs-pain">
@@ -1162,7 +1184,7 @@ html[dir="rtl"] body{direction:rtl;}
           </div>
           <!-- Fluid Balance -->
           <div style="background:#eff6ff;border-radius:8px;padding:10px 12px;margin-bottom:12px">
-            <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:#1d4ed8;margin-bottom:8px">💧 Fluid Balance (since last entry)</div>
+            <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:var(--blue);margin-bottom:8px">💧 Fluid Balance (since last entry)</div>
             <div class="g2">
               <div class="fg"><label class="fl">IV Fluids In (mL)</label><input class="fc" type="number" id="vs-iv-in" placeholder="0" min="0" oninput="calcBalance()"></div>
               <div class="fg"><label class="fl">Oral / NGT In (mL)</label><input class="fc" type="number" id="vs-po-in" placeholder="0" min="0" oninput="calcBalance()"></div>
@@ -1195,7 +1217,7 @@ html[dir="rtl"] body{direction:rtl;}
             <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px">NEWS2 Score</div>
             <div id="vs-news2-val" style="font-size:1.6rem;font-weight:900">—</div>
             <div id="vs-news2-risk" style="font-size:.75rem;font-weight:700"></div>
-            <div id="vs-news2-hourly-flag" style="display:none;margin-top:6px"><span class="bdg" style="background:#fef3c7;color:#92400e">⏰ Hourly Monitoring</span></div>
+            <div id="vs-news2-hourly-flag" style="display:none;margin-top:6px"><span class="bdg" style="background:var(--amber-lt);color:var(--amber)">⏰ Hourly Monitoring</span></div>
           </div>
           <div class="g2">
             <div class="fg"><label class="fl">Recorded By</label><input class="fc" id="vs-by" readonly></div>
@@ -1261,17 +1283,17 @@ html[dir="rtl"] body{direction:rtl;}
         <div class="card-hd"><span class="card-title">📋 MAR Legend</span></div>
         <div class="card-body" style="font-size:.78rem">
           <div style="display:flex;flex-direction:column;gap:6px">
-            <div style="display:flex;align-items:center;gap:10px"><span style="background:#dcfce7;color:#166534;padding:2px 10px;border-radius:4px;font-weight:700;min-width:60px;text-align:center">Given</span><span>Medication administered on time</span></div>
-            <div style="display:flex;align-items:center;gap:10px"><span style="background:#fde68a;color:#92400e;padding:2px 10px;border-radius:4px;font-weight:700;min-width:60px;text-align:center">Refused</span><span>Patient declined — reason required</span></div>
-            <div style="display:flex;align-items:center;gap:10px"><span style="background:#fee2e2;color:#b91c1c;padding:2px 10px;border-radius:4px;font-weight:700;min-width:60px;text-align:center">Omit</span><span>Dose omitted for a clinical/administrative reason — reason required</span></div>
-            <div style="display:flex;align-items:center;gap:10px"><span style="background:#fef9c3;color:#92400e;padding:2px 10px;border-radius:4px;font-weight:700;min-width:60px;text-align:center">Hold</span><span>On hold — pending review — reason required</span></div>
-            <div style="display:flex;align-items:center;gap:10px"><span style="background:#dbeafe;color:#1d4ed8;padding:2px 10px;border-radius:4px;font-weight:700;min-width:60px;text-align:center">PRN</span><span>Given as needed (document indication)</span></div>
+            <div style="display:flex;align-items:center;gap:10px"><span style="background:var(--green-lt);color:var(--green);padding:2px 10px;border-radius:4px;font-weight:700;min-width:60px;text-align:center">Given</span><span>Medication administered on time</span></div>
+            <div style="display:flex;align-items:center;gap:10px"><span style="background:var(--amber-border);color:var(--amber);padding:2px 10px;border-radius:4px;font-weight:700;min-width:60px;text-align:center">Refused</span><span>Patient declined — reason required</span></div>
+            <div style="display:flex;align-items:center;gap:10px"><span style="background:var(--red-lt);color:var(--red);padding:2px 10px;border-radius:4px;font-weight:700;min-width:60px;text-align:center">Omit</span><span>Dose omitted for a clinical/administrative reason — reason required</span></div>
+            <div style="display:flex;align-items:center;gap:10px"><span style="background:#fef9c3;color:var(--amber);padding:2px 10px;border-radius:4px;font-weight:700;min-width:60px;text-align:center">Hold</span><span>On hold — pending review — reason required</span></div>
+            <div style="display:flex;align-items:center;gap:10px"><span style="background:var(--blue-lt);color:var(--blue);padding:2px 10px;border-radius:4px;font-weight:700;min-width:60px;text-align:center">PRN</span><span>Given as needed (document indication)</span></div>
             <div style="display:flex;align-items:center;gap:10px"><span style="background:#f3f4f6;color:#374151;padding:2px 10px;border-radius:4px;font-weight:700;min-width:60px;text-align:center">Due</span><span>Scheduled — not yet given</span></div>
           </div>
-          <div style="margin-top:14px;padding:10px 12px;background:#fffbeb;border-radius:8px;border:1.5px solid #fde68a;font-size:.74rem;color:#92400e;line-height:1.6">
+          <div style="margin-top:14px;padding:10px 12px;background:var(--amber-tint);border-radius:8px;border:1.5px solid var(--amber-border);font-size:.74rem;color:var(--amber);line-height:1.6">
             ⚠️ <strong>ISO 15189 / CAP:</strong> Always verify patient identity with two identifiers before administering. Document each administration immediately. Never pre-sign the MAR.
           </div>
-          <div style="margin-top:8px;padding:10px 12px;background:#fee2e2;border-radius:8px;border:1.5px solid #fca5a5;font-size:.74rem;color:#b91c1c;line-height:1.6">
+          <div style="margin-top:8px;padding:10px 12px;background:var(--red-lt);border-radius:8px;border:1.5px solid var(--red-border);font-size:.74rem;color:var(--red);line-height:1.6">
             🚨 <strong>High-alert medications</strong> (insulin, heparin, warfarin, opioids, concentrated electrolytes, etc.) cannot be marked Given without a second staff member's independent confirmation — see the Verify column.
           </div>
         </div>
@@ -1346,7 +1368,7 @@ html[dir="rtl"] body{direction:rtl;}
       <div class="card">
         <div class="card-hd"><span class="card-title" style="color:#7c2d12">🫁 SOFA Score — Sepsis-Related Organ Failure</span></div>
         <div class="card-body">
-          <div style="background:#fffbeb;border:1.5px solid #fde68a;border-radius:7px;padding:8px 10px;margin-bottom:10px;font-size:.72rem;color:#92400e">
+          <div style="background:var(--amber-tint);border:1.5px solid var(--amber-border);border-radius:7px;padding:8px 10px;margin-bottom:10px;font-size:.72rem;color:var(--amber)">
             ⚠️ Manual entry only — verify every value against the current chart before scoring. Nothing here is auto-pulled from lab results.
           </div>
           <table class="tbl" style="font-size:.78rem">
@@ -1390,7 +1412,7 @@ html[dir="rtl"] body{direction:rtl;}
   <div id="nrs-tab-wound" style="display:none">
     <div class="g2">
       <div class="card">
-        <div class="card-hd"><span class="card-title" style="color:#b91c1c">🩹 Wound / Pressure Ulcer Documentation</span>
+        <div class="card-hd"><span class="card-title" style="color:var(--red)">🩹 Wound / Pressure Ulcer Documentation</span>
           <button class="btn btn-p btn-sm" onclick="addWoundRow()">+ Add Site</button>
         </div>
         <div class="card-body">
@@ -1745,7 +1767,7 @@ html[dir="rtl"] body{direction:rtl;}
 
           <!-- Examination -->
           <div style="background:#f0fdf4;border-radius:8px;padding:10px 12px;margin-bottom:12px">
-            <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:#166534;margin-bottom:8px">🩺 Physical Examination</div>
+            <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:var(--green);margin-bottom:8px">🩺 Physical Examination</div>
             <div class="g2">
               <div class="fg"><label class="fl">General</label>
                 <input class="fc" id="doc-general" placeholder="Alert, oriented, not in distress…">
@@ -1782,7 +1804,7 @@ html[dir="rtl"] body{direction:rtl;}
                table, not a second copy that could drift from it. -->
           <div style="background:#eff6ff;border-radius:8px;padding:10px 12px;margin-bottom:12px">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-              <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:#1d4ed8">🧪 Lab Investigations</div>
+              <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:var(--blue)">🧪 Lab Investigations</div>
               <button class="btn btn-s btn-xs" onclick="openLabHistoryFromDoctor()">Full History →</button>
             </div>
             <div id="doc-lab-invest-body"><div class="empty-state" style="padding:8px;font-size:.76rem">No lab results on file for this patient yet</div></div>
@@ -1868,7 +1890,7 @@ html[dir="rtl"] body{direction:rtl;}
                 <div id="doc-trend-bp-n" style="font-size:.62rem;color:var(--slate);margin-top:2px">—</div>
               </div>
               <div style="background:#f8fafd;border-radius:8px;padding:8px 10px">
-                <div style="font-size:.68rem;font-weight:700;color:#166534">Heart Rate (bpm)</div>
+                <div style="font-size:.68rem;font-weight:700;color:var(--green)">Heart Rate (bpm)</div>
                 <canvas id="doc-trend-hr" style="width:100%;height:70px;display:block"></canvas>
                 <div id="doc-trend-hr-n" style="font-size:.62rem;color:var(--slate);margin-top:2px">—</div>
               </div>
@@ -2786,7 +2808,7 @@ html[dir="rtl"] body{direction:rtl;}
   <div class="mo mo-lg">
     <div class="mo-hd"><h3>🩻 DICOM Viewer (Simulated)</h3><button class="mo-x" onclick="closeDicomViewer()">✕</button></div>
     <div class="mo-b">
-      <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:6px 10px;font-size:.68rem;color:#92400e;margin-bottom:8px">⚠️ Demo viewer over a placeholder image — no real DICOM/PACS integration exists in this app. Set a Study PACS URL on the report to link out to a real viewer instead.</div>
+      <div style="background:var(--amber-tint);border:1px solid var(--amber-border);border-radius:6px;padding:6px 10px;font-size:.68rem;color:var(--amber);margin-bottom:8px">⚠️ Demo viewer over a placeholder image — no real DICOM/PACS integration exists in this app. Set a Study PACS URL on the report to link out to a real viewer instead.</div>
       <div id="dicom-pt-label" style="font-size:.78rem;font-weight:700;margin-bottom:6px">—</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
         <button class="btn btn-s btn-xs" onclick="dicomZoom(1.2)">🔍+ Zoom In</button>
@@ -2975,7 +2997,7 @@ html[dir="rtl"] body{direction:rtl;}
             <div class="fg"><label class="fl" data-i18n="reg_mname">Middle Name</label><input class="fc" id="r-mname" oninput="regValidate()"></div>
             <div class="fg"><label class="fl" data-i18n="reg_lname">Last Name</label><input class="fc" id="r-lname" oninput="regValidate()"></div>
           </div>
-          <div id="r-name-metachar-hint" style="display:none;color:#b91c1c;font-size:.78rem;margin-top:-8px;margin-bottom:8px">⚠ Names can't contain &lt; &gt; &amp; " or ' — please remove these characters.</div>
+          <div id="r-name-metachar-hint" style="display:none;color:var(--red);font-size:.78rem;margin-top:-8px;margin-bottom:8px">⚠ Names can't contain &lt; &gt; &amp; " or ' — please remove these characters.</div>
           <div class="g4">
             <div class="fg"><label class="fl" data-i18n="reg_age">Age *</label><input class="fc" type="number" id="r-age" min="0" oninput="regValidate();updateRegRadSafetyFields()"></div>
             <div class="fg"><label class="fl" data-i18n="reg_unit">Unit</label><select class="fc" id="r-age-unit" onchange="updateRegRadSafetyFields()"><option>Years</option><option>Months</option><option>Days</option></select></div>
@@ -3267,7 +3289,7 @@ html[dir="rtl"] body{direction:rtl;}
           <div class="fg"><label class="fl">Notes</label>
             <input class="fc" id="r-pay-notes" placeholder="Receipt no., transaction ref…">
           </div>
-          <div id="reg-pay-warning" style="display:none;background:#fffbeb;border:1.5px solid #fde68a;border-radius:8px;padding:10px 12px;font-size:.78rem;color:#92400e;margin-bottom:10px">
+          <div id="reg-pay-warning" style="display:none;background:var(--amber-tint);border:1.5px solid var(--amber-border);border-radius:8px;padding:10px 12px;font-size:.78rem;color:var(--amber);margin-bottom:10px">
             ⚠️ <strong>Patient will be marked as unpaid.</strong> They will appear in yellow in all departments and cannot receive services until payment is confirmed or insurance is approved.
           </div>
           <button class="btn btn-p" onclick="submitRegistration()" style="width:100%;justify-content:center" id="r-submit-btn">✅ Register &amp; Create Invoice</button>
@@ -3346,12 +3368,12 @@ html[dir="rtl"] body{direction:rtl;}
   </div>
 
   <!-- STAT alert banner -->
-  <div id="wl-stat-banner" style="display:none;background:#fee2e2;border:2px solid #fca5a5;border-radius:10px;padding:10px 14px;margin-bottom:10px;font-size:.82rem;color:#b91c1c;align-items:center;gap:10px">
+  <div id="wl-stat-banner" style="display:none;background:var(--red-lt);border:2px solid var(--red-border);border-radius:10px;padding:10px 14px;margin-bottom:10px;font-size:.82rem;color:var(--red);align-items:center;gap:10px">
     ⚡ <strong>STAT orders pending — results required immediately</strong>
   </div>
 
   <!-- Unpaid banner -->
-  <div id="wl-unpaid-banner" style="display:none;background:#fef9c3;border:1.5px solid #fde68a;border-radius:8px;padding:8px 14px;margin-bottom:10px;font-size:.76rem;color:#92400e">
+  <div id="wl-unpaid-banner" style="display:none;background:#fef9c3;border:1.5px solid var(--amber-border);border-radius:8px;padding:8px 14px;margin-bottom:10px;font-size:.76rem;color:var(--amber)">
     ⚠️ Some patients below have unpaid invoices — results entry is blocked until payment is confirmed.
   </div>
 
@@ -3391,7 +3413,7 @@ html[dir="rtl"] body{direction:rtl;}
   <div id="sc-tab-collection">
     <div class="g2">
       <div class="card">
-        <div class="card-hd"><span class="card-title" style="color:#b91c1c">🩸 Sample Collection — ISO 15189 / CLSI GP41</span></div>
+        <div class="card-hd"><span class="card-title" style="color:var(--red)">🩸 Sample Collection — ISO 15189 / CLSI GP41</span></div>
         <div class="card-body">
           <!-- Patient search -->
           <div class="fg">
@@ -3431,7 +3453,7 @@ html[dir="rtl"] body{direction:rtl;}
 
           <!-- CLSI GP41 Order of Draw reminder -->
           <div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:.72rem">
-            <div style="font-weight:700;color:#166534;margin-bottom:6px">📋 CLSI GP41 Order of Draw</div>
+            <div style="font-weight:700;color:var(--green);margin-bottom:6px">📋 CLSI GP41 Order of Draw</div>
             <div style="display:flex;gap:6px;flex-wrap:wrap">
               <span style="background:#f5f5f5;border:2px solid #fbbf24;border-radius:6px;padding:3px 8px;font-weight:700">1. Yellow/SPS</span>
               <span style="background:#f5f5f5;border:2px solid #3b82f6;border-radius:6px;padding:3px 8px;font-weight:700">2. Blue (Citrate)</span>
@@ -3443,8 +3465,8 @@ html[dir="rtl"] body{direction:rtl;}
           </div>
 
           <!-- Patient ID verification (ISO 15189 §5.4) -->
-          <div style="background:#fffbeb;border:1.5px solid #fde68a;border-radius:8px;padding:10px 12px;margin-bottom:12px">
-            <div style="font-weight:700;color:#92400e;font-size:.75rem;margin-bottom:6px">✅ Patient Identity Verification (ISO 15189 §5.4.4)</div>
+          <div style="background:var(--amber-tint);border:1.5px solid var(--amber-border);border-radius:8px;padding:10px 12px;margin-bottom:12px">
+            <div style="font-weight:700;color:var(--amber);font-size:.75rem;margin-bottom:6px">✅ Patient Identity Verification (ISO 15189 §5.4.4)</div>
             <div class="g2">
               <label class="chk-item"><input type="checkbox" id="sc-id-verbal"> Patient stated name verbally</label>
               <label class="chk-item"><input type="checkbox" id="sc-id-wristband"> Wristband / ID checked</label>
@@ -3540,7 +3562,7 @@ html[dir="rtl"] body{direction:rtl;}
           </div>
 
           <!-- Rejection warning -->
-          <div id="sc-reject-warn" style="display:none;background:#fee2e2;border:1.5px solid #fca5a5;border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:.78rem;color:#b91c1c">
+          <div id="sc-reject-warn" style="display:none;background:var(--red-lt);border:1.5px solid var(--red-border);border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:.78rem;color:var(--red)">
             ⛔ <strong>Rejection criteria met.</strong> This sample should be rejected and a new sample requested. Document reason below.
           </div>
 
@@ -3603,7 +3625,7 @@ html[dir="rtl"] body{direction:rtl;}
   <div id="sc-tab-receive" style="display:none">
     <div class="g2">
       <div class="card">
-        <div class="card-hd"><span class="card-title" style="color:#166534">📥 Receive Sample in Laboratory</span></div>
+        <div class="card-hd"><span class="card-title" style="color:var(--green)">📥 Receive Sample in Laboratory</span></div>
         <div class="card-body">
           <div class="fg">
             <label class="fl">Scan or Search Sample</label>
@@ -3638,7 +3660,7 @@ html[dir="rtl"] body{direction:rtl;}
               <option value="Expired Tube">Expired Tube ❌</option>
             </select>
           </div>
-          <div id="sc-recv-reject-warn" style="display:none;background:#fee2e2;border:1.5px solid #fca5a5;border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:.78rem;color:#b91c1c">
+          <div id="sc-recv-reject-warn" style="display:none;background:var(--red-lt);border:1.5px solid var(--red-border);border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:.78rem;color:var(--red)">
             ⛔ Sample does not meet acceptance criteria. Proceed to Rejection tab.
           </div>
           <div class="fg"><label class="fl">Storage Temperature</label>
@@ -3675,11 +3697,11 @@ html[dir="rtl"] body{direction:rtl;}
 
   <!-- ── TAB: UNRECEIVE ── -->
   <div id="sc-tab-unreceive" style="display:none">
-    <div style="background:#fffbeb;border:1.5px solid #fde68a;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:.8rem;color:#92400e">
+    <div style="background:var(--amber-tint);border:1.5px solid var(--amber-border);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:.8rem;color:var(--amber)">
       ⚠️ Use this only to correct a mistaken receipt — e.g. the wrong sample was scanned, or it was marked received before actually arriving. The sample reverts to <strong>Collected</strong> status and must be received again once the mix-up is resolved.
     </div>
     <div class="card">
-      <div class="card-hd"><span class="card-title" style="color:#92400e">↩️ Reverse Sample Receipt</span></div>
+      <div class="card-hd"><span class="card-title" style="color:var(--amber)">↩️ Reverse Sample Receipt</span></div>
       <div class="card-body">
         <div class="fg"><label class="fl">Search Received Sample</label>
           <div class="srch"><span>🔍</span><input id="sc-unrecv-search" placeholder="Lab No, MRN, patient name…" oninput="searchUnreceivePatient(this.value)"></div>
@@ -3733,7 +3755,7 @@ html[dir="rtl"] body{direction:rtl;}
   <div id="sc-tab-reject" style="display:none">
     <div class="g2">
       <div class="card">
-        <div class="card-hd"><span class="card-title" style="color:#b91c1c">⛔ Sample Rejection Log</span>
+        <div class="card-hd"><span class="card-title" style="color:var(--red)">⛔ Sample Rejection Log</span>
           <button class="btn btn-r btn-sm" onclick="openRejectModal()">+ Log Rejection</button>
         </div>
         <div id="sc-reject-log-body"><div class="spin-center"><div class="spinner"></div>Loading…</div></div>
@@ -3746,7 +3768,7 @@ html[dir="rtl"] body{direction:rtl;}
             <div class="stat-box" style="--ac:var(--amber)"><div class="stat-n" id="rej-rate">—</div><div class="stat-l">Rejection Rate</div></div>
           </div>
           <canvas id="rej-chart" height="120" style="width:100%;margin-top:10px"></canvas>
-          <div style="margin-top:10px;padding:10px 12px;background:#fffbeb;border-radius:8px;border:1.5px solid #fde68a;font-size:.74rem;color:#92400e">
+          <div style="margin-top:10px;padding:10px 12px;background:var(--amber-tint);border-radius:8px;border:1.5px solid var(--amber-border);font-size:.74rem;color:var(--amber)">
             ⚠️ <strong>ISO 15189 §5.4.6:</strong> All rejections must be documented. Patient and requesting clinician must be notified. Corrective action required if rejection rate >2%.
           </div>
         </div>
@@ -3838,7 +3860,7 @@ html[dir="rtl"] body{direction:rtl;}
 
 <div class="page" id="page-criticals">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
-    <div class="pg-title" style="color:#b91c1c">🚨 Critical Values</div>
+    <div class="pg-title" style="color:var(--red)">🚨 Critical Values</div>
     <div style="display:flex;gap:8px;align-items:center">
       <select class="fc" id="cv-filter" onchange="loadCriticals()" style="padding:5px 9px;font-size:.78rem;width:160px">
         <option value="">All — Unacknowledged</option>
@@ -3864,7 +3886,7 @@ html[dir="rtl"] body{direction:rtl;}
     </div>
   </div>
   <!-- ISO 15189 note -->
-  <div style="margin-top:12px;padding:10px 14px;background:#fff7ed;border:1.5px solid #fed7aa;border-radius:8px;font-size:.76rem;color:#92400e">
+  <div style="margin-top:12px;padding:10px 14px;background:#fff7ed;border:1.5px solid #fed7aa;border-radius:8px;font-size:.76rem;color:var(--amber)">
     ⚠️ <strong>ISO 15189 §5.8 / CAP:</strong> All critical values must be reported immediately to the responsible clinician. Document: time notified, method, clinician name, and read-back confirmation. Target: &lt;30 minutes from result to notification.
   </div>
 </div>
@@ -4167,7 +4189,7 @@ html[dir="rtl"] body{direction:rtl;}
     <div class="card" style="margin-bottom:14px">
       <div class="card-hd">
         <span class="card-title">🩸 Blood Unit Inventory</span>
-        <span id="bb-expiry-alert" style="display:none;font-size:.7rem;font-weight:700;color:#b91c1c;background:#fff1f2;padding:2px 8px;border-radius:10px;margin-left:8px"></span>
+        <span id="bb-expiry-alert" style="display:none;font-size:.7rem;font-weight:700;color:var(--red);background:var(--red-tint);padding:2px 8px;border-radius:10px;margin-left:8px"></span>
         <span style="font-size:.68rem;color:var(--slate)">FEFO — earliest-expiring compatible units are always used/offered first</span>
       </div>
       <div class="card-body">
@@ -4402,7 +4424,7 @@ html[dir="rtl"] body{direction:rtl;}
             <input class="fc" id="stf-qualifications" placeholder="e.g. BSc MLT, ASCP, ISO">
           </div>
           <div id="stf-new-account-fields">
-            <div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:8px;padding:10px 12px;font-size:.75rem;color:#166534;margin-bottom:10px;line-height:1.6">
+            <div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:8px;padding:10px 12px;font-size:.75rem;color:var(--green);margin-bottom:10px;line-height:1.6">
               ✅ <strong>Login Access:</strong> creating a staff member here creates their sign-in account and links it in one step — there's no separate "invite in Supabase, then paste a UUID" process anymore. Requires the <code>create-staff-account</code> Edge Function to be deployed.
             </div>
             <div class="fg"><label class="fl">Login Email *</label>
@@ -4425,16 +4447,16 @@ html[dir="rtl"] body{direction:rtl;}
         <div class="card-hd"><span class="card-title">ℹ️ Role Access Guide</span></div>
         <div class="card-body" style="font-size:.78rem">
           <div style="display:flex;flex-direction:column;gap:8px">
-            <div style="border-left:3px solid #b91c1c;padding:8px 12px;background:#fff1f2;border-radius:0 8px 8px 0">
-              <div style="font-weight:700;color:#b91c1c">🔴 Admin</div>
+            <div style="border-left:3px solid var(--red);padding:8px 12px;background:var(--red-tint);border-radius:0 8px 8px 0">
+              <div style="font-weight:700;color:var(--red)">🔴 Admin</div>
               <div style="color:var(--slate);font-size:.73rem">Full access to all modules, settings, staff management, prices, and reports</div>
             </div>
             <div style="border-left:3px solid #0369a1;padding:8px 12px;background:#f0f9ff;border-radius:0 8px 8px 0">
               <div style="font-weight:700;color:#0369a1">🩺 Doctor</div>
               <div style="color:var(--slate);font-size:.73rem">Consultation, orders, nursing, admissions, theatre, radiology, patient history</div>
             </div>
-            <div style="border-left:3px solid #166534;padding:8px 12px;background:#f0fdf4;border-radius:0 8px 8px 0">
-              <div style="font-weight:700;color:#166534">💉 Nurse</div>
+            <div style="border-left:3px solid var(--green);padding:8px 12px;background:#f0fdf4;border-radius:0 8px 8px 0">
+              <div style="font-weight:700;color:var(--green)">💉 Nurse</div>
               <div style="color:var(--slate);font-size:.73rem">Vitals, nursing, fluid chart, admissions, handover, infection, sample collection</div>
             </div>
             <div style="border-left:3px solid #7c3aed;padding:8px 12px;background:#faf5ff;border-radius:0 8px 8px 0">
@@ -4445,12 +4467,12 @@ html[dir="rtl"] body{direction:rtl;}
               <div style="font-weight:700;color:#0b7a75">🔬 Lab Supervisor</div>
               <div style="color:var(--slate);font-size:.73rem">All lab tech access + result verification, QC management, lab history analytics</div>
             </div>
-            <div style="border-left:3px solid #f59e0b;padding:8px 12px;background:#fffbeb;border-radius:0 8px 8px 0">
-              <div style="font-weight:700;color:#92400e">📋 Receptionist</div>
+            <div style="border-left:3px solid #f59e0b;padding:8px 12px;background:var(--amber-tint);border-radius:0 8px 8px 0">
+              <div style="font-weight:700;color:var(--amber)">📋 Receptionist</div>
               <div style="color:var(--slate);font-size:.73rem">Patient registration, appointments, billing, prices, infection flags</div>
             </div>
             <div style="border-left:3px solid #22c55e;padding:8px 12px;background:#f0fdf4;border-radius:0 8px 8px 0">
-              <div style="font-weight:700;color:#166534">💰 Cashier</div>
+              <div style="font-weight:700;color:var(--green)">💰 Cashier</div>
               <div style="color:var(--slate);font-size:.73rem">Billing, invoices, price list, appointments, patient registration</div>
             </div>
             <div style="border-left:3px solid #ec4899;padding:8px 12px;background:#fdf2f8;border-radius:0 8px 8px 0">
@@ -4626,8 +4648,8 @@ html[dir="rtl"] body{direction:rtl;}
           <div class="fg"><label class="fl">Contraindications / Special Notes</label>
             <input class="fc" id="rad-contraindications" placeholder="Pregnancy, renal function, contrast allergy, pacemaker…">
           </div>
-          <div id="rad-pregnancy-wrap" style="display:none;background:#fef3c7;border:1.5px solid #fde68a;border-radius:8px;padding:10px 12px;margin-bottom:11px">
-            <label class="fl" style="color:#92400e">⚠️ Pregnancy Status Confirmation — Required *</label>
+          <div id="rad-pregnancy-wrap" style="display:none;background:var(--amber-lt);border:1.5px solid var(--amber-border);border-radius:8px;padding:10px 12px;margin-bottom:11px">
+            <label class="fl" style="color:var(--amber)">⚠️ Pregnancy Status Confirmation — Required *</label>
             <select class="fc" id="rad-pregnancy-status">
               <option value="">— Confirm before submitting —</option>
               <option value="confirmed_not_pregnant">Confirmed NOT pregnant</option>
@@ -4641,7 +4663,7 @@ html[dir="rtl"] body{direction:rtl;}
               <div class="fg" style="margin-bottom:0"><label class="fl">eGFR (mL/min/1.73m²)</label><input class="fc" type="number" step="0.1" id="rad-egfr" oninput="checkContrastSafety()"></div>
               <div class="fg" style="margin-bottom:0"><label class="fl">Serum Creatinine (µmol/L)</label><input class="fc" type="number" step="0.1" id="rad-creatinine" oninput="checkContrastSafety()"></div>
             </div>
-            <div id="rad-contrast-warning" style="display:none;margin-top:8px;font-size:.72rem;font-weight:700;color:#b91c1c">⚠️ eGFR below 30 — contrast is relatively contraindicated. Confirm risk/benefit with the radiologist before proceeding.</div>
+            <div id="rad-contrast-warning" style="display:none;margin-top:8px;font-size:.72rem;font-weight:700;color:var(--red)">⚠️ eGFR below 30 — contrast is relatively contraindicated. Confirm risk/benefit with the radiologist before proceeding.</div>
           </div>
           <button class="btn btn-p" onclick="submitRadRequest()" style="width:100%;justify-content:center;margin-top:4px">📋 Submit Request</button>
         </div>
@@ -4723,8 +4745,8 @@ html[dir="rtl"] body{direction:rtl;}
           <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
             <label class="chk-item"><input type="checkbox" id="rad-rep-critical"> 🚨 CRITICAL FINDING (Requires Immediate Physician Alert)</label>
           </div>
-          <div id="rad-critical-detail" style="display:none;background:#fee2e2;border:1.5px solid #fca5a5;border-radius:8px;padding:10px 12px;margin-bottom:10px">
-            <div style="font-size:.75rem;font-weight:700;color:#b91c1c;margin-bottom:4px">Critical Finding — Notify immediately (e.g. Pneumothorax, Acute Haemorrhage, Fracture)</div>
+          <div id="rad-critical-detail" style="display:none;background:var(--red-lt);border:1.5px solid var(--red-border);border-radius:8px;padding:10px 12px;margin-bottom:10px">
+            <div style="font-size:.75rem;font-weight:700;color:var(--red);margin-bottom:4px">Critical Finding — Notify immediately (e.g. Pneumothorax, Acute Haemorrhage, Fracture)</div>
             <input class="fc" id="rad-critical-desc" placeholder="Describe critical finding…" style="margin-bottom:8px">
             <div class="g3">
               <div class="fg" style="margin-bottom:0"><label class="fl">Physician Notified Name *</label><input class="fc" id="rad-crit-notified-name" placeholder="Dr. name"></div>
@@ -5978,10 +6000,10 @@ html[dir="rtl"] body{direction:rtl;}
     <button class="btn btn-p" onclick="openInfectionModal()">+ New Flag</button>
   </div>
   <div class="stat-grid" style="grid-template-columns:repeat(4,1fr)">
-    <div class="stat-box" style="--ac:#b91c1c"><div class="stat-n" id="inf-stat-active">—</div><div class="stat-l">Active Flags</div></div>
+    <div class="stat-box" style="--ac:var(--red)"><div class="stat-n" id="inf-stat-active">—</div><div class="stat-l">Active Flags</div></div>
     <div class="stat-box" style="--ac:#7c3aed"><div class="stat-n" id="inf-stat-contact">—</div><div class="stat-l">Contact Precaution</div></div>
     <div class="stat-box" style="--ac:#0369a1"><div class="stat-n" id="inf-stat-droplet">—</div><div class="stat-l">Droplet Precaution</div></div>
-    <div class="stat-box" style="--ac:#166534"><div class="stat-n" id="inf-stat-resolved">—</div><div class="stat-l">Resolved (30d)</div></div>
+    <div class="stat-box" style="--ac:var(--green)"><div class="stat-n" id="inf-stat-resolved">—</div><div class="stat-l">Resolved (30d)</div></div>
   </div>
   <div class="card">
     <div class="card-hd">
@@ -6110,7 +6132,7 @@ html[dir="rtl"] body{direction:rtl;}
               <span style="font-size:.78rem;font-weight:700;color:var(--teal)" id="az-pending">0</span>
             </div>
           </div>
-          <div style="margin-top:14px;padding:12px;background:#fffbeb;border:1.5px solid #fde68a;border-radius:8px;font-size:.78rem;color:#92400e;line-height:1.6">
+          <div style="margin-top:14px;padding:12px;background:var(--amber-tint);border:1.5px solid var(--amber-border);border-radius:8px;font-size:.78rem;color:var(--amber);line-height:1.6">
             ⚠️ <strong>Note:</strong> Network HL7/MLLP integration (analyzer on the LAN) still requires a middleware server (e.g. Mirth Connect, Rhapsody) or direct TCP socket access — not possible from a static browser app. For an analyzer connected directly by USB/RS-232 cable, see the Live Serial Connection panel below instead, which talks to it directly, no middleware needed.
           </div>
         </div>
@@ -6119,7 +6141,7 @@ html[dir="rtl"] body{direction:rtl;}
         <div class="card-hd"><span class="card-title">🔌 Live Serial Connection (USB / RS-232)</span></div>
         <div class="card-body">
           <div style="font-size:.72rem;color:var(--slate);margin-bottom:10px">Direct, real bidirectional link to an analyzer connected by USB or RS-232 cable, using the browser's Web Serial API (Chrome / Edge desktop only — no extra software, no middleware). Incoming frames are parsed with the same ASTM/HL7 logic as the paste/simulate tools above and land in the same Instrument Data Stream table below.</div>
-          <div id="ws-support-warn" style="display:none;background:#fee2e2;border:1.5px solid #fca5a5;border-radius:8px;padding:8px 10px;font-size:.74rem;color:#b91c1c;margin-bottom:10px">⚠️ Web Serial API not available in this browser — use Chrome or Edge on a desktop/laptop. Not supported on iOS/Safari or most mobile browsers.</div>
+          <div id="ws-support-warn" style="display:none;background:var(--red-lt);border:1.5px solid var(--red-border);border-radius:8px;padding:8px 10px;font-size:.74rem;color:var(--red);margin-bottom:10px">⚠️ Web Serial API not available in this browser — use Chrome or Edge on a desktop/laptop. Not supported on iOS/Safari or most mobile browsers.</div>
           <div class="g2">
             <div class="fg"><label class="fl">Baud Rate</label>
               <select class="fc" id="ws-baud"><option value="9600" selected>9600 (most common)</option><option value="19200">19200</option><option value="38400">38400</option><option value="57600">57600</option><option value="115200">115200</option></select>
@@ -6679,7 +6701,7 @@ html[dir="rtl"] body{direction:rtl;}
     <div class="mo-b">
       <input type="hidden" id="bb-issue-unit-id">
       <div id="bb-issue-summary" style="background:var(--red-lt);border:1.5px solid var(--red);border-radius:8px;padding:12px;margin-bottom:14px;font-size:.82rem"></div>
-      <div style="background:var(--amber-lt);border:1px solid #fde68a;border-radius:8px;padding:10px 12px;font-size:.76rem;margin-bottom:14px">⚠️ Both confirmations below are MANDATORY and must be completed by two DIFFERENT staff members. Re-type the patient MRN and unit number exactly — this is a safety check, not a formality.</div>
+      <div style="background:var(--amber-lt);border:1px solid var(--amber-border);border-radius:8px;padding:10px 12px;font-size:.76rem;margin-bottom:14px">⚠️ Both confirmations below are MANDATORY and must be completed by two DIFFERENT staff members. Re-type the patient MRN and unit number exactly — this is a safety check, not a formality.</div>
 
       <div id="bb-issue-step1" style="border:1.5px solid var(--teal2);border-radius:9px;padding:12px;margin-bottom:12px">
         <div style="font-weight:700;margin-bottom:8px">1️⃣ Issuing Staff Confirmation — <span id="bb-issue-staff1-name"></span></div>
@@ -6785,7 +6807,7 @@ html[dir="rtl"] body{direction:rtl;}
     <div class="mo-hd"><h3>🏦 Insurance Claim Form</h3><button class="mo-x" onclick="closeOv('ins-claim-ov')">✕</button></div>
     <div class="mo-b">
       <input type="hidden" id="icf-invoice-id">
-      <div style="background:var(--amber-lt);border:1px solid #fde68a;border-radius:8px;padding:10px 12px;font-size:.78rem;margin-bottom:14px">⚠️ Complete all fields before printing.</div>
+      <div style="background:var(--amber-lt);border:1px solid var(--amber-border);border-radius:8px;padding:10px 12px;font-size:.78rem;margin-bottom:14px">⚠️ Complete all fields before printing.</div>
       <div class="g2">
         <div class="fg"><label class="fl">Insurance Company</label><input class="fc" id="icf-company"></div>
         <div class="fg"><label class="fl">Policy Number</label><input class="fc" id="icf-policy"></div>
@@ -8734,9 +8756,9 @@ async function runEdgeFunctionHealthCheck(){
       return {...fn, status:'ok', detail:'Deployed and configured'};
     }catch(e){ return {...fn, status:'not_deployed', detail:e.message||'Unreachable'}; }
   }));
-  const badge=r=>r.status==='ok'?'<span style="color:#166534;font-weight:700">✅ OK</span>'
+  const badge=r=>r.status==='ok'?'<span style="color:var(--green);font-weight:700">✅ OK</span>'
     :r.status==='not_configured'?'<span style="color:#b45309;font-weight:700">⚠ Deployed, secret not configured</span>'
-    :'<span style="color:#b91c1c;font-weight:700">❌ Not deployed / unreachable</span>';
+    :'<span style="color:var(--red);font-weight:700">❌ Not deployed / unreachable</span>';
   body.innerHTML='<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Function</th><th>Purpose</th><th>Status</th><th>Detail</th></tr></thead><tbody>'+
     rows.map(r=>'<tr><td><code>'+escapeHtml(r.name)+'</code></td><td>'+escapeHtml(r.label)+'</td><td>'+badge(r)+'</td><td style="font-size:.72rem;color:var(--slate)">'+escapeHtml(r.detail)+'</td></tr>').join('')+
     '</tbody></table></div>';
@@ -9337,40 +9359,40 @@ function renderNotifList(){
     canBloodbank=notifCanReach('bloodbank');
   let html='';
   if(resultsReady&&resultsReady.length){
-    html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;color:#166534;background:#f0fdf4">\ud83d\udd14 Results Ready ('+resultsReady.length+')</div>';
+    html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;color:var(--green);background:#f0fdf4">\ud83d\udd14 Results Ready ('+resultsReady.length+')</div>';
     html+=resultsReady.map(p=>notifRow(canConsultation,"notifJumpToPatientResults('"+p.id+"')",
       '<div style="font-weight:700;font-size:.8rem">'+escapeHtml(p.name||fullName(p))+' <span style="font-weight:400;color:var(--slate);font-size:.68rem">'+escapeHtml(p.mrn||p.lab_no||'')+'</span></div>'+
-      '<div style="font-size:.72rem;color:#166534">Lab/Radiology result ready for review</div>')).join('');
+      '<div style="font-size:.72rem;color:var(--green)">Lab/Radiology result ready for review</div>')).join('');
   }
   if(deferredDue&&deferredDue.length){
-    html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;color:#b91c1c;background:#fff1f2">\u26a0 Deferred Payments Now Due ('+deferredDue.length+')</div>';
+    html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;color:var(--red);background:var(--red-tint)">\u26a0 Deferred Payments Now Due ('+deferredDue.length+')</div>';
     html+=deferredDue.map(d=>{
       const pt=d.patients||{};
       return notifRow(canBilling,"notifJumpToDeferredPayment('"+d.patient_id+"')",
         '<div style="font-weight:700;font-size:.8rem">'+escapeHtml(pt.name||'\u2014')+' <span style="font-weight:400;color:var(--slate);font-size:.68rem">'+escapeHtml(pt.mrn||pt.lab_no||'')+'</span></div>'+
-        '<div style="font-size:.72rem;color:#b91c1c">'+escapeHtml(d.kind)+' \u2014 '+escapeHtml(d.label||'')+' ready \u00b7 payment was deferred (STAT) \u00b7 still '+(pt.payment_status==='insurance_pending'?'insurance pending':'unpaid')+'</div>');
+        '<div style="font-size:.72rem;color:var(--red)">'+escapeHtml(d.kind)+' \u2014 '+escapeHtml(d.label||'')+' ready \u00b7 payment was deferred (STAT) \u00b7 still '+(pt.payment_status==='insurance_pending'?'insurance pending':'unpaid')+'</div>');
     }).join('');
   }
   if(crits.length){
-    html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;color:#b91c1c;background:#fff1f2">\ud83d\udea8 Unacknowledged Criticals ('+crits.length+')</div>';
+    html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;color:var(--red);background:var(--red-tint)">\ud83d\udea8 Unacknowledged Criticals ('+crits.length+')</div>';
     html+=crits.map(c=>{
       const pt=c.patients||{};
       return notifRow(canCriticals,'notifJumpToCritical()',
         '<div style="font-weight:700;font-size:.8rem">'+escapeHtml(pt.name||'\u2014')+' <span style="font-weight:400;color:var(--slate);font-size:.68rem">'+escapeHtml(pt.mrn||'')+'</span></div>'+
-        '<div style="font-size:.72rem;color:#b91c1c">'+escapeHtml(c.parameter||'')+' = '+escapeHtml(c.value||'')+' \u00b7 '+fmtDT(c.created_at)+'</div>');
+        '<div style="font-size:.72rem;color:var(--red)">'+escapeHtml(c.parameter||'')+' = '+escapeHtml(c.value||'')+' \u00b7 '+fmtDT(c.created_at)+'</div>');
     }).join('');
   }
   if(unpaid.length){
-    html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;color:#92400e;background:#fffbeb">\ud83d\udcb0 Unpaid Invoices ('+unpaid.length+')</div>';
+    html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;color:var(--amber);background:var(--amber-tint)">\ud83d\udcb0 Unpaid Invoices ('+unpaid.length+')</div>';
     html+=unpaid.map(i=>notifRow(canBilling,"notifJumpToInvoice('"+i.id+"')",
       '<div style="font-weight:700;font-size:.8rem">'+escapeHtml(i.invoice_no||'\u2014')+' <span style="font-weight:400;color:var(--slate);font-size:.68rem">'+escapeHtml(i.patient_name||'')+'</span></div>'+
-      '<div style="font-size:.72rem;color:#92400e">'+((i.net_amount??i.total_amount??0).toFixed(2))+' '+escapeHtml(i.currency||CFG.currency)+' \u00b7 overdue since '+fmtDT(i.created_at)+'</div>')).join('');
+      '<div style="font-size:.72rem;color:var(--amber)">'+((i.net_amount??i.total_amount??0).toFixed(2))+' '+escapeHtml(i.currency||CFG.currency)+' \u00b7 overdue since '+fmtDT(i.created_at)+'</div>')).join('');
   }
   if(pendingAdm.length){
-    html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;color:#1d4ed8;background:#eff6ff">\ud83d\udecf Pending Admissions ('+pendingAdm.length+')</div>';
+    html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;color:var(--blue);background:#eff6ff">\ud83d\udecf Pending Admissions ('+pendingAdm.length+')</div>';
     html+=pendingAdm.map(p=>notifRow(canAdmission,"notifJumpToAdmission('"+p.id+"')",
       '<div style="font-weight:700;font-size:.8rem">'+escapeHtml(p.name||fullName(p))+' <span style="font-weight:400;color:var(--slate);font-size:.68rem">'+escapeHtml(p.mrn||'')+'</span></div>'+
-      '<div style="font-size:.72rem;color:#1d4ed8">Routed to Admission \u00b7 waiting since '+fmtDT(p.created_at)+'</div>')).join('');
+      '<div style="font-size:.72rem;color:var(--blue)">Routed to Admission \u00b7 waiting since '+fmtDT(p.created_at)+'</div>')).join('');
   }
   if(lowStock.length){
     html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;color:#6d28d9;background:#f5f3ff">\ud83d\udce6 Low Stock ('+lowStock.length+')</div>';
@@ -9379,12 +9401,12 @@ function renderNotifList(){
       '<div style="font-size:.72rem;color:#6d28d9">'+(it.current_stock??0)+' '+escapeHtml(it.unit||'')+' left \u00b7 reorder threshold '+(it.min_level??0)+'</div>')).join('');
   }
   if(bloodExpiry&&bloodExpiry.length){
-    html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;color:#b91c1c;background:#fff1f2">\ud83e\ude78 Blood Units Expiring/Expired ('+bloodExpiry.length+')</div>';
+    html+='<div style="padding:6px 12px;font-size:.66rem;font-weight:700;text-transform:uppercase;color:var(--red);background:var(--red-tint)">\ud83e\ude78 Blood Units Expiring/Expired ('+bloodExpiry.length+')</div>';
     html+=bloodExpiry.map(u=>{
       const exp=computeExpiryStatus(u.expiry_date);
       return notifRow(canBloodbank,'notifJumpToBloodBank()',
         '<div style="font-weight:700;font-size:.8rem">'+escapeHtml(u.unit_no||'\u2014')+' <span style="font-weight:400;color:var(--slate);font-size:.68rem">'+escapeHtml(u.blood_group||'')+(u.rh_factor==='Positive'?'+':u.rh_factor==='Negative'?'\u2212':'')+' \u00b7 '+escapeHtml(u.component_type||'')+'</span></div>'+
-        '<div style="font-size:.72rem;color:#b91c1c">'+(exp.days<0?'Expired':'Expires in '+exp.days+'d')+' \u00b7 '+fmtDate(u.expiry_date)+'</div>');
+        '<div style="font-size:.72rem;color:var(--red)">'+(exp.days<0?'Expired':'Expires in '+exp.days+'d')+' \u00b7 '+fmtDate(u.expiry_date)+'</div>');
     }).join('');
   }
   list.innerHTML=html;
@@ -9522,7 +9544,7 @@ async function loadDeliveryLog(){
         '<td style="font-family:DM Mono,monospace;font-size:.72rem">'+escapeHtml(m.phone||'—')+'</td>'+
         '<td>'+escapeHtml(purposeLabels[m.purpose]||m.purpose||'—')+'</td>'+
         '<td style="max-width:280px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+escapeHtml(m.message||'')+'">'+escapeHtml(m.message||'—')+'</td>'+
-        '<td>'+(m.status==='sent'?'<span class="bdg" style="background:#dcfce7;color:#166534">✅ Sent</span>':'<span class="bdg" style="background:#fee2e2;color:#b91c1c" title="'+escapeHtml(m.error||'')+'">❌ Failed</span>')+'</td>'+
+        '<td>'+(m.status==='sent'?'<span class="bdg" style="background:var(--green-lt);color:var(--green)">✅ Sent</span>':'<span class="bdg" style="background:var(--red-lt);color:var(--red)" title="'+escapeHtml(m.error||'')+'">❌ Failed</span>')+'</td>'+
         '<td style="font-size:.72rem">'+escapeHtml(m.sent_by_name||'—')+'</td>'+
       '</tr>').join('')+'</tbody></table></div>';
   }catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>'; }
@@ -9604,7 +9626,7 @@ async function loadDashboard() {
     const wg=document.getElementById('dash-ward-grid');
     if(wg) wg.innerHTML=wards.map(w=>{
       const occ=wardOcc[w]||0, total=wardTotal[w]||0, pct=total>0?Math.round(occ/total*100):0;
-      const col=pct>=90?'#b91c1c':pct>=70?'#d97706':'#16a34a';
+      const col=pct>=90?'var(--red)':pct>=70?'#d97706':'#16a34a';
       return '<div class="ward-card" onclick="setAdmFilter(\x27'+w+'\x27,null);goPage(\'admission\')"><div class="ward-name">'+w+'</div><div class="ward-occ">'+occ+'<span> / '+total+'</span></div><div class="ward-bar"><div class="ward-bar-fill" style="width:'+pct+'%;background:'+col+'"></div></div><div style="font-size:.63rem;color:var(--slate);margin-top:3px">'+pct+'% occupied</div></div>';
     }).join('');
     const [rptS,admS,critS,unpaidPtS,statOrdS]=await Promise.all([
@@ -9632,7 +9654,7 @@ async function loadDashboard() {
       : '<div style="font-size:.78rem;color:var(--slate);padding:4px 0">No unpaid or blocked patients</div>';
     const statList=document.getElementById('dash-stat-list');
     if(statList) statList.innerHTML=(statOrdS.data||[]).length
-      ? statOrdS.data.map(o=>{ const pt=o.patients||{}; return '<div style="padding:6px 0;border-bottom:1px solid var(--border);font-size:.78rem"><div style="display:flex;justify-content:space-between"><span style="font-weight:600">'+escapeHtml(pt.name||'—')+'<span style="color:var(--slate);font-weight:400"> '+escapeHtml(pt.mrn||'')+'</span></span><span class="bdg" style="background:#fef2f2;color:#b91c1c">'+escapeHtml(o.priority||'')+'</span></div><div style="color:var(--slate);font-size:.72rem">'+escapeHtml(o.order_type||'')+': '+escapeHtml(o.order_detail||'')+'</div></div>'; }).join('')
+      ? statOrdS.data.map(o=>{ const pt=o.patients||{}; return '<div style="padding:6px 0;border-bottom:1px solid var(--border);font-size:.78rem"><div style="display:flex;justify-content:space-between"><span style="font-weight:600">'+escapeHtml(pt.name||'—')+'<span style="color:var(--slate);font-weight:400"> '+escapeHtml(pt.mrn||'')+'</span></span><span class="bdg" style="background:#fef2f2;color:var(--red)">'+escapeHtml(o.priority||'')+'</span></div><div style="color:var(--slate);font-size:.72rem">'+escapeHtml(o.order_type||'')+': '+escapeHtml(o.order_detail||'')+'</div></div>'; }).join('')
       : '<div style="font-size:.78rem;color:var(--slate);padding:4px 0">No STAT/urgent orders awaiting action</div>';
   } catch(e){ console.error(e); }
 }
@@ -10508,8 +10530,8 @@ function printWhoChecklist(){
   const sec=(stage,title)=>{
     const done=!!cl[stage+'_completed_at'];
     return '<div style="margin-bottom:14px"><div style="font-size:10pt;font-weight:700;color:#1e3a5a;margin-bottom:4px">'+title+'</div>'+
-      (done?'<div style="font-size:9pt;color:#166534">✅ Completed by '+escapeHtml(cl[stage+'_completed_by_name']||'—')+' at '+fmtDT(cl[stage+'_completed_at'])+'</div>'
-           :'<div style="font-size:9pt;color:#b91c1c">Not yet completed</div>')+'</div>';
+      (done?'<div style="font-size:9pt;color:var(--green)">✅ Completed by '+escapeHtml(cl[stage+'_completed_by_name']||'—')+' at '+fmtDT(cl[stage+'_completed_at'])+'</div>'
+           :'<div style="font-size:9pt;color:var(--red)">Not yet completed</div>')+'</div>';
   };
   const html=printHeader('WHO Surgical Safety Checklist')+
     '<div style="background:#f1f5f9;padding:10px 14px;border-radius:8px;margin-bottom:14px;font-size:9pt"><strong>Patient:</strong> '+escapeHtml(pt.name||'—')+' ('+escapeHtml(pt.mrn||'—')+') · <strong>Procedure:</strong> '+escapeHtml(_whoCtx.booking.operation_name||'—')+'</div>'+
@@ -10616,7 +10638,7 @@ async function printOTSchedule() {
     if(!data?.length){ toast('No operations scheduled','warn'); return; }
     const sc=b=>b?'☑':'☐';
     const html=printHeader('Operating Theatre Schedule')+'<div style="text-align:center;margin-bottom:14px"><div style="font-size:12pt;font-weight:700;color:#1e3a5a">OPERATING THEATRE SCHEDULE</div><div style="font-size:10pt;color:#64748b">Date: '+fmtDate(d)+'</div></div><table><thead><tr style="background:#0e1928;color:#fff"><th style="padding:7px 10px;font-size:8.5pt;text-align:left">Time</th><th style="padding:7px 10px;font-size:8.5pt;text-align:left">Patient</th><th style="padding:7px 10px;font-size:8.5pt;text-align:left">Operation</th><th style="padding:7px 10px;font-size:8.5pt;text-align:left">Surgeon</th><th style="padding:7px 10px;font-size:8.5pt;text-align:left">Anaesthetist</th><th style="padding:7px 10px;font-size:8.5pt;text-align:center">Room</th><th style="padding:7px 10px;font-size:8.5pt;text-align:center">ASA</th><th style="padding:7px 10px;font-size:8.5pt;text-align:center">Status</th></tr></thead><tbody>'+
-      data.map((b,i)=>'<tr style="background:'+(i%2===0?'#fff':'#f8fafd')+';border-bottom:1px solid #e2e8f3"><td style="padding:8px 10px;font-weight:700;font-family:monospace">'+(b.start_time||'—')+'</td><td style="padding:8px 10px"><div style="font-weight:700">'+escapeHtml(b.patients?.name||fullName(b.patients)||'—')+'</div><div style="font-size:8pt;color:#64748b">'+escapeHtml(b.patients?.mrn||'')+'</div></td><td style="padding:8px 10px"><div style="font-weight:600">'+escapeHtml(b.operation_name||'—')+'</div><div style="font-size:8pt;color:#64748b">'+(b.operation_type||'')+' · '+(b.anaesthesia_type||'')+'</div></td><td style="padding:8px 10px;font-size:9pt">'+escapeHtml(b.surgeon||'—')+'<br><span style="font-size:8pt;color:#64748b">Asst: '+escapeHtml(b.assistant_surgeon||'—')+'</span></td><td style="padding:8px 10px;font-size:9pt">'+escapeHtml(b.anaesthetist||'—')+'</td><td style="padding:8px 10px;text-align:center;font-weight:700;color:#0b7a75">'+(b.theatre_room||'—')+'</td><td style="padding:8px 10px;text-align:center;font-weight:700">'+(b.asa_class||'—')+'</td><td style="padding:8px 10px;text-align:center"><span style="padding:2px 8px;border-radius:12px;font-size:8pt;font-weight:700;background:'+(b.status==='Completed'?'#dcfce7':b.status==='In Progress'?'#fef3c7':'#dbeafe')+';color:'+(b.status==='Completed'?'#166534':b.status==='In Progress'?'#92400e':'#1d4ed8')+'">'+(b.status||'—')+'</span></td></tr>'+
+      data.map((b,i)=>'<tr style="background:'+(i%2===0?'#fff':'#f8fafd')+';border-bottom:1px solid #e2e8f3"><td style="padding:8px 10px;font-weight:700;font-family:monospace">'+(b.start_time||'—')+'</td><td style="padding:8px 10px"><div style="font-weight:700">'+escapeHtml(b.patients?.name||fullName(b.patients)||'—')+'</div><div style="font-size:8pt;color:#64748b">'+escapeHtml(b.patients?.mrn||'')+'</div></td><td style="padding:8px 10px"><div style="font-weight:600">'+escapeHtml(b.operation_name||'—')+'</div><div style="font-size:8pt;color:#64748b">'+(b.operation_type||'')+' · '+(b.anaesthesia_type||'')+'</div></td><td style="padding:8px 10px;font-size:9pt">'+escapeHtml(b.surgeon||'—')+'<br><span style="font-size:8pt;color:#64748b">Asst: '+escapeHtml(b.assistant_surgeon||'—')+'</span></td><td style="padding:8px 10px;font-size:9pt">'+escapeHtml(b.anaesthetist||'—')+'</td><td style="padding:8px 10px;text-align:center;font-weight:700;color:#0b7a75">'+(b.theatre_room||'—')+'</td><td style="padding:8px 10px;text-align:center;font-weight:700">'+(b.asa_class||'—')+'</td><td style="padding:8px 10px;text-align:center"><span style="padding:2px 8px;border-radius:12px;font-size:8pt;font-weight:700;background:'+(b.status==='Completed'?'var(--green-lt)':b.status==='In Progress'?'var(--amber-lt)':'var(--blue-lt)')+';color:'+(b.status==='Completed'?'var(--green)':b.status==='In Progress'?'var(--amber)':'var(--blue)')+'">'+(b.status||'—')+'</span></td></tr>'+
         '<tr style="background:#f8f9fa"><td colspan="8" style="padding:4px 10px 10px"><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;font-size:8pt">'+
         sc(b.pre_op_checklist?.consent)+' Consent &nbsp;'+sc(b.pre_op_checklist?.fast)+' Fasting &nbsp;'+sc(b.pre_op_checklist?.xm)+' Blood X-match &nbsp;'+sc(b.pre_op_checklist?.labs)+' Pre-op labs &nbsp;'+sc(b.pre_op_checklist?.allergy)+' Allergies &nbsp;'+sc(b.pre_op_checklist?.iv)+' IV access &nbsp;'+sc(b.pre_op_checklist?.site)+' Site marked &nbsp;'+sc(b.pre_op_checklist?.anaes)+' Anaes. assessment'+
         '</div></td></tr>').join('')+
@@ -10655,7 +10677,7 @@ function calcBalance() {
   const ivIn=parseFloat(document.getElementById('vs-iv-in')?.value)||0, poIn=parseFloat(document.getElementById('vs-po-in')?.value)||0;
   const urine=parseFloat(document.getElementById('vs-urine')?.value)||0, other=parseFloat(document.getElementById('vs-other-out')?.value)||0;
   const net=ivIn+poIn-urine-other; const el=document.getElementById('vs-balance-disp'); if(!el) return;
-  el.textContent='Net Balance: '+net.toFixed(0)+' mL'; el.style.background=net>500?'#dbeafe':net<-500?'#fee2e2':'#f1f5f9'; el.style.color=net>500?'var(--blue)':net<-500?'var(--red)':'var(--ink)';
+  el.textContent='Net Balance: '+net.toFixed(0)+' mL'; el.style.background=net>500?'var(--blue-lt)':net<-500?'var(--red-lt)':'#f1f5f9'; el.style.color=net>500?'var(--blue)':net<-500?'var(--red)':'var(--ink)';
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -10692,7 +10714,7 @@ function renderTurningStatus(data){
   const overdue=elapsedMs>=TURNING_INTERVAL_MS;
   const mins=Math.max(0,Math.floor(elapsedMs/60000));
   const elapsedStr=mins<60?mins+' min ago':Math.floor(mins/60)+'h '+(mins%60)+'m ago';
-  el.innerHTML='<span class="bdg" style="background:'+(overdue?'#fee2e2':'#dcfce7')+';color:'+(overdue?'#b91c1c':'#166534')+'">'+
+  el.innerHTML='<span class="bdg" style="background:'+(overdue?'var(--red-lt)':'var(--green-lt)')+';color:'+(overdue?'var(--red)':'var(--green)')+'">'+
     (overdue?'⏰ OVERDUE — ':'')+'Last: '+escapeHtml(last.turning_position)+' ('+elapsedStr+')</span>';
 }
 
@@ -10713,9 +10735,9 @@ function renderPostAnalgesiaStatus(data){
   const elapsedMs=Date.now()-administeredAt;
   if(elapsedMs<POST_ANALGESIA_WINDOW_MS){
     const dueAt=new Date(administeredAt+POST_ANALGESIA_WINDOW_MS);
-    el.innerHTML='<span class="bdg" style="background:#dbeafe;color:#1d4ed8">🩹 Analgesia given — reassess pain by '+dueAt.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})+'</span>';
+    el.innerHTML='<span class="bdg" style="background:var(--blue-lt);color:var(--blue)">🩹 Analgesia given — reassess pain by '+dueAt.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})+'</span>';
   } else {
-    el.innerHTML='<span class="bdg" style="background:#fee2e2;color:#b91c1c">⏰ OVERDUE — Reassess pain score (analgesia given '+Math.floor(elapsedMs/60000)+' min ago)</span>';
+    el.innerHTML='<span class="bdg" style="background:var(--red-lt);color:var(--red)">⏰ OVERDUE — Reassess pain score (analgesia given '+Math.floor(elapsedMs/60000)+' min ago)</span>';
   }
 }
 async function saveVitals() {
@@ -10804,13 +10826,13 @@ function drawVitalsTrendChart(data) {
   if(!hrs.length){ canvas.style.display='none'; return; }
   const maxHr=Math.max(...hrs,120), minHr=Math.min(...hrs,40);
   const pad=30, chartH=90;
-  ctx.beginPath(); ctx.strokeStyle='#b91c1c'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.strokeStyle='var(--red)'; ctx.lineWidth=2;
   data.forEach((v,i)=>{ if(!v.heart_rate) return; const x=pad+(i/(data.length-1||1))*(W-2*pad); const y=pad+(1-(v.heart_rate-minHr)/(maxHr-minHr||1))*chartH; i===0?ctx.moveTo(x,y):ctx.lineTo(x,y); });
   ctx.stroke();
   ctx.beginPath(); ctx.strokeStyle='#0369a1'; ctx.lineWidth=2; ctx.setLineDash([4,3]);
   data.forEach((v,i)=>{ if(!v.temperature) return; const x=pad+(i/(data.length-1||1))*(W-2*pad); const y=pad+(1-(v.temperature-35)/5)*chartH; i===0?ctx.moveTo(x,y):ctx.lineTo(x,y); });
   ctx.stroke(); ctx.setLineDash([]);
-  ctx.fillStyle='#b91c1c'; ctx.fillRect(8,6,14,10); ctx.fillStyle='#0e1928'; ctx.font='10px sans-serif'; ctx.fillText('HR',26,15);
+  ctx.fillStyle='var(--red)'; ctx.fillRect(8,6,14,10); ctx.fillStyle='#0e1928'; ctx.font='10px sans-serif'; ctx.fillText('HR',26,15);
   ctx.strokeStyle='#0369a1'; ctx.setLineDash([4,3]); ctx.beginPath(); ctx.moveTo(64,11); ctx.lineTo(78,11); ctx.stroke(); ctx.setLineDash([]); ctx.fillStyle='#0e1928'; ctx.fillText('Temp',82,15);
 }
 async function saveHandover() {
@@ -10848,7 +10870,7 @@ async function loadFluidChart() {
     const {data}=await sb.from('vital_signs').select('*').eq('patient_id',_fcPt.id).gte('recorded_at',d+'T00:00:00').lte('recorded_at',d+'T23:59:59').order('recorded_at');
     if(!data?.length){ body.innerHTML='<tr><td colspan="10" style="padding:20px;text-align:center;color:var(--slate);font-size:.82rem">No vitals recorded on this date</td></tr>'; const badge=document.getElementById('fc-net-positive-badge'); if(badge) badge.innerHTML=''; return; }
     let totIv=0,totUrine=0,totNet=0;
-    body.innerHTML=data.map(v=>{ totIv+=v.fluid_in_ml||0; totUrine+=v.urine_output_ml||0; totNet+=v.net_balance||0; const netColor=(v.net_balance||0)>200?'#1d4ed8':(v.net_balance||0)<-200?'#b91c1c':'#16a34a';
+    body.innerHTML=data.map(v=>{ totIv+=v.fluid_in_ml||0; totUrine+=v.urine_output_ml||0; totNet+=v.net_balance||0; const netColor=(v.net_balance||0)>200?'var(--blue)':(v.net_balance||0)<-200?'var(--red)':'#16a34a';
       return '<tr style="border-bottom:1px solid var(--border)"><td style="padding:6px 10px;font-family:DM Mono,monospace;font-size:.77rem">'+new Date(v.recorded_at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})+'</td><td style="padding:6px 10px;text-align:center;font-size:.8rem;color:var(--blue)">'+(v.fluid_in_ml||'—')+'</td><td style="padding:6px 10px;text-align:center">—</td><td style="padding:6px 10px;text-align:center">—</td><td style="padding:6px 10px;text-align:center;font-size:.8rem;color:var(--teal)">'+(v.urine_output_ml||'—')+'</td><td style="padding:6px 10px;text-align:center">—</td><td style="padding:6px 10px;text-align:center">—</td><td style="padding:6px 10px;text-align:center">—</td><td style="padding:6px 10px;text-align:center;font-size:.8rem;font-weight:700;color:'+netColor+'">'+((v.net_balance||0)>0?'+':'')+String(v.net_balance||0)+'</td><td style="padding:6px 10px;font-size:.72rem;color:var(--slate)">'+(v.recorded_by_name||'—')+'</td></tr>';
     }).join('');
     setText('fc-total-iv',totIv||'—'); setText('fc-total-urine',totUrine||'—');
@@ -10858,7 +10880,7 @@ async function loadFluidChart() {
     // statusBadge() uses elsewhere rather than inventing new markup.
     const npBadge=document.getElementById('fc-net-positive-badge');
     if(npBadge) npBadge.innerHTML = totNet>CFG.fluidNetPositiveThreshold
-      ? '<span class="bdg" style="background:#fee2e2;color:#b91c1c">🚨 Net-Positive — exceeds '+CFG.fluidNetPositiveThreshold+' mL threshold</span>'
+      ? '<span class="bdg" style="background:var(--red-lt);color:var(--red)">🚨 Net-Positive — exceeds '+CFG.fluidNetPositiveThreshold+' mL threshold</span>'
       : '';
     drawFluidTrend(data);
   } catch(e){ body.innerHTML='<tr><td colspan="10" style="padding:14px;color:var(--red);font-size:.78rem">'+escapeHtml(e.message)+'</td></tr>'; }
@@ -10869,9 +10891,9 @@ function drawFluidTrend(data) {
   ctx.clearRect(0,0,W,150); const pad=40;
   const maxV=Math.max(...data.map(v=>Math.max(v.fluid_in_ml||0,v.urine_output_ml||0)),100)*1.1;
   const toX=(_,i)=>pad+i/(data.length-1||1)*(W-2*pad), toY=v=>10+(1-v/maxV)*120;
-  ctx.beginPath(); ctx.strokeStyle='#1d4ed8'; ctx.lineWidth=2; data.forEach((v,i)=>{ const x=toX(null,i),y=toY(v.fluid_in_ml||0); i===0?ctx.moveTo(x,y):ctx.lineTo(x,y); }); ctx.stroke();
+  ctx.beginPath(); ctx.strokeStyle='var(--blue)'; ctx.lineWidth=2; data.forEach((v,i)=>{ const x=toX(null,i),y=toY(v.fluid_in_ml||0); i===0?ctx.moveTo(x,y):ctx.lineTo(x,y); }); ctx.stroke();
   ctx.beginPath(); ctx.strokeStyle='#0b7a75'; ctx.lineWidth=2; ctx.setLineDash([5,3]); data.forEach((v,i)=>{ const x=toX(null,i),y=toY(v.urine_output_ml||0); i===0?ctx.moveTo(x,y):ctx.lineTo(x,y); }); ctx.stroke(); ctx.setLineDash([]);
-  ctx.fillStyle='#1d4ed8'; ctx.fillRect(8,8,14,10); ctx.fillStyle='#0e1928'; ctx.font='9px sans-serif'; ctx.fillText('Fluid In',26,17);
+  ctx.fillStyle='var(--blue)'; ctx.fillRect(8,8,14,10); ctx.fillStyle='#0e1928'; ctx.font='9px sans-serif'; ctx.fillText('Fluid In',26,17);
   ctx.strokeStyle='#0b7a75'; ctx.setLineDash([5,3]); ctx.beginPath(); ctx.moveTo(80,13); ctx.lineTo(94,13); ctx.stroke(); ctx.setLineDash([]); ctx.fillStyle='#0e1928'; ctx.fillText('Urine Out',98,17);
 }
 async function printFluidChart() {
@@ -10882,11 +10904,11 @@ async function printFluidChart() {
     const {data}=await sb.from('vital_signs').select('*').eq('patient_id',_fcPt.id).gte('recorded_at',d+'T00:00:00').lte('recorded_at',d+'T23:59:59').order('recorded_at');
     let totIv=0,totUrine=0,totNet=0;
     const rows=(data||[]).map(v=>{ totIv+=v.fluid_in_ml||0; totUrine+=v.urine_output_ml||0; totNet+=v.net_balance||0;
-      return '<tr style="border-bottom:1px solid #e2e8f3"><td style="padding:4px 8px;font-family:monospace;font-size:9pt">'+new Date(v.recorded_at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})+'</td><td style="padding:4px 8px;text-align:center">'+(v.fluid_in_ml||'—')+'</td><td style="padding:4px 8px;text-align:center">—</td><td style="padding:4px 8px;text-align:center">—</td><td style="padding:4px 8px;text-align:center">'+(v.urine_output_ml||'—')+'</td><td style="padding:4px 8px;text-align:center">—</td><td style="padding:4px 8px;text-align:center">—</td><td style="padding:4px 8px;text-align:center">—</td><td style="padding:4px 8px;text-align:center;font-weight:700;color:'+((v.net_balance||0)>0?'#1d4ed8':'#b91c1c')+'">'+(((v.net_balance||0)>0?'+':'')+String(v.net_balance||0))+'</td><td style="padding:4px 8px;font-size:8pt">'+escapeHtml(v.recorded_by_name||'—')+'</td></tr>';
+      return '<tr style="border-bottom:1px solid #e2e8f3"><td style="padding:4px 8px;font-family:monospace;font-size:9pt">'+new Date(v.recorded_at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})+'</td><td style="padding:4px 8px;text-align:center">'+(v.fluid_in_ml||'—')+'</td><td style="padding:4px 8px;text-align:center">—</td><td style="padding:4px 8px;text-align:center">—</td><td style="padding:4px 8px;text-align:center">'+(v.urine_output_ml||'—')+'</td><td style="padding:4px 8px;text-align:center">—</td><td style="padding:4px 8px;text-align:center">—</td><td style="padding:4px 8px;text-align:center">—</td><td style="padding:4px 8px;text-align:center;font-weight:700;color:'+((v.net_balance||0)>0?'var(--blue)':'var(--red)')+'">'+(((v.net_balance||0)>0?'+':'')+String(v.net_balance||0))+'</td><td style="padding:4px 8px;font-size:8pt">'+escapeHtml(v.recorded_by_name||'—')+'</td></tr>';
     }).join('');
     const html=printHeader('Nursing Fluid Balance Chart')+'<div style="display:flex;gap:20px;margin-bottom:12px;font-size:9.5pt"><div><strong>Patient:</strong> '+escapeHtml(_fcPt.name||'—')+'</div><div><strong>MRN:</strong> '+escapeHtml(_fcPt.mrn||'—')+'</div><div><strong>Ward/Bed:</strong> '+escapeHtml(_fcPt.ward||'—')+'/'+escapeHtml(_fcPt.bed||'—')+'</div><div><strong>Date:</strong> '+fmtDate(d)+'</div></div>'+
       '<table style="width:100%;border-collapse:collapse"><thead><tr style="background:#0e1928;color:#fff"><th style="padding:6px 8px;font-size:8pt;width:70px">Time</th><th colspan="3" style="padding:6px 8px;font-size:8pt;border-left:2px solid rgba(255,255,255,.2)">INTAKE (mL)</th><th colspan="4" style="padding:6px 8px;font-size:8pt;border-left:2px solid rgba(255,255,255,.2)">OUTPUT (mL)</th><th style="padding:6px 8px;font-size:8pt;border-left:2px solid rgba(255,255,255,.2)">NET</th><th style="padding:6px 8px;font-size:8pt">Nurse</th></tr><tr style="background:#1e3a5a;color:rgba(255,255,255,.7)"><th></th><th style="padding:4px 8px;font-size:7.5pt;border-left:2px solid rgba(255,255,255,.1)">IV</th><th style="padding:4px 8px;font-size:7.5pt">PO</th><th style="padding:4px 8px;font-size:7.5pt">Other</th><th style="padding:4px 8px;font-size:7.5pt;border-left:2px solid rgba(255,255,255,.1)">Urine</th><th style="padding:4px 8px;font-size:7.5pt">Drain</th><th style="padding:4px 8px;font-size:7.5pt">NG</th><th style="padding:4px 8px;font-size:7.5pt">Other</th><th style="padding:4px 8px;font-size:7.5pt">Net</th><th></th></tr></thead><tbody>'+
-      (rows||'<tr><td colspan="10" style="padding:20px;text-align:center">No entries</td></tr>')+'</tbody><tfoot><tr style="background:#f1f5f9;font-weight:800;border-top:2px solid var(--border)"><td style="padding:6px 8px">24hr TOTAL</td><td style="padding:6px 8px;text-align:center;color:#1d4ed8">'+totIv+'</td><td colspan="2" style="padding:6px 8px;text-align:center">—</td><td style="padding:6px 8px;text-align:center;color:#0b7a75">'+totUrine+'</td><td colspan="3" style="padding:6px 8px;text-align:center">—</td><td style="padding:6px 8px;text-align:center;font-size:10pt;color:'+(totNet>0?'#1d4ed8':'#b91c1c')+'">'+((totNet>0?'+':'')+totNet)+'</td><td></td></tr></tfoot></table>'+
+      (rows||'<tr><td colspan="10" style="padding:20px;text-align:center">No entries</td></tr>')+'</tbody><tfoot><tr style="background:#f1f5f9;font-weight:800;border-top:2px solid var(--border)"><td style="padding:6px 8px">24hr TOTAL</td><td style="padding:6px 8px;text-align:center;color:var(--blue)">'+totIv+'</td><td colspan="2" style="padding:6px 8px;text-align:center">—</td><td style="padding:6px 8px;text-align:center;color:#0b7a75">'+totUrine+'</td><td colspan="3" style="padding:6px 8px;text-align:center">—</td><td style="padding:6px 8px;text-align:center;font-size:10pt;color:'+(totNet>0?'var(--blue)':'var(--red)')+'">'+((totNet>0?'+':'')+totNet)+'</td><td></td></tr></tfoot></table>'+
       '<div style="margin-top:20px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px"><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Nurse Signature</div><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Charge Nurse</div><div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Doctor Review</div></div>'+printFooter('nursing');
     openPrintWin(html,'Fluid Balance Chart');
   } catch(e){ toast(e.message,'err'); }
@@ -10906,7 +10928,7 @@ function renderDocQueueCard(p, ready) {
     ' onmouseout="this.style.borderColor=\x27var(--border)\x27;this.style.background=\x27#fff\x27">'+
     '<div style="display:flex;align-items:center;justify-content:space-between;gap:6px">'+
     '<span style="font-weight:700;font-size:.84rem">'+escapeHtml(p.name||fullName(p))+'</span>'+
-    (ready?'<span class="bdg" style="background:#dcfce7;color:#166534" title="Lab/Radiology result ready for review">🔔 Result Ready</span>':'')+
+    (ready?'<span class="bdg" style="background:var(--green-lt);color:var(--green)" title="Lab/Radiology result ready for review">🔔 Result Ready</span>':'')+
     paymentTag(p.payment_status)+'</div>'+
     '<div style="font-size:.69rem;color:var(--slate);margin-top:3px">'+escapeHtml(p.mrn||'')+' · '+(p.age||'?')+(p.age_unit||'y')+'/'+(p.sex||'?')+' · '+escapeHtml(p.diagnosis||'—')+'</div>'+
     '<div style="font-size:.68rem;margin-top:2px;color:var(--teal);font-weight:600">'+(p.visit_destination?'→ '+escapeHtml(p.visit_destination):'')+' '+(p.priority&&p.priority!=='Routine'?'· '+escapeHtml(p.priority):'')+'</div>'+
@@ -11307,14 +11329,14 @@ async function loadDocVitals(ptId) {
     const {data}=await sb.from('vital_signs').select('*').eq('patient_id',ptId).order('recorded_at',{ascending:false}).limit(1).maybeSingle();
     if(!data){el.innerHTML='<div class="empty-state">No vitals on record</div>';return;}
     const news=data.news2_score;
-    const nc=news>=7?'#b91c1c':news>=5?'#f59e0b':news>=1?'#eab308':'#166534';
+    const nc=news>=7?'var(--red)':news>=5?'#f59e0b':news>=1?'#eab308':'var(--green)';
     const sys=data.systolic||data.bp_systolic; const dia=data.diastolic||data.bp_diastolic;
     el.innerHTML='<div style="font-size:.72rem;color:var(--slate);margin-bottom:10px">Last recorded: '+fmtDT(data.recorded_at)+'</div>'+
       '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px">'+
-      '<div style="background:#f0f9ff;border-radius:8px;padding:10px;text-align:center"><div style="font-size:.68rem;color:#0369a1;font-weight:700;text-transform:uppercase">BP</div><div style="font-size:1.1rem;font-weight:800;color:'+(sys>140?'#b91c1c':'var(--ink)')+'">'+sys+'/'+dia+'</div><div style="font-size:.65rem;color:var(--slate)">mmHg</div></div>'+
-      '<div style="background:#f0fdf4;border-radius:8px;padding:10px;text-align:center"><div style="font-size:.68rem;color:#166534;font-weight:700;text-transform:uppercase">HR</div><div style="font-size:1.1rem;font-weight:800;color:'+(data.heart_rate>100||data.heart_rate<60?'#f59e0b':'var(--ink)')+'">'+( data.heart_rate||'—')+'</div><div style="font-size:.65rem;color:var(--slate)">bpm</div></div>'+
-      '<div style="background:#fff7ed;border-radius:8px;padding:10px;text-align:center"><div style="font-size:.68rem;color:#c2410c;font-weight:700;text-transform:uppercase">Temp</div><div style="font-size:1.1rem;font-weight:800;color:'+(data.temperature>38.5?'#b91c1c':'var(--ink)')+'">'+( data.temperature||'—')+'\u00b0C</div><div style="font-size:.65rem;color:var(--slate)">\u00b0Celsius</div></div>'+
-      '<div style="background:#faf5ff;border-radius:8px;padding:10px;text-align:center"><div style="font-size:.68rem;color:#7c3aed;font-weight:700;text-transform:uppercase">SpO\u2082</div><div style="font-size:1.1rem;font-weight:800;color:'+(data.spo2<94?'#b91c1c':'var(--ink)')+'">'+( data.spo2||'—')+'%</div><div style="font-size:.65rem;color:var(--slate)">oxygen sat</div></div></div>'+
+      '<div style="background:#f0f9ff;border-radius:8px;padding:10px;text-align:center"><div style="font-size:.68rem;color:#0369a1;font-weight:700;text-transform:uppercase">BP</div><div style="font-size:1.1rem;font-weight:800;color:'+(sys>140?'var(--red)':'var(--ink)')+'">'+sys+'/'+dia+'</div><div style="font-size:.65rem;color:var(--slate)">mmHg</div></div>'+
+      '<div style="background:#f0fdf4;border-radius:8px;padding:10px;text-align:center"><div style="font-size:.68rem;color:var(--green);font-weight:700;text-transform:uppercase">HR</div><div style="font-size:1.1rem;font-weight:800;color:'+(data.heart_rate>100||data.heart_rate<60?'#f59e0b':'var(--ink)')+'">'+( data.heart_rate||'—')+'</div><div style="font-size:.65rem;color:var(--slate)">bpm</div></div>'+
+      '<div style="background:#fff7ed;border-radius:8px;padding:10px;text-align:center"><div style="font-size:.68rem;color:#c2410c;font-weight:700;text-transform:uppercase">Temp</div><div style="font-size:1.1rem;font-weight:800;color:'+(data.temperature>38.5?'var(--red)':'var(--ink)')+'">'+( data.temperature||'—')+'\u00b0C</div><div style="font-size:.65rem;color:var(--slate)">\u00b0Celsius</div></div>'+
+      '<div style="background:#faf5ff;border-radius:8px;padding:10px;text-align:center"><div style="font-size:.68rem;color:#7c3aed;font-weight:700;text-transform:uppercase">SpO\u2082</div><div style="font-size:1.1rem;font-weight:800;color:'+(data.spo2<94?'var(--red)':'var(--ink)')+'">'+( data.spo2||'—')+'%</div><div style="font-size:.65rem;color:var(--slate)">oxygen sat</div></div></div>'+
       (news!=null?'<div style="text-align:center;padding:10px;border-radius:8px;background:#f8fafd;margin-bottom:10px"><div style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:var(--slate)">NEWS2</div><div style="font-size:1.4rem;font-weight:900;color:'+nc+'">'+news+'</div><div style="font-size:.72rem;font-weight:700;color:'+nc+'">'+(news>=7?'\ud83d\udea8 HIGH RISK':news>=5?'\u26a0\ufe0f MEDIUM RISK':news>=1?'\ud83d\udfe1 LOW RISK':'\ud83d\udfe2 NORMAL')+'</div></div>':'')+
       '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:.78rem">'+
       '<div><span style="color:var(--slate)">RR:</span> <strong>'+(data.respiratory_rate||'—')+'/min</strong></div>'+
@@ -11354,7 +11376,7 @@ function drawSparkline(canvas,data,opts={}) {
     const x=toX(i),y=toY(d.val);
     const abnormal=opts.lo!=null&&opts.hi!=null&&(d.val<opts.lo||d.val>opts.hi);
     ctx.beginPath(); ctx.arc(x,y,abnormal?3.5:2.5,0,Math.PI*2);
-    ctx.fillStyle=abnormal?'#b91c1c':(opts.color||'#0b7a75'); ctx.fill();
+    ctx.fillStyle=abnormal?'var(--red)':(opts.color||'#0b7a75'); ctx.fill();
   });
 }
 async function loadDocVitalsTrend(ptId) {
@@ -11380,7 +11402,7 @@ async function loadDocVitalsTrend(ptId) {
     if(!sys.length&&!hr.length&&!temp.length&&!spo2.length&&!gluc.length){ wrap.style.display='none'; return; }
     wrap.style.display='';
     drawSparkline(document.getElementById('doc-trend-bp'),sys,{color:'#0369a1',lo:90,hi:140});
-    drawSparkline(document.getElementById('doc-trend-hr'),hr,{color:'#166534',lo:60,hi:100});
+    drawSparkline(document.getElementById('doc-trend-hr'),hr,{color:'var(--green)',lo:60,hi:100});
     drawSparkline(document.getElementById('doc-trend-temp'),temp,{color:'#c2410c',lo:36,hi:37.5});
     drawSparkline(document.getElementById('doc-trend-spo2'),spo2,{color:'#7c3aed',lo:94,hi:100});
     drawSparkline(document.getElementById('doc-trend-gluc'),gluc,{color:'#b45309',lo:3.9,hi:7.8});
@@ -11849,7 +11871,7 @@ async function loadActiveOrders() {
     }));
     const merged=[...nonRadOrders,...regRows,...radRows].sort((a,b)=>new Date(b.ordered_at||0)-new Date(a.ordered_at||0));
     if(!merged.length){el.innerHTML='<div style="font-size:.78rem;color:var(--slate);padding:8px 0">No active orders</div>';return;}
-    const tc={Lab:'#dbeafe',Radiology:'#ede9fe',Nursing:'#dcfce7',Diet:'#fef9c3',Physio:'#fce7f3',Other:'#f3f4f6'};
+    const tc={Lab:'var(--blue-lt)',Radiology:'#ede9fe',Nursing:'var(--green-lt)',Diet:'#fef9c3',Physio:'#fce7f3',Other:'#f3f4f6'};
     el.innerHTML=merged.map(o=>{
       let viewBtn='';
       if(o.canView&&o.order_type==='Lab'){
@@ -11862,7 +11884,7 @@ async function loadActiveOrders() {
       '<span style="background:'+(tc[o.order_type]||'#f3f4f6')+';padding:2px 8px;border-radius:20px;font-size:.68rem;font-weight:700;white-space:nowrap">'+o.order_type+'</span>'+
       '<span style="flex:1;font-size:.78rem">'+escapeHtml(o.order_detail||'')+'</span>'+
       '<span style="font-size:.68rem;color:var(--slate);white-space:nowrap" title="Ordered by">'+escapeHtml(o.orderedByLabel||'—')+'</span>'+
-      (o.payment_deferred?'<span class="bdg" style="background:#fef2f2;color:#b91c1c;border:1.5px solid #fca5a5;white-space:nowrap" title="Granted by '+escapeHtml(o.payment_deferred_by_name||'')+'">\u26a0 Payment Deferred \u2014 STAT</span>':'')+
+      (o.payment_deferred?'<span class="bdg" style="background:var(--red-tint);color:var(--red);border:1.5px solid var(--red-border);white-space:nowrap" title="Granted by '+escapeHtml(o.payment_deferred_by_name||'')+'">\u26a0 Payment Deferred \u2014 STAT</span>':'')+
       '<span style="font-size:.68rem;color:var(--slate);white-space:nowrap">'+fmtDT(o.ordered_at)+'</span>'+
       statusBadge(o.status)+
       viewBtn+
@@ -11919,9 +11941,9 @@ function printConsultation() {
     sec('History of Presenting Illness',g('doc-hpi'))+
     sec('Past Medical History',g('doc-pmh'))+
     sec('Current Medications',g('doc-meds'))+
-    (g('doc-allergies')?'<div style="background:#fee2e2;border-left:4px solid #b91c1c;padding:8px 12px;border-radius:0 6px 6px 0;margin-bottom:10px;font-size:9pt"><strong>\u26a0\ufe0f ALLERGIES: '+g('doc-allergies')+'</strong></div>':'')+
+    (g('doc-allergies')?'<div style="background:var(--red-lt);border-left:4px solid var(--red);padding:8px 12px;border-radius:0 6px 6px 0;margin-bottom:10px;font-size:9pt"><strong>\u26a0\ufe0f ALLERGIES: '+g('doc-allergies')+'</strong></div>':'')+
     '<div style="background:#f0fdf4;border-radius:8px;padding:10px 12px;margin-bottom:10px">'+
-    '<div style="font-size:8pt;font-weight:700;color:#166534;text-transform:uppercase;margin-bottom:6px">Physical Examination</div>'+
+    '<div style="font-size:8pt;font-weight:700;color:var(--green);text-transform:uppercase;margin-bottom:6px">Physical Examination</div>'+
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:9pt">'+
     (g('doc-general')?'<div><b>General:</b> '+g('doc-general')+'</div>':'')+
     (g('doc-cvs')?'<div><b>CVS:</b> '+g('doc-cvs')+'</div>':'')+
@@ -12240,7 +12262,7 @@ function printReferral() {
     '<tr style="border-bottom:1px solid #e2e8f0"><td style="width:35%;padding:7px 8px;font-size:9pt;font-weight:600;color:#64748b">Patient</td><td style="padding:7px 8px;font-size:9.5pt;font-weight:700">'+escapeHtml(_docPt.name||fullName(_docPt))+'</td></tr>'+
     '<tr style="border-bottom:1px solid #e2e8f0;background:#f8fafd"><td style="padding:7px 8px;font-size:9pt;font-weight:600;color:#64748b">Age/Sex</td><td style="padding:7px 8px;font-size:9pt">'+escapeHtml((_docPt.age||'?')+(_docPt.age_unit||'y'))+' / '+escapeHtml(_docPt.sex||'')+'</td></tr>'+
     '<tr style="border-bottom:1px solid #e2e8f0"><td style="padding:7px 8px;font-size:9pt;font-weight:600;color:#64748b">Diagnosis</td><td style="padding:7px 8px;font-size:9.5pt;font-weight:700">'+dx+'</td></tr>'+
-    '<tr><td style="padding:7px 8px;font-size:9pt;font-weight:600;color:#64748b">Urgency</td><td style="padding:7px 8px;font-size:9.5pt;font-weight:700;color:'+(g('ref-urgency')==='Emergency'?'#b91c1c':g('ref-urgency')==='Urgent'?'#f59e0b':'#166534')+'">'+g('ref-urgency')+'</td></tr></table>'+
+    '<tr><td style="padding:7px 8px;font-size:9pt;font-weight:600;color:#64748b">Urgency</td><td style="padding:7px 8px;font-size:9.5pt;font-weight:700;color:'+(g('ref-urgency')==='Emergency'?'var(--red)':g('ref-urgency')==='Urgent'?'#f59e0b':'var(--green)')+'">'+g('ref-urgency')+'</td></tr></table>'+
     '<div style="margin-bottom:12px"><div style="font-size:8pt;font-weight:700;text-transform:uppercase;color:#64748b;margin-bottom:4px">Reason for Referral</div><div style="font-size:9.5pt;line-height:1.6;white-space:pre-wrap">'+g('ref-reason')+'</div></div>'+
     (g('ref-management')?'<div style="margin-bottom:12px"><div style="font-size:8pt;font-weight:700;text-transform:uppercase;color:#64748b;margin-bottom:4px">Current Management</div><div style="font-size:9.5pt;line-height:1.6">'+g('ref-management')+'</div></div>':'')+
     '<p style="font-size:9.5pt">Thank you for your kind assistance.</p>'+
@@ -12760,7 +12782,7 @@ function renderWlRow(p,sampleMap) {
   const unpaid=p.payment_status==='unpaid'||p.payment_status==='insurance_pending';
   const stt=sampleMap[p.id]?.status||'Pending';
   const src=sampleMap[p.id]?.source||'';
-  const pbg=(p.priority==='STAT'||p.priority==='Critical')?'style="background:#fff1f2"':p.priority==='Urgent'?'style="background:#fffbeb"':'';
+  const pbg=(p.priority==='STAT'||p.priority==='Critical')?'style="background:var(--red-tint)"':p.priority==='Urgent'?'style="background:var(--amber-tint)"':'';
   // Only Received/Processing/Completed samples are actually workable -- a
   // search result for a patient whose sample hasn't reached the lab yet
   // must still be VISIBLE (repro: patient 513/"gada" has real, paid orders
@@ -12777,7 +12799,7 @@ function renderWlRow(p,sampleMap) {
       ((p.tests_requested||[]).length>3?'<span class="bdg bdg-sl" style="font-size:.64rem">+'+(( p.tests_requested||[]).length-3)+' more</span>':'')+
     '</div></td>'+
     '<td style="font-size:.75rem">'+(p.doctor||'—')+'</td>'+
-    '<td>'+(p.priority==='STAT'?'<span class="bdg" style="background:#fef2f2;color:#b91c1c;border:1.5px solid #fca5a5">\u26a1 STAT</span>':statusBadge(p.priority))+'</td>'+
+    '<td>'+(p.priority==='STAT'?'<span class="bdg" style="background:var(--red-tint);color:var(--red);border:1.5px solid var(--red-border)">\u26a1 STAT</span>':statusBadge(p.priority))+'</td>'+
     '<td>'+paymentTag(p.payment_status)+'</td>'+
     '<td>'+statusBadge(stt)+'</td>'+
     '<td>'+visitStatusBadge(p)+'</td>'+
@@ -12958,7 +12980,7 @@ async function loadAllResults() {
     const {data:pts}=await sb.from('patients').select('id,name,first_name,last_name,mrn,lab_no,age,sex,phone').in('id',ptIds);
     const ptMap={}; (pts||[]).forEach(p=>ptMap[p.id]=p);
     results.sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
-    const deptColors={haematology:'#dbeafe',chemistry:'#dcfce7',serology:'#ede9fe',microbiology:'#fce7f3',pcr:'#fef3c7',histopathology:'#fee2e2',cytology:'#ecfdf5'};
+    const deptColors={haematology:'var(--blue-lt)',chemistry:'var(--green-lt)',serology:'#ede9fe',microbiology:'#fce7f3',pcr:'var(--amber-lt)',histopathology:'var(--red-lt)',cytology:'#ecfdf5'};
     body.innerHTML='<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Dept</th><th>Patient</th><th>MRN</th><th>Age/Sex</th><th>Date</th><th>Status</th><th>Actions</th></tr></thead><tbody>'+
       results.map(r=>{
         const pt=ptMap[r.patient_id]||{};
@@ -12968,7 +12990,7 @@ async function loadAllResults() {
           '<td style="font-family:DM Mono,monospace;font-size:.72rem;color:var(--teal)">'+escapeHtml(pt.mrn||pt.lab_no||'—')+'</td>'+
           '<td style="font-size:.78rem">'+(pt.age||'?')+' / '+(pt.sex||'')+'</td>'+
           '<td style="font-size:.75rem">'+fmtDate(r.analysis_date||r.created_at)+'</td>'+
-          '<td>'+(r.is_verified?'<span class="bdg" style="background:#dcfce7;color:#166534">\u2705 Verified</span>':'<span class="bdg" style="background:#fef9c3;color:#92400e">\u23f3 Pending</span>')+'</td>'+
+          '<td>'+(r.is_verified?'<span class="bdg" style="background:var(--green-lt);color:var(--green)">\u2705 Verified</span>':'<span class="bdg" style="background:#fef9c3;color:var(--amber)">\u23f3 Pending</span>')+'</td>'+
           '<td><div class="acts">'+
             '<button class="btn btn-p btn-xs" onclick="openEnterModalDept(\x27'+escAttr(r.patient_id)+'\x27,\x27'+escAttr(r.dept)+'\x27)">\ud83d\udcdd View/Edit</button>'+
             '<button class="btn btn-s btn-xs" onclick="printResultByDept(\x27'+escAttr(r.patient_id)+'\x27,\x27'+escAttr(r.dept)+'\x27)">\ud83d\udda8</button>'+
@@ -13008,15 +13030,15 @@ async function loadCriticals() {
     body.innerHTML=all.map(c=>{
       const pt=c.patients||{};
       const elapsed=c.created_at?Math.round((Date.now()-new Date(c.created_at))/60000):null;
-      const tc=elapsed!=null&&elapsed>30&&!c.is_acknowledged?'color:#b91c1c;font-weight:700':'';
-      return '<tr style="'+(c.is_acknowledged?'':'background:#fff1f2')+'">'+
-        '<td style="font-size:.72rem;'+tc+'">'+fmtDT(c.created_at)+(elapsed!=null&&!c.is_acknowledged?'<div style="font-size:.65rem;color:#b91c1c">'+elapsed+' min ago</div>':'')+'</td>'+
+      const tc=elapsed!=null&&elapsed>30&&!c.is_acknowledged?'color:var(--red);font-weight:700':'';
+      return '<tr style="'+(c.is_acknowledged?'':'background:var(--red-tint)')+'">'+
+        '<td style="font-size:.72rem;'+tc+'">'+fmtDT(c.created_at)+(elapsed!=null&&!c.is_acknowledged?'<div style="font-size:.65rem;color:var(--red)">'+elapsed+' min ago</div>':'')+'</td>'+
         '<td style="font-weight:600">'+escapeHtml(pt.name||'—')+'<div style="font-size:.68rem;color:var(--slate)">'+escapeHtml(pt.mrn||pt.lab_no||'')+(pt.ward?' \u00b7 '+escapeHtml(pt.ward):'')+'</div></td>'+
         '<td style="font-size:.78rem">'+escapeHtml(c.department||'—')+'</td>'+
-        '<td style="font-weight:700;color:#b91c1c">'+escapeHtml(c.parameter||'—')+': <span style="font-size:.9rem">'+escapeHtml(c.value||'—')+'</span> '+escapeHtml(c.unit||'')+'<div style="font-size:.68rem;color:#92400e">Ref: '+escapeHtml(c.reference||'—')+'</div></td>'+
+        '<td style="font-weight:700;color:var(--red)">'+escapeHtml(c.parameter||'—')+': <span style="font-size:.9rem">'+escapeHtml(c.value||'—')+'</span> '+escapeHtml(c.unit||'')+'<div style="font-size:.68rem;color:var(--amber)">Ref: '+escapeHtml(c.reference||'—')+'</div></td>'+
         '<td style="font-size:.72rem">'+escapeHtml(c.notified_by||'—')+'</td>'+
         '<td style="font-size:.72rem">'+escapeHtml(c.clinician_notified||pt.doctor||'—')+'</td>'+
-        '<td>'+(c.is_acknowledged?'<span class="bdg" style="background:#dcfce7;color:#166534">\u2705 Ack</span>':'<span class="bdg" style="background:#fee2e2;color:#b91c1c">\u26a0\ufe0f Pending</span>')+'</td>'+
+        '<td>'+(c.is_acknowledged?'<span class="bdg" style="background:var(--green-lt);color:var(--green)">\u2705 Ack</span>':'<span class="bdg" style="background:var(--red-lt);color:var(--red)">\u26a0\ufe0f Pending</span>')+'</td>'+
         '<td><div class="acts">'+
           (!c.is_acknowledged?'<button class="btn btn-p btn-xs" onclick="openCritAck(\x27'+c.id+'\x27)">\u2705 Ack</button>':'')+
           '<button class="btn btn-s btn-xs" onclick="printCriticalNotice(\x27'+c.id+'\x27)">\ud83d\udda8</button>'+
@@ -13059,12 +13081,12 @@ async function printCriticalNotice(id) {
     if(!c) return;
     const pt=c.patients||{};
     const html=printHeader('Critical Value Notification')+
-      '<div style="background:#fee2e2;border:2px solid #fca5a5;border-radius:8px;padding:14px;margin-bottom:16px;text-align:center">'+
-      '<div style="font-size:13pt;font-weight:900;color:#b91c1c">\ud83d\udea8 CRITICAL VALUE</div></div>'+
+      '<div style="background:var(--red-lt);border:2px solid var(--red-border);border-radius:8px;padding:14px;margin-bottom:16px;text-align:center">'+
+      '<div style="font-size:13pt;font-weight:900;color:var(--red)">\ud83d\udea8 CRITICAL VALUE</div></div>'+
       '<table style="width:100%;border-collapse:collapse;margin-bottom:14px">'+
       '<tr style="border-bottom:1px solid #e2e8f0"><td style="width:40%;padding:8px;font-size:9pt;font-weight:600;color:#64748b">Patient</td><td style="padding:8px;font-size:10pt;font-weight:700">'+escapeHtml(pt.name||'—')+'</td></tr>'+
       '<tr style="border-bottom:1px solid #e2e8f0;background:#f8fafd"><td style="padding:8px;font-size:9pt;font-weight:600;color:#64748b">MRN</td><td style="padding:8px">'+escapeHtml(pt.mrn||pt.lab_no||'—')+'</td></tr>'+
-      '<tr style="border-bottom:1px solid #e2e8f0"><td style="padding:8px;font-size:9pt;font-weight:600;color:#64748b">Critical Value</td><td style="padding:8px;font-size:13pt;font-weight:900;color:#b91c1c">'+(c.parameter||'—')+': '+(c.value||'—')+' '+(c.unit||'')+'</td></tr>'+
+      '<tr style="border-bottom:1px solid #e2e8f0"><td style="padding:8px;font-size:9pt;font-weight:600;color:#64748b">Critical Value</td><td style="padding:8px;font-size:13pt;font-weight:900;color:var(--red)">'+(c.parameter||'—')+': '+(c.value||'—')+' '+(c.unit||'')+'</td></tr>'+
       '<tr style="border-bottom:1px solid #e2e8f0;background:#f8fafd"><td style="padding:8px;font-size:9pt;font-weight:600;color:#64748b">Reference</td><td style="padding:8px;font-size:9pt">'+(c.reference||'—')+'</td></tr>'+
       '<tr style="border-bottom:1px solid #e2e8f0"><td style="padding:8px;font-size:9pt;font-weight:600;color:#64748b">Time Reported</td><td style="padding:8px;font-size:9pt">'+fmtDT(c.created_at)+'</td></tr>'+
       '<tr><td style="padding:8px;font-size:9pt;font-weight:600;color:#64748b">Clinician Notified</td><td style="padding:8px;font-size:9pt;font-weight:700">'+escapeHtml(c.clinician_notified||'—')+'</td></tr></table>'+
@@ -13354,35 +13376,35 @@ function flagHem(inp,lo,hi,flagId,canBeCrit=false) {
   const v=parseFloat(inp.value); const flagEl=document.getElementById(flagId); if(isNaN(v)||!flagEl) return;
   let flag='',color='';
   if(v>hi){ flag='▲ H'; color='var(--red)'; inp.classList.add('hi'); inp.classList.remove('lo'); }
-  else if(v<lo){ flag='▼ L'; color='var(--chem)'; inp.classList.add('lo'); inp.classList.remove('hi'); }
+  else if(v<lo){ flag='▼ L'; color='var(--blue)'; inp.classList.add('lo'); inp.classList.remove('hi'); }
   else { flag=''; inp.classList.remove('hi','lo'); }
   flagEl.innerHTML=flag?'<span style="color:'+color+';font-weight:700;font-size:.72rem">'+flag+'</span>':'';
-  if(canBeCrit){ const cr=CRIT_RANGES[inp.id.replace('he-','')]; if(cr&&!isNaN(v)&&(v<cr.lo||v>cr.hi)){ inp.style.background='#fff1f2'; const warn=document.getElementById('he-critical-warn'); if(warn) warn.style.display='block'; } }
+  if(canBeCrit){ const cr=CRIT_RANGES[inp.id.replace('he-','')]; if(cr&&!isNaN(v)&&(v<cr.lo||v>cr.hi)){ inp.style.background='var(--red-tint)'; const warn=document.getElementById('he-critical-warn'); if(warn) warn.style.display='block'; } }
 }
 function flagChem(inp,lo,hi,flagId,canBeCrit=false) {
   const v=parseFloat(inp.value); const flagEl=document.getElementById(flagId); if(isNaN(v)||!flagEl) return;
   let flag='',color='';
-  if(v>hi){ flag='▲ H'; color='var(--red)'; } else if(v<lo){ flag='▼ L'; color='var(--chem)'; }
+  if(v>hi){ flag='▲ H'; color='var(--red)'; } else if(v<lo){ flag='▼ L'; color='var(--blue)'; }
   flagEl.innerHTML=flag?'<span style="color:'+color+';font-weight:700;font-size:.72rem">'+flag+'</span>':'';
-  if(canBeCrit){ const fid=inp.id.replace('ce-',''); const cr=CRIT_RANGES[fid]; if(cr&&!isNaN(v)&&(v<cr.lo||v>cr.hi)){ inp.style.background='#fff1f2'; const warn=document.getElementById('ce-critical-warn'); if(warn) warn.style.display='block'; } }
+  if(canBeCrit){ const fid=inp.id.replace('ce-',''); const cr=CRIT_RANGES[fid]; if(cr&&!isNaN(v)&&(v<cr.lo||v>cr.hi)){ inp.style.background='var(--red-tint)'; const warn=document.getElementById('ce-critical-warn'); if(warn) warn.style.display='block'; } }
 }
 function flagSero(inp,lo,hi,flagId) {
   const v=parseFloat(inp.value); const flagEl=document.getElementById(flagId); if(isNaN(v)||!flagEl) return;
   let flag='',color='';
-  if(v>hi){ flag='▲ H'; color='var(--red)'; } else if(v<lo){ flag='▼ L'; color='var(--chem)'; }
+  if(v>hi){ flag='▲ H'; color='var(--red)'; } else if(v<lo){ flag='▼ L'; color='var(--blue)'; }
   flagEl.innerHTML=flag?'<span style="color:'+color+';font-weight:700;font-size:.72rem">'+flag+'</span>':'';
 }
 function flagMicro(inp,lo,hi,flagId,canBeCrit=false) {
   const v=parseFloat(inp.value); const flagEl=document.getElementById(flagId); if(!flagEl) return;
   if(isNaN(v)){ flagEl.innerHTML=''; return; }
   const isHi=v>hi, isLo=v<lo;
-  flagEl.innerHTML=isHi?'<span style="color:var(--red);font-weight:700;font-size:.72rem">▲ H</span>':isLo?'<span style="color:var(--chem);font-weight:700;font-size:.72rem">▼ L</span>':'';
-  if(canBeCrit&&(isHi||isLo)) inp.style.background='#fff1f2';
+  flagEl.innerHTML=isHi?'<span style="color:var(--red);font-weight:700;font-size:.72rem">▲ H</span>':isLo?'<span style="color:var(--blue);font-weight:700;font-size:.72rem">▼ L</span>':'';
+  if(canBeCrit&&(isHi||isLo)) inp.style.background='var(--red-tint)';
 }
 function flagQual(sel,id,positiveVal) {
   const warn=document.getElementById('se-critical-warn'); const allSels=['se-hiv','se-hbsag','se-hcv']; const anyPositive=allSels.some(sid=>{ const el=document.getElementById(sid); return el&&el.value&&el.value.toLowerCase().includes('positive'); });
   if(warn) warn.style.display=anyPositive?'block':'none';
-  sel.style.background=sel.value.toLowerCase().includes('positive')?'#fff1f2':''; sel.style.color=sel.value.toLowerCase().includes('positive')?'var(--red)':''; sel.style.fontWeight=sel.value.toLowerCase().includes('positive')?'700':'';
+  sel.style.background=sel.value.toLowerCase().includes('positive')?'var(--red-tint)':''; sel.style.color=sel.value.toLowerCase().includes('positive')?'var(--red)':''; sel.style.fontWeight=sel.value.toLowerCase().includes('positive')?'700':'';
 }
 function calcAbsCounts() {
   const wbc=parseFloat(document.getElementById('he-wbc')?.value)||0; if(!wbc) return;
@@ -14096,7 +14118,7 @@ async function printHemReport() {
     const req=new Set((pt.tests_requested||[]).map(t=>String(t).toLowerCase().trim()));
     const wanted=(tag)=>!req.size || tag.split('|').some(t=>req.has(t.toLowerCase().trim()));
     const ptB=buildLabPtBanner(pt, r.analysis_date||r.created_at);
-    const row=(name,val,unit,lo,hi,tag)=>{ if(!wanted(tag)) return ''; const v=parseFloat(val); const flag=!isNaN(v)?(v>hi?'▲ H':v<lo?'▼ L':''):''; const fc=flag==='▲ H'?'#b91c1c':flag==='▼ L'?'#1d4ed8':''; return '<tr style="border-bottom:1px solid #f1f5fb"><td style="padding:3px 8px;font-size:9pt">'+name+'</td><td style="padding:3px 8px;font-weight:'+(flag?700:400)+';color:'+(fc||'inherit')+'">'+(val??'—')+'</td><td style="padding:3px 8px;font-size:8pt;color:#64748b">'+unit+'</td><td style="padding:3px 8px;font-size:8pt;color:#64748b">'+lo+' – '+hi+'</td><td style="padding:3px 8px;color:'+fc+';font-weight:700;font-size:8.5pt">'+flag+'</td></tr>'; };
+    const row=(name,val,unit,lo,hi,tag)=>{ if(!wanted(tag)) return ''; const v=parseFloat(val); const flag=!isNaN(v)?(v>hi?'▲ H':v<lo?'▼ L':''):''; const fc=flag==='▲ H'?'var(--red)':flag==='▼ L'?'var(--blue)':''; return '<tr style="border-bottom:1px solid #f1f5fb"><td style="padding:3px 8px;font-size:9pt">'+name+'</td><td style="padding:3px 8px;font-weight:'+(flag?700:400)+';color:'+(fc||'inherit')+'">'+(val??'—')+'</td><td style="padding:3px 8px;font-size:8pt;color:#64748b">'+unit+'</td><td style="padding:3px 8px;font-size:8pt;color:#64748b">'+lo+' – '+hi+'</td><td style="padding:3px 8px;color:'+fc+';font-weight:700;font-size:8.5pt">'+flag+'</td></tr>'; };
     const sh=l=>'<tr style="background:#e0f2fe"><td colspan="5" style="padding:4px 8px;font-weight:700;font-size:8pt;text-transform:uppercase;letter-spacing:.5px;color:#0369a1">'+l+'</td></tr>';
     const sect=(label,rows)=>{ const body=rows.filter(Boolean).join(''); return body ? sh(label)+body : ''; };
     const CBC='CBC (Full Blood Count)';
@@ -14137,7 +14159,7 @@ async function printChemReport() {
         dVal=convertLabValueForDisplay('chem',fieldCode,val);
       }
       const v=parseFloat(dVal); const f=(!isNaN(v)&&dHi!=null&&dLo!=null)?(v>dHi?'▲ H':v<dLo?'▼ L':''):'';
-      return '<tr style="border-bottom:1px solid #f1f5fb"><td style="padding:3px 8px;font-size:9pt">'+name+'</td><td style="padding:3px 8px;color:'+(f==='▲ H'?'#b91c1c':f==='▼ L'?'#1d4ed8':'inherit')+';font-weight:'+(f?700:400)+'">'+(dVal??'—')+'</td><td style="padding:3px 8px;font-size:8pt;color:#64748b">'+dUnit+'</td><td style="padding:3px 8px;font-size:8pt;color:#64748b">'+(dHi!=null?dLo+'–'+dHi:'—')+'</td><td style="padding:3px 8px;color:'+(f==='▲ H'?'#b91c1c':f==='▼ L'?'#1d4ed8':'')+';font-weight:700;font-size:8.5pt">'+f+'</td></tr>';
+      return '<tr style="border-bottom:1px solid #f1f5fb"><td style="padding:3px 8px;font-size:9pt">'+name+'</td><td style="padding:3px 8px;color:'+(f==='▲ H'?'var(--red)':f==='▼ L'?'var(--blue)':'inherit')+';font-weight:'+(f?700:400)+'">'+(dVal??'—')+'</td><td style="padding:3px 8px;font-size:8pt;color:#64748b">'+dUnit+'</td><td style="padding:3px 8px;font-size:8pt;color:#64748b">'+(dHi!=null?dLo+'–'+dHi:'—')+'</td><td style="padding:3px 8px;color:'+(f==='▲ H'?'var(--red)':f==='▼ L'?'var(--blue)':'')+';font-weight:700;font-size:8.5pt">'+f+'</td></tr>';
     };
     const sh=l=>'<tr style="background:#e0f7fa"><td colspan="5" style="padding:4px 8px;font-weight:700;font-size:8pt;text-transform:uppercase;letter-spacing:.5px;color:#0369a1">'+l+'</td></tr>';
     const sect=(label,rows)=>{ const body=rows.filter(Boolean).join(''); return body ? sh(label)+body : ''; };
@@ -14578,7 +14600,7 @@ async function buildRegInvoicePreview() {
       : '<span style="font-weight:600">'+l.total_price.toFixed(2)+' SDG</span>')+
     '</div>'
   ).join('') : '<div style="color:var(--slate);font-size:.78rem">Select a visit destination to see charges</div>')
-  + (unpriced.length ? '<div style="margin-top:8px;padding:8px 10px;background:#fef2f2;border:1.5px solid #fca5a5;border-radius:8px;color:#b91c1c;font-size:.74rem;font-weight:600">⚠ '+unpriced.length+' item(s) have no price set in the Price List and are NOT included in the total below — contact admin before proceeding.</div>' : '');
+  + (unpriced.length ? '<div style="margin-top:8px;padding:8px 10px;background:#fef2f2;border:1.5px solid var(--red-border);border-radius:8px;color:var(--red);font-size:.74rem;font-weight:600">⚠ '+unpriced.length+' item(s) have no price set in the Price List and are NOT included in the total below — contact admin before proceeding.</div>' : '');
   if(totalEl) totalEl.textContent = total.toFixed(2)+' '+(CFG?.currency||'SDG');
 }
 
@@ -14625,7 +14647,7 @@ function regShowSuccess(pt, mrn, labNo, testCount, payStatus, destinations, tota
     '<div><div style="color:var(--slate);font-size:.7rem">Total</div><div style="font-weight:700">'+total.toFixed(2)+' SDG</div></div>'+
     '</div>'+
     (payStatus==='unpaid'||payStatus==='insurance_pending' ?
-      '<div style="background:#fef9c3;border:1.5px solid #eab308;border-radius:8px;padding:10px 12px;font-size:.78rem;color:#92400e;margin-bottom:12px">'+
+      '<div style="background:#fef9c3;border:1.5px solid #eab308;border-radius:8px;padding:10px 12px;font-size:.78rem;color:var(--amber);margin-bottom:12px">'+
       '⚠️ Patient is <strong>'+payStatus.replace('_',' ').toUpperCase()+'</strong>. They will appear in <strong>yellow</strong> in all departments. '+
       'Services are blocked until payment is confirmed.</div>' : '')+
     '<div style="display:flex;flex-direction:column;gap:8px">'+
@@ -14676,7 +14698,7 @@ function paymentBanner(pt) {
   if(s==='insurance_pending')
     return '<div class="reg-blocked-banner" style="border-color:#3b82f6;background:#eff6ff">🔵 <div><strong>Insurance Pending Approval</strong><br>Awaiting insurance pre-authorisation. Contact billing to proceed.</div></div>';
   if(s==='partial')
-    return '<div class="reg-blocked-banner" style="border-color:#f59e0b;background:#fffbeb">🔶 <div><strong>Partial Payment</strong><br>Balance outstanding. Services may be limited.</div></div>';
+    return '<div class="reg-blocked-banner" style="border-color:#f59e0b;background:var(--amber-tint)">🔶 <div><strong>Partial Payment</strong><br>Balance outstanding. Services may be limited.</div></div>';
   return '';
 }
 
@@ -14710,7 +14732,7 @@ async function generateInsuranceClaim(invId) {
     const {data:inv} = await sb.from('invoices').select('*').eq('id',invId).single();
     if(!inv) { toast('Invoice not found','err'); return; }
     const html = printHeader('Insurance Claim Form')+
-      '<div style="background:#dbeafe;border:2px solid #3b82f6;border-radius:8px;padding:12px 16px;margin-bottom:14px;font-size:9pt">'+
+      '<div style="background:var(--blue-lt);border:2px solid #3b82f6;border-radius:8px;padding:12px 16px;margin-bottom:14px;font-size:9pt">'+
       '<strong>INSURANCE CLAIM</strong> — '+escapeHtml(inv.insurance_company)+' | Policy: '+escapeHtml(inv.insurance_no||'—')+' | Pre-auth: '+escapeHtml(inv.pre_auth_no||'—')+'</div>'+
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">'+
       '<div style="border:1px solid var(--border);border-radius:6px;padding:10px">'+
@@ -14937,9 +14959,9 @@ function setPcrFlag(i) {
   const res = document.getElementById('pcr-result-'+i)?.value;
   const ct = parseFloat(document.getElementById('pcr-ct-'+i)?.value);
   const flagEl = document.getElementById('pcr-flag-'+i); if(!flagEl) return;
-  if(res==='Detected') { flagEl.textContent='🔴 POS'; flagEl.style.color='#b91c1c'; }
-  else if(res==='Not Detected') { flagEl.textContent='🟢 NEG'; flagEl.style.color='#166534'; }
-  else if(res==='Indeterminate'||res==='Equivocal') { flagEl.textContent='⚠️ IND'; flagEl.style.color='#92400e'; }
+  if(res==='Detected') { flagEl.textContent='🔴 POS'; flagEl.style.color='var(--red)'; }
+  else if(res==='Not Detected') { flagEl.textContent='🟢 NEG'; flagEl.style.color='var(--green)'; }
+  else if(res==='Indeterminate'||res==='Equivocal') { flagEl.textContent='⚠️ IND'; flagEl.style.color='var(--amber)'; }
   else { flagEl.textContent=''; }
   if(!isNaN(ct)&&res==='Detected') {
     if(ct<25) flagEl.textContent+=' (High load)';
@@ -15004,7 +15026,7 @@ async function printPcrReport() {
       const det=t.result==='Detected',nd=t.result==='Not Detected';
       return '<tr style="border-bottom:1px solid #f1f5fb">'+
         '<td style="padding:5px 8px;font-size:9pt;font-weight:600">'+escapeHtml(t.target||'—')+'</td>'+
-        '<td style="padding:5px 8px;font-weight:700;color:'+(det?'#b91c1c':nd?'#166534':'#92400e')+'">'+(t.result||'—')+'</td>'+
+        '<td style="padding:5px 8px;font-weight:700;color:'+(det?'var(--red)':nd?'var(--green)':'var(--amber)')+'">'+(t.result||'—')+'</td>'+
         '<td style="padding:5px 8px;font-size:9pt">'+(t.ct_value!=null?t.ct_value+'':'—')+'</td>'+
         '<td style="padding:5px 8px;font-size:8pt;color:#64748b">'+(det?'Positive — Pathogen detected':nd?'Negative — Not detected':'Equivocal / Indeterminate')+'</td></tr>';
     }).join('');
@@ -15100,7 +15122,7 @@ async function printHistoReport() {
     if(!pt||!r){ toast('No results found','err'); return; }
     const ihcRows = Object.entries(r.ihc_results||{}).map(([m,v])=>
       '<tr style="border-bottom:1px solid #f1f5fb"><td style="padding:4px 8px;font-size:9pt;font-weight:600">'+escapeHtml(m)+'</td>'+
-      '<td style="padding:4px 8px;font-weight:700;color:'+(v.result==='Positive'?'#b91c1c':v.result==='Negative'?'#166534':'#92400e')+'">'+escapeHtml(v.result)+'</td>'+
+      '<td style="padding:4px 8px;font-weight:700;color:'+(v.result==='Positive'?'var(--red)':v.result==='Negative'?'var(--green)':'var(--amber)')+'">'+escapeHtml(v.result)+'</td>'+
       '<td style="padding:4px 8px;font-size:9pt">'+escapeHtml(v.intensity)+'</td>'+
       '<td style="padding:4px 8px;font-size:9pt">'+(v.percent?v.percent+'%':'—')+'</td></tr>'
     ).join('');
@@ -15196,7 +15218,7 @@ async function printCytoReport() {
       '<div style="background:#fff9f0;border-left:4px solid #0369a1;padding:12px 14px;border-radius:0 8px 8px 0;margin-bottom:12px">'+
       '<div style="font-size:8pt;color:#0369a1;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Cytological Diagnosis</div>'+
       '<div style="font-size:10.5pt;font-weight:700;line-height:1.5">'+escapeHtml(r.diagnosis||'—')+'</div></div>'+
-      (r.recommendation?'<div style="background:#f0fdf4;border-left:4px solid #166534;padding:10px 12px;border-radius:0 8px 8px 0;margin-bottom:10px;font-size:9.5pt"><strong>Recommendation:</strong> '+r.recommendation+'</div>':'')+
+      (r.recommendation?'<div style="background:#f0fdf4;border-left:4px solid var(--green);padding:10px 12px;border-radius:0 8px 8px 0;margin-bottom:10px;font-size:9.5pt"><strong>Recommendation:</strong> '+r.recommendation+'</div>':'')+
       (r.notes?'<div style="background:#f8fafd;border-left:3px solid #0369a1;padding:10px 12px;font-size:9pt"><strong>Comments:</strong> '+escapeHtml(r.notes)+'</div>':'')+
       '<div style="margin-top:16px;display:grid;grid-template-columns:1fr 1fr;gap:20px">'+
       '<div style="text-align:center;border-top:1px solid #000;padding-top:6px;font-size:9pt">Cytologist / Pathologist</div>'+
@@ -15220,8 +15242,8 @@ async function printSeroReportFull() {
     const req=new Set((pt.tests_requested||[]).map(t=>String(t).toLowerCase().trim()));
     const wanted=(tag)=>!req.size || tag.split('|').some(t=>req.has(t.toLowerCase().trim()));
     const ptB=buildLabPtBanner(pt, r.analysis_date||r.created_at);
-    const nrow=(name,val,unit,lo,hi,tag)=>{ if(!wanted(tag)) return ''; const v=parseFloat(val);const f=!isNaN(v)?(v>hi?'▲ H':v<lo?'▼ L':''):'';return '<tr style="border-bottom:1px solid #f1f5fb"><td style="padding:3px 8px;font-size:9pt">'+name+'</td><td style="padding:3px 8px;font-weight:'+(f?700:400)+';color:'+(f==='▲ H'?'#b91c1c':f==='▼ L'?'#1d4ed8':'inherit')+'">'+(val??'—')+'</td><td style="padding:3px 8px;font-size:8pt;color:#64748b">'+unit+'</td><td style="padding:3px 8px;font-size:8pt">'+f+'</td></tr>';};
-    const qrow=(name,val,tag)=>(val&&wanted(tag))?'<tr style="border-bottom:1px solid #f1f5fb"><td style="padding:3px 8px;font-size:9pt">'+name+'</td><td style="padding:3px 8px;font-weight:700;color:'+(val==='Reactive'||val==='Positive'?'#b91c1c':val==='Non-Reactive'||val==='Negative'?'#166534':'#92400e')+'">'+val+'</td></tr>':'';
+    const nrow=(name,val,unit,lo,hi,tag)=>{ if(!wanted(tag)) return ''; const v=parseFloat(val);const f=!isNaN(v)?(v>hi?'▲ H':v<lo?'▼ L':''):'';return '<tr style="border-bottom:1px solid #f1f5fb"><td style="padding:3px 8px;font-size:9pt">'+name+'</td><td style="padding:3px 8px;font-weight:'+(f?700:400)+';color:'+(f==='▲ H'?'var(--red)':f==='▼ L'?'var(--blue)':'inherit')+'">'+(val??'—')+'</td><td style="padding:3px 8px;font-size:8pt;color:#64748b">'+unit+'</td><td style="padding:3px 8px;font-size:8pt">'+f+'</td></tr>';};
+    const qrow=(name,val,tag)=>(val&&wanted(tag))?'<tr style="border-bottom:1px solid #f1f5fb"><td style="padding:3px 8px;font-size:9pt">'+name+'</td><td style="padding:3px 8px;font-weight:700;color:'+(val==='Reactive'||val==='Positive'?'var(--red)':val==='Non-Reactive'||val==='Negative'?'var(--green)':'var(--amber)')+'">'+val+'</td></tr>':'';
     const sh=l=>'<tr style="background:#f5f3ff"><td colspan="4" style="padding:4px 8px;font-weight:700;font-size:8pt;text-transform:uppercase;letter-spacing:.5px;color:#7c3aed">'+l+'</td></tr>';
     const sect=(label,rows)=>{ const body=rows.filter(Boolean).join(''); return body?sh(label)+body:''; };
     const body=
@@ -15249,13 +15271,13 @@ async function printImmunoReportFull() {
     const req=new Set((pt.tests_requested||[]).map(t=>String(t).toLowerCase().trim()));
     const wanted=(col)=>{ const tag=RESULT_TAGS.immuno[col]; return !req.size || !tag || tag.split('|').some(t=>req.has(t.toLowerCase().trim())); };
     const ptB=buildLabPtBanner(pt, r.analysis_date||r.created_at);
-    const nrow=(name,val,unit,lo,hi,col)=>{ if(!wanted(col)) return ''; const v=parseFloat(val);const f=!isNaN(v)?(v>hi?'▲ H':v<lo?'▼ L':''):'';return '<tr style="border-bottom:1px solid #f1f5fb"><td style="padding:3px 8px;font-size:9pt">'+name+'</td><td style="padding:3px 8px;font-weight:'+(f?700:400)+';color:'+(f==='▲ H'?'#b91c1c':f==='▼ L'?'#1d4ed8':'inherit')+'">'+(val??'—')+'</td><td style="padding:3px 8px;font-size:8pt;color:#64748b">'+unit+'</td><td style="padding:3px 8px;font-size:8pt">'+f+'</td></tr>';};
+    const nrow=(name,val,unit,lo,hi,col)=>{ if(!wanted(col)) return ''; const v=parseFloat(val);const f=!isNaN(v)?(v>hi?'▲ H':v<lo?'▼ L':''):'';return '<tr style="border-bottom:1px solid #f1f5fb"><td style="padding:3px 8px;font-size:9pt">'+name+'</td><td style="padding:3px 8px;font-weight:'+(f?700:400)+';color:'+(f==='▲ H'?'var(--red)':f==='▼ L'?'var(--blue)':'inherit')+'">'+(val??'—')+'</td><td style="padding:3px 8px;font-size:8pt;color:#64748b">'+unit+'</td><td style="padding:3px 8px;font-size:8pt">'+f+'</td></tr>';};
     const sh=l=>'<tr style="background:#f5f3ff"><td colspan="4" style="padding:4px 8px;font-weight:700;font-size:8pt;text-transform:uppercase;letter-spacing:.5px;color:#7c3aed">'+l+'</td></tr>';
     const sect=(label,rows)=>{ const body=rows.filter(Boolean).join(''); return body?sh(label)+body:''; };
     const col1 =
       sect('Thyroid Profile',[nrow('TSH',r.tsh,'mIU/L',0.4,4.0,'tsh'),nrow('Free T4',r.ft4,'pmol/L',9,25,'ft4'),nrow('Free T3',r.ft3,'pmol/L',3.5,7.8,'ft3'),nrow('Total T3',r.t3,'nmol/L',1.2,2.7,'t3'),nrow('Total T4',r.t4,'nmol/L',55,161,'t4')])+
       sect('Fertility / Reproductive Profile',[nrow('FSH',r.fsh,'IU/L',1,12,'fsh'),nrow('LH',r.lh,'IU/L',1,12,'lh'),nrow('Oestradiol',r.estradiol,'pmol/L',0,999,'estradiol'),nrow('Progesterone',r.prog,'nmol/L',0,89,'prog'),nrow('Testosterone',r.testosterone,'nmol/L',0,31,'testosterone'),nrow('Prolactin',r.prolactin,'mIU/L',72,511,'prolactin'),
-        (r.bhcg_qual&&wanted('bhcg_qual'))?'<tr><td style="padding:3px 8px;font-size:9pt">β-hCG (Qualitative)</td><td style="padding:3px 8px;font-weight:700;color:'+(r.bhcg_qual==='Positive'?'#b91c1c':'#166534')+'">'+r.bhcg_qual+'</td></tr>':'']);
+        (r.bhcg_qual&&wanted('bhcg_qual'))?'<tr><td style="padding:3px 8px;font-size:9pt">β-hCG (Qualitative)</td><td style="padding:3px 8px;font-weight:700;color:'+(r.bhcg_qual==='Positive'?'var(--red)':'var(--green)')+'">'+r.bhcg_qual+'</td></tr>':'']);
     const col2 =
       sect('Tumour Marker Profile',[nrow('PSA',r.psa,'ng/mL',0,4,'psa'),nrow('AFP',r.afp,'IU/mL',0,5.8,'afp'),nrow('CEA',r.cea,'ng/mL',0,5,'cea'),nrow('CA-125',r.ca125,'U/mL',0,35,'ca125'),nrow('CA 19-9',r.ca199,'U/mL',0,37,'ca199')])+
       sect('Vitamin & Iron Profile',[nrow('Vitamin D',r.vit_d,'nmol/L',50,250,'vit_d'),nrow('Vitamin B12',r.vit_b12,'pmol/L',145,637,'vit_b12'),nrow('Folate',r.folate,'nmol/L',7,46,'folate'),nrow('Ferritin',r.ferritin,'µg/L',15,200,'ferritin')]);
@@ -15299,7 +15321,7 @@ async function printMicroReportFull() {
     const rightCol =
       (wanted(CULTURE_TAG) ? sect('Culture & Sensitivity',[mrow('Specimen',r.specimen_type,''),mrow('Culture',r.culture_result,''),mrow('Organism',r.culture_organism||'No growth','—')]) : '')+
       (wanted(CULTURE_TAG) && sensEntries.length ? '<table style="width:100%;border-collapse:collapse"><thead><tr style="background:#15803d;color:#fff"><th style="padding:5px 8px;font-size:8.5pt;text-align:left">Antibiotic</th><th style="padding:5px 8px;font-size:8.5pt;text-align:center">Sensitivity</th></tr></thead><tbody>'+
-        sensEntries.map(([k,v])=>'<tr style="border-bottom:1px solid #f1f5fb"><td style="padding:3px 8px;font-size:9pt">'+(abxMap[k]||k)+'</td><td style="padding:3px 8px;text-align:center;font-weight:700;color:'+(v==='S'?'#166534':v==='R'?'#b91c1c':'#92400e')+'">'+v+'</td></tr>').join('')+
+        sensEntries.map(([k,v])=>'<tr style="border-bottom:1px solid #f1f5fb"><td style="padding:3px 8px;font-size:9pt">'+(abxMap[k]||k)+'</td><td style="padding:3px 8px;text-align:center;font-weight:700;color:'+(v==='S'?'var(--green)':v==='R'?'var(--red)':'var(--amber)')+'">'+v+'</td></tr>').join('')+
         '</tbody></table>' : '')+
       (wanted('CSF Analysis') ? sect('CSF Analysis',[mrow('Appearance',r.csf_appear,''),mrow('WBC',r.csf_wbc,'0–5/µL'),mrow('Protein',r.csf_protein,'0.15–0.45 g/L'),mrow('Glucose',r.csf_glucose,'2.2–3.9 mmol/L'),mrow('Culture',r.csf_culture,'')]) : '');
     if(!leftCol && !rightCol){ toast('No matching microbiology results to print','err'); return; }
@@ -15341,8 +15363,8 @@ async function loadInfectionFlags() {
     if(!all.length){ tbody.innerHTML='<tr><td colspan="9" class="empty-state">No flags found</td></tr>'; return; }
     tbody.innerHTML = all.map(f=>{
       const pt = f.patients;
-      const badge = f.active ? '<span class="bdg" style="background:#fee2e2;color:#b91c1c">Active</span>' : '<span class="bdg bdg-sl">Resolved</span>';
-      const typeBadge = {Contact:'#fee2e2',Droplet:'#dbeafe',Airborne:'#fef3c7',Enteric:'#dcfce7'}[f.flag_type]||'#f1f5f9';
+      const badge = f.active ? '<span class="bdg" style="background:var(--red-lt);color:var(--red)">Active</span>' : '<span class="bdg bdg-sl">Resolved</span>';
+      const typeBadge = {Contact:'var(--red-lt)',Droplet:'var(--blue-lt)',Airborne:'var(--amber-lt)',Enteric:'var(--green-lt)'}[f.flag_type]||'#f1f5f9';
       return '<tr>'+
         '<td style="padding:7px 10px;font-weight:600">'+escapeHtml(pt?.name||'Unknown')+'<div style="font-size:.68rem;color:var(--slate)">'+escapeHtml(pt?.mrn||'')+'</div></td>'+
         '<td style="padding:7px 10px;font-size:.8rem">'+escapeHtml(pt?.ward||'—')+'</td>'+
@@ -15855,7 +15877,7 @@ async function loadVitals() {
       '<th>Time</th><th>BP</th><th>HR</th><th>RR</th><th>Temp</th><th>SpO₂</th><th>NEWS2</th><th>Pain</th><th>By</th></tr></thead><tbody>'+
       data.map(v => {
         const news = v.news2_score;
-        const newsColor = news>=7?'#b91c1c':news>=5?'#f59e0b':news>=1?'#eab308':'#166534';
+        const newsColor = news>=7?'var(--red)':news>=5?'#f59e0b':news>=1?'#eab308':'var(--green)';
         return '<tr>'+
           '<td style="white-space:nowrap">'+fmtDT(v.recorded_at)+'</td>'+
           '<td style="font-weight:600">'+(v.systolic&&v.diastolic?v.systolic+'/'+v.diastolic:'—')+'</td>'+
@@ -16227,7 +16249,7 @@ async function printConsentForm(id){
       (c.risks_explained?'<div style="margin-bottom:12px"><div style="font-size:8pt;font-weight:700;text-transform:uppercase;color:#64748b;margin-bottom:3px">Risks, Benefits &amp; Alternatives Explained</div><div style="font-size:9.5pt;line-height:1.6">'+escapeHtml(c.risks_explained)+'</div></div>':'')+
       '<div style="margin-bottom:12px"><div style="font-size:8pt;font-weight:700;text-transform:uppercase;color:#64748b;margin-bottom:3px">Signed By</div><div style="font-size:9.5pt">'+escapeHtml(c.signee_name||'—')+' ('+escapeHtml(c.signee_relationship||'Self')+')'+(c.witnessed_by?' · Witnessed by '+escapeHtml(c.witnessed_by):'')+'</div></div>'+
       '<div style="margin:16px 0"><div style="font-size:8pt;font-weight:700;text-transform:uppercase;color:#64748b;margin-bottom:4px">Signature</div>'+
-      (c.signature_data_url?'<img src="'+c.signature_data_url+'" style="max-width:320px;height:auto;border:1px solid #e2e8f0;border-radius:6px;background:#fff">':'<div style="color:#b91c1c">No signature on file</div>')+'</div>'+
+      (c.signature_data_url?'<img src="'+c.signature_data_url+'" style="max-width:320px;height:auto;border:1px solid #e2e8f0;border-radius:6px;background:#fff">':'<div style="color:var(--red)">No signature on file</div>')+'</div>'+
       '<div style="font-size:8pt;color:#64748b;margin-top:14px">Recorded by '+escapeHtml(c.performed_by_name||'—')+' · '+fmtDT(c.created_at)+'</div>'+
       printFooter('general');
     openPrintWin(html,'Informed Consent — '+(pt.name||''));
@@ -16311,7 +16333,7 @@ function calcMAP() {
   if(sys&&dia) {
     const map = Math.round((sys + 2*dia)/3);
     const el = document.getElementById('vs-map');
-    if(el) { el.value = map; el.style.color = map<65?'#b91c1c':map>100?'#f59e0b':''; }
+    if(el) { el.value = map; el.style.color = map<65?'var(--red)':map>100?'#f59e0b':''; }
   }
 }
 
@@ -16361,10 +16383,10 @@ function calcNEWS2() {
   if(!bar) return;
   bar.style.display='block';
   valEl.textContent = score;
-  if(score>=7){ bar.style.background='#fee2e2'; valEl.style.color='#b91c1c'; riskEl.textContent='🚨 HIGH RISK — Urgent review'; riskEl.style.color='#b91c1c'; }
-  else if(score>=5){ bar.style.background='#fef3c7'; valEl.style.color='#b45309'; riskEl.textContent='⚠️ MEDIUM RISK — Urgent review'; riskEl.style.color='#b45309'; }
-  else if(score>=1){ bar.style.background='#fff7ed'; valEl.style.color='#92400e'; riskEl.textContent='🟡 LOW RISK — Routine monitoring'; riskEl.style.color='#92400e'; }
-  else { bar.style.background='#f0fdf4'; valEl.style.color='#166534'; riskEl.textContent='🟢 NORMAL'; riskEl.style.color='#166534'; }
+  if(score>=7){ bar.style.background='var(--red-lt)'; valEl.style.color='var(--red)'; riskEl.textContent='🚨 HIGH RISK — Urgent review'; riskEl.style.color='var(--red)'; }
+  else if(score>=5){ bar.style.background='var(--amber-lt)'; valEl.style.color='#b45309'; riskEl.textContent='⚠️ MEDIUM RISK — Urgent review'; riskEl.style.color='#b45309'; }
+  else if(score>=1){ bar.style.background='#fff7ed'; valEl.style.color='var(--amber)'; riskEl.textContent='🟡 LOW RISK — Routine monitoring'; riskEl.style.color='var(--amber)'; }
+  else { bar.style.background='#f0fdf4'; valEl.style.color='var(--green)'; riskEl.textContent='🟢 NORMAL'; riskEl.style.color='var(--green)'; }
 
   // Nursing Safety Ext. Phase 2 — escalation on top of the score above,
   // never replacing it. >=7 pulses red and opens the blocking RRT
@@ -16434,10 +16456,10 @@ function calcBMI() {
     const cat = document.getElementById('vs-bmi-cat');
     if(el) el.value = bmi;
     if(cat) {
-      if(bmi<18.5){ cat.textContent=' Underweight'; cat.style.color='#1d4ed8'; }
-      else if(bmi<25){ cat.textContent=' Normal'; cat.style.color='#166534'; }
+      if(bmi<18.5){ cat.textContent=' Underweight'; cat.style.color='var(--blue)'; }
+      else if(bmi<25){ cat.textContent=' Normal'; cat.style.color='var(--green)'; }
       else if(bmi<30){ cat.textContent=' Overweight'; cat.style.color='#f59e0b'; }
-      else { cat.textContent=' Obese'; cat.style.color='#b91c1c'; }
+      else { cat.textContent=' Obese'; cat.style.color='var(--red)'; }
     }
   }
 }
@@ -16450,7 +16472,7 @@ function setPain(score, el) {
   if(label){
     const desc=['No pain','Minimal','Mild','Mild-Moderate','Moderate','Moderate','Moderate-Severe','Severe','Very Severe','Worst possible','Unbearable'][score];
     label.textContent = score+' — '+desc;
-    label.style.color = score>=7?'#b91c1c':score>=4?'#f59e0b':'#166534';
+    label.style.color = score>=7?'var(--red)':score>=4?'#f59e0b':'var(--green)';
   }
   calcNEWS2();
 }
@@ -16463,8 +16485,8 @@ function calcGCS() {
   const el = document.getElementById('vs-gcs-total');
   if(el&&total>0){
     el.textContent='GCS: E'+e+' V'+v+' M'+m+' = '+total;
-    el.style.background = total<=8?'#fee2e2':total<=12?'#fef9c3':'#f0fdf4';
-    el.style.color = total<=8?'#b91c1c':total<=12?'#92400e':'#166534';
+    el.style.background = total<=8?'var(--red-lt)':total<=12?'#fef9c3':'#f0fdf4';
+    el.style.color = total<=8?'var(--red)':total<=12?'var(--amber)':'var(--green)';
   }
   if(typeof calcSOFA==='function') calcSOFA();
 }
@@ -16475,7 +16497,7 @@ function calcGCS() {
 // card's total via calcGCS() rather than asking for E/V/M a second time.
 function calcSOFA() {
   const num = id => { const v = parseFloat(document.getElementById(id)?.value); return isNaN(v) ? null : v; };
-  const setPt = (id, pts) => { const el = document.getElementById(id); if(!el) return; el.textContent = pts==null ? '—' : pts; el.style.color = pts>=3?'#b91c1c':pts>=1?'#92400e':'#166534'; };
+  const setPt = (id, pts) => { const el = document.getElementById(id); if(!el) return; el.textContent = pts==null ? '—' : pts; el.style.color = pts>=3?'var(--red)':pts>=1?'var(--amber)':'var(--green)'; };
 
   // Respiration — PaO2/FiO2 ratio, worse scores require respiratory support
   const pf = num('sofa-pf-ratio');
@@ -16546,8 +16568,8 @@ function calcSOFA() {
   if(!enteredParts.length){ resultEl.textContent='SOFA Total: —'; return null; }
   const total = enteredParts.reduce((s,p)=>s+p,0);
   resultEl.textContent='SOFA Total: '+total+' / 24 ('+enteredParts.length+' of 6 systems entered)';
-  resultEl.style.background = total>=15?'#fee2e2':total>=8?'#fef9c3':'#f0fdf4';
-  resultEl.style.color = total>=15?'#b91c1c':total>=8?'#92400e':'#166534';
+  resultEl.style.background = total>=15?'var(--red-lt)':total>=8?'#fef9c3':'#f0fdf4';
+  resultEl.style.color = total>=15?'var(--red)':total>=8?'var(--amber)':'var(--green)';
   return total;
 }
 
@@ -16560,11 +16582,11 @@ function calcBraden() {
   const el = document.getElementById('braden-result');
   if(!el||!total) return;
   let risk,color;
-  if(total<=9){ risk='Severe Risk'; color='#b91c1c'; }
+  if(total<=9){ risk='Severe Risk'; color='var(--red)'; }
   else if(total<=12){ risk='High Risk'; color='#f59e0b'; }
   else if(total<=14){ risk='Moderate Risk'; color='#eab308'; }
   else if(total<=18){ risk='Mild Risk'; color='#3b82f6'; }
-  else { risk='No Risk'; color='#166534'; }
+  else { risk='No Risk'; color='var(--green)'; }
   el.textContent = `Score: ${total} — ${risk}`;
   el.style.background = '#f1f5f9'; el.style.color = color;
 }
@@ -16578,9 +16600,9 @@ function calcMorse() {
   const el = document.getElementById('morse-result');
   if(!el) return;
   let risk,color;
-  if(total>=45){ risk='High Risk — Implement fall prevention protocol'; color='#b91c1c'; }
+  if(total>=45){ risk='High Risk — Implement fall prevention protocol'; color='var(--red)'; }
   else if(total>=25){ risk='Moderate Risk — Standard fall precautions'; color='#f59e0b'; }
-  else { risk='Low Risk — Good nursing practice'; color='#166534'; }
+  else { risk='Low Risk — Good nursing practice'; color='var(--green)'; }
   el.textContent = `Score: ${total} — ${risk}`;
   el.style.color = color;
 }
@@ -16691,11 +16713,11 @@ function addMarRow() {
     `<td><select class="fc" id="mar-freq-${i}" style="padding:3px 6px"><option>Once daily</option><option>Twice daily</option><option>Three times daily</option><option>Four times daily</option><option>Every 6h</option><option>Every 8h</option><option>Every 12h</option><option>PRN</option><option>Stat</option></select></td>`+
     `<td><input class="fc" type="time" id="mar-time-${i}" style="padding:3px 6px" oninput="marTimeStatus(${i})"><div id="mar-time-status-${i}" style="margin-top:3px"></div></td>`+
     `<td><select class="fc" id="mar-status-${i}" style="padding:3px 6px" onchange="updateMarRowUI(${i})">
-      <option value="Due">Due</option><option value="Given" style="color:#166534">Given ✅</option>
-      <option value="Refused" style="color:#92400e">Refused 🚫</option>
-      <option value="Omit" style="color:#b91c1c">Omit ❌</option>
-      <option value="Hold" style="color:#92400e">Hold ⏸</option>
-      <option value="PRN" style="color:#1d4ed8">PRN</option></select></td>`+
+      <option value="Due">Due</option><option value="Given" style="color:var(--green)">Given ✅</option>
+      <option value="Refused" style="color:var(--amber)">Refused 🚫</option>
+      <option value="Omit" style="color:var(--red)">Omit ❌</option>
+      <option value="Hold" style="color:var(--amber)">Hold ⏸</option>
+      <option value="PRN" style="color:var(--blue)">PRN</option></select></td>`+
     `<td><input class="fc" id="mar-reason-${i}" placeholder="Required if Omit/Hold/Refused" style="padding:3px 6px;min-width:150px;display:none"></td>`+
     `<td id="mar-verify-cell-${i}" style="min-width:110px"></td>`+
     `<td><input class="fc" id="mar-by-${i}" placeholder="Initials" style="padding:3px 6px;width:70px"></td>`+
@@ -16775,9 +16797,9 @@ function marTimeStatus(i){
   const scheduled=new Date(); scheduled.setHours(hh,mm,0,0);
   const diffMin=(Date.now()-scheduled.getTime())/60000;
   let label,bg,color;
-  if(diffMin<0){ label='On-time'; bg='#dcfce7'; color='#166534'; }
-  else if(diffMin<=MAR_DUE_WINDOW_MIN){ label='Due'; bg='#fef3c7'; color='#92400e'; }
-  else { label='Overdue'; bg='#fee2e2'; color='#b91c1c'; }
+  if(diffMin<0){ label='On-time'; bg='var(--green-lt)'; color='var(--green)'; }
+  else if(diffMin<=MAR_DUE_WINDOW_MIN){ label='Due'; bg='var(--amber-lt)'; color='var(--amber)'; }
+  else { label='Overdue'; bg='var(--red-lt)'; color='var(--red)'; }
   cell.innerHTML='<span class="bdg" style="background:'+bg+';color:'+color+';font-size:.64rem">'+label+'</span>';
 }
 // Analgesic keyword match against MAR's free-text drug name field, same
@@ -16841,7 +16863,7 @@ async function printMAR() {
   const rows = [...document.querySelectorAll('[id^="mar-row-"]')].map(row=>{
     const i=row.id.replace('mar-row-','');
     const status=document.getElementById('mar-status-'+i)?.value||'';
-    const color={Given:'#166534',Refused:'#92400e',Omit:'#b91c1c',Hold:'#92400e',PRN:'#1d4ed8',Due:'#374151'}[status]||'';
+    const color={Given:'var(--green)',Refused:'var(--amber)',Omit:'var(--red)',Hold:'var(--amber)',PRN:'var(--blue)',Due:'#374151'}[status]||'';
     return `<tr><td>${escapeHtml(document.getElementById('mar-drug-'+i)?.value||'—')}</td>`+
       `<td>${escapeHtml(document.getElementById('mar-dose-'+i)?.value||'—')}</td>`+
       `<td>${escapeHtml(document.getElementById('mar-route-'+i)?.value||'—')}</td>`+
@@ -16856,7 +16878,7 @@ async function printMAR() {
     '<table style="width:100%;border-collapse:collapse"><thead><tr style="background:#1e3a5a;color:#fff">'+
     '<th style="padding:5px 8px;font-size:8.5pt;text-align:left">Drug</th><th style="padding:5px 8px;font-size:8.5pt;text-align:left">Dose</th><th>Route</th><th>Frequency</th><th>Time</th><th>Status</th><th>Reason</th><th>Given By</th></tr></thead>'+
     `<tbody>${rows}</tbody></table>`+
-    '<div style="margin-top:16px;padding:10px 12px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;font-size:8pt;color:#92400e">'+
+    '<div style="margin-top:16px;padding:10px 12px;background:var(--amber-tint);border:1px solid var(--amber-border);border-radius:6px;font-size:8pt;color:var(--amber)">'+
     'Never pre-sign. Each entry must be made at time of administration. (ISO 15189 / Hospital Policy)</div>'+
     '<div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:20px;text-align:center">'+
     '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">Nurse Signature</div>'+
@@ -17043,7 +17065,7 @@ async function loadRejectionLog() {
         <td style="font-family:DM Mono,monospace;font-size:.72rem;color:var(--teal)">${escapeHtml(s.patients?.lab_no||'—')}</td>
         <td style="font-weight:600">${escapeHtml(s.patients?.name||'—')}</td>
         <td style="font-size:.78rem">${escapeHtml(s.specimen_type||'—')}</td>
-        <td style="font-size:.78rem;color:#b91c1c">${escapeHtml(s.rejection_reason||s.notes||'—')}</td>
+        <td style="font-size:.78rem;color:var(--red)">${escapeHtml(s.rejection_reason||s.notes||'—')}</td>
         <td style="font-size:.72rem">${escapeHtml(s.collected_by||'—')}</td>
       </tr>`).join('')+'</tbody></table></div>';
   }catch(e){}
@@ -17065,9 +17087,9 @@ async function printHandoverNote() {
     `<div style="font-size:9.5pt;margin-bottom:3px"><strong>Background:</strong> ${g('ho-background')||'—'}</div>`+
     `<div style="font-size:9.5pt;margin-bottom:3px"><strong>Assessment:</strong> ${g('ho-assessment')||'—'}</div>`+
     `<div style="font-size:9.5pt"><strong>Recommendation:</strong> ${g('ho-recommendation')||'—'}</div></div>`+
-    `<div style="margin-bottom:12px"><div style="font-size:8pt;font-weight:700;text-transform:uppercase;color:#b91c1c;margin-bottom:4px">Critical / High-Dependency Patients</div><div style="font-size:9.5pt;white-space:pre-wrap">${g('ho-critical')||'None documented'}</div></div>`+
-    `<div style="margin-bottom:12px"><div style="font-size:8pt;font-weight:700;text-transform:uppercase;color:#1d4ed8;margin-bottom:4px">Pending Tasks / Outstanding Orders</div><div style="font-size:9.5pt;white-space:pre-wrap">${g('ho-pending')||'None'}</div></div>`+
-    `<div style="margin-bottom:12px"><div style="font-size:8pt;font-weight:700;text-transform:uppercase;color:#166534;margin-bottom:4px">General Notes</div><div style="font-size:9.5pt;white-space:pre-wrap">${g('ho-notes')||'—'}</div></div>`+
+    `<div style="margin-bottom:12px"><div style="font-size:8pt;font-weight:700;text-transform:uppercase;color:var(--red);margin-bottom:4px">Critical / High-Dependency Patients</div><div style="font-size:9.5pt;white-space:pre-wrap">${g('ho-critical')||'None documented'}</div></div>`+
+    `<div style="margin-bottom:12px"><div style="font-size:8pt;font-weight:700;text-transform:uppercase;color:var(--blue);margin-bottom:4px">Pending Tasks / Outstanding Orders</div><div style="font-size:9.5pt;white-space:pre-wrap">${g('ho-pending')||'None'}</div></div>`+
+    `<div style="margin-bottom:12px"><div style="font-size:8pt;font-weight:700;text-transform:uppercase;color:var(--green);margin-bottom:4px">General Notes</div><div style="font-size:9.5pt;white-space:pre-wrap">${g('ho-notes')||'—'}</div></div>`+
     '<div style="margin-top:20px;display:grid;grid-template-columns:1fr 1fr;gap:20px;text-align:center">'+
     '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">Handing Over — Signature</div>'+
     '<div style="border-top:1px solid #000;padding-top:6px;font-size:9pt">Receiving — Signature</div></div>'+
@@ -17090,7 +17112,7 @@ async function printVitalsSheet() {
       <td style="padding:4px 8px;font-size:9pt">${v.respiratory_rate||'—'}</td>
       <td style="padding:4px 8px;font-size:9pt">${v.temperature||'—'}</td>
       <td style="padding:4px 8px;font-size:9pt">${v.spo2||'—'}</td>
-      <td style="padding:4px 8px;font-size:9pt;font-weight:700;color:${(v.news2_score||0)>=7?'#b91c1c':(v.news2_score||0)>=5?'#f59e0b':'#166534'}">${v.news2_score??'—'}</td>
+      <td style="padding:4px 8px;font-size:9pt;font-weight:700;color:${(v.news2_score||0)>=7?'var(--red)':(v.news2_score||0)>=5?'#f59e0b':'var(--green)'}">${v.news2_score??'—'}</td>
       <td style="padding:4px 8px;font-size:9pt">${v.pain_score??'—'}</td>
       <td style="padding:4px 8px;font-size:9pt">${escapeHtml(v.recorded_by||'—')}</td>
     </tr>`).join('');
@@ -17211,17 +17233,17 @@ function nursingQueueAlertBadges(flags){
   let html='';
   const span=(bg,color,text)=>'<span class="bdg" style="background:'+bg+';color:'+color+';display:inline-block;margin:1px 2px 1px 0">'+text+'</span>';
   if(flags.news2!=null){
-    if(flags.news2>=7) html+='<span class="bdg news2-pulse" style="background:#fee2e2;color:#b91c1c;display:inline-block;margin:1px 2px 1px 0">\ud83d\udea8 NEWS2 '+flags.news2+'</span>';
-    else if(flags.news2>=3) html+=span('#fef3c7','#92400e','\u23f0 Hourly Monitoring (NEWS2 '+flags.news2+')');
+    if(flags.news2>=7) html+='<span class="bdg news2-pulse" style="background:var(--red-lt);color:var(--red);display:inline-block;margin:1px 2px 1px 0">\ud83d\udea8 NEWS2 '+flags.news2+'</span>';
+    else if(flags.news2>=3) html+=span('var(--amber-lt)','var(--amber)','\u23f0 Hourly Monitoring (NEWS2 '+flags.news2+')');
   }
   if(flags.turningAt){
     const elapsed=Date.now()-new Date(flags.turningAt).getTime();
-    if(elapsed>=TURNING_INTERVAL_MS) html+=span('#fee2e2','#b91c1c','\ud83d\udd04 Turning Overdue');
+    if(elapsed>=TURNING_INTERVAL_MS) html+=span('var(--red-lt)','var(--red)','\ud83d\udd04 Turning Overdue');
   }
   if(flags.analgesiaAt){
     const administeredAt=new Date(flags.analgesiaAt).getTime();
     const reassessed=flags.lastPainAt && new Date(flags.lastPainAt).getTime()>administeredAt;
-    if(!reassessed && (Date.now()-administeredAt)>=POST_ANALGESIA_WINDOW_MS) html+=span('#fee2e2','#b91c1c','\ud83e\ude79 Pain Reassessment Overdue');
+    if(!reassessed && (Date.now()-administeredAt)>=POST_ANALGESIA_WINDOW_MS) html+=span('var(--red-lt)','var(--red)','\ud83e\ude79 Pain Reassessment Overdue');
   }
   return html;
 }
@@ -18328,7 +18350,7 @@ async function printInvoice(id) {
       '<tbody>'+itemRows+'</tbody>'+
       '<tfoot>'+
       (inv.discount_amount?'<tr style="background:#f8fafd"><td colspan="3" style="padding:5px 8px;text-align:right;font-size:9pt">Discount</td><td style="padding:5px 8px;text-align:right;font-size:9pt;color:var(--green)">-'+((inv.discount_amount||0).toLocaleString('en-US',{minimumFractionDigits:2}))+'</td></tr>':'')+
-      (inv.insurance_company?'<tr style="background:#f8fafd"><td colspan="3" style="padding:5px 8px;text-align:right;font-size:9pt">Insurance Covered Share</td><td style="padding:5px 8px;text-align:right;font-size:9pt;color:#1d4ed8">-'+((inv.insurance_covered||0).toLocaleString('en-US',{minimumFractionDigits:2}))+'</td></tr>':'')+
+      (inv.insurance_company?'<tr style="background:#f8fafd"><td colspan="3" style="padding:5px 8px;text-align:right;font-size:9pt">Insurance Covered Share</td><td style="padding:5px 8px;text-align:right;font-size:9pt;color:var(--blue)">-'+((inv.insurance_covered||0).toLocaleString('en-US',{minimumFractionDigits:2}))+'</td></tr>':'')+
       '<tr style="background:#d4f1ef"><td colspan="3" style="padding:7px 8px;text-align:right;font-weight:800;font-size:10.5pt">'+(inv.insurance_company?'PATIENT PAYABLE':'NET TOTAL')+'</td>'+
       '<td style="padding:7px 8px;text-align:right;font-weight:900;font-size:10.5pt;color:#0b7a75">'+((inv.insurance_company?(inv.patient_payable||inv.net_amount):(inv.net_amount||inv.total_amount))||0).toLocaleString('en-US',{minimumFractionDigits:2})+' SDG</td></tr>'+
       '</tfoot></table>'+
@@ -18389,7 +18411,7 @@ function renderPricePicker(prices) {
   const el = document.getElementById('pp-items');
   if(!el) return;
   if(!prices.length){ el.innerHTML='<div class="empty-state">No prices in list. Go to Price List to add items.</div>'; return; }
-  const catColors = {lab:'#dbeafe',radiology:'#ede9fe',consultation:'#dcfce7',nursing:'#fce7f3',admission:'#fef9c3',theatre:'#fee2e2',pharmacy:'#f0fdf4',registration:'#f1f5f9',other:'#f3f4f6'};
+  const catColors = {lab:'var(--blue-lt)',radiology:'#ede9fe',consultation:'var(--green-lt)',nursing:'#fce7f3',admission:'#fef9c3',theatre:'var(--red-lt)',pharmacy:'#f0fdf4',registration:'#f1f5f9',other:'#f3f4f6'};
   el.innerHTML='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:6px">'+
     prices.map(p=>'<div onclick="addPriceToInvoice('+JSON.stringify(p).replace(/"/g,'&quot;')+')" '+
       'style="border:1.5px solid var(--border);border-radius:8px;padding:8px 12px;cursor:pointer;transition:all .12s;display:flex;align-items:center;justify-content:space-between" '+
@@ -18437,7 +18459,7 @@ function renderPriceTable(prices) {
   const body = document.getElementById('price-table-body');
   if(!body) return;
   if(!prices.length){ body.innerHTML='<div class="empty-state"><div class="empty-icon">💲</div><div class="empty-title">No prices yet.<br>Click "Load Defaults" to add all standard prices.</div></div>'; return; }
-  const catColors = {lab:'#dbeafe',radiology:'#ede9fe',consultation:'#dcfce7',nursing:'#fce7f3',admission:'#fef9c3',theatre:'#fee2e2',pharmacy:'#f0fdf4',registration:'#f1f5f9',other:'#f3f4f6'};
+  const catColors = {lab:'var(--blue-lt)',radiology:'#ede9fe',consultation:'var(--green-lt)',nursing:'#fce7f3',admission:'#fef9c3',theatre:'var(--red-lt)',pharmacy:'#f0fdf4',registration:'#f1f5f9',other:'#f3f4f6'};
   // Group by category
   const groups = {};
   prices.forEach(p=>{ if(!groups[p.category]) groups[p.category]=[]; groups[p.category].push(p); });
@@ -18528,7 +18550,7 @@ async function deletePrice(id) {
 async function printPriceList() {
   const prices = _allPrices.length?_allPrices:await ensurePriceList();
   if(!prices.length){toast('No prices to print','err');return;}
-  const catColors={lab:'#dbeafe',radiology:'#ede9fe',consultation:'#dcfce7',nursing:'#fce7f3',admission:'#fef9c3',theatre:'#fee2e2',pharmacy:'#f0fdf4',registration:'#f1f5f9',other:'#f3f4f6'};
+  const catColors={lab:'var(--blue-lt)',radiology:'#ede9fe',consultation:'var(--green-lt)',nursing:'#fce7f3',admission:'#fef9c3',theatre:'var(--red-lt)',pharmacy:'#f0fdf4',registration:'#f1f5f9',other:'#f3f4f6'};
   let currentCat='';
   const rows=prices.map((p,n)=>{
     let catRow='';
@@ -19189,7 +19211,7 @@ async function loadStaff() {
     if(roleFilter) q=q.eq('role',roleFilter);
     const {data}=await q;
     if(!data?.length){body.innerHTML='<div class="empty-state"><div class="empty-icon">👥</div><div class="empty-title">No staff found</div></div>';return;}
-    const roleColors={admin:'#fee2e2',doctor:'#dbeafe',nurse:'#dcfce7',lab_tech:'#ede9fe',lab_supervisor:'#f3e8ff',receptionist:'#fef9c3',cashier:'#f0fdf4',theatre_nurse:'#fdf2f8',radiologist:'#eef2ff'};
+    const roleColors={admin:'var(--red-lt)',doctor:'var(--blue-lt)',nurse:'var(--green-lt)',lab_tech:'#ede9fe',lab_supervisor:'#f3e8ff',receptionist:'#fef9c3',cashier:'#f0fdf4',theatre_nurse:'#fdf2f8',radiologist:'#eef2ff'};
     const roleLabels={admin:'Admin',doctor:'Doctor',nurse:'Nurse',lab_tech:'Lab Tech',lab_supervisor:'Lab Supervisor',receptionist:'Receptionist',cashier:'Cashier',theatre_nurse:'Theatre Nurse',radiologist:'Radiologist'};
     body.innerHTML='<div style="overflow-x:auto"><table class="tbl" id="stf-table"><thead><tr>'+
       '<th>Name</th><th>Role</th><th>Department</th><th>Phone</th><th>Email</th><th>Status</th><th>Hire Date</th><th>Actions</th></tr></thead><tbody>'+
@@ -19199,7 +19221,7 @@ async function loadStaff() {
         '<td style="font-size:.78rem">'+escapeHtml(s.department||'—')+'</td>'+
         '<td style="font-size:.75rem">'+escapeHtml(s.phone||'—')+'</td>'+
         '<td style="font-size:.72rem">'+escapeHtml(s.email||'—')+'</td>'+
-        '<td>'+(s.status==='active'?'<span class="bdg" style="background:#dcfce7;color:#166534">\u2705 Active</span>':s.status==='on_leave'?'<span class="bdg" style="background:#fef9c3;color:#92400e">\u23f8 On Leave</span>':'<span class="bdg bdg-sl">'+escapeHtml(s.status||'—')+'</span>')+'</td>'+
+        '<td>'+(s.status==='active'?'<span class="bdg" style="background:var(--green-lt);color:var(--green)">\u2705 Active</span>':s.status==='on_leave'?'<span class="bdg" style="background:#fef9c3;color:var(--amber)">\u23f8 On Leave</span>':'<span class="bdg bdg-sl">'+escapeHtml(s.status||'—')+'</span>')+'</td>'+
         '<td style="font-size:.72rem">'+(s.hire_date?fmtDate(s.hire_date):'—')+'</td>'+
         '<td><div class="acts">'+
           '<button class="btn btn-s btn-xs" onclick="editStaff(\''+s.id+'\')">✏️</button>'+
@@ -19338,7 +19360,7 @@ function renderPermissionsMatrix() {
     html+='<tr style="background:#f1f5f9"><td colspan="10" style="padding:5px 10px;font-weight:700;font-size:.72rem;text-transform:uppercase;letter-spacing:.4px;color:var(--slate)">'+mod.label+'</td></tr>';
     mod.pages.forEach(page=>{
       html+='<tr style="border-bottom:1px solid var(--border)"><td style="padding:5px 10px;font-size:.78rem">'+(pageLabels[page]||page)+'</td>'+
-        roles.map(r=>'<td style="text-align:center;padding:5px 4px">'+(hasAccess(r,page)?'<span style="color:#166534;font-size:1rem">\u2705</span>':'<span style="color:#e2e8f0;font-size:1rem">\u2012</span>')+'</td>').join('')+
+        roles.map(r=>'<td style="text-align:center;padding:5px 4px">'+(hasAccess(r,page)?'<span style="color:var(--green);font-size:1rem">\u2705</span>':'<span style="color:#e2e8f0;font-size:1rem">\u2012</span>')+'</td>').join('')+
         '</tr>';
     });
   });
@@ -19731,7 +19753,7 @@ async function loadRadRequests() {
         : '<div class="empty-state"><div class="empty-icon">\ud83e\ude7b</div><div class="empty-title">No radiology requests</div></div>';
       return;
     }
-    const urgColor={STAT:'#fff1f2',Urgent:'#fffbeb',Routine:''};
+    const urgColor={STAT:'var(--red-tint)',Urgent:'var(--amber-tint)',Routine:''};
     body.innerHTML='<div style="overflow-x:auto"><table class="tbl"><thead><tr>'+
       '<th>Date</th><th>Patient</th><th>Study</th><th>Urgency</th><th>Requesting Dr</th><th>Payment</th><th>Status</th><th>Visit</th><th>Actions</th></tr></thead><tbody>'+
       data.map(r=>{
@@ -19741,10 +19763,10 @@ async function loadRadRequests() {
           '<td style="font-size:.72rem;color:var(--slate)">'+fmtDate(r.created_at)+'</td>'+
           '<td><div style="font-weight:600;font-size:.82rem">'+escapeHtml(pt.name||'—')+'</div>'+
           '<div style="font-size:.68rem;color:var(--slate)">'+escapeHtml(pt.mrn||pt.lab_no||'')+' \u00b7 '+escapeHtml((pt.age||'?')+(pt.age_unit||'y'))+' / '+escapeHtml(pt.sex||'')+' '+(pt.ward?'\u00b7 '+escapeHtml(pt.ward):'')+'</div></td>'+
-          '<td style="font-size:.78rem;font-weight:600">'+escapeHtml(r.imaging_type||'—')+(r.is_critical?' <span class="bdg" style="background:#b91c1c;color:#fff">🚨 CRITICAL</span>':'')+'</td>'+
-          '<td>'+(r.urgency==='STAT'?'<span class="bdg" style="background:#fef2f2;color:#b91c1c;border:1.5px solid #fca5a5">\u26a1 STAT</span>':statusBadge(r.urgency))+'</td>'+
+          '<td style="font-size:.78rem;font-weight:600">'+escapeHtml(r.imaging_type||'—')+(r.is_critical?' <span class="bdg" style="background:var(--red);color:#fff">🚨 CRITICAL</span>':'')+'</td>'+
+          '<td>'+(r.urgency==='STAT'?'<span class="bdg" style="background:var(--red-tint);color:var(--red);border:1.5px solid var(--red-border)">\u26a1 STAT</span>':statusBadge(r.urgency))+'</td>'+
           '<td style="font-size:.75rem">'+escapeHtml(r.requesting_doctor||'—')+'</td>'+
-          '<td>'+paymentTag(pt.payment_status)+(r.payment_deferred?' <span class="bdg" style="background:#fef2f2;color:#b91c1c;border:1.5px solid #fca5a5">\u26a0 Payment Deferred \u2014 STAT</span>':'')+'</td>'+
+          '<td>'+paymentTag(pt.payment_status)+(r.payment_deferred?' <span class="bdg" style="background:var(--red-tint);color:var(--red);border:1.5px solid var(--red-border)">\u26a0 Payment Deferred \u2014 STAT</span>':'')+'</td>'+
           '<td>'+statusBadge(r.status)+'</td>'+
           '<td>'+visitStatusBadge(pt)+'</td>'+
           '<td><div class="acts">'+
@@ -19767,7 +19789,7 @@ async function loadPendingForReport() {
       'onmouseover="this.style.borderColor=\x27var(--teal)\x27;this.style.background=\x27var(--teal-lt)\x27" onmouseout="this.style.borderColor=\x27var(--border)\x27;this.style.background=\x27\x27">'+
       '<div style="display:flex;align-items:center;justify-content:space-between">'+
       '<span style="font-weight:700;font-size:.82rem">'+escapeHtml(r.patients?.name||'—')+'</span>'+
-      (r.urgency==='STAT'?'<span class="bdg" style="background:#fef2f2;color:#b91c1c;font-size:.65rem">\u26a1 STAT</span>':'')+
+      (r.urgency==='STAT'?'<span class="bdg" style="background:#fef2f2;color:var(--red);font-size:.65rem">\u26a1 STAT</span>':'')+
       '</div>'+
       '<div style="font-size:.75rem;color:var(--teal);font-weight:600;margin-top:2px">'+(r.imaging_type||'—')+'</div>'+
       '<div style="font-size:.68rem;color:var(--slate)">'+(r.patients?.mrn||'')+' \u00b7 '+fmtDate(r.created_at)+'</div>'+
@@ -19922,7 +19944,7 @@ async function printRadReport() {
       '<div><div style="font-size:8pt;color:#64748b">Date</div><div>'+fmtDate(r.reported_at||r.created_at)+'</div></div>'+
       '<div><div style="font-size:8pt;color:#64748b">Urgency</div><div>'+escapeHtml(r.urgency||'Routine')+'</div></div>'+
       '<div><div style="font-size:8pt;color:#64748b">Requesting Dr</div><div>'+escapeHtml(r.requesting_doctor||pt.doctor||'—')+'</div></div></div>'+
-      (r.is_critical?'<div style="background:#fee2e2;border:2px solid #fca5a5;border-radius:8px;padding:10px 14px;margin-bottom:14px;color:#b91c1c;font-weight:700">\ud83d\udea8 CRITICAL FINDING — Immediate clinical notification required</div>':'')+
+      (r.is_critical?'<div style="background:var(--red-lt);border:2px solid var(--red-border);border-radius:8px;padding:10px 14px;margin-bottom:14px;color:var(--red);font-weight:700">\ud83d\udea8 CRITICAL FINDING — Immediate clinical notification required</div>':'')+
       (r.technique?sec('Technique / Protocol',escapeHtml(r.technique)):'')+
       sec('Findings',escapeHtml(findings||'—'))+
       '<div style="background:#fff9f0;border-left:4px solid #f59e0b;padding:12px 14px;border-radius:0 8px 8px 0;margin-bottom:12px">'+
@@ -19951,7 +19973,7 @@ async function loadReportedStudies() {
       data.map(r=>'<tr>'+
         '<td style="font-size:.72rem;color:var(--slate)">'+fmtDate(r.reported_at||r.created_at)+'</td>'+
         '<td style="font-weight:600;font-size:.82rem">'+escapeHtml(r.patients?.name||'—')+'<div style="font-size:.68rem;color:var(--slate)">'+escapeHtml(r.patients?.mrn||'')+'</div></td>'+
-        '<td style="font-size:.78rem;font-weight:600">'+(r.imaging_type||'—')+(r.is_critical?' <span class="bdg" style="background:#b91c1c;color:#fff">🚨 CRITICAL</span>':'')+'</td>'+
+        '<td style="font-size:.78rem;font-weight:600">'+(r.imaging_type||'—')+(r.is_critical?' <span class="bdg" style="background:var(--red);color:#fff">🚨 CRITICAL</span>':'')+'</td>'+
         '<td style="font-size:.75rem">'+escapeHtml(r.radiologist||'—')+'</td>'+
         '<td style="font-size:.75rem;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escapeHtml(r.impression||'—')+'</td>'+
         '<td>'+statusBadge(r.status)+(r.status==='Verified'&&r.verified_by_name?'<div style="font-size:.65rem;color:var(--slate);margin-top:2px">by '+escapeHtml(r.verified_by_name)+' · '+fmtDT(r.verified_at)+'</div>':'')+'</td>'+
@@ -20129,11 +20151,11 @@ function computeSigmaMetric(lot, rollingStats){
   return {tea,biasPct,cv:rollingStats.cv,sigma};
 }
 function sigmaBand(sigma){
-  if(sigma>=6) return {label:'World Class',color:'#166534',bg:'#f0fdf4'};
+  if(sigma>=6) return {label:'World Class',color:'var(--green)',bg:'#f0fdf4'};
   if(sigma>=5) return {label:'Excellent',color:'#15803d',bg:'#f0fdf4'};
-  if(sigma>=4) return {label:'Good',color:'#166534',bg:'#f0fdf4'};
-  if(sigma>=3) return {label:'Marginal',color:'#b45309',bg:'#fef3c7'};
-  return {label:'Poor',color:'#b91c1c',bg:'#fee2e2'};
+  if(sigma>=4) return {label:'Good',color:'var(--green)',bg:'#f0fdf4'};
+  if(sigma>=3) return {label:'Marginal',color:'#b45309',bg:'var(--amber-lt)'};
+  return {label:'Poor',color:'var(--red)',bg:'var(--red-lt)'};
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -20561,7 +20583,7 @@ function renderValidationResultPanel({ep15,ep09}){
   const finalStatus=_valCurrentResult?.result_status||'Pending Review';
   renderValidationPassFail(finalStatus);
   const warnEl=document.getElementById('val-warnings');
-  if(warnEl) warnEl.innerHTML=(result.warnings||[]).map(w=>'<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:6px 10px;font-size:.74rem;color:#92400e;margin-top:4px">⚠️ '+escapeHtml(w)+'</div>').join('');
+  if(warnEl) warnEl.innerHTML=(result.warnings||[]).map(w=>'<div style="background:var(--amber-tint);border:1px solid var(--amber-border);border-radius:6px;padding:6px 10px;font-size:.74rem;color:var(--amber);margin-top:4px">⚠️ '+escapeHtml(w)+'</div>').join('');
   const scatterCard=document.getElementById('val-scatter-card'), baCard=document.getElementById('val-ba-card');
   const precisionCard=document.getElementById('val-precision-card');
   if(ep09){
@@ -20597,7 +20619,7 @@ function renderValidationKPIs(ep15,ep09){
 }
 function renderValidationPassFail(status){
   const el=document.getElementById('val-passfail-badge'); if(!el) return;
-  const map={Pass:{bg:'#dcfce7',color:'#166534',label:'✅ PASS'},Fail:{bg:'#fee2e2',color:'#b91c1c',label:'⛔ FAIL'},'Pending Review':{bg:'#fef3c7',color:'#92400e',label:'🟡 PENDING REVIEW'}};
+  const map={Pass:{bg:'var(--green-lt)',color:'var(--green)',label:'✅ PASS'},Fail:{bg:'var(--red-lt)',color:'var(--red)',label:'⛔ FAIL'},'Pending Review':{bg:'var(--amber-lt)',color:'var(--amber)',label:'🟡 PENDING REVIEW'}};
   const m=map[status]||map['Pending Review'];
   el.innerHTML='<span class="bdg" style="background:'+m.bg+';color:'+m.color+';font-size:.9rem;padding:6px 16px;font-weight:800">'+m.label+'</span>';
 }
@@ -20789,8 +20811,8 @@ async function printValidationReport(){
           ['SD of Differences', r.sd_differences!=null?r.sd_differences.toFixed(4):'—'],
           ['TEa (Total Allowable Error)', study.tea_limit!=null?study.tea_limit+'%':'—'],
         ].map(([k,v])=>row(k,v)).join('');
-    const methodNote=!isEP15?'<div style="font-size:8pt;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:8px 10px;margin-top:10px">⚠️ Regression computed via Ordinary Least Squares (OLS), <strong>not Deming regression</strong>. OLS assumes measurement error is confined to Method Y — for a formal CLSI EP09-A3 conclusion, review alongside a true error-in-both-variables (Deming/Passing-Bablok) analysis.</div>':'';
-    const statusMap={Pass:{color:'#166534',bg:'#dcfce7',label:'PASS'},Fail:{color:'#b91c1c',bg:'#fee2e2',label:'FAIL'},'Pending Review':{color:'#92400e',bg:'#fef3c7',label:'PENDING REVIEW'}};
+    const methodNote=!isEP15?'<div style="font-size:8pt;color:var(--amber);background:var(--amber-tint);border:1px solid var(--amber-border);border-radius:6px;padding:8px 10px;margin-top:10px">⚠️ Regression computed via Ordinary Least Squares (OLS), <strong>not Deming regression</strong>. OLS assumes measurement error is confined to Method Y — for a formal CLSI EP09-A3 conclusion, review alongside a true error-in-both-variables (Deming/Passing-Bablok) analysis.</div>':'';
+    const statusMap={Pass:{color:'var(--green)',bg:'var(--green-lt)',label:'PASS'},Fail:{color:'var(--red)',bg:'var(--red-lt)',label:'FAIL'},'Pending Review':{color:'var(--amber)',bg:'var(--amber-lt)',label:'PENDING REVIEW'}};
     const sm=statusMap[r.result_status]||statusMap['Pending Review'];
     const sigBlock=(name,at,role)=>'<div style="border-top:1px solid #000;padding-top:6px;font-size:8.5pt;text-align:center">'+
       (at?escapeHtml(name||'—')+'<br><span style="font-size:7.5pt;color:#64748b">'+fmtDT(at)+'</span>':'&nbsp;')+
@@ -20839,12 +20861,12 @@ function calcZscore(){
   if(mean==null||sd==null||sd<=0){ if(disp) disp.textContent='Z-score: — (lot has no target mean/SD set)'; return; }
   const z=(val-mean)/sd;
   let label, color;
-  if(Math.abs(z)>=3){ label='⛔ 3s Violation — REJECT run'; color='#b91c1c'; }
+  if(Math.abs(z)>=3){ label='⛔ 3s Violation — REJECT run'; color='var(--red)'; }
   else if(Math.abs(z)>=2){ label='⚠️ 2s Warning — Review'; color='#f59e0b'; }
-  else { label='✅ In control'; color='#166534'; }
+  else { label='✅ In control'; color='var(--green)'; }
   if(disp){
     disp.innerHTML='Z-score: <strong style="color:'+color+'">'+z.toFixed(2)+'</strong> · '+label;
-    disp.style.background=Math.abs(z)>=3?'#fee2e2':Math.abs(z)>=2?'#fef3c7':'#f0fdf4';
+    disp.style.background=Math.abs(z)>=3?'var(--red-lt)':Math.abs(z)>=2?'var(--amber-lt)':'#f0fdf4';
   }
   // Auto-suggest accept/reject
   const accEl=document.getElementById('qc-accept');
@@ -20889,7 +20911,7 @@ async function loadQcLots(){
               '<td style="font-weight:600">'+escapeHtml(l.control_name||'—')+'</td>'+
               '<td>'+escapeHtml(l.section||'—')+'</td><td>'+escapeHtml(l.level||'—')+'</td>'+
               '<td>'+(l.target_mean??'—')+'</td><td>'+(l.target_sd??'—')+'</td>'+
-              '<td style="'+(expired?'color:#b91c1c;font-weight:700':'')+'">'+(l.expiry_date||'—')+(expired?' ⚠️':'')+'</td>'+
+              '<td style="'+(expired?'color:var(--red);font-weight:700':'')+'">'+(l.expiry_date||'—')+(expired?' ⚠️':'')+'</td>'+
               '<td><button class="btn btn-r btn-xs" onclick="deactivateQcLot(\''+l.id+'\')">✕</button></td></tr>';
           }).join('')+'</tbody></table></div>';
       }
@@ -20917,12 +20939,12 @@ async function loadQcResults(){
       data.map(r=>{
         const lot=r.qc_lots||{};
         const z=r.z_score;
-        const zColor = z==null?'':Math.abs(z)>=3?'#b91c1c':Math.abs(z)>=2?'#f59e0b':'#166534';
+        const zColor = z==null?'':Math.abs(z)>=3?'var(--red)':Math.abs(z)>=2?'#f59e0b':'var(--green)';
         return '<tr><td style="font-size:.72rem">'+(r.result_date||'—')+'</td>'+
           '<td>'+(lot.lot_no||'')+' · '+(lot.control_name||'—')+'</td>'+
           '<td style="font-weight:600">'+(r.result_value??'—')+'</td>'+
           '<td style="font-weight:700;color:'+zColor+'">'+(z!=null?z.toFixed(2):'—')+'</td>'+
-          '<td>'+(r.accepted?'<span class="bdg" style="background:#dcfce7;color:#166534">✅ Accepted</span>':'<span class="bdg" style="background:#fee2e2;color:#b91c1c">⛔ Rejected</span>')+'</td>'+
+          '<td>'+(r.accepted?'<span class="bdg" style="background:var(--green-lt);color:var(--green)">✅ Accepted</span>':'<span class="bdg" style="background:var(--red-lt);color:var(--red)">⛔ Rejected</span>')+'</td>'+
           '<td style="font-size:.72rem;color:var(--slate)">'+(r.comment||r.rule_violation||'—')+'</td></tr>';
       }).join('')+'</tbody></table></div>';
   }catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>'; }
@@ -21079,7 +21101,7 @@ function renderInventoryTable(){
       return '<tr'+(low||status.locked?' class="pay-unpaid"':'')+'>'+
         '<td style="font-weight:600">'+escapeHtml(it.item_name||'—')+(it.barcode?'<div style="font-size:.65rem;color:var(--slate);font-family:\'DM Mono\',monospace">'+escapeHtml(it.barcode)+'</div>':'')+'</td>'+
         '<td style="font-size:.72rem">'+escapeHtml(it.department||'Uncategorized')+'<div style="color:var(--slate)">'+escapeHtml(it.category||'—')+'</div></td>'+
-        '<td style="font-weight:700;'+(low?'color:#b91c1c':'')+'">'+(it.current_stock??0)+' '+escapeHtml(it.unit||'')+(low?' ⚠️':'')+'</td>'+
+        '<td style="font-weight:700;'+(low?'color:var(--red)':'')+'">'+(it.current_stock??0)+' '+escapeHtml(it.unit||'')+(low?' ⚠️':'')+'</td>'+
         '<td>'+(it.min_level??0)+'</td>'+
         '<td><span class="bdg" style="background:'+status.color+'22;color:'+status.color+'">'+status.emoji+' '+escapeHtml(status.label)+'</span></td>'+
         '<td><div class="acts">'+
@@ -21986,7 +22008,7 @@ async function loadTat(){
     if(!data?.length){body.innerHTML='<div class="empty-state">No TAT data</div>';return;}
     const now=Date.now();
     body.innerHTML='<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Lab No</th><th>Patient</th><th>Priority</th><th>Collected</th><th>TAT</th><th>Status</th></tr></thead><tbody>'+
-      data.map(s=>{const pt=s.patients||{};const cT=s.collected_at?new Date(s.collected_at).getTime():null;const tM=cT?Math.floor((now-cT)/60000):null;const tH=tM!=null?Math.floor(tM/60)+'h '+(tM%60)+'m':'—';const tc=tM==null?'':tM>240?'#b91c1c':tM>120?'#f59e0b':'#166534';
+      data.map(s=>{const pt=s.patients||{};const cT=s.collected_at?new Date(s.collected_at).getTime():null;const tM=cT?Math.floor((now-cT)/60000):null;const tH=tM!=null?Math.floor(tM/60)+'h '+(tM%60)+'m':'—';const tc=tM==null?'':tM>240?'var(--red)':tM>120?'#f59e0b':'var(--green)';
       return '<tr><td style="font-family:DM Mono,monospace;font-size:.7rem;color:var(--teal)">'+(pt.lab_no||pt.mrn||'—')+'</td><td style="font-weight:600">'+escapeHtml(pt.name||'—')+'</td><td>'+statusBadge(pt.priority||'Routine')+'</td><td style="font-size:.72rem">'+fmtDT(s.collected_at)+'</td><td style="font-weight:700;color:'+tc+'">'+tH+'</td><td>'+statusBadge(s.status)+'</td></tr>';}).join('')+
       '</tbody></table></div>';
   }catch(e){body.innerHTML='<div style="color:var(--red);padding:12px;font-size:.8rem">'+escapeHtml(e.message)+'</div>';}
@@ -22023,7 +22045,7 @@ async function loadSampleQueue(){
     }
     body.innerHTML='<div style="overflow-x:auto"><table class="tbl" style="font-size:.74rem"><thead><tr><th>Lab No</th><th>Name</th><th>Priority</th><th>Payment</th><th>Status</th></tr></thead><tbody>'+
       visible.map(s=>{const pt=s.patients||{};const up=pt.payment_status==='unpaid'||pt.payment_status==='insurance_pending';
-        return '<tr class="'+(up?'pay-unpaid':'')+'" style="cursor:pointer" onclick="selectScPt(\x27'+s.patient_id+'\x27)">'+'<td style="font-family:DM Mono,monospace;color:var(--teal)">'+(pt.lab_no||pt.mrn||'—')+'</td><td style="font-weight:600">'+escapeHtml(pt.name||'—')+'</td><td>'+statusBadge(pt.priority||'Routine')+'</td><td>'+paymentTag(pt.payment_status)+(s.payment_deferred?' <span class="bdg" style="background:#fef2f2;color:#b91c1c;border:1.5px solid #fca5a5">\u26a0 Payment Deferred \u2014 STAT</span>':'')+'</td><td>'+statusBadge(s.status)+'</td></tr>';
+        return '<tr class="'+(up?'pay-unpaid':'')+'" style="cursor:pointer" onclick="selectScPt(\x27'+s.patient_id+'\x27)">'+'<td style="font-family:DM Mono,monospace;color:var(--teal)">'+(pt.lab_no||pt.mrn||'—')+'</td><td style="font-weight:600">'+escapeHtml(pt.name||'—')+'</td><td>'+statusBadge(pt.priority||'Routine')+'</td><td>'+paymentTag(pt.payment_status)+(s.payment_deferred?' <span class="bdg" style="background:var(--red-tint);color:var(--red);border:1.5px solid var(--red-border)">\u26a0 Payment Deferred \u2014 STAT</span>':'')+'</td><td>'+statusBadge(s.status)+'</td></tr>';
       }).join('')+(hiddenCount?'<tr><td colspan="5" style="text-align:center;padding:8px;font-size:.72rem;color:var(--slate)">'+hiddenCount+' more order(s) hidden pending payment</td></tr>':'')+'</tbody></table></div>';
   }catch(e){}
 }
@@ -22069,7 +22091,7 @@ async function selectScPt(ptId){
         if(opt&&[...specimenEl.options].some(o=>o.value===opt)) specimenEl.value=opt;
         updateTubeColor();
       }
-      const multiTubeWarn=tubes.length>1?'<div style="padding:6px 8px;margin-bottom:8px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;font-size:.72rem;color:#92400e">⚠️ '+tubes.length+' different tube types required — Specimen Type above only records one; use the printed tube labels below to track each one collected.</div>':'';
+      const multiTubeWarn=tubes.length>1?'<div style="padding:6px 8px;margin-bottom:8px;background:var(--amber-tint);border:1px solid var(--amber-border);border-radius:6px;font-size:.72rem;color:var(--amber)">⚠️ '+tubes.length+' different tube types required — Specimen Type above only records one; use the printed tube labels below to track each one collected.</div>':'';
       tubesEl.innerHTML = tubes.length ? multiTubeWarn+tubes.map(t=>
         '<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;margin-bottom:6px;background:var(--bg);border-radius:8px">'+
         '<div style="width:22px;height:30px;border-radius:4px 4px 8px 8px;background:'+t.color+';border:1.5px solid rgba(0,0,0,.15);flex-shrink:0"></div>'+
@@ -22492,8 +22514,8 @@ function applyResultLock(deptKey, data){
   if(badge){
     if(locked){
       badge.style.display='inline-block';
-      badge.style.background = data.is_released ? '#fee2e2' : '#fef3c7';
-      badge.style.color = data.is_released ? '#b91c1c' : '#92400e';
+      badge.style.background = data.is_released ? 'var(--red-lt)' : 'var(--amber-lt)';
+      badge.style.color = data.is_released ? 'var(--red)' : 'var(--amber)';
       badge.textContent = '🔒 '+(data.is_released?'RELEASED':'VERIFIED')+(overridden?' — editing (override)':'');
     } else badge.style.display='none';
   }
@@ -23123,8 +23145,8 @@ function setInvHistoryView(view,btn){
 // other printed lab report) already uses — red for high, blue for low —
 // so a flag reads the same way here as it does on a printed result.
 function invHistoryFlagBadge(flag){
-  if(flag==='H') return '<span style="color:#b91c1c;font-weight:800">▲ H</span>';
-  if(flag==='L') return '<span style="color:#1d4ed8;font-weight:800">▼ L</span>';
+  if(flag==='H') return '<span style="color:var(--red);font-weight:800">▲ H</span>';
+  if(flag==='L') return '<span style="color:var(--blue);font-weight:800">▼ L</span>';
   return '';
 }
 function renderInvHistoryList(){
@@ -23165,7 +23187,7 @@ function renderInvHistoryDetailTable(rows){
   return '<div style="overflow-x:auto"><table class="tbl" style="width:100%;font-size:.8rem"><thead><tr><th>Test</th><th>Value</th><th>Unit</th><th>Reference Range</th><th>Flag</th><th>Date</th></tr></thead><tbody>'
     + rows.map(r=>'<tr>'
       +'<td>'+escapeHtml(r.test_name)+'</td>'
-      +'<td style="font-weight:'+(r.flag&&r.flag!=='N'?700:400)+';color:'+(r.flag==='H'?'#b91c1c':r.flag==='L'?'#1d4ed8':'inherit')+'">'+escapeHtml(r.value??'—')+'</td>'
+      +'<td style="font-weight:'+(r.flag&&r.flag!=='N'?700:400)+';color:'+(r.flag==='H'?'var(--red)':r.flag==='L'?'var(--blue)':'inherit')+'">'+escapeHtml(r.value??'—')+'</td>'
       +'<td style="color:var(--slate);font-size:.75rem">'+escapeHtml(r.unit||'—')+'</td>'
       +'<td style="color:var(--slate);font-size:.75rem">'+escapeHtml(r.ref_range_text||(r.ref_range_lo!=null?r.ref_range_lo+' – '+r.ref_range_hi:'—'))+'</td>'
       +'<td>'+invHistoryFlagBadge(r.flag)+'</td>'
@@ -23507,13 +23529,13 @@ async function printAllReports() {
           if(tags && !wasRequested(tags[col])) return; // not actually ordered — skip even if a stray value exists
           if(meta && meta[col]) {
             const m=meta[col]; const v=parseFloat(val); const flag=!isNaN(v)?(v>m.hi?'▲ H':v<m.lo?'▼ L':''):'';
-            const fc=flag==='▲ H'?'#b91c1c':flag==='▼ L'?'#1d4ed8':'inherit';
+            const fc=flag==='▲ H'?'var(--red)':flag==='▼ L'?'var(--blue)':'inherit';
             rows += '<tr style="border-bottom:1px solid #f1f5fb"><td style="padding:3px 8px;font-size:9pt">'+escapeHtml(m.label)+'</td><td style="padding:3px 8px;font-weight:'+(flag?700:400)+';color:'+fc+'">'+escapeHtml(val)+'</td><td style="padding:3px 8px;font-size:8pt;color:#64748b">'+escapeHtml(m.unit)+'</td><td style="padding:3px 8px;font-size:8pt;color:#64748b">'+m.lo+'–'+m.hi+'</td><td style="padding:3px 8px;color:'+fc+';font-weight:700;font-size:8.5pt">'+flag+'</td></tr>';
           } else {
             const label=document.getElementById(id)?.closest('tr')?.querySelector('.tn')?.textContent
               || document.getElementById(id)?.closest('.fg')?.querySelector('.fl')?.textContent
               || col;
-            rows += '<tr style="border-bottom:1px solid #f1f5fb"><td style="padding:3px 8px;font-size:9pt">'+escapeHtml(label)+'</td><td style="padding:3px 8px;font-weight:600;color:#166534" colspan="4">'+escapeHtml(val)+'</td></tr>';
+            rows += '<tr style="border-bottom:1px solid #f1f5fb"><td style="padding:3px 8px;font-size:9pt">'+escapeHtml(label)+'</td><td style="padding:3px 8px;font-weight:600;color:var(--green)" colspan="4">'+escapeHtml(val)+'</td></tr>';
             hasRange = false;
           }
         });
@@ -23528,7 +23550,7 @@ async function printAllReports() {
       if(!anyRows) continue;
       sections += '<div style="margin-bottom:18px">'+
         '<div style="font-weight:700;font-size:10.5pt;color:#0b7a75;margin-bottom:6px;padding-bottom:4px;border-bottom:2px solid #d4f1ef">'+DEPT_META[d].label+
-        (row.is_verified?' <span style="font-size:8pt;color:#166534;font-weight:700">✓ Verified</span>':' <span style="font-size:8pt;color:#b45309;font-weight:700">⚠ Not yet verified</span>')+
+        (row.is_verified?' <span style="font-size:8pt;color:var(--green);font-weight:700">✓ Verified</span>':' <span style="font-size:8pt;color:#b45309;font-weight:700">⚠ Not yet verified</span>')+
         (row.is_released?' <span style="font-size:8pt;color:#0b7a75;font-weight:700">📤 Released</span>':'')+
         '</div>'+panelsHtml+
         (row.notes?'<div style="font-size:8.5pt;color:#475569;margin-top:4px"><strong>Notes:</strong> '+escapeHtml(row.notes)+'</div>':'')+
@@ -23943,7 +23965,7 @@ async function renderQcChart(){
     }
     const pad={t:20,r:20,b:30,l:50};
     const dW=W-pad.l-pad.r; const dH=H-pad.t-pad.b;
-    const lines=[{y:mean+3*sd,c:'#fee2e2',lbl:'+3s'},{y:mean+2*sd,c:'#fef3c7',lbl:'+2s'},{y:mean+sd,c:'#dcfce7',lbl:'+1s'},{y:mean,c:'#dbeafe',lbl:'Mean'},{y:mean-sd,c:'#dcfce7',lbl:'-1s'},{y:mean-2*sd,c:'#fef3c7',lbl:'-2s'},{y:mean-3*sd,c:'#fee2e2',lbl:'-3s'}];
+    const lines=[{y:mean+3*sd,c:'var(--red-lt)',lbl:'+3s'},{y:mean+2*sd,c:'var(--amber-lt)',lbl:'+2s'},{y:mean+sd,c:'var(--green-lt)',lbl:'+1s'},{y:mean,c:'var(--blue-lt)',lbl:'Mean'},{y:mean-sd,c:'var(--green-lt)',lbl:'-1s'},{y:mean-2*sd,c:'var(--amber-lt)',lbl:'-2s'},{y:mean-3*sd,c:'var(--red-lt)',lbl:'-3s'}];
     const minV=mean-3.5*sd; const maxV=mean+3.5*sd;
     const sy=v=>pad.t+dH-(v-minV)/(maxV-minV)*dH;
     const sx=i=>pad.l+(i/(pts.length-1||1))*dW;
@@ -23964,14 +23986,14 @@ async function renderQcChart(){
       const rulesHere=evaluateWestgardRules(zSeries.slice(0,i+1));
       const rejectHere=rulesHere.some(r=>WESTGARD_REJECT_RULES.has(r));
       if(rejectHere){ violations++; rulesHere.filter(r=>WESTGARD_REJECT_RULES.has(r)).forEach(r=>{ multiRuleCounts[r]=(multiRuleCounts[r]||0)+1; }); }
-      ctx.fillStyle=rejectHere?'#b91c1c':Math.abs(zSeries[i])>=2?'#f59e0b':'#0b7a75';
+      ctx.fillStyle=rejectHere?'var(--red)':Math.abs(zSeries[i])>=2?'#f59e0b':'#0b7a75';
       ctx.beginPath(); ctx.arc(sx(i),sy(v),4,0,Math.PI*2); ctx.fill();
     });
     if(violDiv){
       const ruleBreakdown=Object.entries(multiRuleCounts).map(([r,n])=>r+' \u00d7'+n).join(', ');
       violDiv.innerHTML = violations
-        ? '<div style="background:#fee2e2;border-radius:8px;padding:10px 12px;font-size:.8rem;color:#b91c1c;font-weight:600">\u26a0\ufe0f '+violations+' Westgard reject-rule violation(s) in this window'+(ruleBreakdown?' \u2014 '+ruleBreakdown:'')+' \u2014 investigate before reporting patient results</div>'
-        : '<div style="background:#f0fdf4;border-radius:8px;padding:10px 12px;font-size:.8rem;color:#166534">\u2705 All '+pts.length+' points within control limits (no Westgard reject rules triggered)</div>';
+        ? '<div style="background:var(--red-lt);border-radius:8px;padding:10px 12px;font-size:.8rem;color:var(--red);font-weight:600">\u26a0\ufe0f '+violations+' Westgard reject-rule violation(s) in this window'+(ruleBreakdown?' \u2014 '+ruleBreakdown:'')+' \u2014 investigate before reporting patient results</div>'
+        : '<div style="background:#f0fdf4;border-radius:8px;padding:10px 12px;font-size:.8rem;color:var(--green)">\u2705 All '+pts.length+' points within control limits (no Westgard reject rules triggered)</div>';
     }
     const sigmaDiv=document.getElementById('qc-sigma-panel');
     if(sigmaDiv){
@@ -23988,7 +24010,7 @@ async function renderQcChart(){
           '<div style="font-size:.72rem;margin-top:3px;color:var(--slate)">TEa '+metric.tea+'% \u00b7 Bias '+metric.biasPct.toFixed(2)+'% \u00b7 %CV '+metric.cv.toFixed(2)+'% \u00b7 n='+(rolling?.n||0)+'</div></div>';
       }
     }
-  }catch(e){ ctx.fillStyle='#b91c1c'; ctx.font='12px sans-serif'; ctx.textAlign='center'; ctx.fillText('Error: '+e.message,W/2,H/2); }
+  }catch(e){ ctx.fillStyle='var(--red)'; ctx.font='12px sans-serif'; ctx.textAlign='center'; ctx.fillText('Error: '+e.message,W/2,H/2); }
 }
 // Prints the currently-selected lot's Levey-Jennings chart (as a snapshot
 // image, since it's a <canvas>) alongside its Westgard/Six Sigma summary
@@ -24008,7 +24030,7 @@ async function printQcReport(){
     const sigmaHtml=document.getElementById('qc-sigma-panel')?.innerHTML||'';
     const rows=(results||[]).map(r=>{
       const z=r.z_score;
-      const zColor=z==null?'':Math.abs(z)>=3?'#b91c1c':Math.abs(z)>=2?'#f59e0b':'#166534';
+      const zColor=z==null?'':Math.abs(z)>=3?'var(--red)':Math.abs(z)>=2?'#f59e0b':'var(--green)';
       return '<tr><td>'+escapeHtml(r.result_date||'—')+'</td><td>'+(r.result_value??'—')+'</td>'+
         '<td style="color:'+zColor+';font-weight:700">'+(z!=null?z.toFixed(2):'—')+'</td>'+
         '<td>'+(r.accepted?'Accepted':'Rejected')+'</td>'+
