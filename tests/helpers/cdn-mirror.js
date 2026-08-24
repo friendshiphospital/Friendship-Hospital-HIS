@@ -98,6 +98,22 @@ async function installCdnMirror(contextOrPage) {
     }
     route.fulfill({ status: 200, contentType: 'text/javascript; charset=utf-8', body });
   });
+
+  // index.html's <head> also links a Google Fonts stylesheet
+  // (fonts.googleapis.com, which in turn pulls the actual font files from
+  // fonts.gstatic.com). Unlike the jsdelivr <script> tags above, a blocked
+  // stylesheet <link> doesn't just fail one feature — Chromium holds the
+  // page's `load` event until it resolves, and if this sandbox's proxy is
+  // dropping the TLS handshake to that host (observed 2026-08-24: repeated
+  // net_error -101 "handshake failed" on a ~6-7s retry loop instead of a
+  // clean, fast-failing HTTP error), `page.goto(..., {waitUntil:'load'})`
+  // can hang indefinitely instead of the page ever finishing its load.
+  // The suite doesn't assert on font rendering, so fail these fast and
+  // deterministically instead of leaving them to the real (and apparently
+  // sometimes-blocked) network.
+  await contextOrPage.route(/^https:\/\/fonts\.(googleapis|gstatic)\.com\//, (route) => {
+    route.abort('failed');
+  });
 }
 
 module.exports = { installCdnMirror };

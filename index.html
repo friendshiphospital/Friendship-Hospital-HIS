@@ -19387,8 +19387,8 @@ async function loadDoctors() {
         '<td style="font-size:.72rem">'+escapeHtml(d.email||'—')+'</td>'+
         '<td style="font-size:.72rem;font-family:DM Mono,monospace">'+escapeHtml(d.license_no||d.license||'—')+'</td>'+
         '<td><div class="acts">'+
-          '<button class="btn btn-s btn-xs" onclick="editDoctor(\''+d.id+'\')">✏️</button>'+
-          '<button class="btn btn-r btn-xs" onclick="deleteDoctor(\''+d.id+'\')">✕</button>'+
+          '<button class="btn btn-s btn-xs" onclick="editDoctor(\''+escAttr(d.id)+'\')">✏️</button>'+
+          '<button class="btn btn-r btn-xs" onclick="deleteDoctor(\''+escAttr(d.id)+'\')">✕</button>'+
         '</div></td></tr>'
       ).join('')+'</tbody></table></div>';
   } catch(e){body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>';}
