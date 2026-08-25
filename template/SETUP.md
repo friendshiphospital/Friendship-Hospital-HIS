@@ -108,6 +108,19 @@ pass described in the PR/commit that created this folder.
    | `reception-shift-notify` | Open/Close Shift email notifications | `RESEND_API_KEY`, `EMAIL_FROM` (same Resend account as `send-email`) |
    | `backup-verify` | Automated backup-verification alert (cron-triggered) | `RESEND_API_KEY`, `EMAIL_FROM`, `ADMIN_EMAIL` (alert recipient), `BACKUP_VERIFY_SECRET` (a secret you invent, used to authenticate the cron trigger's call to this function) |
 
+   ⚠️ **None of these functions work until their secrets above are set —
+   this is expected on a fresh project, not a bug.** In particular, Open/
+   Close Shift email notifications will fail with a toast like "Email
+   provider not configured — set RESEND_API_KEY via `supabase secrets
+   set`" until `reception-shift-notify`'s secrets are configured; this
+   never blocks opening or closing the shift itself, it only means the
+   admin notification email doesn't go out yet. **Verify every function's
+   deployment + secret status from inside the app**: Settings → Edge
+   Function Health Check pings each function with a harmless test payload
+   and reports whether it's deployed and whether its secret is configured
+   — check it after step 4 below, before assuming a notification failure
+   is a real bug rather than a not-yet-configured secret.
+
    ⚠️ **Set `EMAIL_FROM` explicitly — don't rely on the code default.** All
    three email-sending functions fall back to
    `"Friendship Hospital HIS <noreply@friendshiphospital.example>"` if
