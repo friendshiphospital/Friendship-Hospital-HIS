@@ -14758,7 +14758,7 @@ async function buildRegInvoicePreview() {
     '<span style="color:var(--ink2)">'+escapeHtml(l.name)+'</span>'+
     (l.priced===false
       ? '<span style="font-weight:600;color:var(--red)">⚠ Price not set</span>'
-      : '<span style="font-weight:600">'+l.total_price.toFixed(2)+' SDG</span>')+
+      : '<span style="font-weight:600">'+l.total_price.toFixed(2)+' '+CFG.currency+'</span>')+
     '</div>'
   ).join('') : '<div style="color:var(--slate);font-size:.78rem">Select a visit destination to see charges</div>')
   + (unpriced.length ? '<div style="margin-top:8px;padding:8px 10px;background:#fef2f2;border:1.5px solid var(--red-border);border-radius:8px;color:var(--red);font-size:.74rem;font-weight:600">⚠ '+unpriced.length+' item(s) have no price set in the Price List and are NOT included in the total below — contact admin before proceeding.</div>' : '');
@@ -14805,7 +14805,7 @@ function regShowSuccess(pt, mrn, labNo, testCount, payStatus, destinations, tota
     '<div><div style="color:var(--slate);font-size:.7rem">Destination</div><div style="font-weight:600">'+(destList.map(d=>destLabels[d]||d).join(' + ')||'—')+'</div></div>'+
     '<div><div style="color:var(--slate);font-size:.7rem">Payment</div><div>'+payBadge+'</div></div>'+
     '<div><div style="color:var(--slate);font-size:.7rem">Invoice</div><div style="font-family:DM Mono,monospace;font-size:.75rem;color:var(--teal)">'+escapeHtml(invNo)+'</div></div>'+
-    '<div><div style="color:var(--slate);font-size:.7rem">Total</div><div style="font-weight:700">'+total.toFixed(2)+' SDG</div></div>'+
+    '<div><div style="color:var(--slate);font-size:.7rem">Total</div><div style="font-weight:700">'+total.toFixed(2)+' '+CFG.currency+'</div></div>'+
     '</div>'+
     (payStatus==='unpaid'||payStatus==='insurance_pending' ?
       '<div style="background:#fef9c3;border:1.5px solid #eab308;border-radius:8px;padding:10px 12px;font-size:.78rem;color:var(--amber);margin-bottom:12px">'+
@@ -14921,7 +14921,7 @@ async function generateInsuranceClaim(invId) {
         '<td style="padding:4px 8px;text-align:right;font-size:9pt;font-weight:600">'+((item.total_price||0).toFixed(2))+'</td></tr>'
       ).join('')+
       '<tr style="background:#d4f1ef;font-weight:800"><td colspan="3" style="padding:6px 8px;font-size:10pt">TOTAL CLAIM AMOUNT</td>'+
-      '<td style="padding:6px 8px;text-align:right;font-size:10pt;color:#0b7a75">'+((inv.net_amount||0).toFixed(2))+' '+(inv.currency||'SDG')+'</td></tr>'+
+      '<td style="padding:6px 8px;text-align:right;font-size:10pt;color:#0b7a75">'+((inv.net_amount||0).toFixed(2))+' '+(inv.currency||CFG.currency)+'</td></tr>'+
       '</tbody></table>'+
       '<div style="margin-top:20px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;text-align:center">'+
       '<div style="border-top:1px solid #000;padding-top:6px;font-size:8.5pt">Cashier / Receptionist</div>'+
@@ -17579,7 +17579,7 @@ function renderBillTable(invoices) {
         '<td style="font-family:DM Mono,monospace;font-size:.7rem;font-weight:700;color:var(--teal)">'+escapeHtml(i.invoice_no||'—')+(i.queue_token?'<div style="font-size:.62rem;color:var(--slate);font-weight:500">Token '+escapeHtml(i.queue_token)+'</div>':'')+'</td>'+
         '<td style="font-weight:600;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escapeHtml(i.patient_name||'—')+'</td>'+
         '<td><span class="bdg bdg-sl" style="font-size:.65rem">'+escapeHtml(i.invoice_type||'—')+'</span></td>'+
-        '<td style="font-weight:700;color:var(--teal);white-space:nowrap">'+((i.net_amount||i.total_amount||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}))+' '+escapeHtml(i.currency||'SDG')+'</td>'+
+        '<td style="font-weight:700;color:var(--teal);white-space:nowrap">'+((i.net_amount||i.total_amount||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}))+' '+escapeHtml(i.currency||CFG.currency)+'</td>'+
         '<td>'+(i.voided?'<span class="pay-tag-void">VOID</span>':paymentTag(i.payment_status))+'</td>'+
         '<td style="font-size:.72rem">'+escapeHtml(i.payment_method||'—')+'</td>'+
         '<td style="font-size:.72rem;color:var(--slate)">'+fmtDate(i.created_at)+'</td>'+
@@ -17727,7 +17727,7 @@ function recalcBill() {
   const paid = parseFloat(document.getElementById('bill-paid-amount')?.value)||0;
   const total = Math.max(0, subtotal-discount);
   const balance = Math.max(0, total-paid);
-  const fmt = v => v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+' SDG';
+  const fmt = v => v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+' '+CFG.currency;
   const se = (id,v) => { const el=document.getElementById(id); if(el) el.textContent=v; };
   se('bill-subtotal', fmt(subtotal));
   se('bill-total', fmt(total));
@@ -17830,7 +17830,7 @@ async function submitOpenShift(){
     shift_no: genOfflineId('SFT'),
     staff_id: currentProfile?.id, staff_name: currentProfile?.full_name||'',
     station_id: station, shift_type: g('sfo-type')||'morning', status:'active',
-    currency: g('sfo-currency')||'SDG', opening_float: parseFloat(g('sfo-float'))||0,
+    currency: g('sfo-currency')||CFG.currency, opening_float: parseFloat(g('sfo-float'))||0,
     opened_by: currentProfile?.id
   };
   try {
@@ -17919,7 +17919,7 @@ function recalcCloseVariance(){
   const expected=window._shiftExpectedCash||0;
   if(isNaN(actual)){ varEl.value=''; reasonWrap.style.display='none'; return; }
   const variance=actual-expected;
-  varEl.value=(variance>=0?'+':'')+variance.toFixed(2)+' SDG';
+  varEl.value=(variance>=0?'+':'')+variance.toFixed(2)+' '+CFG.currency;
   varEl.className='fc '+(Math.abs(variance)<0.01?'':(variance>0?'variance-pos':'variance-neg'));
   reasonWrap.style.display = Math.abs(variance)>=0.01 ? '' : 'none';
 }
@@ -18089,8 +18089,8 @@ async function loadWalletBalance(ptId){
     const {data:wallet} = await sb.from('patient_wallets').select('*').eq('patient_id',ptId).maybeSingle();
     const bal = wallet?.balance||0;
     _currentWalletId = wallet?.id||null;
-    const balEl=document.getElementById('wal-balance'); if(balEl) balEl.textContent=bal.toLocaleString('en-US',{minimumFractionDigits:2})+' SDG';
-    const bannerEl=document.getElementById('bill-pt-wallet-bal'); if(bannerEl) bannerEl.textContent=bal.toLocaleString('en-US',{minimumFractionDigits:2})+' SDG';
+    const balEl=document.getElementById('wal-balance'); if(balEl) balEl.textContent=bal.toLocaleString('en-US',{minimumFractionDigits:2})+' '+CFG.currency;
+    const bannerEl=document.getElementById('bill-pt-wallet-bal'); if(bannerEl) bannerEl.textContent=bal.toLocaleString('en-US',{minimumFractionDigits:2})+' '+CFG.currency;
     const txnsEl=document.getElementById('wal-txns');
     if(!txnsEl) return;
     if(!wallet){ txnsEl.innerHTML='<div style="font-size:.76rem;color:var(--slate);text-align:center;padding:10px">No wallet activity yet</div>'; return; }
@@ -18113,7 +18113,7 @@ async function submitWalletCredit(){
       p_reference_invoice_id:null, p_shift_id:_activeShift?.id||null, p_notes:'Reception deposit'
     });
     if(error) throw error;
-    toast('👛 Wallet credited '+amt.toFixed(2)+' SDG','ok');
+    toast('👛 Wallet credited '+amt.toFixed(2)+' '+CFG.currency,'ok');
     document.getElementById('wal-credit-amt').value='';
     await loadWalletBalance(_billPt.id);
   } catch(e){ toast(e.message,'err'); }
@@ -18134,8 +18134,8 @@ function recalcInsurance(){
   const fixed=parseFloat(document.getElementById('bill-copay-fixed')?.value)||0;
   const patientPayable=Math.min(total, fixed + total*(pct/100));
   const covered=Math.max(0, total-patientPayable);
-  const ce=document.getElementById('bill-ins-covered'); if(ce) ce.textContent=covered.toFixed(2)+' SDG';
-  const pe=document.getElementById('bill-pt-payable'); if(pe) pe.textContent=patientPayable.toFixed(2)+' SDG';
+  const ce=document.getElementById('bill-ins-covered'); if(ce) ce.textContent=covered.toFixed(2)+' '+CFG.currency;
+  const pe=document.getElementById('bill-pt-payable'); if(pe) pe.textContent=patientPayable.toFixed(2)+' '+CFG.currency;
 }
 // The visible control is a <select> of common providers; the actual value
 // saved/read everywhere else in the billing form (saveInvoice, editInvoice,
@@ -18198,9 +18198,9 @@ function recalcSplitPayment(){
   const totalText=document.getElementById('bill-total')?.textContent||'0';
   const total=parseFloat(totalText.replace(/[^0-9.]/g,''))||0;
   const remaining=total-allocated;
-  const ae=document.getElementById('bill-split-allocated'); if(ae) ae.textContent=allocated.toFixed(2)+' SDG';
+  const ae=document.getElementById('bill-split-allocated'); if(ae) ae.textContent=allocated.toFixed(2)+' '+CFG.currency;
   const re=document.getElementById('bill-split-remaining');
-  if(re){ re.textContent=remaining.toFixed(2)+' SDG'; re.style.color = Math.abs(remaining)<0.01?'var(--green)':(remaining<0?'var(--red)':'var(--slate)'); }
+  if(re){ re.textContent=remaining.toFixed(2)+' '+CFG.currency; re.style.color = Math.abs(remaining)<0.01?'var(--green)':(remaining<0?'var(--red)':'var(--slate)'); }
 }
 
 async function saveInvoice() {
@@ -18230,7 +18230,7 @@ async function saveInvoice() {
     lab_no:_billPt?.lab_no||_billPt?.mrn||'',
     invoice_type:g('bill-type'), invoice_date:g('bill-date')||today(),
     line_items:items, total_amount:subtotal, discount_amount:discount, net_amount:net,
-    currency:'SDG', payment_status:g('bill-status'), payment_method:splitOn?'Split':g('bill-method'),
+    currency:CFG.currency, payment_status:g('bill-status'), payment_method:splitOn?'Split':g('bill-method'),
     insurance_company:insCo, insurance_no:g('bill-ins-no'),
     pre_auth_no:g('bill-preauth'), notes:g('bill-notes'), created_by:currentProfile?.id,
     shift_id:_activeShift?.id||null, insurance_covered:insuranceCovered, patient_payable:patientPayable,
@@ -18277,7 +18277,7 @@ async function finalizeSaveInvoice(payload, editId, overrideAdmin) {
     const linesToWrite = rows.length ? rows : (paidAmt>0 ? [{method:methodMap[document.getElementById('bill-method')?.value]||'cash', amount:paidAmt}] : []);
     for(const line of linesToWrite) {
       await dbWrite('payments','insert',{
-        invoice_id:invId, method:line.method, amount:line.amount, currency:'SDG',
+        invoice_id:invId, method:line.method, amount:line.amount, currency:CFG.currency,
         shift_id:_activeShift?.id||null, received_by:currentProfile?.id, received_by_name:currentProfile?.full_name
       });
       if(line.method==='wallet' && _billPt?.id) {
@@ -18315,7 +18315,7 @@ function clearBillForm() {
   document.getElementById('bill-discount').value='0';
   document.getElementById('bill-paid-amount').value='0';
   ['bill-subtotal','bill-total','bill-balance'].forEach(id=>{
-    const el=document.getElementById(id); if(el) el.textContent='0.00 SDG';
+    const el=document.getElementById(id); if(el) el.textContent='0.00 '+CFG.currency;
   });
   const d=document.getElementById('bill-date'); if(d) d.value=today();
   const insPicker=document.getElementById('bill-ins-co-picker'); if(insPicker) insPicker.value='';
@@ -18337,7 +18337,7 @@ async function voidInvoice(id){
   const {data:inv} = await sb.from('invoices').select('*').eq('id',id).single();
   if(!inv){ toast('Invoice not found','err'); return; }
   if(inv.voided){ toast('Invoice already voided','warn'); return; }
-  requireOverride('Voiding invoice '+(inv.invoice_no||id)+' ('+((inv.net_amount||inv.total_amount||0).toFixed(2))+' SDG) requires admin/manager authorization.', async(admin)=>{
+  requireOverride('Voiding invoice '+(inv.invoice_no||id)+' ('+((inv.net_amount||inv.total_amount||0).toFixed(2))+' '+CFG.currency+') requires admin/manager authorization.', async(admin)=>{
     try {
       await sb.from('invoices').update({voided:true, voided_reason:'Voided by admin authorization', voided_at:new Date().toISOString()}).eq('id',id);
       await dbWrite('billing_audit_logs','insert',{
@@ -18369,7 +18369,7 @@ function submitRefundAmount(){
   if(!id){ toast('No invoice selected','err'); return; }
   if(!amt||amt<=0){ toast('Enter a valid refund amount','err'); return; }
   closeOv('refund-ov');
-  requireOverride('Refunding '+amt.toFixed(2)+' SDG via '+method+' requires admin/manager authorization.', async(admin)=>{
+  requireOverride('Refunding '+amt.toFixed(2)+' '+CFG.currency+' via '+method+' requires admin/manager authorization.', async(admin)=>{
     try {
       const {data:inv} = await sb.from('invoices').select('*').eq('id',id).single();
       await dbWrite('billing_audit_logs','insert',{
@@ -18423,9 +18423,9 @@ async function openBillDetail(id) {
       '<th style="padding:5px 8px;text-align:right">Unit Price</th><th style="padding:5px 8px;text-align:right">Total</th></tr></thead>'+
       '<tbody>'+itemRows+'</tbody></table>'+
       '<div style="background:var(--surface2);border-radius:8px;padding:10px 12px">'+
-      '<div style="display:flex;justify-content:space-between;font-size:.8rem;margin-bottom:4px"><span>Subtotal</span><span>'+((inv.total_amount||0).toLocaleString('en-US',{minimumFractionDigits:2}))+' SDG</span></div>'+
-      (inv.discount_amount?'<div style="display:flex;justify-content:space-between;font-size:.8rem;margin-bottom:4px;color:var(--green)"><span>Discount</span><span>-'+((inv.discount_amount||0).toLocaleString('en-US',{minimumFractionDigits:2}))+' SDG</span></div>':'')+
-      '<div style="display:flex;justify-content:space-between;font-size:1rem;font-weight:800;color:var(--teal);border-top:1px solid var(--border);padding-top:6px;margin-top:4px"><span>NET TOTAL</span><span>'+((inv.net_amount||inv.total_amount||0).toLocaleString('en-US',{minimumFractionDigits:2}))+' SDG</span></div></div>';
+      '<div style="display:flex;justify-content:space-between;font-size:.8rem;margin-bottom:4px"><span>Subtotal</span><span>'+((inv.total_amount||0).toLocaleString('en-US',{minimumFractionDigits:2}))+' '+CFG.currency+'</span></div>'+
+      (inv.discount_amount?'<div style="display:flex;justify-content:space-between;font-size:.8rem;margin-bottom:4px;color:var(--green)"><span>Discount</span><span>-'+((inv.discount_amount||0).toLocaleString('en-US',{minimumFractionDigits:2}))+' '+CFG.currency+'</span></div>':'')+
+      '<div style="display:flex;justify-content:space-between;font-size:1rem;font-weight:800;color:var(--teal);border-top:1px solid var(--border);padding-top:6px;margin-top:4px"><span>NET TOTAL</span><span>'+((inv.net_amount||inv.total_amount||0).toLocaleString('en-US',{minimumFractionDigits:2}))+' '+CFG.currency+'</span></div></div>';
     const insBtn = document.getElementById('ins-claim-btn');
     if(insBtn) insBtn.style.display = inv.insurance_company?'':'none';
     openOv('bill-detail-ov');
@@ -18516,7 +18516,7 @@ async function printInvoice(id) {
       (inv.discount_amount?'<tr style="background:var(--surface2)"><td colspan="3" style="padding:5px 8px;text-align:right;font-size:9pt">Discount</td><td style="padding:5px 8px;text-align:right;font-size:9pt;color:var(--green)">-'+((inv.discount_amount||0).toLocaleString('en-US',{minimumFractionDigits:2}))+'</td></tr>':'')+
       (inv.insurance_company?'<tr style="background:var(--surface2)"><td colspan="3" style="padding:5px 8px;text-align:right;font-size:9pt">Insurance Covered Share</td><td style="padding:5px 8px;text-align:right;font-size:9pt;color:var(--blue)">-'+((inv.insurance_covered||0).toLocaleString('en-US',{minimumFractionDigits:2}))+'</td></tr>':'')+
       '<tr style="background:#d4f1ef"><td colspan="3" style="padding:7px 8px;text-align:right;font-weight:800;font-size:10.5pt">'+(inv.insurance_company?'PATIENT PAYABLE':'NET TOTAL')+'</td>'+
-      '<td style="padding:7px 8px;text-align:right;font-weight:900;font-size:10.5pt;color:#0b7a75">'+((inv.insurance_company?(inv.patient_payable||inv.net_amount):(inv.net_amount||inv.total_amount))||0).toLocaleString('en-US',{minimumFractionDigits:2})+' SDG</td></tr>'+
+      '<td style="padding:7px 8px;text-align:right;font-weight:900;font-size:10.5pt;color:#0b7a75">'+((inv.insurance_company?(inv.patient_payable||inv.net_amount):(inv.net_amount||inv.total_amount))||0).toLocaleString('en-US',{minimumFractionDigits:2})+' '+CFG.currency+'</td></tr>'+
       '</tfoot></table>'+
       '<div style="display:flex;justify-content:space-between;align-items:center;background:#f1f5f9;padding:10px 14px;border-radius:8px;margin-bottom:16px">'+
       '<div><span style="font-size:9pt;color:#64748b">Payment Status: </span>'+(inv.voided?'<span class="pay-tag-void">VOID</span>':paymentTag(inv.payment_status))+'</div>'+
@@ -18557,7 +18557,7 @@ async function printInvoiceThermal(id) {
       '</div>'+
       '<table>'+itemLines+'</table>'+
       '<div style="border-top:1px dashed #000;margin-top:4px;padding-top:4px;display:flex;justify-content:space-between;font-weight:800;font-size:9.5pt">'+
-      '<span>TOTAL</span><span>'+((inv.net_amount||inv.total_amount||0).toFixed(2))+' SDG</span></div>'+
+      '<span>TOTAL</span><span>'+((inv.net_amount||inv.total_amount||0).toFixed(2))+' '+CFG.currency+'</span></div>'+
       '<div style="text-align:center;margin-top:6px;font-size:7.5pt">'+(inv.voided?'VOIDED':(inv.payment_status||'').toUpperCase())+'</div>'+
       '<div style="text-align:center;margin-top:8px;font-size:7pt">Thank you</div>';
     openPrintWinThermal(html, 'Receipt - '+(inv.invoice_no||''));
@@ -18582,7 +18582,7 @@ function renderPricePicker(prices) {
       'onmouseover="this.style.borderColor=\x27var(--teal)\x27;this.style.background=\x27var(--teal-lt)\x27" onmouseout="this.style.borderColor=\x27var(--border)\x27;this.style.background=\x27\x27">'+
       '<div><div style="font-size:.78rem;font-weight:600">'+escapeHtml(p.name||'—')+'</div>'+
       '<div><span class="bdg" style="background:'+(catColors[p.category]||'#f1f5f9')+';font-size:.62rem">'+escapeHtml(p.category||'')+'</span></div></div>'+
-      '<div style="font-weight:700;color:var(--teal);font-size:.84rem;white-space:nowrap">'+((p.price||0).toLocaleString())+' SDG</div>'+
+      '<div style="font-weight:700;color:var(--teal);font-size:.84rem;white-space:nowrap">'+((p.price||0).toLocaleString())+' '+CFG.currency+'</div>'+
       '</div>'
     ).join('')+'</div>';
 }
@@ -18640,7 +18640,7 @@ function renderPriceTable(prices) {
       '<td style="font-family:DM Mono,monospace;font-size:.7rem;color:var(--teal)">'+escapeHtml(p.code||'—')+'</td>'+
       '<td style="font-weight:500">'+escapeHtml(p.name||'—')+'</td>'+
       '<td><span class="bdg" style="background:'+(catColors[p.category]||'#f1f5f9')+';font-size:.65rem">'+escapeHtml(p.category||'—')+'</span></td>'+
-      '<td style="text-align:right;font-weight:700;color:var(--teal)">'+((p.price||0).toLocaleString('en-US',{minimumFractionDigits:2}))+' '+escapeHtml(p.currency||'SDG')+'</td>'+
+      '<td style="text-align:right;font-weight:700;color:var(--teal)">'+((p.price||0).toLocaleString('en-US',{minimumFractionDigits:2}))+' '+escapeHtml(p.currency||CFG.currency)+'</td>'+
       '<td><div class="acts">'+
         '<button class="btn btn-s btn-xs" onclick="editPrice(\''+p.id+'\')">✏️</button>'+
         '<button class="btn btn-r btn-xs" onclick="deletePrice(\''+p.id+'\')">✕</button>'+
@@ -18676,7 +18676,7 @@ async function savePrice() {
   if(!g('price-name')){toast('Item name required','err');return;}
   if(!g('price-amount')){toast('Price required','err');return;}
   const editId = g('price-edit-id');
-  const payload = {name:g('price-name'),category:g('price-cat'),code:g('price-code'),price:parseFloat(g('price-amount'))||0,currency:g('price-currency')||'SDG',notes:g('price-notes')};
+  const payload = {name:g('price-name'),category:g('price-cat'),code:g('price-code'),price:parseFloat(g('price-amount'))||0,currency:g('price-currency')||CFG.currency,notes:g('price-notes')};
   try {
     if(editId) {
       await sb.from('price_list').update(payload).eq('id',editId);
@@ -18697,7 +18697,7 @@ async function editPrice(id) {
   document.getElementById('price-cat').value = p.category||'lab';
   document.getElementById('price-code').value = p.code||'';
   document.getElementById('price-amount').value = p.price||0;
-  document.getElementById('price-currency').value = p.currency||'SDG';
+  document.getElementById('price-currency').value = p.currency||CFG.currency;
   document.getElementById('price-notes').value = p.notes||'';
   document.getElementById('price-form-title').textContent='✏️ Edit Price Item';
   document.getElementById('price-form-card')?.scrollIntoView({behavior:'smooth'});
@@ -18723,7 +18723,7 @@ async function printPriceList() {
       '<td style="padding:4px 8px;font-size:8.5pt;font-family:monospace">'+escapeHtml(p.code||'—')+'</td>'+
       '<td style="padding:4px 8px;font-size:9pt">'+escapeHtml(p.name||'—')+'</td>'+
       '<td style="padding:4px 8px;font-size:8.5pt">'+(p.category||'—')+'</td>'+
-      '<td style="padding:4px 8px;font-size:9pt;text-align:right;font-weight:700">'+((p.price||0).toLocaleString('en-US',{minimumFractionDigits:2}))+' '+(p.currency||'SDG')+'</td></tr>';
+      '<td style="padding:4px 8px;font-size:9pt;text-align:right;font-weight:700">'+((p.price||0).toLocaleString('en-US',{minimumFractionDigits:2}))+' '+(p.currency||CFG.currency)+'</td></tr>';
   }).join('');
   const html=printHeader('Official Price List — Friendship Hospital')+
     '<div style="font-size:8pt;color:#64748b;margin-bottom:10px">Effective Date: '+today()+' | All prices in Sudanese Pounds (SDG) unless stated</div>'+
@@ -19215,7 +19215,7 @@ async function seedDefaultPrices() {
     const BATCH = 50;
     let inserted = 0;
     for(let i=0; i<prices.length; i+=BATCH) {
-      const batch = prices.slice(i,i+BATCH);
+      const batch = prices.slice(i,i+BATCH).map(p=>({...p,currency:CFG.currency}));
       await sb.from('price_list').upsert(batch,{onConflict:'code',ignoreDuplicates:true});
       inserted += batch.length;
     }
