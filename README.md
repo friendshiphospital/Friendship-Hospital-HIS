@@ -99,7 +99,7 @@ VALUES ('<uuid>', 'Administrator', 'admin', 'Administration');
 ```
 FriendshipHospital-HIS/
 ├── FriendshipHospital_HIS_v2.6_FINAL.html   ← Main application
-├── FriendshipHospital_HIS_v1_Schema.sql      ← Base database schema (38 tables)
+├── FriendshipHospital_HIS_v1_Schema.sql      ← Base database schema (67 tables)
 ├── migration_v2_receptionist.sql             ← Run 1st
 ├── migration_v2.2_nursing.sql                ← Run 2nd
 ├── migration_v2.4_lab.sql                    ← Run 3rd

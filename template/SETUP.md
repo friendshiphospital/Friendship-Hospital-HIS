@@ -41,11 +41,32 @@ pass described in the PR/commit that created this folder.
 1. **Create a new Supabase project** (your own — do not reuse Friendship
    Hospital's project). Note its Project URL and `anon public` API key
    (Settings → API). Never use the `service_role` key client-side.
-2. **Run the migrations in order** in the Supabase SQL Editor. As of
-   2026-08-24, `migrations/` holds 46 files, `migration_v2.8_rls_security.sql`
-   through `migration_v2.52_rls_gap_closure.sql`. Run them **in numeric
-   version order**, not filename string order (`v2.9` sorts before `v2.10`
-   alphabetically the wrong way in a plain file listing):
+2. **Run `migrations/FriendshipHospital_HIS_v1_Schema.sql` first** — this is
+   the mandatory base schema (67 tables, constraints, indexes, RLS policies,
+   functions, triggers) that every incremental migration below assumes
+   already exists. It's a real schema-only export from Friendship Hospital's
+   live Supabase project (zero patient data), not a reconstruction. On a
+   completely empty Supabase project, run this before anything else in this
+   checklist. Two of its `CREATE EXTENSION` statements
+   (`pg_cron`, `pg_net`) require those extensions to be enabled for your
+   project — Supabase enables them by default on new projects, but if either
+   errors out as unavailable, enable it under Database → Extensions first
+   and re-run.
+   - If your SQL Editor rejects the whole file with something like
+     `relation "AS" does not exist` (a parser-level error, not a real
+     missing-table error), that's a paste getting corrupted on its way into
+     a browser code editor, not a problem with the file — split it into
+     smaller chunks and paste each separately. Confirmed reproducible this
+     way once; splitting the same unmodified file into 5 pieces (by object
+     type: extensions/sequences/tables/constraints, FK/CHECK constraints,
+     indexes, RLS/functions/triggers, policies) and running each on its own
+     applied every statement with zero errors.
+3. **Then run the incremental migrations in order** in the Supabase SQL
+   Editor. As of 2026-08-24, `migrations/` also holds 46 numbered files,
+   `migration_v2.8_rls_security.sql` through `migration_v2.52_rls_gap_closure.sql`.
+   Run them **in numeric version order**, not filename string order (`v2.9`
+   sorts before `v2.10` alphabetically the wrong way in a plain file
+   listing):
    ```
    v2.8 → v2.9 → v2.10 → v2.11 → v2.12 → v2.13 → v2.14 → v2.15 → v2.16 →
    v2.17 → v2.18 → v2.19 → v2.20 → v2.21 → v2.22 → v2.23 → v2.24 → v2.25 →
@@ -59,15 +80,18 @@ pass described in the PR/commit that created this folder.
    `migration_v2.45_followup_reminders.sql`) — both are independent, order
    between the two of them doesn't matter, but both must run after every
    lower-numbered file and before `v2.46`.
-   - Note: there is no base `FriendshipHospital_HIS_v1_Schema.sql` in this
-     checkout (see `CLAUDE.md`) — if your Supabase project is completely
-     empty, you'll need the original v1 schema file (tables like `patients`,
-     `staff`, `invoices`, etc.) before these incremental migrations will apply
-     cleanly. These migrations assume that base schema already exists.
+   - `migration_v2.46_backup_verify_cron.sql` has two placeholders
+     (`<YOUR-PROJECT-REF>`, `<YOUR-CRON-SECRET>`) that must be hand-edited
+     before running it — it is not paste-and-run like the others. See that
+     file's own header comment for what to fill in and when.
    - `migration_v2.52_rls_gap_closure.sql` is the most recently added file —
      it closes a real security gap (15 tables had zero row-level security
      before it). **Do not skip it.**
-3. **Deploy the Edge Functions** from `../supabase/functions/` using the
+   - This full chain — base schema through `v2.52` — has been verified to
+     apply cleanly, in this exact order, both on a completely empty local
+     Postgres database and on a real, empty Supabase project, with zero
+     manual intervention beyond the `v2.46` placeholders above.
+4. **Deploy the Edge Functions** from `../supabase/functions/` using the
    Supabase CLI (`supabase functions deploy <name>` for each of the 5
    folders: `create-staff-account`, `send-email`, `send-sms`,
    `reception-shift-notify`, `backup-verify`). `SUPABASE_URL` and
@@ -94,25 +118,25 @@ pass described in the PR/commit that created this folder.
    sandbox address like `onboarding@resend.dev` also works as a stopgap, but
    typically only delivers to the account owner's own inbox until a domain is
    verified).
-4. **Deploy `index.html`** — upload it directly to your static host (e.g.
+5. **Deploy `index.html`** — upload it directly to your static host (e.g.
    Vercel). No build step.
-5. **Open the app** → the "⚙ Supabase Configuration" panel on the login
+6. **Open the app** → the "⚙ Supabase Configuration" panel on the login
    screen → enter your new project's URL and `anon public` key → Save &
    Connect.
-6. **Create your first admin staff account** directly in Supabase: create an
+7. **Create your first admin staff account** directly in Supabase: create an
    Auth user (Authentication → Users → Add User), then insert a matching row
    into the `staff` table with `role: 'admin'` and `user_id` set to that
    Auth user's UUID. (Once you have one admin, the in-app "Staff" page and
    the `create-staff-account` Edge Function can be used for everyone else.)
-7. **Sign in as that admin** → go to **Settings** → fill in:
+8. **Sign in as that admin** → go to **Settings** → fill in:
    - **Hospital Name** and **Address** (shown on the login screen, sidebar,
      and every printed report/header — blank until you set this).
    - **Currency** (SDG / USD / SAR / OMR).
    - Phone, email, lab number prefix, and the other Settings fields as needed.
-8. Optionally use **Price List → Load Default Prices** to seed a starting fee
+9. Optionally use **Price List → Load Default Prices** to seed a starting fee
    schedule (see "Reference data kept" below) — it's inserted using whichever
-   currency you configured in step 7, not hardcoded to SDG.
-9. Done — the instance is ready for real use under its own identity.
+   currency you configured in step 8, not hardcoded to SDG.
+10. Done — the instance is ready for real use under its own identity.
 
 ## What was changed vs. the live Friendship Hospital codebase
 
