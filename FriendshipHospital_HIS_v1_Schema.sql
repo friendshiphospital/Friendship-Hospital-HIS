@@ -96,7 +96,7 @@ CREATE TABLE public.appointments (
 );
 
 CREATE TABLE public.audit_logs (
-  id bigint NOT NULL,
+  id bigint NOT NULL DEFAULT nextval('public.audit_logs_id_seq'::regclass),
   table_name text NOT NULL,
   record_id text,
   patient_id text,
@@ -109,7 +109,7 @@ CREATE TABLE public.audit_logs (
 );
 
 CREATE TABLE public.bed_transfers (
-  id bigint NOT NULL,
+  id bigint NOT NULL DEFAULT nextval('public.bed_transfers_id_seq'::regclass),
   admission_id uuid NOT NULL,
   patient_id uuid,
   from_ward text,
@@ -137,7 +137,7 @@ CREATE TABLE public.beds (
 );
 
 CREATE TABLE public.billing_audit_logs (
-  id bigint NOT NULL,
+  id bigint NOT NULL DEFAULT nextval('public.billing_audit_logs_id_seq'::regclass),
   event_type text NOT NULL,
   invoice_id uuid,
   shift_id uuid,
@@ -320,7 +320,7 @@ CREATE TABLE public.critical_values (
 );
 
 CREATE TABLE public.delta_check_log (
-  id bigint NOT NULL,
+  id bigint NOT NULL DEFAULT nextval('public.delta_check_log_id_seq'::regclass),
   patient_id uuid NOT NULL,
   result_table text NOT NULL,
   department text NOT NULL,
@@ -445,7 +445,7 @@ CREATE TABLE public.doctors (
 );
 
 CREATE TABLE public.follow_ups (
-  id bigint NOT NULL,
+  id bigint NOT NULL DEFAULT nextval('public.follow_ups_id_seq'::regclass),
   patient_mrn text NOT NULL,
   origin_patient_id uuid,
   scheduled_by uuid,
@@ -481,7 +481,7 @@ CREATE TABLE public.infection_flags (
 );
 
 CREATE TABLE public.instrument_messages (
-  id bigint NOT NULL,
+  id bigint NOT NULL DEFAULT nextval('public.instrument_messages_id_seq'::regclass),
   machine_id text NOT NULL,
   protocol text NOT NULL,
   raw_message text NOT NULL,
@@ -501,7 +501,7 @@ CREATE TABLE public.instrument_messages (
 );
 
 CREATE TABLE public.inventory_batches (
-  id bigint NOT NULL,
+  id bigint NOT NULL DEFAULT nextval('public.inventory_batches_id_seq'::regclass),
   item_id uuid NOT NULL,
   batch_no text,
   quantity numeric NOT NULL DEFAULT 0,
@@ -585,7 +585,7 @@ CREATE TABLE public.lab_reference_ranges (
 );
 
 CREATE TABLE public.lab_result_history (
-  id bigint NOT NULL,
+  id bigint NOT NULL DEFAULT nextval('public.lab_result_history_id_seq'::regclass),
   patient_id uuid NOT NULL,
   mrn text,
   department text NOT NULL,
@@ -751,7 +751,7 @@ CREATE TABLE public.price_list (
 );
 
 CREATE TABLE public.purchase_order_items (
-  id bigint NOT NULL,
+  id bigint NOT NULL DEFAULT nextval('public.purchase_order_items_id_seq'::regclass),
   po_id bigint NOT NULL,
   item_id uuid,
   item_name_snapshot text NOT NULL,
@@ -760,7 +760,7 @@ CREATE TABLE public.purchase_order_items (
 );
 
 CREATE TABLE public.purchase_orders (
-  id bigint NOT NULL,
+  id bigint NOT NULL DEFAULT nextval('public.purchase_orders_id_seq'::regclass),
   po_no text NOT NULL,
   supplier text,
   status text NOT NULL DEFAULT 'draft'::text,
@@ -963,7 +963,7 @@ CREATE TABLE public.results_chemistry (
 );
 
 CREATE TABLE public.results_chemistry_history (
-  id bigint NOT NULL,
+  id bigint NOT NULL DEFAULT nextval('public.results_chemistry_history_id_seq'::regclass),
   patient_id uuid NOT NULL,
   analyzer text,
   analysis_date date,
@@ -1088,7 +1088,7 @@ CREATE TABLE public.results_hematology (
 );
 
 CREATE TABLE public.results_hematology_history (
-  id bigint NOT NULL,
+  id bigint NOT NULL DEFAULT nextval('public.results_hematology_history_id_seq'::regclass),
   patient_id uuid NOT NULL,
   analyzer text,
   analysis_date date,
@@ -1343,7 +1343,7 @@ CREATE TABLE public.settings (
 );
 
 CREATE TABLE public.sms_log (
-  id bigint NOT NULL,
+  id bigint NOT NULL DEFAULT nextval('public.sms_log_id_seq'::regclass),
   patient_id uuid,
   phone text NOT NULL,
   message text NOT NULL,
@@ -1374,7 +1374,7 @@ CREATE TABLE public.staff (
 );
 
 CREATE TABLE public.stock_requisitions (
-  id bigint NOT NULL,
+  id bigint NOT NULL DEFAULT nextval('public.stock_requisitions_id_seq'::regclass),
   requesting_department text NOT NULL,
   item_id uuid NOT NULL,
   qty_requested numeric NOT NULL,
