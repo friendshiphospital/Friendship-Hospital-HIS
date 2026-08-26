@@ -51,6 +51,18 @@ pass described in the PR/commit that created this folder.
 1. **Create a new Supabase project** (your own — do not reuse Friendship
    Hospital's project). Note its Project URL and `anon public` API key
    (Settings → API). Never use the `service_role` key client-side.
+   - ⚠️ **Don't enable any extra Dashboard options, extensions, or security
+     features before running the schema file below** — start from a
+     genuinely untouched project. Confirmed live (2026-08-26): a project
+     where `ensure_rls` (a Postgres event trigger) had been turned on via
+     the Dashboard before the schema file ran caused `ERROR: 42710: event
+     trigger "ensure_rls" already exists`, because the schema file creates
+     that same-named trigger itself as part of its own RLS-enforcement
+     setup. The fix in that case was `drop event trigger if exists
+     ensure_rls;` and then re-running the schema file — but avoiding this
+     collision entirely by not touching Dashboard options first is simpler,
+     and keeps every hospital's project identically configured by the
+     schema file alone rather than by whatever was clicked beforehand.
 2. **Run `migrations/FriendshipHospital_HIS_v1_Schema.sql` first** — this is
    the mandatory base schema (67 tables, constraints, indexes, RLS policies,
    functions, triggers) that every incremental migration below assumes
