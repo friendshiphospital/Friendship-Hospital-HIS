@@ -14,22 +14,32 @@ pass described in the PR/commit that created this folder.
 
 - `index.html` — the full single-file application (HTML/CSS/JS together, matching
   the live app's architecture — there is no build step).
-  - ⚠️ **Known staleness (as of 2026-08-24):** this file was cut on 2026-08-14
-    (commit `1cea1a3`) and has **not** been resynced since. The live root
-    `index.html` has since grown by ~1,400 lines — doctor-type/specialty
-    consultation-fee routing, a shared Procedures-ordering component, and a
-    Billing Report section — none of which are in this copy yet. Spot-checked
-    (2026-08-24) that this later growth didn't reintroduce any hardcoded
-    hospital-identity or currency strings (it already follows the same
-    `CFG.name`/`CFG.currency` patterns this template's own de-identification
-    pass established), so the *de-identification is still valid* — this file
-    is just missing recent *features*, not carrying new identity leaks. Before
-    using this template for a real new deployment, either accept it without
-    those newer features, or ask Claude Code to re-cut `template/index.html`
-    from the current root `index.html` (same de-identification pass — no new
-    fixes are expected to be needed, just a resync).
+  - Resynced 2026-08-26 against root `index.html` via a 3-way merge (base:
+    the pre-template-creation commit; ours: the original 2026-08-14
+    de-identified snapshot; theirs: current root), so it now carries every
+    feature root has gained since — doctor-type/specialty consultation-fee
+    routing, the shared Procedures-ordering component, the Billing Report
+    section, and root's `CFG.currency` hardcoding fixes — while keeping the
+    de-identification intact: `CFG.name`/`CFG.addr` default to `''` (not a
+    hospital name), and `printHeader()`/`openPrintWin()`/thermal-receipt/
+    sick-leave/referral all fall back to generic placeholder text
+    (`YOUR HOSPITAL NAME`, `Set hospital address in Settings`, `Hospital`)
+    when unconfigured, instead of ever showing Friendship Hospital's name.
+    Verified: `node --check` clean, function list is root's 867 plus 2
+    template-only onboarding helpers (`applyCurrencyDefaults`,
+    `applyHospitalIdentity`), full-file grep shows zero remaining
+    `Friendship Hospital`/`Al Damazin`/`Blue Nile` matches outside one
+    unrelated insurance-dropdown sample option and one code comment, and a
+    live run against the mocked test harness confirms both an unconfigured
+    project (shows the generic placeholders) and a configured one (shows
+    the custom name/address/currency) render correctly.
+  - **Keeping it in sync going forward:** this is a snapshot, not a
+    symlink, so it will drift again as root gains features. There is no
+    automatic sync — re-run the same 3-way-merge resync (or ask Claude Code
+    to do it) periodically, or at minimum before using this template for a
+    new deployment, rather than assuming it's current.
 - `migrations/` — every `migration_v2*.sql` file from the repo (currently 46
-  files, `v2.8` through `v2.52`, kept in sync as of 2026-08-24), unmodified
+  files, `v2.8` through `v2.52`, kept in sync as of 2026-08-26), unmodified
   (see "Data audit" below for why no edits were needed).
 - `CLAUDE.md`, `README.md`, `CHANGELOG.md`, `BLOOD_BANK_WALKTHROUGH.md`,
   `proposed-features.md`, `tests-README.md` — full contents of every `.md` file
@@ -62,7 +72,7 @@ pass described in the PR/commit that created this folder.
      indexes, RLS/functions/triggers, policies) and running each on its own
      applied every statement with zero errors.
 3. **Then run the incremental migrations in order** in the Supabase SQL
-   Editor. As of 2026-08-24, `migrations/` also holds 46 numbered files,
+   Editor. As of 2026-08-26, `migrations/` also holds 46 numbered files,
    `migration_v2.8_rls_security.sql` through `migration_v2.52_rls_gap_closure.sql`.
    Run them **in numeric version order**, not filename string order (`v2.9`
    sorts before `v2.10` alphabetically the wrong way in a plain file
