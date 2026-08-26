@@ -8931,7 +8931,7 @@ async function loadBedConfig() {
     const {data}=await sb.from('beds').select('*').order('ward').order('room').order('bed_number');
     if(!data?.length){ body.innerHTML='<div style="padding:12px;font-size:.78rem;color:var(--slate)">No beds configured</div>'; return; }
     body.innerHTML='<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Ward</th><th>Room</th><th>Bed</th><th>Status</th><th></th></tr></thead><tbody>'+
-      data.map(b=>'<tr><td>'+escapeHtml(b.ward)+'</td><td>'+escapeHtml(b.room)+'</td><td>'+escapeHtml(b.bed_number)+'</td><td>'+statusBadge(b.status)+'</td><td><button class="btn btn-r btn-xs" onclick="deleteBed(\x27'+b.id+'\x27)">✕</button></td></tr>').join('')+
+      data.map(b=>'<tr><td>'+escapeHtml(b.ward)+'</td><td>'+escapeHtml(b.room)+'</td><td>'+escapeHtml(b.bed_number)+'</td><td>'+statusBadge(b.status)+'</td><td><button class="btn btn-r btn-xs" onclick="deleteBed(\x27'+escAttr(b.id)+'\x27)">✕</button></td></tr>').join('')+
       '</tbody></table></div>';
   } catch(e){ body.innerHTML='<div style="padding:10px;color:var(--red);font-size:.78rem">'+escapeHtml(e.message)+'</div>'; }
 }
@@ -9949,10 +9949,10 @@ function renderAdmTable(data) {
       '<td style="font-size:.79rem">'+escapeHtml(a.admitting_doctor||'—')+'</td>'+
       '<td style="font-size:.78rem;max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+escapeHtml(a.primary_diagnosis||'—')+'</td>'+
       '<td style="font-size:.78rem">'+los(a)+'</td><td>'+statusBadge(a.status)+'</td>'+
-      '<td><div class="acts"><button class="btn btn-s btn-xs" onclick="openAdmDetail(\x27'+a.id+'\x27)">📋</button>'+
-      '<button class="btn btn-s btn-xs" onclick="openDischarge(\x27'+a.id+'\x27)">🏥</button>'+
-      '<button class="btn btn-s btn-xs" onclick="openPreop(\x27'+a.id+'\x27,\x27'+(a.patient_id||'')+'\x27)">📋 Pre-op</button>'+
-      '<button class="btn btn-p btn-xs" onclick="openOtForAdm(\x27'+a.patient_id+'\x27,\x27'+a.id+'\x27)">🔪</button>'+
+      '<td><div class="acts"><button class="btn btn-s btn-xs" onclick="openAdmDetail(\x27'+escAttr(a.id)+'\x27)">📋</button>'+
+      '<button class="btn btn-s btn-xs" onclick="openDischarge(\x27'+escAttr(a.id)+'\x27)">🏥</button>'+
+      '<button class="btn btn-s btn-xs" onclick="openPreop(\x27'+escAttr(a.id)+'\x27,\x27'+escAttr((a.patient_id||''))+'\x27)">📋 Pre-op</button>'+
+      '<button class="btn btn-p btn-xs" onclick="openOtForAdm(\x27'+escAttr(a.patient_id)+'\x27,\x27'+escAttr(a.id)+'\x27)">🔪</button>'+
       '</div></td></tr>').join('')+'</tbody></table></div>';
 }
 function filterAdmList(q) {
@@ -10114,8 +10114,8 @@ function renderBedGrid() {
     // active infection flag (Occupied/Discharge Pending only).
     const isoCls=b._isolation?' bed-isolation':'';
     const isoMarker=b._isolation?'<div class="bed-tile-iso" title="Active isolation precaution — '+escAttr(b._isolation)+'">☣ '+escapeHtml(b._isolation)+'</div>':'';
-    return '<div class="bed-tile '+cls+slaCls+isoCls+'" onclick="bedTileClick(\x27'+b.id+'\x27)">'+
-      '<div class="bed-tile-menu" onclick="event.stopPropagation();openBedStatusMenu(event,\x27'+b.id+'\x27)">⋮</div>'+
+    return '<div class="bed-tile '+cls+slaCls+isoCls+'" onclick="bedTileClick(\x27'+escAttr(b.id)+'\x27)">'+
+      '<div class="bed-tile-menu" onclick="event.stopPropagation();openBedStatusMenu(event,\x27'+escAttr(b.id)+'\x27)">⋮</div>'+
       isoMarker+
       '<div class="bed-tile-loc">'+escapeHtml(b.ward)+' · '+escapeHtml(b.room)+'</div>'+
       '<div class="bed-tile-num">Bed '+escapeHtml(b.bed_number)+'</div>'+
@@ -10199,7 +10199,7 @@ async function searchAdmPatients(q) {
     const {data}=await sb.from('patients').select('id,name,first_name,last_name,mrn,visit_no,age,age_unit,sex,patient_type').or('name.ilike.%'+q+'%,mrn.ilike.%'+q+'%,visit_no.ilike.%'+q+'%,phone.ilike.%'+q+'%').limit(8);
     if(!data?.length){ res.style.display='none'; return; }
     res.style.display='block';
-    res.innerHTML=data.map(p=>'<div onclick="selectAdmPatient('+JSON.stringify(p).replace(/"/g,'&quot;')+')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:.81rem" onmouseover="this.style.background=\x27#f0f9ff\x27" onmouseout="this.style.background=\x27#fff\x27"><strong>'+escapeHtml(p.name||fullName(p))+'</strong> <span style="color:var(--slate);font-size:.72rem">'+escapeHtml(p.mrn||'')+' · '+(p.age||'?')+(p.age_unit||'')+'y / '+(p.sex||'')+'</span></div>').join('');
+    res.innerHTML=data.map(p=>'<div onclick="selectAdmPatient('+JSON.stringify(p).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:.81rem" onmouseover="this.style.background=\x27#f0f9ff\x27" onmouseout="this.style.background=\x27#fff\x27"><strong>'+escapeHtml(p.name||fullName(p))+'</strong> <span style="color:var(--slate);font-size:.72rem">'+escapeHtml(p.mrn||'')+' · '+(p.age||'?')+(p.age_unit||'')+'y / '+(p.sex||'')+'</span></div>').join('');
   } catch(e){}
 }
 function selectAdmPatient(p) {
@@ -10563,11 +10563,11 @@ async function loadOTSchedule() {
     setText('ots-inprog',all.filter(a=>a.status==='In Progress').length); setText('ots-emerg',all.filter(a=>a.operation_type==='Emergency').length);
     if(!all.length){ body.innerHTML='<div class="empty-state"><div class="empty-icon">🔪</div><div class="empty-title">No operations scheduled</div></div>'; return; }
     body.innerHTML=all.map(b=>'<div class="ot-time-card"><div class="ot-time-slot">'+escapeHtml(b.start_time||'—')+'</div><div class="ot-info"><div class="ot-op">'+escapeHtml(b.operation_name||'—')+'</div><div class="ot-meta">'+escapeHtml(b.patients?.name||fullName(b.patients)||'—')+' · '+escapeHtml(b.surgeon||'—')+' · '+escapeHtml(b.theatre_room||'—')+'</div><div class="ot-meta">Anaest: '+escapeHtml(b.anaesthetist||'—')+' · '+escapeHtml(b.anaesthesia_type||'—')+' · ASA '+escapeHtml(b.asa_class||'—')+'</div></div><div>'+statusBadge(b.status)+'</div><div class="ot-acts">'+
-      '<button class="btn btn-s btn-xs" onclick="openWhoChecklist(\''+b.id+'\')">☑ WHO Checklist</button>'+
-      (b.status==='Scheduled'?'<button class="btn btn-p btn-xs" onclick="startOperation(\''+b.id+'\')">▶ Start</button>':'')+
-      (b.status==='In Progress'?'<button class="btn btn-p btn-xs" style="background:var(--green)" onclick="openPostop(\''+b.id+'\')">✅ Done</button>':'')+
-      '<button class="btn btn-s btn-xs" onclick="openPostop(\''+b.id+'\')">📝</button>'+
-      (b.status==='Scheduled'?'<button class="btn btn-r btn-xs" onclick="cancelOperation(\''+b.id+'\')">✕</button>':'')+
+      '<button class="btn btn-s btn-xs" onclick="openWhoChecklist(\''+escAttr(b.id)+'\')">☑ WHO Checklist</button>'+
+      (b.status==='Scheduled'?'<button class="btn btn-p btn-xs" onclick="startOperation(\''+escAttr(b.id)+'\')">▶ Start</button>':'')+
+      (b.status==='In Progress'?'<button class="btn btn-p btn-xs" style="background:var(--green)" onclick="openPostop(\''+escAttr(b.id)+'\')">✅ Done</button>':'')+
+      '<button class="btn btn-s btn-xs" onclick="openPostop(\''+escAttr(b.id)+'\')">📝</button>'+
+      (b.status==='Scheduled'?'<button class="btn btn-r btn-xs" onclick="cancelOperation(\''+escAttr(b.id)+'\')">✕</button>':'')+
       '</div></div>').join('');
   } catch(e){ body.innerHTML='<div style="padding:14px;color:var(--red);font-size:.78rem">'+escapeHtml(e.message)+'</div>'; }
 }
@@ -10740,7 +10740,7 @@ async function searchOtPatients(q) {
     const f=data?.filter(a=>(a.patients?.name||fullName(a.patients)||'').toLowerCase().includes(q.toLowerCase())||(a.admission_no||'').toLowerCase().includes(q.toLowerCase()));
     if(!f?.length){ res.style.display='none'; return; }
     res.style.display='block';
-    res.innerHTML=f.map(a=>'<div onclick="selectOtPatient('+JSON.stringify({patient_id:a.patient_id,admission_id:a.id,name:a.patients?.name||fullName(a.patients),ward:a.ward,bed:a.bed,admission_no:a.admission_no}).replace(/"/g,'&quot;')+')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:.81rem" onmouseover="this.style.background=\\x27#f0f9ff\\x27" onmouseout="this.style.background=\\x27#fff\\x27"><strong>'+escapeHtml(a.patients?.name||fullName(a.patients))+'</strong> <span style="color:var(--slate);font-size:.72rem">'+escapeHtml(a.admission_no)+' · '+escapeHtml(a.ward)+'/'+escapeHtml(a.bed)+'</span></div>').join('');
+    res.innerHTML=f.map(a=>'<div onclick="selectOtPatient('+JSON.stringify({patient_id:a.patient_id,admission_id:a.id,name:a.patients?.name||fullName(a.patients),ward:a.ward,bed:a.bed,admission_no:a.admission_no}).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:.81rem" onmouseover="this.style.background=\\x27#f0f9ff\\x27" onmouseout="this.style.background=\\x27#fff\\x27"><strong>'+escapeHtml(a.patients?.name||fullName(a.patients))+'</strong> <span style="color:var(--slate);font-size:.72rem">'+escapeHtml(a.admission_no)+' · '+escapeHtml(a.ward)+'/'+escapeHtml(a.bed)+'</span></div>').join('');
   } catch(e){}
 }
 function selectOtPatient(p) {
@@ -11421,7 +11421,7 @@ function searchIcd10(query,target){
   if(q.length<2){ box.style.display='none'; return; }
   const matches=ICD10_CATALOG.filter(e=>e.code.toLowerCase().startsWith(q)||e.desc.toLowerCase().includes(q)).slice(0,8);
   if(!matches.length){ box.style.display='none'; return; }
-  box.innerHTML=matches.map(e=>'<div onmousedown="selectIcd10(\''+e.code+'\',\''+escAttr(e.desc)+'\')" style="padding:7px 10px;cursor:pointer;border-bottom:1px solid var(--border);font-size:.76rem" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'"><span style="font-weight:800;color:var(--teal)">'+escapeHtml(e.code)+'</span> <span style="color:var(--ink)">'+escapeHtml(e.desc)+'</span></div>').join('');
+  box.innerHTML=matches.map(e=>'<div onmousedown="selectIcd10(\''+escAttr(e.code)+'\',\''+escAttr(e.desc)+'\')" style="padding:7px 10px;cursor:pointer;border-bottom:1px solid var(--border);font-size:.76rem" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'"><span style="font-weight:800;color:var(--teal)">'+escapeHtml(e.code)+'</span> <span style="color:var(--ink)">'+escapeHtml(e.desc)+'</span></div>').join('');
   box.style.display='block';
 }
 function hideIcd10Results(target){
@@ -12037,7 +12037,7 @@ async function loadActiveOrders() {
       let viewBtn='';
       if(o.canView&&o.order_type==='Lab'){
         const dept=resolveDeptFullNameForTest(o.order_detail);
-        if(dept) viewBtn='<button class="btn btn-s btn-xs" onclick="printResultByDept(\x27'+_docPt.id+'\x27,\x27'+dept+'\x27)">\ud83d\udc41 View Result</button>';
+        if(dept) viewBtn='<button class="btn btn-s btn-xs" onclick="printResultByDept(\x27'+escAttr(_docPt.id)+'\x27,\x27'+dept+'\x27)">\ud83d\udc41 View Result</button>';
       } else if(o.canView&&o.order_type==='Radiology'&&o.radRequestId){
         viewBtn='<button class="btn btn-s btn-xs" onclick="printRadReportById(\x27'+o.radRequestId+'\x27)">\ud83d\udc41 View Report</button>';
       }
@@ -12049,7 +12049,7 @@ async function loadActiveOrders() {
       '<span style="font-size:.68rem;color:var(--slate);white-space:nowrap">'+fmtDT(o.ordered_at)+'</span>'+
       statusBadge(o.status)+
       viewBtn+
-      (o.cancellable?'<button class="btn btn-r btn-xs" onclick="cancelOrder(\x27'+o.id+'\x27)">\u2715</button>':'')+
+      (o.cancellable?'<button class="btn btn-r btn-xs" onclick="cancelOrder(\x27'+escAttr(o.id)+'\x27)">\u2715</button>':'')+
       '</div>';
     }).join('');
   } catch(e){}
@@ -12450,7 +12450,7 @@ async function loadAppointments() {
     const [{data:todayA},{data:allA}]=await Promise.all([sb.from('appointments').select('*').eq('appointment_date',today()).order('appointment_time'),sb.from('appointments').select('*').eq('appointment_date',fd).order('appointment_time')]);
     const rr=a=>'<tr><td>'+escapeHtml(a.appointment_time||'—')+'</td><td>'+escapeHtml(a.patient_name||'—')+'</td><td>'+statusBadge(a.appt_type)+'</td><td>'+escapeHtml(a.doctor||'—')+'</td><td>'+statusBadge(a.status)+'</td><td><div class="acts">'+
       (a.phone?'<button class="btn btn-s btn-xs" onclick="sendAppointmentReminder(\''+escAttr(a.id)+'\',\''+escAttr(a.phone)+'\',\''+escAttr(a.patient_name||'')+'\',\''+escAttr(a.appointment_date)+'\',\''+escAttr(a.appointment_time||'')+'\')" title="Send SMS reminder">📲</button>':'')+
-      '<button class="btn btn-s btn-xs" onclick="updateApptStatus(\''+a.id+'\',\'Arrived\')">✅</button><button class="btn btn-r btn-xs" onclick="updateApptStatus(\''+a.id+'\',\'Cancelled\')">✕</button></div></td></tr>';
+      '<button class="btn btn-s btn-xs" onclick="updateApptStatus(\''+escAttr(a.id)+'\',\'Arrived\')">✅</button><button class="btn btn-r btn-xs" onclick="updateApptStatus(\''+escAttr(a.id)+'\',\'Cancelled\')">✕</button></div></td></tr>';
     const waiting=(todayA||[]).filter(a=>a.status!=='Cancelled');
     waitBody.innerHTML=waiting.length?'<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Time</th><th>Patient</th><th>Type</th><th>Doctor</th><th>Status</th><th></th></tr></thead><tbody>'+waiting.map(rr).join('')+'</tbody></table></div>':'<div class="empty-state"><div class="empty-icon">🚶</div><div class="empty-title">No patients waiting today</div></div>';
     listBody.innerHTML=allA?.length?'<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Time</th><th>Patient</th><th>Type</th><th>Doctor</th><th>Status</th><th></th></tr></thead><tbody>'+allA.map(rr).join('')+'</tbody></table></div>':'<div class="empty-state"><div class="empty-icon">📅</div><div class="empty-title">No appointments on this date</div></div>';
@@ -12969,9 +12969,9 @@ function renderWlRow(p,sampleMap) {
     '<td><div class="acts">'+
       (unpaid?'<button class="btn btn-s btn-xs" style="opacity:.5;cursor:not-allowed" title="Payment required">\ud83d\udd12 Blocked</button>':
         notReceived?'<button class="btn btn-s btn-xs" style="opacity:.5;cursor:not-allowed" title="Sample not yet received in the lab">\ud83d\udce5 Awaiting Receipt</button>':
-        '<button class="btn btn-p btn-xs" onclick="openEnterModal(\x27'+p.id+'\x27,\x27'+(p.lab_no||'')+'\x27,\x27'+escAttr(p.name||fullName(p))+'\x27)">\ud83d\udcdd Enter</button>')+
-      '<button class="btn btn-s btn-xs" onclick="openWlQuickHistory(\x27'+p.id+'\x27)" title="Quick view \u2014 this patient\x27s history across all visits, without leaving the Worklist">\ud83d\udd50 Quick History</button>'+
-      '<button class="btn btn-s btn-xs" onclick="openPatientHistoryTimeline(\x27'+p.id+'\x27)" title="Open the full Patient History Timeline page (trends, filters, admin actions)">\ud83d\udcca Full Timeline</button>'+
+        '<button class="btn btn-p btn-xs" onclick="openEnterModal(\x27'+escAttr(p.id)+'\x27,\x27'+(p.lab_no||'')+'\x27,\x27'+escAttr(p.name||fullName(p))+'\x27)">\ud83d\udcdd Enter</button>')+
+      '<button class="btn btn-s btn-xs" onclick="openWlQuickHistory(\x27'+escAttr(p.id)+'\x27)" title="Quick view \u2014 this patient\x27s history across all visits, without leaving the Worklist">\ud83d\udd50 Quick History</button>'+
+      '<button class="btn btn-s btn-xs" onclick="openPatientHistoryTimeline(\x27'+escAttr(p.id)+'\x27)" title="Open the full Patient History Timeline page (trends, filters, admin actions)">\ud83d\udcca Full Timeline</button>'+
     '</div></td></tr>';
 }
 // Lab Worklist "Quick History" (Item C) \u2014 a fast, in-context multi-visit
@@ -13201,8 +13201,8 @@ async function loadCriticals() {
         '<td style="font-size:.72rem">'+escapeHtml(c.clinician_notified||pt.doctor||'—')+'</td>'+
         '<td>'+(c.is_acknowledged?'<span class="bdg" style="background:var(--green-lt);color:var(--green)">\u2705 Ack</span>':'<span class="bdg" style="background:var(--red-lt);color:var(--red)">\u26a0\ufe0f Pending</span>')+'</td>'+
         '<td><div class="acts">'+
-          (!c.is_acknowledged?'<button class="btn btn-p btn-xs" onclick="openCritAck(\x27'+c.id+'\x27)">\u2705 Ack</button>':'')+
-          '<button class="btn btn-s btn-xs" onclick="printCriticalNotice(\x27'+c.id+'\x27)">\ud83d\udda8</button>'+
+          (!c.is_acknowledged?'<button class="btn btn-p btn-xs" onclick="openCritAck(\x27'+escAttr(c.id)+'\x27)">\u2705 Ack</button>':'')+
+          '<button class="btn btn-s btn-xs" onclick="printCriticalNotice(\x27'+escAttr(c.id)+'\x27)">\ud83d\udda8</button>'+
         '</div></td></tr>';
     }).join('');
   } catch(e){ body.innerHTML='<tr><td colspan="8" style="padding:12px;color:var(--red)">'+escapeHtml(e.message)+'</td></tr>'; }
@@ -13294,7 +13294,7 @@ async function searchPtHistory(q) {
     const {data}=await sb.from('patients').select('id,name,first_name,last_name,mrn,lab_no,age,age_unit,sex,phone').or('name.ilike.%'+q+'%,mrn.ilike.%'+q+'%,lab_no.ilike.%'+q+'%,phone.ilike.%'+q+'%').limit(8);
     if(!data?.length){ res.style.display='none'; return; }
     res.style.display='block';
-    res.innerHTML=data.map(p=>'<div onclick="selectPthPatient('+JSON.stringify(p).replace(/"/g,'&quot;')+')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:.81rem" onmouseover="this.style.background=\\x27#f0f9ff\\x27" onmouseout="this.style.background=\\x27#fff\\x27"><strong>'+escapeHtml(p.name||fullName(p))+'</strong> <span style="color:var(--slate);font-size:.72rem">'+escapeHtml(p.mrn||p.lab_no||'')+' · '+(p.age||'?')+(p.age_unit||'')+' / '+(p.sex||'')+'</span></div>').join('');
+    res.innerHTML=data.map(p=>'<div onclick="selectPthPatient('+JSON.stringify(p).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:.81rem" onmouseover="this.style.background=\\x27#f0f9ff\\x27" onmouseout="this.style.background=\\x27#fff\\x27"><strong>'+escapeHtml(p.name||fullName(p))+'</strong> <span style="color:var(--slate);font-size:.72rem">'+escapeHtml(p.mrn||p.lab_no||'')+' · '+(p.age||'?')+(p.age_unit||'')+' / '+(p.sex||'')+'</span></div>').join('');
   } catch(e){}
 }
 // Admin-only. Deletes a person entirely — every visit sharing their MRN,
@@ -14552,7 +14552,7 @@ async function selectExistingFilePatient(mrn){
       const rows=data.slice(0,5).map(v=>{
         const dest=(v.visit_destination||'').split(',').filter(Boolean).map(d=>destIcon[d]||'').join('');
         const dx=v.diagnosis||'—'; const dxShort=dx.length>30?dx.slice(0,30)+'…':dx;
-        const link=canViewHistory?'<a href="javascript:void(0)" onclick="openPatientHistoryTimeline(\''+v.id+'\')" style="color:var(--teal);font-weight:600;white-space:nowrap;flex-shrink:0">View →</a>':'';
+        const link=canViewHistory?'<a href="javascript:void(0)" onclick="openPatientHistoryTimeline(\''+escAttr(v.id)+'\')" style="color:var(--teal);font-weight:600;white-space:nowrap;flex-shrink:0">View →</a>':'';
         return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:3px 0;border-bottom:1px solid var(--border)">'
           +'<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+fmtDate(v.created_at)+' '+dest+' <span style="color:var(--slate)">'+escapeHtml(dxShort)+'</span></span>'+link+'</div>';
       }).join('');
@@ -15536,7 +15536,7 @@ async function loadInfectionFlags() {
         '<td style="padding:7px 10px;font-size:.75rem;color:var(--slate)">'+fmtDate(f.flagged_at)+'</td>'+
         '<td style="padding:7px 10px">'+badge+'</td>'+
         '<td style="padding:7px 10px">'+
-        (f.active?'<button class="btn btn-s btn-xs" onclick="resolveInfectionFlag(\''+f.id+'\')">✓ Resolve</button>':'')+
+        (f.active?'<button class="btn btn-s btn-xs" onclick="resolveInfectionFlag(\''+escAttr(f.id)+'\')">✓ Resolve</button>':'')+
         '</td></tr>';
     }).join('');
   } catch(e){ tbody.innerHTML='<tr><td colspan="9" style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</td></tr>'; }
@@ -16393,7 +16393,7 @@ async function loadConsentForms(ptId){
       '<div style="border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">'+
       '<div><div style="font-weight:600;font-size:.82rem">'+escapeHtml(c.consent_type||'—')+' <span class="bdg bdg-g" style="margin-left:4px">✓ Signed</span></div>'+
       '<div style="font-size:.72rem;color:var(--slate)">'+fmtDate(c.consent_date||c.created_at)+' · '+escapeHtml(c.performed_by_name||'—')+' · Signed by '+escapeHtml(c.signee_name||'—')+'</div></div>'+
-      '<button class="btn btn-s btn-xs" onclick="printConsentForm(\''+c.id+'\')">🖨 Print</button></div>'
+      '<button class="btn btn-s btn-xs" onclick="printConsentForm(\''+escAttr(c.id)+'\')">🖨 Print</button></div>'
     ).join('');
   }catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>'; }
 }
@@ -16464,7 +16464,7 @@ async function searchNrsProcPatient(q) {
     res.style.display='block';
     res.innerHTML=data.map(p=>{
       const rawName=p.name||fullName(p);
-      return '<div onclick="selectNrsProcPatient('+JSON.stringify(p).replace(/"/g,'&quot;')+')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:.81rem" onmouseover="this.style.background=\'#f0f9ff\'" onmouseout="this.style.background=\'#fff\'"><strong>'+escapeHtml(rawName)+'</strong> <span style="color:var(--slate);font-size:.72rem">'+escapeHtml(p.mrn||'')+(p.ward?' · '+escapeHtml(p.ward):'')+'</span></div>';
+      return '<div onclick="selectNrsProcPatient('+JSON.stringify(p).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:.81rem" onmouseover="this.style.background=\'#f0f9ff\'" onmouseout="this.style.background=\'#fff\'"><strong>'+escapeHtml(rawName)+'</strong> <span style="color:var(--slate);font-size:.72rem">'+escapeHtml(p.mrn||'')+(p.ward?' · '+escapeHtml(p.ward):'')+'</span></div>';
     }).join('');
   } catch(e){}
 }
@@ -17133,7 +17133,7 @@ async function searchReceivePatient(q) {
     _scRecvMatches=matches;
     if(!matches.length){ box.style.display='block'; box.innerHTML='<div style="padding:8px 12px;font-size:.78rem;color:var(--slate)">No collected samples match — sample may not be marked Collected yet</div>'; return; }
     box.style.display='block';
-    box.innerHTML=matches.map(p=>'<div onclick="selectReceivePt(\''+p.id+'\')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:.8rem" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'"><div style="font-weight:700">'+escapeHtml(p.name||fullName(p))+'</div><div style="font-size:.7rem;color:var(--slate)">'+escapeHtml(p.mrn||p.lab_no||'—')+'</div></div>').join('');
+    box.innerHTML=matches.map(p=>'<div onclick="selectReceivePt(\''+escAttr(p.id)+'\')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:.8rem" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'"><div style="font-weight:700">'+escapeHtml(p.name||fullName(p))+'</div><div style="font-size:.7rem;color:var(--slate)">'+escapeHtml(p.mrn||p.lab_no||'—')+'</div></div>').join('');
   }catch(e){}
 }
 // Most USB/Bluetooth barcode scanners act as a keyboard: they type the
@@ -17176,7 +17176,7 @@ async function loadReceiveQueue(){
     body.innerHTML=data.map(s=>{
       const pt=s.patients||{};
       const waitMins=s.collected_at?Math.round((Date.now()-new Date(s.collected_at).getTime())/60000):null;
-      return '<div onclick="selectReceivePt(\''+s.patient_id+'\')" style="display:flex;align-items:center;justify-content:space-between;padding:9px 10px;border-radius:8px;cursor:pointer;margin-bottom:4px;background:var(--bg)" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'var(--bg)\'">'+
+      return '<div onclick="selectReceivePt(\''+escAttr(s.patient_id)+'\')" style="display:flex;align-items:center;justify-content:space-between;padding:9px 10px;border-radius:8px;cursor:pointer;margin-bottom:4px;background:var(--bg)" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'var(--bg)\'">'+
         '<div><div style="font-weight:700;font-size:.8rem">'+escapeHtml(pt.name||'—')+'</div><div style="font-size:.7rem;color:var(--slate)">'+(pt.lab_no||pt.mrn||'—')+' · '+(s.specimen_type||'')+'</div></div>'+
         '<div style="text-align:right">'+statusBadge(pt.priority||'Routine')+(waitMins!=null?'<div style="font-size:.68rem;color:'+(waitMins>30?'var(--red)':'var(--slate)')+';margin-top:2px">'+waitMins+'m waiting</div>':'')+'</div>'+
         '</div>';
@@ -17204,7 +17204,7 @@ async function loadSampleQueueFull() {
         <td>${paymentTag(s.patients?.payment_status)}</td>
         <td style="font-size:.72rem">${fmtDT(s.collected_at)}</td>
         <td style="font-size:.72rem">${fmtDT(s.received_at)}</td>
-        <td><button class="btn btn-s btn-xs" onclick="selectScPt('${s.patient_id}')">📋 Open</button></td>
+        <td><button class="btn btn-s btn-xs" onclick="selectScPt('${escAttr(s.patient_id)}')">📋 Open</button></td>
       </tr>`).join('')+'</tbody></table></div>';
   }catch(e){body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>';}
 }
@@ -17372,7 +17372,7 @@ async function loadNursingQueue() {
         const destParts2=dest.split(',').map(s=>s.trim()).filter(Boolean);
         const destIconStr=destParts2.map(d=>destIcon[d]||'\ud83c\udfe5').join('');
         const alertHtml=nursingQueueAlertBadges(flagsMap[p.id]||{});
-        return '<tr class="'+(unpaid?'pay-unpaid':'')+'" style="cursor:pointer" onclick="selectVitalsFromQueue(\''+p.id+'\',\''+escAttr(rawName)+'\')">'+
+        return '<tr class="'+(unpaid?'pay-unpaid':'')+'" style="cursor:pointer" onclick="selectVitalsFromQueue(\''+escAttr(p.id)+'\',\''+escAttr(rawName)+'\')">'+
           '<td style="font-family:DM Mono,monospace;font-size:.72rem;color:var(--teal)">'+escapeHtml(p.mrn||p.lab_no||'\u2014')+'</td>'+
           '<td style="font-weight:600">'+escapeHtml(rawName)+'</td>'+
           '<td>'+(p.age||'?')+(p.age_unit||'y')+' / '+(p.sex||'')+'</td>'+
@@ -17382,7 +17382,7 @@ async function loadNursingQueue() {
           '<td>'+visitStatusBadge(p)+'</td>'+
           '<td>'+(alertHtml||'<span style="font-size:.7rem;color:var(--slate)">\u2014</span>')+'</td>'+
           '<td><div class="acts">'+
-            '<button class="btn btn-p btn-xs" onclick="selectVitalsFromQueue(\''+p.id+'\',\''+escAttr(rawName)+'\');event.stopPropagation()">\ud83d\udcc8 Vitals</button>'+
+            '<button class="btn btn-p btn-xs" onclick="selectVitalsFromQueue(\''+escAttr(p.id)+'\',\''+escAttr(rawName)+'\');event.stopPropagation()">\ud83d\udcc8 Vitals</button>'+
             '<button class="btn btn-s btn-xs" onclick="goPage(\x27fluid-chart\x27);event.stopPropagation()">\ud83d\udca7 Fluid</button>'+
           '</div></td></tr>';
       }).join('')+'</tbody></table></div>';
@@ -17575,7 +17575,7 @@ function renderBillTable(invoices) {
     '<th>Invoice No</th><th>Patient</th><th>Type</th><th>Total</th><th>Status</th><th>Method</th><th>Date</th><th>Actions</th></tr></thead><tbody>'+
     invoices.map(i=>{
       const unpaid=i.payment_status==='unpaid'||i.payment_status==='insurance_pending';
-      return '<tr class="'+(unpaid?'pay-unpaid':'')+'" id="inv-row-'+i.id+'">'+
+      return '<tr class="'+(unpaid?'pay-unpaid':'')+'" id="inv-row-'+escAttr(i.id)+'">'+
         '<td style="font-family:DM Mono,monospace;font-size:.7rem;font-weight:700;color:var(--teal)">'+escapeHtml(i.invoice_no||'—')+(i.queue_token?'<div style="font-size:.62rem;color:var(--slate);font-weight:500">Token '+escapeHtml(i.queue_token)+'</div>':'')+'</td>'+
         '<td style="font-weight:600;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escapeHtml(i.patient_name||'—')+'</td>'+
         '<td><span class="bdg bdg-sl" style="font-size:.65rem">'+escapeHtml(i.invoice_type||'—')+'</span></td>'+
@@ -17584,13 +17584,13 @@ function renderBillTable(invoices) {
         '<td style="font-size:.72rem">'+escapeHtml(i.payment_method||'—')+'</td>'+
         '<td style="font-size:.72rem;color:var(--slate)">'+fmtDate(i.created_at)+'</td>'+
         '<td><div class="acts">'+
-          '<button class="btn btn-s btn-xs" onclick="openBillDetail(\''+i.id+'\')">👁</button>'+
-          '<button class="btn btn-s btn-xs" onclick="printInvoice(\''+i.id+'\')" title="'+(i.reprint_count?'Reprint A4 (already printed '+i.reprint_count+'x)':'Print A4')+'">🖨</button>'+
-          '<button class="btn btn-s btn-xs" onclick="printInvoiceThermal(\''+i.id+'\')" title="Thermal Receipt (80mm)">🧾</button>'+
-          (!i.voided?((i.payment_status!=='paid'?'<button class="btn btn-p btn-xs" onclick="markPaid(\''+i.id+'\')">✅</button>':'')+(i.insurance_company?'<button class="btn btn-s btn-xs" onclick="generateInsuranceClaim(\''+i.id+'\')">🏥</button>':'')+
-          '<button class="btn btn-s btn-xs" onclick="editInvoice(\''+i.id+'\')">✏️</button>'+
-          (i.payment_status==='paid'||i.payment_status==='partial'?'<button class="btn btn-s btn-xs" onclick="openRefundModal(\''+i.id+'\')" title="Refund">↩</button>':'')+
-          '<button class="btn btn-r btn-xs" onclick="voidInvoice(\''+i.id+'\')" title="Void — requires admin authorization">🛡 Void</button>'):'')+
+          '<button class="btn btn-s btn-xs" onclick="openBillDetail(\''+escAttr(i.id)+'\')">👁</button>'+
+          '<button class="btn btn-s btn-xs" onclick="printInvoice(\''+escAttr(i.id)+'\')" title="'+(i.reprint_count?'Reprint A4 (already printed '+i.reprint_count+'x)':'Print A4')+'">🖨</button>'+
+          '<button class="btn btn-s btn-xs" onclick="printInvoiceThermal(\''+escAttr(i.id)+'\')" title="Thermal Receipt (80mm)">🧾</button>'+
+          (!i.voided?((i.payment_status!=='paid'?'<button class="btn btn-p btn-xs" onclick="markPaid(\''+escAttr(i.id)+'\')">✅</button>':'')+(i.insurance_company?'<button class="btn btn-s btn-xs" onclick="generateInsuranceClaim(\''+escAttr(i.id)+'\')">🏥</button>':'')+
+          '<button class="btn btn-s btn-xs" onclick="editInvoice(\''+escAttr(i.id)+'\')">✏️</button>'+
+          (i.payment_status==='paid'||i.payment_status==='partial'?'<button class="btn btn-s btn-xs" onclick="openRefundModal(\''+escAttr(i.id)+'\')" title="Refund">↩</button>':'')+
+          '<button class="btn btn-r btn-xs" onclick="voidInvoice(\''+escAttr(i.id)+'\')" title="Void — requires admin authorization">🛡 Void</button>'):'')+
         '</div></td></tr>';
     }).join('')+'</tbody></table></div>';
 }
@@ -17621,7 +17621,7 @@ async function searchBillPatient(q) {
     if(!data?.length){ box.style.display='none'; return; }
     box.style.display='block';
     box.innerHTML = data.map(p=>
-      '<div onclick="selectBillPatient('+JSON.stringify(p).replace(/"/g,'&quot;')+')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:.8rem" '+
+      '<div onclick="selectBillPatient('+JSON.stringify(p).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:.8rem" '+
       'onmouseover="this.style.background=\x27var(--teal-lt)\x27" onmouseout="this.style.background=\x27\x27">'+
       '<div style="font-weight:700">'+escapeHtml(p.name||fullName(p))+'</div>'+
       '<div style="font-size:.7rem;color:var(--slate)">'+escapeHtml(p.mrn||p.lab_no||'—')+' · '+(p.age||'?')+(p.age_unit||'y')+' / '+(p.sex||'')+' · '+paymentTag(p.payment_status)+'</div>'+
@@ -18636,14 +18636,14 @@ function renderPriceTable(prices) {
       html+='<tr style="background:#f1f5f9"><td colspan="5" style="padding:6px 10px;font-weight:700;font-size:.72rem;text-transform:uppercase;letter-spacing:.4px;color:var(--slate)">'+
         '<span class="bdg" style="background:'+(catColors[p.category]||'#f1f5f9')+'">'+escapeHtml(p.category.toUpperCase())+'</span></td></tr>';
     }
-    html+='<tr id="price-row-'+p.id+'">'+
+    html+='<tr id="price-row-'+escAttr(p.id)+'">'+
       '<td style="font-family:DM Mono,monospace;font-size:.7rem;color:var(--teal)">'+escapeHtml(p.code||'—')+'</td>'+
       '<td style="font-weight:500">'+escapeHtml(p.name||'—')+'</td>'+
       '<td><span class="bdg" style="background:'+(catColors[p.category]||'#f1f5f9')+';font-size:.65rem">'+escapeHtml(p.category||'—')+'</span></td>'+
       '<td style="text-align:right;font-weight:700;color:var(--teal)">'+((p.price||0).toLocaleString('en-US',{minimumFractionDigits:2}))+' '+escapeHtml(p.currency||CFG.currency)+'</td>'+
       '<td><div class="acts">'+
-        '<button class="btn btn-s btn-xs" onclick="editPrice(\''+p.id+'\')">✏️</button>'+
-        '<button class="btn btn-r btn-xs" onclick="deletePrice(\''+p.id+'\')">✕</button>'+
+        '<button class="btn btn-s btn-xs" onclick="editPrice(\''+escAttr(p.id)+'\')">✏️</button>'+
+        '<button class="btn btn-r btn-xs" onclick="deletePrice(\''+escAttr(p.id)+'\')">✕</button>'+
       '</div></td></tr>';
   });
   html+='</tbody></table></div>';
@@ -19271,13 +19271,13 @@ function renderRefRangeTable(rows) {
     }
     const siRange=(r.si_lo??'—')+' – '+(r.si_hi??'—')+' '+escapeHtml(r.si_unit||'');
     const convRange=r.conventional_unit ? ((r.conventional_lo??'—')+' – '+(r.conventional_hi??'—')+' '+escapeHtml(r.conventional_unit)) : '<span style="color:var(--slate)">Not set — falls back to SI</span>';
-    html+='<tr id="refrange-row-'+r.id+'">'+
+    html+='<tr id="refrange-row-'+escAttr(r.id)+'">'+
       '<td style="font-weight:500">'+escapeHtml(r.label||r.field_code)+'<div style="font-size:.66rem;color:var(--slate);font-family:DM Mono,monospace">'+escapeHtml(r.field_code)+'</div></td>'+
       '<td style="font-size:.78rem">'+siRange+'</td>'+
       '<td style="font-size:.78rem">'+convRange+'</td>'+
       '<td><div class="acts">'+
-        '<button class="btn btn-s btn-xs" onclick="editRefRange(\''+r.id+'\')">✏️</button>'+
-        '<button class="btn btn-r btn-xs" onclick="deleteRefRange(\''+r.id+'\')">✕</button>'+
+        '<button class="btn btn-s btn-xs" onclick="editRefRange(\''+escAttr(r.id)+'\')">✏️</button>'+
+        '<button class="btn btn-r btn-xs" onclick="deleteRefRange(\''+escAttr(r.id)+'\')">✕</button>'+
       '</div></td></tr>';
   });
   html+='</tbody></table></div>';
@@ -19379,7 +19379,7 @@ async function loadStaff() {
     const roleLabels={admin:'Admin',doctor:'Doctor',nurse:'Nurse',lab_tech:'Lab Tech',lab_supervisor:'Lab Supervisor',receptionist:'Receptionist',cashier:'Cashier',theatre_nurse:'Theatre Nurse',radiologist:'Radiologist'};
     body.innerHTML='<div style="overflow-x:auto"><table class="tbl" id="stf-table"><thead><tr>'+
       '<th>Name</th><th>Role</th><th>Department</th><th>Phone</th><th>Email</th><th>Status</th><th>Hire Date</th><th>Actions</th></tr></thead><tbody>'+
-      data.map(s=>'<tr id="stf-row-'+s.id+'">'+
+      data.map(s=>'<tr id="stf-row-'+escAttr(s.id)+'">'+
         '<td style="font-weight:600">'+escapeHtml(s.full_name||s.name||'—')+'</td>'+
         '<td><span class="bdg" style="background:'+(roleColors[s.role]||'#f1f5f9')+';font-size:.68rem">'+escapeHtml(roleLabels[s.role]||s.role||'—')+'</span></td>'+
         '<td style="font-size:.78rem">'+escapeHtml(s.department||'—')+'</td>'+
@@ -19388,8 +19388,8 @@ async function loadStaff() {
         '<td>'+(s.status==='active'?'<span class="bdg" style="background:var(--green-lt);color:var(--green)">\u2705 Active</span>':s.status==='on_leave'?'<span class="bdg" style="background:#fef9c3;color:var(--amber)">\u23f8 On Leave</span>':'<span class="bdg bdg-sl">'+escapeHtml(s.status||'—')+'</span>')+'</td>'+
         '<td style="font-size:.72rem">'+(s.hire_date?fmtDate(s.hire_date):'—')+'</td>'+
         '<td><div class="acts">'+
-          '<button class="btn btn-s btn-xs" onclick="editStaff(\''+s.id+'\')">✏️</button>'+
-          '<button class="btn btn-r btn-xs" onclick="deleteStaff(\''+s.id+'\')">✕</button>'+
+          '<button class="btn btn-s btn-xs" onclick="editStaff(\''+escAttr(s.id)+'\')">✏️</button>'+
+          '<button class="btn btn-r btn-xs" onclick="deleteStaff(\''+escAttr(s.id)+'\')">✕</button>'+
         '</div></td></tr>'
       ).join('')+'</tbody></table></div>';
   } catch(e){body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>';}
@@ -19829,7 +19829,7 @@ async function searchRadPatient(q) {
     if(!data?.length){box.style.display='none';return;}
     box.style.display='block';
     box.innerHTML=data.map(p=>
-      '<div onclick="selectRadPatient('+JSON.stringify(p).replace(/"/g,'&quot;')+')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:.8rem" '+
+      '<div onclick="selectRadPatient('+JSON.stringify(p).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:.8rem" '+
       'onmouseover="this.style.background=\x27var(--teal-lt)\x27" onmouseout="this.style.background=\x27\x27">'+
       '<div style="font-weight:700">'+escapeHtml(p.name||fullName(p))+'</div>'+
       '<div style="font-size:.7rem;color:var(--slate)">'+escapeHtml(p.mrn||p.lab_no||'—')+' \u00b7 '+(p.age||'?')+(p.age_unit||'y')+' / '+(p.sex||'')+' '+paymentTag(p.payment_status)+'</div>'+
@@ -19934,9 +19934,9 @@ async function loadRadRequests() {
           '<td>'+statusBadge(r.status)+'</td>'+
           '<td>'+visitStatusBadge(pt)+'</td>'+
           '<td><div class="acts">'+
-            '<button class="btn btn-p btn-xs" onclick="openRadReport(\''+r.id+'\')">📝 Report</button>'+
-            '<button class="btn btn-s btn-xs" onclick="updateRadStatus(\''+r.id+'\',\'In Progress\')">▶ Start</button>'+
-            ((r.status==='Reported'||r.status==='Verified')?'<button class="btn btn-s btn-xs" onclick="openDicomViewer(\''+r.id+'\')">👁️ View DICOM</button>':'')+
+            '<button class="btn btn-p btn-xs" onclick="openRadReport(\''+escAttr(r.id)+'\')">📝 Report</button>'+
+            '<button class="btn btn-s btn-xs" onclick="updateRadStatus(\''+escAttr(r.id)+'\',\'In Progress\')">▶ Start</button>'+
+            ((r.status==='Reported'||r.status==='Verified')?'<button class="btn btn-s btn-xs" onclick="openDicomViewer(\''+escAttr(r.id)+'\')">👁️ View DICOM</button>':'')+
           '</div></td></tr>';
       }).join('')+(hiddenCount?'<tr><td colspan="8" style="text-align:center;padding:8px;font-size:.72rem;color:var(--slate)">'+hiddenCount+' more request(s) hidden pending payment</td></tr>':'')+'</tbody></table></div>';
   } catch(e){body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>';}
@@ -19949,7 +19949,7 @@ async function loadPendingForReport() {
     const {data}=await sb.from('radiology_requests').select('id,imaging_type,urgency,created_at,patients(name,mrn)').in('status',['Requested','In Progress']).order('created_at',{ascending:false}).limit(30);
     if(!data?.length){body.innerHTML='<div class="empty-state">No pending studies</div>';return;}
     body.innerHTML=data.map(r=>'<div style="padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;margin-bottom:6px;cursor:pointer;transition:all .12s" '+
-      'onclick="openRadReport(\''+r.id+'\')" '+
+      'onclick="openRadReport(\''+escAttr(r.id)+'\')" '+
       'onmouseover="this.style.borderColor=\x27var(--teal)\x27;this.style.background=\x27var(--teal-lt)\x27" onmouseout="this.style.borderColor=\x27var(--border)\x27;this.style.background=\x27\x27">'+
       '<div style="display:flex;align-items:center;justify-content:space-between">'+
       '<span style="font-weight:700;font-size:.82rem">'+escapeHtml(r.patients?.name||'—')+'</span>'+
@@ -20142,10 +20142,10 @@ async function loadReportedStudies() {
         '<td style="font-size:.75rem;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escapeHtml(r.impression||'—')+'</td>'+
         '<td>'+statusBadge(r.status)+(r.status==='Verified'&&r.verified_by_name?'<div style="font-size:.65rem;color:var(--slate);margin-top:2px">by '+escapeHtml(r.verified_by_name)+' · '+fmtDT(r.verified_at)+'</div>':'')+'</td>'+
         '<td><div class="acts">'+
-          '<button class="btn btn-s btn-xs" onclick="openRadReport(\''+r.id+'\')">📝</button>'+
-          '<button class="btn btn-s btn-xs" onclick="printRadReportById(\''+r.id+'\')">🖨</button>'+
-          '<button class="btn btn-s btn-xs" onclick="openDicomViewer(\''+r.id+'\')">👁️</button>'+
-          (r.status==='Reported'?'<button class="btn btn-p btn-xs" onclick="updateRadStatus(\''+r.id+'\',\'Verified\')">✅ Verify</button>':'')+
+          '<button class="btn btn-s btn-xs" onclick="openRadReport(\''+escAttr(r.id)+'\')">📝</button>'+
+          '<button class="btn btn-s btn-xs" onclick="printRadReportById(\''+escAttr(r.id)+'\')">🖨</button>'+
+          '<button class="btn btn-s btn-xs" onclick="openDicomViewer(\''+escAttr(r.id)+'\')">👁️</button>'+
+          (r.status==='Reported'?'<button class="btn btn-p btn-xs" onclick="updateRadStatus(\''+escAttr(r.id)+'\',\'Verified\')">✅ Verify</button>':'')+
         '</div></td></tr>'
       ).join('')+'</tbody></table></div>';
   } catch(e){body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>';}
@@ -20184,7 +20184,7 @@ async function loadRadPrintStudies(ptId, ptName){
     body.innerHTML='<div style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:var(--slate);margin-bottom:8px">Completed Studies</div>'+
       data.map(r=>'<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:var(--bg);border-radius:8px;margin-bottom:6px">'+
         '<div><div style="font-weight:700;font-size:.85rem">'+escapeHtml(r.imaging_type)+'</div><div style="font-size:.72rem;color:var(--slate)">'+(r.radiologist?'Dr. '+escapeHtml(r.radiologist)+' · ':'')+fmtDate(r.reported_at)+'</div></div>'+
-        '<button class="btn btn-p btn-sm" onclick="printRadReportById(\''+r.id+'\')">🖨 Print</button>'+
+        '<button class="btn btn-p btn-sm" onclick="printRadReportById(\''+escAttr(r.id)+'\')">🖨 Print</button>'+
         '</div>').join('');
   }catch(e){ body.innerHTML='<div style="padding:16px;color:var(--red);font-size:.82rem">'+escapeHtml(e.message)+'</div>'; }
 }
@@ -20582,7 +20582,7 @@ async function loadValidationStudies(){
         '<td>'+escapeHtml(s.instrument_name)+(s.instrument_serial?' <span style="color:var(--slate);font-size:.7rem">('+escapeHtml(s.instrument_serial)+')</span>':'')+'</td>'+
         '<td>'+escapeHtml(s.protocol_type)+'</td><td>'+statusBadge(s.status)+'</td>'+
         '<td style="font-size:.72rem;color:var(--slate)">'+fmtDT(s.created_at)+'</td>'+
-        '<td><button class="btn btn-p btn-xs" onclick="openValidationWorkspace(\''+s.id+'\')">Open</button></td></tr>').join('')+
+        '<td><button class="btn btn-p btn-xs" onclick="openValidationWorkspace(\''+escAttr(s.id)+'\')">Open</button></td></tr>').join('')+
       '</tbody></table></div>';
   }catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>'; }
 }
@@ -21076,11 +21076,11 @@ async function loadQcLots(){
               '<td>'+escapeHtml(l.section||'—')+'</td><td>'+escapeHtml(l.level||'—')+'</td>'+
               '<td>'+(l.target_mean??'—')+'</td><td>'+(l.target_sd??'—')+'</td>'+
               '<td style="'+(expired?'color:var(--red);font-weight:700':'')+'">'+(l.expiry_date||'—')+(expired?' ⚠️':'')+'</td>'+
-              '<td><button class="btn btn-r btn-xs" onclick="deactivateQcLot(\''+l.id+'\')">✕</button></td></tr>';
+              '<td><button class="btn btn-r btn-xs" onclick="deactivateQcLot(\''+escAttr(l.id)+'\')">✕</button></td></tr>';
           }).join('')+'</tbody></table></div>';
       }
     }
-    const opts='<option value="">Select lot…</option>'+lots.map(l=>'<option value="'+l.id+'">'+escapeHtml(l.lot_no||'')+' — '+escapeHtml(l.control_name||'')+' ('+escapeHtml(l.level||'')+')</option>').join('');
+    const opts='<option value="">Select lot…</option>'+lots.map(l=>'<option value="'+escAttr(l.id)+'">'+escapeHtml(l.lot_no||'')+' — '+escapeHtml(l.control_name||'')+' ('+escapeHtml(l.level||'')+')</option>').join('');
     if(selLot) selLot.innerHTML=opts;
     if(chartLot) chartLot.innerHTML=opts;
   }catch(e){ if(body) body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.8rem">'+escapeHtml(e.message)+'</div>'; }
@@ -21269,13 +21269,13 @@ function renderInventoryTable(){
         '<td>'+(it.min_level??0)+'</td>'+
         '<td><span class="bdg" style="background:'+status.color+'22;color:'+status.color+'">'+status.emoji+' '+escapeHtml(status.label)+'</span></td>'+
         '<td><div class="acts">'+
-          '<button class="btn btn-s btn-xs" onclick="toggleInvBatches(\''+it.id+'\')" title="Batches">📦</button>'+
-          '<button class="btn btn-w btn-xs" onclick="promptDispenseFefo(\''+it.id+'\')" title="Dispense (FEFO)">📤</button>'+
-          '<button class="btn btn-s btn-xs" onclick="printInventoryBarcodeLabel(\''+it.id+'\')" title="Print Label">🖨</button>'+
-          '<button class="btn btn-s btn-xs" onclick="editInventoryItem(\''+it.id+'\')" title="Edit">✏️</button>'+
-          '<button class="btn btn-r btn-xs" onclick="deleteInventoryItem(\''+it.id+'\')" title="Remove">✕</button>'+
+          '<button class="btn btn-s btn-xs" onclick="toggleInvBatches(\''+escAttr(it.id)+'\')" title="Batches">📦</button>'+
+          '<button class="btn btn-w btn-xs" onclick="promptDispenseFefo(\''+escAttr(it.id)+'\')" title="Dispense (FEFO)">📤</button>'+
+          '<button class="btn btn-s btn-xs" onclick="printInventoryBarcodeLabel(\''+escAttr(it.id)+'\')" title="Print Label">🖨</button>'+
+          '<button class="btn btn-s btn-xs" onclick="editInventoryItem(\''+escAttr(it.id)+'\')" title="Edit">✏️</button>'+
+          '<button class="btn btn-r btn-xs" onclick="deleteInventoryItem(\''+escAttr(it.id)+'\')" title="Remove">✕</button>'+
         '</div></td></tr>'+
-        '<tr id="inv-batches-row-'+it.id+'" style="display:none"><td colspan="6" style="background:var(--surface2);padding:10px 14px">'+invBatchesPanelHtml(it,itBatches)+'</td></tr>';
+        '<tr id="inv-batches-row-'+escAttr(it.id)+'" style="display:none"><td colspan="6" style="background:var(--surface2);padding:10px 14px">'+invBatchesPanelHtml(it,itBatches)+'</td></tr>';
     }).join('')+'</tbody></table></div>';
 }
 function invBatchesPanelHtml(it,batches){
@@ -21286,17 +21286,17 @@ function invBatchesPanelHtml(it,batches){
       '<td>'+(b.quantity??0)+' '+escapeHtml(it.unit||'')+'</td>'+
       '<td style="font-size:.72rem">'+(b.expiry_date||'—')+(b.is_opened?' <span style="color:var(--amber)">(opened '+(b.opened_date||'')+')</span>':'')+'</td>'+
       '<td><span class="bdg" style="background:'+st.color+'22;color:'+st.color+'">'+st.emoji+' '+escapeHtml(st.label)+'</span></td>'+
-      '<td style="display:flex;gap:4px">'+(b.is_opened?'':'<button class="btn btn-s btn-xs" onclick="markBatchOpened('+b.id+')">Mark Opened</button>')+
-      '<button class="btn btn-r btn-xs" onclick="openDiscardBatch(\''+b.id+'\',\''+it.id+'\')">🗑 Discard</button></td>'+
+      '<td style="display:flex;gap:4px">'+(b.is_opened?'':'<button class="btn btn-s btn-xs" onclick="markBatchOpened('+Number(b.id)+')">Mark Opened</button>')+
+      '<button class="btn btn-r btn-xs" onclick="openDiscardBatch(\''+escAttr(b.id)+'\',\''+escAttr(it.id)+'\')">🗑 Discard</button></td>'+
       '</tr>';
   }).join('') : '<tr><td colspan="5" style="text-align:center;color:var(--slate);padding:10px">No active batches — this item has no FEFO detail yet</td></tr>';
   return '<div style="font-size:.72rem;font-weight:700;text-transform:uppercase;color:var(--slate);margin-bottom:6px">📦 Batches (FEFO order — soonest expiry dispensed first)</div>'+
     '<table class="tbl" style="width:100%;font-size:.76rem;margin-bottom:10px"><thead><tr><th>Batch/Lot</th><th>Qty</th><th>Expiry</th><th>Status</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>'+
     '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:end">'+
-      '<div class="fg" style="margin:0"><label class="fl">New Batch/Lot No.</label><input class="fc" id="rcv-lot-'+it.id+'" style="width:120px;padding:5px 8px"></div>'+
-      '<div class="fg" style="margin:0"><label class="fl">Qty</label><input class="fc" type="number" min="1" id="rcv-qty-'+it.id+'" style="width:80px;padding:5px 8px"></div>'+
-      '<div class="fg" style="margin:0"><label class="fl">Expiry</label><input class="fc" type="date" id="rcv-exp-'+it.id+'" style="padding:5px 8px"></div>'+
-      '<button class="btn btn-p btn-sm" onclick="receiveBatchStock(\''+it.id+'\')">+ Receive Stock</button>'+
+      '<div class="fg" style="margin:0"><label class="fl">New Batch/Lot No.</label><input class="fc" id="rcv-lot-'+escAttr(it.id)+'" style="width:120px;padding:5px 8px"></div>'+
+      '<div class="fg" style="margin:0"><label class="fl">Qty</label><input class="fc" type="number" min="1" id="rcv-qty-'+escAttr(it.id)+'" style="width:80px;padding:5px 8px"></div>'+
+      '<div class="fg" style="margin:0"><label class="fl">Expiry</label><input class="fc" type="date" id="rcv-exp-'+escAttr(it.id)+'" style="padding:5px 8px"></div>'+
+      '<button class="btn btn-p btn-sm" onclick="receiveBatchStock(\''+escAttr(it.id)+'\')">+ Receive Stock</button>'+
     '</div>';
 }
 function toggleInvBatches(id){
@@ -21504,10 +21504,10 @@ function renderBloodUnitTable(units) {
         '<td style="font-size:.75rem">'+fmtDate(u.collection_date)+'</td>'+
         '<td style="font-size:.75rem;color:'+exp.color+'">'+exp.emoji+' '+fmtDate(u.expiry_date)+(exp.days!=null?' — '+exp.label:'')+'</td>'+
         '<td>'+statusBadge(u.status)+'</td>'+
-        '<td><div class="acts"><button class="btn btn-s btn-xs" onclick="printBloodUnitLabel(\x27'+u.id+'\x27)">🏷 Label</button>'+
-          (u.status==='Crossmatched'?'<button class="btn btn-p btn-xs" onclick="openIssueUnit(\x27'+u.id+'\x27)">🩸 Issue</button>':'')+
-          (u.status==='Issued'?'<button class="btn btn-p btn-xs" onclick="openTransfusionRecord(\x27'+u.id+'\x27)">🩺 Transfusion</button>':'')+
-          (u.status!=='Issued'&&u.status!=='Discarded'?'<button class="btn btn-r btn-xs" onclick="openDiscardUnit(\x27'+u.id+'\x27)">🗑 Discard</button>':'')+
+        '<td><div class="acts"><button class="btn btn-s btn-xs" onclick="printBloodUnitLabel(\x27'+escAttr(u.id)+'\x27)">🏷 Label</button>'+
+          (u.status==='Crossmatched'?'<button class="btn btn-p btn-xs" onclick="openIssueUnit(\x27'+escAttr(u.id)+'\x27)">🩸 Issue</button>':'')+
+          (u.status==='Issued'?'<button class="btn btn-p btn-xs" onclick="openTransfusionRecord(\x27'+escAttr(u.id)+'\x27)">🩺 Transfusion</button>':'')+
+          (u.status!=='Issued'&&u.status!=='Discarded'?'<button class="btn btn-r btn-xs" onclick="openDiscardUnit(\x27'+escAttr(u.id)+'\x27)">🗑 Discard</button>':'')+
         '</div></td>'+
       '</tr>';
     }).join('')+
@@ -21584,7 +21584,7 @@ async function searchBloodDonors(q) {
     const {data}=await sb.from('blood_donors').select('*').or('full_name.ilike.%'+q+'%,phone.ilike.%'+q+'%').limit(8);
     if(!data?.length){ res.style.display='none'; return; }
     res.style.display='block';
-    res.innerHTML=data.map(d=>'<div onclick="selectBloodDonor('+JSON.stringify(d).replace(/"/g,'&quot;')+')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:.81rem"><strong>'+escapeHtml(d.full_name)+'</strong> <span style="color:var(--slate);font-size:.72rem">'+(d.donor_no||'')+' · '+(d.blood_group||'?')+(d.rh_factor==='Positive'?'+':d.rh_factor==='Negative'?'−':'')+'</span></div>').join('');
+    res.innerHTML=data.map(d=>'<div onclick="selectBloodDonor('+JSON.stringify(d).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:.81rem"><strong>'+escapeHtml(d.full_name)+'</strong> <span style="color:var(--slate);font-size:.72rem">'+(d.donor_no||'')+' · '+(d.blood_group||'?')+(d.rh_factor==='Positive'?'+':d.rh_factor==='Negative'?'−':'')+'</span></div>').join('');
   } catch(e){}
 }
 function selectBloodDonor(d) {
@@ -21733,9 +21733,9 @@ async function loadPendingDonations() {
         '<div style="font-weight:700">'+escapeHtml(d.blood_donors?.full_name||'—')+' <span style="font-size:.72rem;color:var(--slate);font-weight:400">'+(d.blood_donors?.donor_no||'')+' · '+fmtDate(d.collection_date)+'</span></div>'+
         (flags.length?'<div style="font-size:.7rem;color:var(--amber);margin-top:4px">⚠️ '+flags.join(', ')+'</div>':'')+
         '<div class="g3" style="margin-top:8px">'+
-          BLOOD_SCREENING_TESTS.map(x=>'<div class="fg" style="margin-bottom:4px"><label class="fl" style="text-transform:uppercase">'+x+'</label><select class="fc" id="bb-screen-'+d.id+'-'+x+'" style="padding:4px 6px;font-size:.75rem"><option value="Pending">Pending</option><option value="Negative">Negative</option><option value="Positive">Positive</option></select></div>').join('')+
+          BLOOD_SCREENING_TESTS.map(x=>'<div class="fg" style="margin-bottom:4px"><label class="fl" style="text-transform:uppercase">'+x+'</label><select class="fc" id="bb-screen-'+escAttr(d.id)+'-'+x+'" style="padding:4px 6px;font-size:.75rem"><option value="Pending">Pending</option><option value="Negative">Negative</option><option value="Positive">Positive</option></select></div>').join('')+
         '</div>'+
-        '<button class="btn btn-p btn-xs" onclick="clearDonationScreening(\''+d.id+'\')" style="margin-top:6px">✅ Record Results &amp; Clear if Negative</button>'+
+        '<button class="btn btn-p btn-xs" onclick="clearDonationScreening(\''+escAttr(d.id)+'\')" style="margin-top:6px">✅ Record Results &amp; Clear if Negative</button>'+
       '</div>';
     }).join('');
   } catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.78rem">'+escapeHtml(e.message)+'</div>'; }
@@ -21769,7 +21769,7 @@ async function loadPendingExternalUnits() {
       '<div style="border:1px solid var(--border);border-radius:9px;padding:10px 12px;margin-bottom:10px">'+
         '<div style="font-weight:700">'+escapeHtml(u.unit_no)+' <span style="font-size:.72rem;color:var(--slate);font-weight:400">'+escapeHtml(u.blood_group)+(u.rh_factor==='Positive'?'+':'−')+' · '+escapeHtml(u.component_type)+'</span></div>'+
         '<div style="font-size:.75rem;color:var(--slate);margin-top:3px">From '+escapeHtml(u.external_source_org||'—')+' · Their ref: '+escapeHtml(u.external_unit_ref||'—')+'</div>'+
-        '<button class="btn btn-p btn-xs" onclick="verifyUnitOnReceipt(\''+u.id+'\')" style="margin-top:6px">✅ Confirm Label Matches — Verify</button>'+
+        '<button class="btn btn-p btn-xs" onclick="verifyUnitOnReceipt(\''+escAttr(u.id)+'\')" style="margin-top:6px">✅ Confirm Label Matches — Verify</button>'+
       '</div>'
     ).join('');
   } catch(e){ body.innerHTML='<div style="padding:12px;color:var(--red);font-size:.78rem">'+escapeHtml(e.message)+'</div>'; }
@@ -21839,7 +21839,7 @@ async function renderBloodRequestCard(r) {
     const {data:candidates}=await sb.from('blood_units').select('*').eq('component_type',r.component_type).eq('status','Available').gte('expiry_date',today()).order('expiry_date',{ascending:true});
     const compatible=(candidates||[]).filter(u=>isBloodCompatible(patientType,u.blood_group,u.rh_factor));
     const list=compatible.length
-      ? compatible.slice(0,5).map(u=>'<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 8px;border:1px solid var(--border);border-radius:6px;margin-top:4px;font-size:.75rem"><span>'+escapeHtml(u.unit_no)+' · '+escapeHtml(u.blood_group)+(u.rh_factor==='Positive'?'+':'−')+' · exp '+fmtDate(u.expiry_date)+'</span><button class="btn btn-p btn-xs" onclick="crossmatchUnit(\''+u.id+'\',\''+r.id+'\')">🧬 Crossmatch</button></div>').join('')
+      ? compatible.slice(0,5).map(u=>'<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 8px;border:1px solid var(--border);border-radius:6px;margin-top:4px;font-size:.75rem"><span>'+escapeHtml(u.unit_no)+' · '+escapeHtml(u.blood_group)+(u.rh_factor==='Positive'?'+':'−')+' · exp '+fmtDate(u.expiry_date)+'</span><button class="btn btn-p btn-xs" onclick="crossmatchUnit(\''+escAttr(u.id)+'\',\''+escAttr(r.id)+'\')">🧬 Crossmatch</button></div>').join('')
       : '<div style="font-size:.75rem;color:var(--amber);margin-top:6px">⚠️ No compatible '+escapeHtml(r.component_type)+' units currently Available</div>';
     return '<div style="border:1px solid var(--border);border-radius:9px;padding:10px 12px;margin-bottom:10px">'+head+
       '<div style="font-size:.72rem;color:var(--teal);font-weight:700">Patient type (on file): '+patientType+'</div>'+list+
@@ -22209,7 +22209,7 @@ async function loadSampleQueue(){
     }
     body.innerHTML='<div style="overflow-x:auto"><table class="tbl" style="font-size:.74rem"><thead><tr><th>Lab No</th><th>Name</th><th>Priority</th><th>Payment</th><th>Status</th></tr></thead><tbody>'+
       visible.map(s=>{const pt=s.patients||{};const up=pt.payment_status==='unpaid'||pt.payment_status==='insurance_pending';
-        return '<tr class="'+(up?'pay-unpaid':'')+'" style="cursor:pointer" onclick="selectScPt(\x27'+s.patient_id+'\x27)">'+'<td style="font-family:DM Mono,monospace;color:var(--teal)">'+(pt.lab_no||pt.mrn||'—')+'</td><td style="font-weight:600">'+escapeHtml(pt.name||'—')+'</td><td>'+statusBadge(pt.priority||'Routine')+'</td><td>'+paymentTag(pt.payment_status)+(s.payment_deferred?' <span class="bdg" style="background:var(--red-tint);color:var(--red);border:1.5px solid var(--red-border)">\u26a0 Payment Deferred \u2014 STAT</span>':'')+'</td><td>'+statusBadge(s.status)+'</td></tr>';
+        return '<tr class="'+(up?'pay-unpaid':'')+'" style="cursor:pointer" onclick="selectScPt(\x27'+escAttr(s.patient_id)+'\x27)">'+'<td style="font-family:DM Mono,monospace;color:var(--teal)">'+(pt.lab_no||pt.mrn||'—')+'</td><td style="font-weight:600">'+escapeHtml(pt.name||'—')+'</td><td>'+statusBadge(pt.priority||'Routine')+'</td><td>'+paymentTag(pt.payment_status)+(s.payment_deferred?' <span class="bdg" style="background:var(--red-tint);color:var(--red);border:1.5px solid var(--red-border)">\u26a0 Payment Deferred \u2014 STAT</span>':'')+'</td><td>'+statusBadge(s.status)+'</td></tr>';
       }).join('')+(hiddenCount?'<tr><td colspan="5" style="text-align:center;padding:8px;font-size:.72rem;color:var(--slate)">'+hiddenCount+' more order(s) hidden pending payment</td></tr>':'')+'</tbody></table></div>';
   }catch(e){}
 }
@@ -22348,7 +22348,7 @@ async function searchUnreceivePatient(q){
     if(!box) return;
     if(!matches.length){ box.style.display='block'; box.innerHTML='<div style="padding:8px 12px;font-size:.78rem;color:var(--slate)">No received samples match — sample may not be marked Received yet</div>'; return; }
     box.style.display='block';
-    box.innerHTML=matches.map(p=>'<div onclick="selectUnreceivePt(\''+p.id+'\')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:.8rem" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'"><div style="font-weight:700">'+escapeHtml(p.name||fullName(p))+'</div><div style="font-size:.7rem;color:var(--slate)">'+escapeHtml(p.mrn||p.lab_no||'—')+'</div></div>').join('');
+    box.innerHTML=matches.map(p=>'<div onclick="selectUnreceivePt(\''+escAttr(p.id)+'\')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:.8rem" onmouseover="this.style.background=\'var(--teal-lt)\'" onmouseout="this.style.background=\'\'"><div style="font-weight:700">'+escapeHtml(p.name||fullName(p))+'</div><div style="font-size:.7rem;color:var(--slate)">'+escapeHtml(p.mrn||p.lab_no||'—')+'</div></div>').join('');
   }catch(e){}
 }
 async function selectUnreceivePt(ptId){
@@ -22413,7 +22413,7 @@ async function searchSamplePatient(q){
     const{data}=await sb.from('patients').select('id,name,first_name,last_name,mrn,lab_no,age,age_unit,sex,payment_status').or('name.ilike.%'+q+'%,mrn.ilike.%'+q+'%,lab_no.ilike.%'+q+'%,phone.ilike.%'+q+'%').limit(8);
     if(!box)return;if(!data?.length){box.style.display='none';return;}
     box.style.display='block';
-    box.innerHTML=data.map(p=>'<div onclick="selectScPt(\x27'+p.id+'\x27)" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:.8rem" onmouseover="this.style.background=\x27var(--teal-lt)\x27" onmouseout="this.style.background=\x27\x27"><div style="font-weight:700">'+escapeHtml(p.name||fullName(p))+'</div><div style="font-size:.7rem;color:var(--slate)">'+escapeHtml(p.mrn||p.lab_no||'—')+'</div></div>').join('');
+    box.innerHTML=data.map(p=>'<div onclick="selectScPt(\x27'+escAttr(p.id)+'\x27)" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:.8rem" onmouseover="this.style.background=\x27var(--teal-lt)\x27" onmouseout="this.style.background=\x27\x27"><div style="font-weight:700">'+escapeHtml(p.name||fullName(p))+'</div><div style="font-size:.7rem;color:var(--slate)">'+escapeHtml(p.mrn||p.lab_no||'—')+'</div></div>').join('');
   }catch(e){}
 }
 // Worklist "Enter" button — opens every department relevant to this
@@ -23733,7 +23733,7 @@ async function searchReportPatient(q){
     const{data}=await sb.from('patients').select('id,name,first_name,last_name,mrn,lab_no,age,age_unit,sex,phone').or('name.ilike.%'+q+'%,mrn.ilike.%'+q+'%,lab_no.ilike.%'+q+'%,phone.ilike.%'+q+'%').limit(8);
     if(!box)return;if(!data?.length){box.style.display='none';return;}
     box.style.display='block';
-    box.innerHTML=data.map(p=>'<div onclick="selectRptPatient('+JSON.stringify(p).replace(/"/g,'&quot;')+')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:.8rem" onmouseover="this.style.background=\x27var(--teal-lt)\x27" onmouseout="this.style.background=\x27\x27"><div style="font-weight:700">'+escapeHtml(p.name||fullName(p))+'</div><div style="font-size:.7rem;color:var(--slate)">'+escapeHtml(p.mrn||p.lab_no||'—')+'</div></div>').join('');
+    box.innerHTML=data.map(p=>'<div onclick="selectRptPatient('+JSON.stringify(p).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:.8rem" onmouseover="this.style.background=\x27var(--teal-lt)\x27" onmouseout="this.style.background=\x27\x27"><div style="font-weight:700">'+escapeHtml(p.name||fullName(p))+'</div><div style="font-size:.7rem;color:var(--slate)">'+escapeHtml(p.mrn||p.lab_no||'—')+'</div></div>').join('');
   }catch(e){}
 }
 function selectRptPatient(p){
@@ -23944,7 +23944,7 @@ async function loadPurchaseOrders(){
           '<td>'+statusBadge(po.status)+'</td>'+
           '<td style="font-size:.72rem">'+items.length+' item(s)</td>'+
           '<td style="font-size:.72rem">'+fmtDT(po.created_at)+'</td>'+
-          '<td><button class="btn btn-s btn-xs" onclick="printPurchaseOrder('+po.id+')">\ud83d\udda8 Print</button></td>'+
+          '<td><button class="btn btn-s btn-xs" onclick="printPurchaseOrder('+Number(po.id)+')">\ud83d\udda8 Print</button></td>'+
           '</tr>';
       }).join('')+'</tbody></table></div>';
     window._poLookup={}; pos.forEach(po=>{ window._poLookup[po.id]=po; });
@@ -23965,7 +23965,7 @@ function printPurchaseOrder(poId,poMeta,items){
 function loadReqItemDropdown(){
   const sel=document.getElementById('req-item'); if(!sel) return;
   const items=window._invItems||[];
-  sel.innerHTML=items.length?items.map(it=>'<option value="'+it.id+'">'+escapeHtml(it.item_name)+' ('+(it.current_stock??0)+' '+escapeHtml(it.unit||'')+' on hand)</option>').join(''):'<option value="">No items in catalog</option>';
+  sel.innerHTML=items.length?items.map(it=>'<option value="'+escAttr(it.id)+'">'+escapeHtml(it.item_name)+' ('+(it.current_stock??0)+' '+escapeHtml(it.unit||'')+' on hand)</option>').join(''):'<option value="">No items in catalog</option>';
 }
 async function submitStockRequisition(){
   if(!sb){ toast('Not connected','err'); return; }
@@ -24002,9 +24002,9 @@ async function loadStockRequisitions(){
         const itemLabel=(r.reagent_inventory?.item_name||'\u2014')+' ('+r.qty_requested+' '+(r.reagent_inventory?.unit||'')+')';
         let actions='';
         const canConfirmReceipt=r.requested_by===currentProfile?.id||currentProfile?.role==='admin';
-        if(r.status==='pending'&&canDecide) actions='<button class="btn btn-p btn-xs" onclick="decideRequisition('+r.id+',\'approved\')">\u2705 Approve</button> <button class="btn btn-r btn-xs" onclick="decideRequisition('+r.id+',\'rejected\')">\u2715 Reject</button>';
-        else if(r.status==='approved'&&canDecide) actions='<button class="btn btn-w btn-xs" onclick="fulfillRequisition('+r.id+')">\ud83d\udce4 Fulfill (FEFO)</button>';
-        else if(r.status==='fulfilled'&&canConfirmReceipt) actions='<button class="btn btn-p btn-xs" onclick="confirmRequisitionReceipt('+r.id+')">\ud83d\udce5 Confirm Receipt</button>';
+        if(r.status==='pending'&&canDecide) actions='<button class="btn btn-p btn-xs" onclick="decideRequisition('+Number(r.id)+',\'approved\')">\u2705 Approve</button> <button class="btn btn-r btn-xs" onclick="decideRequisition('+Number(r.id)+',\'rejected\')">\u2715 Reject</button>';
+        else if(r.status==='approved'&&canDecide) actions='<button class="btn btn-w btn-xs" onclick="fulfillRequisition('+Number(r.id)+')">\ud83d\udce4 Fulfill (FEFO)</button>';
+        else if(r.status==='fulfilled'&&canConfirmReceipt) actions='<button class="btn btn-p btn-xs" onclick="confirmRequisitionReceipt('+Number(r.id)+')">\ud83d\udce5 Confirm Receipt</button>';
         return '<tr>'+
           '<td>'+escapeHtml(r.requesting_department||'\u2014')+'</td>'+
           '<td>'+escapeHtml(itemLabel)+'</td>'+
