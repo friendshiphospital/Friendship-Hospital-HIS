@@ -2745,6 +2745,14 @@ CREATE TRIGGER trg_lock_results_pcr BEFORE UPDATE ON public.results_pcr FOR EACH
 CREATE TRIGGER trg_lock_results_serology BEFORE UPDATE ON public.results_serology FOR EACH ROW EXECUTE FUNCTION enforce_result_lock();
 CREATE TRIGGER trg_payments_shift_lock BEFORE INSERT ON public.payments FOR EACH ROW EXECUTE FUNCTION enforce_shift_lock();
 
+-- Defensive: some Supabase Dashboard options create an event trigger of
+-- this same name before this file ever runs, which would otherwise fail
+-- the CREATE EVENT TRIGGER below with "event trigger ensure_rls already
+-- exists" (confirmed live 2026-08-26 on a genuinely new project where a
+-- Dashboard option had been toggled before running this schema). Dropping
+-- it first makes this file idempotent regardless of what a project's
+-- Dashboard already set up.
+DROP EVENT TRIGGER IF EXISTS ensure_rls;
 CREATE EVENT TRIGGER ensure_rls ON ddl_command_end WHEN TAG IN ('CREATE TABLE', 'CREATE TABLE AS', 'SELECT INTO') EXECUTE FUNCTION rls_auto_enable();
 CREATE POLICY admissions_delete ON public.admissions AS PERMISSIVE FOR DELETE TO public USING (is_admin());
 CREATE POLICY admissions_insert ON public.admissions AS PERMISSIVE FOR INSERT TO public WITH CHECK ((is_admin() OR (current_staff_role() = ANY (ARRAY['doctor'::text, 'nurse'::text, 'theatre_nurse'::text]))));
