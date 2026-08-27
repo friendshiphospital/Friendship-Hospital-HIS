@@ -153,8 +153,9 @@ pass described in the PR/commit that created this folder.
    sandbox address like `onboarding@resend.dev` also works as a stopgap, but
    typically only delivers to the account owner's own inbox until a domain is
    verified).
-5. **Deploy `index.html`** — upload it directly to your static host (e.g.
-   Vercel). No build step.
+5. **Deploy the whole folder** (`index.html` plus `assets/`, `sw.js`, etc. —
+   not just the `index.html` file on its own) to your static host, e.g.
+   Vercel connected to this repo via its Git integration. No build step.
 6. **Open the app** → the "⚙ Supabase Configuration" panel on the login
    screen → enter your new project's URL and `anon public` key → Save &
    Connect.
@@ -172,6 +173,41 @@ pass described in the PR/commit that created this folder.
    schedule (see "Reference data kept" below) — it's inserted using whichever
    currency you configured in step 8, not hardcoded to SDG.
 10. Done — the instance is ready for real use under its own identity.
+
+## Testing branding/assets before going live
+
+`index.html`'s logo and login/launcher background image
+(`assets/branding/elmohajir-logo.png`, `assets/branding/login-bg-glow.png`)
+are referenced by a plain relative path, so they resolve correctly wherever
+the `assets/` folder sits alongside `index.html` — a real deployment serving
+the whole repo, or a full local clone/download opened directly in a browser
+(confirmed working via `file://` too). The only way branding breaks is
+copying just the single `index.html` file somewhere without its `assets/`
+folder (GitHub's "raw" single-file view, an email attachment, pasting the
+file alone into an empty folder) — that's a missing-files situation, not a
+bug in the app or in your hospital's configuration, and it's unrelated to
+whether Supabase is connected yet (the login screen renders branding before
+any backend call).
+
+**Recommended: verify with a real (even throwaway) deployment** before
+considering setup done — it exercises the exact same path production uses,
+and catches anything else path-related beyond just the logo:
+
+1. On vercel.com: **Add New → Project → Import Git Repository**, connect
+   your GitHub account (granting it access to this repo if it's private),
+   and select it.
+2. Framework Preset: **Other**. Leave Build Command and Output Directory
+   blank — there's no build step. Set **Root Directory** to `template` to
+   test this de-identified starter kit specifically (so
+   `template/index.html` becomes that deployment's `/`); leave it at the
+   repo root to test the live Friendship Hospital `index.html` instead.
+3. Click **Deploy**. This creates a new, separate Vercel project — it does
+   not touch or affect your real production deployment, regardless of which
+   branch you point it at.
+4. Open the resulting `<project>.vercel.app` URL. The login screen should
+   show the Elmohajir logo and background glow immediately.
+5. Delete the throwaway project afterward (Project Settings → Delete) once
+   you're satisfied.
 
 ## What was changed vs. the live Friendship Hospital codebase
 
