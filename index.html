@@ -587,6 +587,7 @@ html[dir="rtl"] body{direction:rtl;}
       <div class="auth-field"><label>Supabase URL</label><input id="cfg-url" placeholder="https://xxxx.supabase.co"></div>
       <div class="auth-field"><label>Anon Key</label><input id="cfg-key" placeholder="eyJ…"></div>
       <button class="auth-submit" style="margin-top:8px" onclick="saveCfg()">💾 Save & Connect</button>
+      <button class="auth-submit" style="margin-top:6px;background:transparent;border:1px solid var(--red-border,#f3caca);color:var(--red,#b91c1c)" onclick="resetAllLocalConfig()" title="Clear all locally-saved settings on this device (hospital identity, Supabase connection, everything) — use before setting up a new hospital on a reused device">🗑 Reset All Local Configuration</button>
     </div>
   </div>
 </div>
@@ -4929,6 +4930,8 @@ html[dir="rtl"] body{direction:rtl;}
           <button class="btn btn-s" onclick="testConnection()">🔌 Test</button>
         </div>
         <div id="cfg-conn-status" style="margin-top:8px;font-size:.78rem"></div>
+        <button class="btn btn-r" style="width:100%;justify-content:center;margin-top:10px" onclick="resetAllLocalConfig()">🗑 Reset All Local Configuration</button>
+        <div style="font-size:.7rem;color:var(--slate);margin-top:6px">Clears every locally-saved setting on this device (hospital identity, this connection, everything else in Settings) and signs you out. Does not touch anything in Supabase itself. Use before handing this device off to a different hospital's deployment.</div>
       </div></div>
       <div class="card"><div class="card-hd"><span class="card-title">🕓 Lab Investigation History Backfill</span></div><div class="card-body">
         <div style="font-size:.72rem;color:var(--slate);margin-bottom:8px">The Lab Investigation History browser (Laboratory/Doctor/Nurse/Radiology) only shows results saved <em>after</em> <code>migration_v2.51</code> was applied — by design, nothing was backfilled automatically. Run this once to add every existing lab result on file to the browser. Safe to re-run: patients/departments that already have history are skipped, never duplicated.</div>
@@ -8286,6 +8289,20 @@ function saveCfg() {
   if(!url||!key){ toast('Enter both URL and Key','err'); return; }
   localStorage.setItem('sb_url',url); localStorage.setItem('sb_key',key);
   initSupabase(); toast('Supabase config saved','ok');
+}
+// Everything this app remembers between visits (hospital identity, the
+// Supabase connection, every other Settings field) lives in localStorage,
+// which is scoped to the browser, not to any particular copy of this
+// file -- reopening a freshly-downloaded index.html on a device that
+// previously connected to a different hospital's project shows THAT
+// hospital's name and Supabase credentials, not a blank slate, because
+// nothing ever prompts anyone to clear it first. This is that explicit
+// clear, reachable before login so a new deployment on a reused device
+// doesn't inherit a stranger's config by accident.
+function resetAllLocalConfig() {
+  if(!confirm('This clears EVERY locally-saved setting on this device/browser for this app -- hospital name/address/phone/email, the Supabase connection, and any other saved preference -- and reloads the page. It does NOT delete or change anything in Supabase itself, only this browser\'s local copy. Use this before setting up a new hospital on a device that was previously connected to a different project. Continue?')) return;
+  localStorage.clear();
+  location.reload();
 }
 
 // ── AUTH ──────────────────────────────────────────────
